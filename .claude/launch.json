@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Static HTTP Server",
+      "runtimeExecutable": "ruby",
+      "runtimeArgs": ["/tmp/ecg_serve.rb"],
+      "port": 8080,
+      "autoPort": true
+    }
+  ]
+}

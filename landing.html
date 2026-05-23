@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Context Graphs</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f1ece0;
+    --panel: #faf6ec;
+    --panel-2: #f5f0e4;
+    --ink: #1f211b;
+    --ink-2: #3a3d33;
+    --ink-3: #6a6c5c;
+    --ink-4: #a09e88;
+    --line: #d9d2bf;
+    --line-2: #e6dfce;
+    --chip: #ebe4d0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; background: var(--bg); color: var(--ink); font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  #root { min-height: 100vh; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useRef, useEffect } = React;
+
+// ─── CATALOG DATA ───────────────────────────────────────────────────────────
+
+const GRAPHS = [
+  {
+    id: "ecg",
+    slug: "enterprise-context-graph",
+    label: "GLOBAL",
+    title: "Enterprise Context Graph",
+    desc: "The unified context layer connecting every entity, system, and decision across the organization.",
+    nodes: 28431, edges: 183202, agents: 41,
+    health: 96, synced: "2 min ago", health_ok: true,
+    color: { node: "#6f97ba", edge: "#9bbcd6", glow: "rgba(111,151,186,0.14)", bg: "rgba(111,151,186,0.07)" },
+    href: "ecg.html",
+    featured: true,
+    domain: "Enterprise",
+    owner: "data-platform",
+    version: "v2.14.0",
+  },
+  {
+    id: "sales",
+    slug: "sales-graph",
+    label: "REVENUE",
+    title: "Sales Graph",
+    desc: "Pipeline, opportunities, accounts and the early signals — across CRM, billing and product — that the agents reason on to close revenue.",
+    nodes: 6204, edges: 21380, agents: 9,
+    health: 92, synced: "5 min ago", health_ok: true,
+    color: { node: "#b8923a", edge: "#d4b06a", glow: "rgba(184,146,58,0.14)", bg: "rgba(184,146,58,0.07)" },
+    href: "ecg.html",
+    domain: "Revenue",
+    owner: "fin-ops",
+    version: "v1.8.2",
+  },
+  {
+    id: "finance",
+    slug: "finance-graph",
+    label: "FINANCE",
+    title: "Finance Graph",
+    desc: "Ledger entities, controls, policies and audit lineage spanning systems of record.",
+    nodes: 4118, edges: 16002, agents: 5,
+    health: 98, synced: "1 min ago", health_ok: true,
+    color: { node: "#6f8b5f", edge: "#96b286", glow: "rgba(111,139,95,0.14)", bg: "rgba(111,139,95,0.07)" },
+    href: "ecg.html",
+    domain: "Finance",
+    owner: "fin-ops",
+    version: "v2.1.0",
+  },
+  {
+    id: "product",
+    slug: "product-specialist-graph",
+    label: "PRODUCT",
+    title: "Product Specialist Graph",
+    desc: "Features, telemetry, specifications and the AI specialists reasoning over them.",
+    nodes: 3902, edges: 12774, agents: 11,
+    health: 89, synced: "3 min ago", health_ok: false,
+    color: { node: "#8a78a8", edge: "#b0a2c4", glow: "rgba(138,120,168,0.14)", bg: "rgba(138,120,168,0.07)" },
+    href: "ecg.html",
+    domain: "Product",
+    owner: "applied-ml",
+    version: "v1.3.1",
+  },
+  {
+    id: "customer",
+    slug: "customer-360-graph",
+    label: "CUSTOMER",
+    title: "Customer 360 Graph",
+    desc: "Identity-resolved customer entities unifying CRM, support, billing and product.",
+    nodes: 9482, edges: 41200, agents: 7,
+    health: 93, synced: "4 min ago", health_ok: true,
+    color: { node: "#b8923a", edge: "#d4c080", glow: "rgba(184,146,58,0.12)", bg: "rgba(184,146,58,0.06)" },
+    href: "ecg.html",
+    domain: "Customer",
+    owner: "cs-platform",
+    version: "v2.0.4",
+  },
+  {
+    id: "compliance",
+    slug: "compliance-graph",
+    label: "RISK & COMPLIANCE",
+    title: "Compliance Graph",
+    desc: "Policies, controls, evidence and obligations mapped to every regulated process.",
+    nodes: 1840, edges: 7320, agents: 4,
+    health: 97, synced: "8 min ago", health_ok: true,
+    color: { node: "#b14a3c", edge: "#d08070", glow: "rgba(177,74,60,0.12)", bg: "rgba(177,74,60,0.07)" },
+    href: "ecg.html",
+    domain: "Governance",
+    owner: "governance",
+    version: "v1.5.0",
+  },
+  {
+    id: "people",
+    slug: "employee-graph",
+    label: "PEOPLE",
+    title: "Employee Graph",
+    desc: "Org structure, roles, skill attestations and team topology for workforce planning.",
+    nodes: 2140, edges: 8910, agents: 3,
+    health: 88, synced: "12 min ago", health_ok: false,
+    color: { node: "#6f8b5f", edge: "#a0c090", glow: "rgba(111,139,95,0.12)", bg: "rgba(111,139,95,0.06)" },
+    href: "ecg.html",
+    domain: "People",
+    owner: "data-platform",
+    version: "v1.1.0",
+  },
+  {
+    id: "procurement",
+    slug: "vendor-graph",
+    label: "PROCUREMENT",
+    title: "Vendor Graph",
+    desc: "Supplier entities, contract milestones and risk signals for the procurement lifecycle.",
+    nodes: 1290, edges: 4870, agents: 3,
+    health: 90, synced: "6 min ago", health_ok: true,
+    color: { node: "#8a78a8", edge: "#c0b0d8", glow: "rgba(138,120,168,0.12)", bg: "rgba(138,120,168,0.06)" },
+    href: "ecg.html",
+    domain: "Procurement",
+    owner: "data-platform",
+    version: "v1.0.2",
+  },
+  {
+    id: "support",
+    slug: "support-graph",
+    label: "SUPPORT",
+    title: "Support Graph",
+    desc: "Tickets, incidents, escalations and resolution paths across every support channel.",
+    nodes: 5620, edges: 19440, agents: 6,
+    health: 91, synced: "9 min ago", health_ok: true,
+    color: { node: "#b8923a", edge: "#d8b868", glow: "rgba(184,146,58,0.12)", bg: "rgba(184,146,58,0.06)" },
+    href: "ecg.html",
+    domain: "Support",
+    owner: "cs-platform",
+    version: "v1.6.3",
+  },
+  {
+    id: "infra",
+    slug: "data-platform-graph",
+    label: "INFRASTRUCTURE",
+    title: "Data Platform Graph",
+    desc: "Pipeline assets, warehouse tables, transformation steps and data quality contracts.",
+    nodes: 3340, edges: 11290, agents: 8,
+    health: 95, synced: "2 min ago", health_ok: true,
+    color: { node: "#6f97ba", edge: "#aac4d8", glow: "rgba(111,151,186,0.12)", bg: "rgba(111,151,186,0.06)" },
+    href: "ecg.html",
+    domain: "Platform",
+    owner: "data-platform",
+    version: "v2.3.1",
+  },
+];
+
+// ─── DETERMINISTIC MINI-GRAPH ────────────────────────────────────────────────
+
+function seededRandom(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    return ((s >>> 0) / 0xffffffff);
+  };
+}
+
+const VB_W = 400, VB_H = 200;
+
+function MiniGraph({ graph }) {
+  const rand = seededRandom(graph.id.charCodeAt(0) * 7 + graph.nodes);
+  const nodeCount = 8 + Math.floor(rand() * 5);
+  const px = 36, py = 28;
+  const nodes = Array.from({ length: nodeCount }, (_, i) => ({
+    x: px + rand() * (VB_W - px * 2),
+    y: py + rand() * (VB_H - py * 2),
+    r: 5 + rand() * 8,
+  }));
+  const edges = [];
+  const edgeCount = Math.floor(nodeCount * 1.4);
+  for (let i = 0; i < edgeCount; i++) {
+    const a = Math.floor(rand() * nodeCount);
+    const b = Math.floor(rand() * nodeCount);
+    if (a !== b) edges.push([a, b]);
+  }
+
+  return (
+    <svg
+      viewBox={`0 0 ${VB_W} ${VB_H}`}
+      preserveAspectRatio="xMidYMid meet"
+      style={{ display: "block", width: "100%", height: "100%" }}
+    >
+      <defs>
+        <radialGradient id={"glow-" + graph.id} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={graph.color.node} stopOpacity="0.28" />
+          <stop offset="100%" stopColor={graph.color.node} stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <rect x="0" y="0" width={VB_W} height={VB_H} fill={graph.color.bg} />
+      <ellipse cx={VB_W / 2} cy={VB_H / 2} rx={VB_W * 0.46} ry={VB_H * 0.44} fill={`url(#glow-${graph.id})`} />
+      {edges.map(([a, b], i) => (
+        <line key={i}
+          x1={nodes[a].x} y1={nodes[a].y}
+          x2={nodes[b].x} y2={nodes[b].y}
+          stroke={graph.color.edge} strokeWidth="1.1" opacity="0.65"
+        />
+      ))}
+      {nodes.map((n, i) => (
+        <circle key={i} cx={n.x} cy={n.y} r={n.r} fill={graph.color.node} opacity={0.65 + (i % 3) * 0.12} />
+      ))}
+    </svg>
+  );
+}
+
+// ─── GRAPH CARD ──────────────────────────────────────────────────────────────
+
+function GraphCard({ graph, viewMode }) {
+  const [hov, setHov] = useState(false);
+
+  if (viewMode === "list") {
+    return (
+      <a
+        href={graph.href}
+        className={"lc-row" + (hov ? " hov" : "") + (graph.featured ? " featured" : "")}
+        onMouseEnter={() => setHov(true)}
+        onMouseLeave={() => setHov(false)}
+      >
+        <div className="lc-row-left">
+          <span className="lc-label">{graph.label}</span>
+          <div className="lc-row-titles">
+            <span className="lc-row-name">{graph.title}</span>
+            <span className="lc-row-desc">{graph.desc}</span>
+          </div>
+        </div>
+        <div className="lc-row-stats">
+          <div><div className="stat-k">NODES</div><div className="stat-v">{graph.nodes.toLocaleString()}</div></div>
+          <div><div className="stat-k">EDGES</div><div className="stat-v">{graph.edges.toLocaleString()}</div></div>
+          <div><div className="stat-k">AGENTS</div><div className="stat-v">{graph.agents}</div></div>
+        </div>
+        <div className="lc-row-meta">
+          <span className={"health-dot" + (graph.health_ok ? "" : " warn")} />
+          <span className="stat-v">{graph.health}%</span>
+          <span className="sync-txt">Synced {graph.synced}</span>
+        </div>
+        <svg className="lc-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <path d="M7 17L17 7M17 7H7M17 7v10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </a>
+    );
+  }
+
+  return (
+    <a
+      href={graph.href}
+      className={"gc" + (hov ? " hov" : "") + (graph.featured ? " featured" : "")}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+    >
+      <div className="gc-thumb">
+        <MiniGraph graph={graph} />
+        <span className="gc-label">{graph.label}</span>
+        <span className={"gc-health" + (graph.health_ok ? "" : " warn")}>
+          <span className="health-dot" /> {graph.health}%
+        </span>
+      </div>
+      <div className="gc-body">
+        <div className="gc-title-row">
+          <h2 className="gc-title">{graph.title}</h2>
+          <svg className="gc-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M7 17L17 7M17 7H7M17 7v10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+        <p className="gc-desc">{graph.desc}</p>
+        <div className="gc-stats">
+          <div className="stat">
+            <div className="stat-k">NODES</div>
+            <div className="stat-v">{graph.nodes.toLocaleString()}</div>
+          </div>
+          <div className="stat">
+            <div className="stat-k">EDGES</div>
+            <div className="stat-v">{graph.edges.toLocaleString()}</div>
+          </div>
+          <div className="stat">
+            <div className="stat-k">AGENTS</div>
+            <div className="stat-v">{graph.agents}</div>
+          </div>
+        </div>
+        <div className="gc-foot">
+          <span className={"sync-dot" + (graph.health_ok ? " ok" : " warn")} />
+          <span className="sync-txt">Synced {graph.synced}</span>
+        </div>
+      </div>
+    </a>
+  );
+}
+
+// ─── NEW GRAPH MODAL ─────────────────────────────────────────────────────────
+
+function NewGraphModal({ onClose }) {
+  const [name, setName] = useState("");
+  const [domain, setDomain] = useState("");
+  const [template, setTemplate] = useState("blank");
+
+  const TEMPLATES = [
+    { id: "blank",      label: "Blank canvas",       desc: "Start from zero — define every node and edge type." },
+    { id: "entity",     label: "Entity graph",        desc: "Pre-loaded with Account, Person, Organization shapes." },
+    { id: "compliance", label: "Compliance scaffold", desc: "Controls, obligations and evidence nodes ready to populate." },
+    { id: "product",    label: "Product telemetry",   desc: "Feature, event, signal and specification node types." },
+  ];
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <div className="modal-eyebrow">CONTEXT GRAPHS · NEW</div>
+            <div className="modal-title">New context graph</div>
+          </div>
+          <button className="modal-close" onClick={onClose}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+          </button>
+        </div>
+
+        <div className="modal-body">
+          <div className="field">
+            <label className="field-label">Graph name <span className="field-req">required</span></label>
+            <input className="input" placeholder="e.g. Partner Ecosystem Graph" value={name} onChange={e => setName(e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label className="field-label">Domain</label>
+            <input className="input" placeholder="e.g. Partnerships, Supply Chain…" value={domain} onChange={e => setDomain(e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label className="field-label">Start from template</label>
+            <div className="template-grid">
+              {TEMPLATES.map(t => (
+                <button key={t.id} className={"template-card" + (template === t.id ? " on" : "")} onClick={() => setTemplate(t.id)}>
+                  <div className="template-title">{t.label}</div>
+                  <div className="template-desc">{t.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="field">
+            <label className="field-label">Owner team</label>
+            <select className="input input-select">
+              <option>data-platform</option>
+              <option>fin-ops</option>
+              <option>cs-platform</option>
+              <option>governance</option>
+              <option>applied-ml</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="modal-foot">
+          <button className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn-dark" onClick={onClose} disabled={!name.trim()}>Create graph →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
+
+const SORT_OPTIONS = ["Most active", "Health ↓", "Health ↑", "Nodes ↓", "Nodes ↑", "A–Z", "Recently synced"];
+const DOMAIN_FILTERS = ["All", "Revenue", "Finance", "Customer", "Product", "Governance", "Support", "People", "Platform"];
+
+function App() {
+  const [viewMode, setViewMode] = useState("grid");
+  const [sort, setSort] = useState("Most active");
+  const [filter, setFilter] = useState("All");
+  const [search, setSearch] = useState("");
+  const [showNew, setShowNew] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const filtered = useMemo(() => {
+    let gs = [...GRAPHS];
+    if (filter !== "All") gs = gs.filter(g => g.domain === filter);
+    if (search) gs = gs.filter(g => g.title.toLowerCase().includes(search.toLowerCase()) || g.label.toLowerCase().includes(search.toLowerCase()) || g.desc.toLowerCase().includes(search.toLowerCase()));
+    const sorters = {
+      "Most active": (a, b) => b.edges - a.edges,
+      "Health ↓":   (a, b) => b.health - a.health,
+      "Health ↑":   (a, b) => a.health - b.health,
+      "Nodes ↓":    (a, b) => b.nodes - a.nodes,
+      "Nodes ↑":    (a, b) => a.nodes - b.nodes,
+      "A–Z":        (a, b) => a.title.localeCompare(b.title),
+      "Recently synced": (a, b) => parseInt(a.synced) - parseInt(b.synced),
+    };
+    return gs.sort(sorters[sort] || sorters["Most active"]);
+  }, [filter, sort, search]);
+
+  const totalNodes  = GRAPHS.reduce((s, g) => s + g.nodes, 0);
+  const totalEdges  = GRAPHS.reduce((s, g) => s + g.edges, 0);
+  const totalAgents = GRAPHS.reduce((s, g) => s + g.agents, 0);
+
+  // close dropdowns on outside click
+  useEffect(() => {
+    const close = () => { setSortOpen(false); setFilterOpen(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+
+  return (
+    <div className="app">
+      {/* ── TOPBAR ── */}
+      <header className="topbar">
+        <div className="topbar-left">
+          <div className="topbar-wordmark">ECG</div>
+          <div className="topbar-title">Context Graphs</div>
+        </div>
+        <div className="topbar-right">
+          <div className="search-wrap">
+            <svg className="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6" /><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+            <input className="search-input" placeholder="Search graphs…" value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <div className="view-toggle">
+            <button className={"vt" + (viewMode === "grid" ? " on" : "")} onClick={() => setViewMode("grid")} title="Grid view">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1.5" /><rect x="13" y="3" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1.5" /><rect x="3" y="13" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1.5" /><rect x="13" y="13" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1.5" /></svg>
+            </button>
+            <button className={"vt" + (viewMode === "list" ? " on" : "")} onClick={() => setViewMode("list")} title="List view">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><line x1="3" y1="6" x2="21" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /><line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /><line x1="3" y1="18" x2="21" y2="18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+            </button>
+          </div>
+
+          {/* FILTER */}
+          <div className="dropdown-wrap" onMouseDown={e => e.stopPropagation()}>
+            <button className={"btn-ghost" + (filter !== "All" ? " active" : "")} onClick={() => { setFilterOpen(o => !o); setSortOpen(false); }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M7 12h10M11 18h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+              Filter {filter !== "All" && <span className="btn-badge">{filter}</span>}
+            </button>
+            {filterOpen && (
+              <div className="dropdown">
+                {DOMAIN_FILTERS.map(d => (
+                  <button key={d} className={"dd-item" + (filter === d ? " on" : "")} onClick={() => { setFilter(d); setFilterOpen(false); }}>{d}</button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* SORT */}
+          <div className="dropdown-wrap" onMouseDown={e => e.stopPropagation()}>
+            <button className="btn-ghost" onClick={() => { setSortOpen(o => !o); setFilterOpen(false); }}>
+              Sort: <b>{sort}</b>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ marginLeft: 4 }}><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+            </button>
+            {sortOpen && (
+              <div className="dropdown">
+                {SORT_OPTIONS.map(s => (
+                  <button key={s} className={"dd-item" + (sort === s ? " on" : "")} onClick={() => { setSort(s); setSortOpen(false); }}>{s}</button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button className="btn-dark" onClick={() => setShowNew(true)}>
+            <span className="plus">+</span> New graph
+          </button>
+        </div>
+      </header>
+
+      {/* ── SUMMARY STRIP ── */}
+      <div className="summary-strip">
+        <div className="summary-left">
+          <span className="summary-count">{filtered.length} of {GRAPHS.length} context graphs</span>
+          {filter !== "All" && <span className="summary-filter-tag">· {filter}</span>}
+          {search && <span className="summary-filter-tag">· "{search}"</span>}
+        </div>
+        <div className="summary-right">
+          <div className="sum-stat"><span className="sum-k">TOTAL NODES</span><span className="sum-v">{totalNodes.toLocaleString()}</span></div>
+          <div className="sum-sep" />
+          <div className="sum-stat"><span className="sum-k">TOTAL EDGES</span><span className="sum-v">{totalEdges.toLocaleString()}</span></div>
+          <div className="sum-sep" />
+          <div className="sum-stat"><span className="sum-k">ACTIVE AGENTS</span><span className="sum-v">{totalAgents}</span></div>
+          <div className="sum-sep" />
+          <div className="sum-stat"><span className="sum-k">AVG HEALTH</span><span className="sum-v" style={{ color: "var(--green)" }}>{Math.round(GRAPHS.reduce((s,g)=>s+g.health,0)/GRAPHS.length)}%</span></div>
+        </div>
+      </div>
+
+      {/* ── GRAPH GRID ── */}
+      <main className={"main" + (viewMode === "list" ? " list-mode" : "")}>
+        {filtered.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">◌</div>
+            <div className="empty-title">No graphs match</div>
+            <div className="empty-desc">Try a different filter or search term.</div>
+            <button className="btn-ghost" onClick={() => { setFilter("All"); setSearch(""); }}>Clear filters</button>
+          </div>
+        ) : viewMode === "grid" ? (
+          <div className="grid">
+            {filtered.map(g => <GraphCard key={g.id} graph={g} viewMode="grid" />)}
+          </div>
+        ) : (
+          <div className="list-wrap">
+            {filtered.map(g => <GraphCard key={g.id} graph={g} viewMode="list" />)}
+          </div>
+        )}
+      </main>
+
+      {/* ── STATUS BAR ── */}
+      <div className="statusbar">
+        <span>ECG · Graph Registry · v3.2</span>
+        <span className="sb-sep">·</span>
+        <span>{GRAPHS.length} graphs · {GRAPHS.filter(g=>g.health_ok).length} healthy</span>
+        <span style={{ flex: 1 }} />
+        <span className="sb-ok">● all systems nominal</span>
+      </div>
+
+      {showNew && <NewGraphModal onClose={() => setShowNew(false)} />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+<style>
+  /* ── LAYOUT ── */
+  .app { display: flex; flex-direction: column; min-height: 100vh; }
+  .main { flex: 1; padding: 24px 40px 48px; }
+
+  /* ── TOPBAR ── */
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 16px 40px; background: var(--panel); border-bottom: 1px solid var(--line); gap: 24px; position: sticky; top: 0; z-index: 30; }
+  .topbar-left { display: flex; align-items: baseline; gap: 16px; }
+  .topbar-wordmark { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: 2px; color: var(--ink-3); padding: 4px 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); }
+  .topbar-title { font-family: "Instrument Serif", serif; font-size: 28px; letter-spacing: -0.2px; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+
+  .search-wrap { position: relative; }
+  .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--ink-3); pointer-events: none; }
+  .search-input { height: 36px; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 0 12px 0 32px; font-family: inherit; font-size: 13.5px; color: var(--ink); outline: none; width: 220px; }
+  .search-input:focus { border-color: var(--ink-3); background: var(--panel); }
+  .search-input::placeholder { color: var(--ink-4); }
+
+  .view-toggle { display: flex; gap: 2px; padding: 3px; background: var(--chip); border-radius: 8px; }
+  .vt { width: 30px; height: 30px; border: 0; background: transparent; border-radius: 5px; cursor: pointer; color: var(--ink-3); display: grid; place-items: center; }
+  .vt:hover { color: var(--ink); }
+  .vt.on { background: var(--panel); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+
+  .btn-ghost { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); cursor: pointer; font-family: inherit; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+  .btn-ghost:hover { background: var(--chip); color: var(--ink); }
+  .btn-ghost.active { border-color: var(--ink); color: var(--ink); }
+  .btn-badge { font-family: "JetBrains Mono", monospace; font-size: 10.5px; background: var(--ink); color: var(--panel); padding: 1px 5px; border-radius: 3px; }
+  .btn-dark { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; border: 0; background: var(--ink); color: var(--panel); cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .btn-dark:hover { background: #2a2d24; }
+  .btn-dark:disabled { opacity: 0.4; cursor: not-allowed; }
+  .plus { font-size: 15px; line-height: 1; }
+
+  /* ── DROPDOWN ── */
+  .dropdown-wrap { position: relative; }
+  .dropdown { position: absolute; top: calc(100% + 6px); right: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px; min-width: 180px; box-shadow: 0 8px 24px rgba(0,0,0,0.10); z-index: 40; }
+  .dd-item { display: block; width: 100%; padding: 8px 12px; text-align: left; border: 0; background: transparent; cursor: pointer; font-family: inherit; font-size: 13px; color: var(--ink-2); border-radius: 6px; }
+  .dd-item:hover { background: var(--chip); color: var(--ink); }
+  .dd-item.on { background: var(--chip); color: var(--ink); font-weight: 500; }
+
+  /* ── SUMMARY STRIP ── */
+  .summary-strip { display: flex; justify-content: space-between; align-items: center; padding: 12px 40px; border-bottom: 1px solid var(--line-2); background: var(--panel); gap: 24px; }
+  .summary-left { display: flex; align-items: center; gap: 6px; font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--ink-3); }
+  .summary-count { font-weight: 500; color: var(--ink-2); }
+  .summary-filter-tag { color: var(--ink); }
+  .summary-right { display: flex; align-items: center; gap: 20px; }
+  .sum-stat { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+  .sum-k { font-family: "JetBrains Mono", monospace; font-size: 9.5px; letter-spacing: 0.6px; color: var(--ink-3); }
+  .sum-v { font-family: "Instrument Serif", serif; font-size: 20px; line-height: 1; color: var(--ink); }
+  .sum-sep { width: 1px; height: 28px; background: var(--line-2); }
+  .sb-sep { color: var(--line); }
+  .sb-ok  { color: #6f8b5f; }
+
+  /* ── GRID ── */
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+  @media (max-width: 1200px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 760px)  { .grid { grid-template-columns: 1fr; } }
+
+  /* ── GRAPH CARD (grid) ── */
+  .gc { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow: hidden; cursor: pointer; text-decoration: none; color: inherit; transition: box-shadow 140ms, transform 140ms, border-color 140ms; }
+  .gc.hov { border-color: color-mix(in oklab, var(--ink) 30%, var(--line)); box-shadow: 0 6px 24px rgba(30,30,20,0.09); transform: translateY(-1px); }
+  .gc.featured { border-color: var(--line); }
+  .gc.featured.hov { border-color: var(--ink); }
+
+  .gc-thumb { position: relative; flex-shrink: 0; overflow: hidden; width: 100%; aspect-ratio: 2 / 1; }
+  .gc-label { position: absolute; top: 12px; left: 12px; font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 0.8px; padding: 3px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; color: var(--ink-2); text-transform: uppercase; }
+  .gc-health { position: absolute; top: 14px; right: 14px; font-family: "JetBrains Mono", monospace; font-size: 12px; display: flex; align-items: center; gap: 5px; color: var(--ink); }
+  .gc-health.warn { color: var(--ink-2); }
+
+  .gc-body { padding: 18px 20px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  .gc-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .gc-title { font-family: "Instrument Serif", serif; font-size: 22px; line-height: 1.15; letter-spacing: -0.1px; flex: 1; }
+  .gc-arrow { color: var(--ink-3); flex-shrink: 0; margin-top: 4px; opacity: 0; transition: opacity 120ms; }
+  .gc.hov .gc-arrow { opacity: 1; }
+  .gc-desc { font-size: 13px; color: var(--ink-3); line-height: 1.5; }
+
+  .gc-stats { display: flex; gap: 28px; padding-top: 12px; border-top: 1px solid var(--line-2); margin-top: 4px; }
+  .stat-k { font-family: "JetBrains Mono", monospace; font-size: 9.5px; letter-spacing: 0.6px; color: var(--ink-3); margin-bottom: 3px; text-transform: uppercase; }
+  .stat-v { font-family: "Instrument Serif", serif; font-size: 22px; line-height: 1; }
+
+  .gc-foot { display: flex; align-items: center; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line-2); margin-top: auto; }
+  .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-4); flex-shrink: 0; }
+  .sync-dot.ok { background: #6f8b5f; }
+  .sync-dot.warn { background: #b8923a; }
+  .sync-txt { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--ink-3); }
+  .health-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #6f8b5f; }
+  .health-dot.warn { background: #b8923a; }
+
+  /* ── LIST VIEW ── */
+  .list-wrap { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); }
+  .lc-row { display: flex; align-items: center; gap: 24px; padding: 18px 22px; text-decoration: none; color: inherit; border-bottom: 1px solid var(--line-2); transition: background 100ms; }
+  .lc-row:last-child { border-bottom: 0; }
+  .lc-row.hov { background: var(--panel-2); }
+  .lc-row-left { display: flex; align-items: center; gap: 16px; flex: 2; min-width: 0; }
+  .lc-label { font-family: "JetBrains Mono", monospace; font-size: 9.5px; letter-spacing: 0.7px; padding: 3px 8px; background: var(--chip); border: 1px solid var(--line); border-radius: 4px; color: var(--ink-2); white-space: nowrap; flex-shrink: 0; }
+  .lc-row-titles { min-width: 0; }
+  .lc-row-name { font-family: "Instrument Serif", serif; font-size: 18px; line-height: 1.2; display: block; }
+  .lc-row-desc { font-size: 12px; color: var(--ink-3); display: block; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lc-row-stats { display: flex; gap: 28px; flex-shrink: 0; }
+  .lc-row-stats .stat-v { font-family: "JetBrains Mono", monospace; font-size: 14px; color: var(--ink); }
+  .lc-row-meta { display: flex; align-items: center; gap: 8px; font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--ink-3); flex-shrink: 0; }
+  .lc-arrow { color: var(--ink-4); flex-shrink: 0; transition: color 120ms; }
+  .lc-row.hov .lc-arrow { color: var(--ink); }
+
+  /* ── STATUS BAR ── */
+  .statusbar { height: 28px; display: flex; align-items: center; gap: 10px; padding: 0 40px; background: var(--panel); border-top: 1px solid var(--line); font-size: 11px; color: var(--ink-3); font-family: "JetBrains Mono", monospace; letter-spacing: 0.3px; }
+
+  /* ── EMPTY STATE ── */
+  .empty-state { padding: 80px 0; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .empty-icon { font-size: 48px; color: var(--ink-4); }
+  .empty-title { font-family: "Instrument Serif", serif; font-size: 28px; }
+  .empty-desc { color: var(--ink-3); font-size: 14px; }
+
+  /* ── NEW GRAPH MODAL ── */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(20,22,16,0.4); backdrop-filter: blur(2px); z-index: 100; display: grid; place-items: center; padding: 24px; }
+  .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; width: 100%; max-width: 560px; box-shadow: 0 24px 64px rgba(0,0,0,0.15); animation: modal-in 160ms cubic-bezier(.2,.8,.2,1); }
+  @keyframes modal-in { from { transform: translateY(8px) scale(0.99); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+  .modal-head { display: flex; justify-content: space-between; align-items: flex-start; padding: 20px 22px 16px; border-bottom: 1px solid var(--line-2); }
+  .modal-eyebrow { font-family: "JetBrains Mono", monospace; font-size: 10.5px; letter-spacing: 1.2px; color: var(--ink-3); margin-bottom: 4px; }
+  .modal-title { font-family: "Instrument Serif", serif; font-size: 26px; }
+  .modal-close { width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--line); background: var(--bg); cursor: pointer; display: grid; place-items: center; color: var(--ink-2); }
+  .modal-close:hover { background: var(--chip); }
+  .modal-body { padding: 20px 22px; display: flex; flex-direction: column; gap: 18px; }
+  .modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 22px; border-top: 1px solid var(--line-2); }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field-label { font-family: "JetBrains Mono", monospace; font-size: 10.5px; letter-spacing: 0.5px; color: var(--ink-2); text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+  .field-req { color: #b14a3c; font-size: 10px; }
+  .input { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 9px 11px; font-family: inherit; font-size: 13.5px; color: var(--ink); outline: none; }
+  .input:focus { border-color: var(--ink-3); background: var(--panel); }
+  .input-select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%), linear-gradient(135deg, var(--ink-3) 50%, transparent 50%); background-position: right 10px center, right 5px center; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; padding-right: 24px; }
+
+  .template-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .template-card { text-align: left; padding: 12px 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg); cursor: pointer; font-family: inherit; transition: border-color 80ms, background 80ms; }
+  .template-card:hover { background: var(--chip); }
+  .template-card.on { border-color: var(--ink); background: var(--panel-2); }
+  .template-title { font-size: 13px; font-weight: 500; color: var(--ink); margin-bottom: 4px; }
+  .template-desc { font-size: 11.5px; color: var(--ink-3); line-height: 1.4; }
+
+  /* CSS var fallbacks */
+  :root { --green: #6f8b5f; --gold: #b8923a; --coral: #b14a3c; }
+</style>
+</body>
+</html>
