@@ -836,7 +836,7 @@ function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filte
             if (!path) return null;
             const baseColor = markers[e.kind].color;
             return (
-              <g key={i} opacity={visEdge ? (dim ? 0.18 : 1) : 0.08}>
+              <g key={i} opacity={lit ? 1 : (highlightId ? (visEdge ? 0.12 : 0.04) : (visEdge ? 0.7 : 0.06))}>
                 <path
                   d={path}
                   fill="none"
@@ -853,8 +853,8 @@ function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filte
           {/* edge labels — only render at decent zoom or when lit */}
           {EDGES.map((e, i) => {
             const visEdge = isVisible(e.s) && isVisible(e.t);
-            if (!visEdge) return null;
             const lit = edgeIsLit(e);
+            if (!visEdge && !lit) return null;
             if (zoom < 0.85 && !lit) return null;
             const [mx, my] = edgeMid(e);
             return (
@@ -871,7 +871,7 @@ function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filte
           {nodes.map(n => {
             const vis = isVisible(n.id);
             const lit = nodeIsLit(n.id);
-            const dim = !vis || nodeIsDim(n.id);
+            const dim = !lit && (!vis || nodeIsDim(n.id));
             const isSel = selected === n.id;
             const isHov = hover === n.id;
             return (
@@ -883,7 +883,7 @@ function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filte
                 onPointerUp={(e) => { e.stopPropagation(); onPointerUp(e, n.id); }}
                 onMouseEnter={() => setHover(n.id)}
                 onMouseLeave={() => setHover(null)}
-                opacity={vis ? 1 : 0.22}
+                opacity={lit ? 1 : (highlightId ? (vis ? 0.18 : 0.06) : (vis ? 1 : 0.22))}
               >
                 <NodeShape node={n} selected={isSel} highlighted={lit || isHov} dimmed={dim} />
                 <text
