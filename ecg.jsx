@@ -2272,175 +2272,334 @@ function SourcesPane({ sources, node }) {
   );
 }
 
-const RULE_TEMPLATES = [
-  { id: "required",     kind: "VALIDATE", title: "Required field",       desc: "Assert a field is never null or empty.",              exprTemplate: "{field} IS NOT NULL",                         exprHint: "owner_id IS NOT NULL",                          severity: "ERROR" },
-  { id: "range",        kind: "VALIDATE", title: "Value range",          desc: "Numeric field stays within defined bounds.",          exprTemplate: "{field} BETWEEN {min} AND {max}",             exprHint: "arr_usd >= 0",                                  severity: "ERROR" },
-  { id: "format",       kind: "VALIDATE", title: "Format / Pattern",     desc: "Field value must match a regex pattern.",             exprTemplate: "{field} ~ /{pattern}/",                       exprHint: 'email ~ /^[^@]+@[^@]+$/',                       severity: "WARN"  },
-  { id: "enum",         kind: "VALIDATE", title: "Enum membership",      desc: "Field value must be one of a known set.",             exprTemplate: "{field} IN ({values})",                       exprHint: "tier IN (SMB, GROWTH, ENT)",                    severity: "WARN"  },
-  { id: "cross_field",  kind: "VALIDATE", title: "Cross-field rule",     desc: "If field A is set, field B must also be present.",    exprTemplate: "IF {field_a} IS NOT NULL THEN {field_b} IS NOT NULL", exprHint: "IF tier = STRATEGIC THEN csm_id IS NOT NULL", severity: "WARN" },
-  { id: "freshness",    kind: "SLO",      title: "Freshness SLO",        desc: "Data must arrive within a time budget.",              exprTemplate: "p95(ingest_lag) < {duration}",                exprHint: "p95(ingest_lag) < 30m",                         severity: "WARN"  },
-  { id: "completeness", kind: "SLO",      title: "Completeness SLO",     desc: "Fill rate must stay above a threshold.",              exprTemplate: "fill_rate({field}) > {threshold}%",           exprHint: "fill_rate(owner_id) > 95%",                     severity: "WARN"  },
-  { id: "pii_gate",     kind: "ACCESS",   title: "PII access gate",      desc: "Restrict PII fields to users with a required role.",  exprTemplate: "fields(pii=true) → require role:{role}",      exprHint: "fields(pii=true) → require role:acct_admin",    severity: "ERROR" },
-];
-
 function NewRuleModal({ node, onClose }) {
-  const [step, setStep]       = useState(1);
-  const [template, setTemplate] = useState(null);
-  const [form, setForm]       = useState({ title: "", expr: "", severity: "ERROR", kind: "VALIDATE" });
+  const props = generateProps(node);
+  const [step, setStep]   = useState(1);
+  const [kind, setKind]   = useState("VALIDATE");
+  const [title, setTitle] = useState("");
+  const [sev, setSev]     = useState("ERROR");
+  const [manual, setManual] = useState(false);
+  const [rawExpr, setRawExpr] = useState("");
 
-  function pickTemplate(t) {
-    setTemplate(t);
-    setForm({ title: "", expr: t.exprTemplate, severity: t.severity, kind: t.kind });
-    setStep(2);
+  // VALIDATE builder state
+  const firstField = props[0]?.name || "";
+  const [vField, setVField] = useState(firstField);
+  const [vOp, setVOp]       = useState("is not null");
+  const [vVal, setVVal]     = useState("");
+  const [vVal2, setVVal2]   = useState("");
+
+  // SLO builder state
+  const [sloDim, setSloDim]   = useState("freshness");
+  const [sloField, setSloField] = useState(firstField);
+  const [sloN, setSloN]       = useState("30");
+  const [sloU, setSloU]       = useState("m");
+
+  // ACCESS builder state
+  const [accScope, setAccScope] = useState("pii");
+  const [accField, setAccField] = useState(props.find(p => p.pii)?.name || firstField);
+  const [accRole, setAccRole]   = useState("");
+
+  function opsFor(name) {
+    const t = (props.find(p => p.name === name) || {}).type || "string";
+    if (t === "bool")      return ["is true", "is false", "is not null"];
+    if (t === "decimal" || t === "float") return ["is not null", "=", "≠", ">", "≥", "<", "≤", "between"];
+    if (t.startsWith("enum"))  return ["is not null", "is one of", "is not one of"];
+    if (t === "timestamp" || t === "date") return ["is not null", "is after", "is before", "is recent within"];
+    if (t === "struct") return ["is not null"];
+    return ["is not null", "equals", "not equals", "contains", "matches regex", "starts with", "ends with"];
   }
 
-  const sevStyle = s => s === "ERROR"
-    ? { bg: "var(--coral-fill)", color: "var(--coral)" }
-    : s === "WARN"
-    ? { bg: "var(--gold-fill)",  color: "var(--gold)"  }
-    : { bg: "var(--chip)",       color: "var(--ink-3)" };
+  function onFieldChange(f) {
+    setVField(f);
+    const ops = opsFor(f);
+    if (!ops.includes(vOp)) setVOp(ops[0]);
+  }
 
-  const inputStyle = { width: "100%", border: "1px solid var(--line)", borderRadius: 8, padding: "10px 12px", fontSize: 13, fontFamily: "inherit", color: "var(--ink)", background: "var(--bg-canvas)", outline: "none", boxSizing: "border-box" };
+  function buildExpr() {
+    if (manual) return rawExpr;
+    if (kind === "VALIDATE") {
+      const f = vField, v = vVal || "?";
+      if (vOp === "is not null")     return `${f} IS NOT NULL`;
+      if (vOp === "is true")         return `${f} = TRUE`;
+      if (vOp === "is false")        return `${f} = FALSE`;
+      if (vOp === "=")               return `${f} = ${v}`;
+      if (vOp === "≠")               return `${f} != ${v}`;
+      if (vOp === ">")               return `${f} > ${v}`;
+      if (vOp === "≥")               return `${f} >= ${v}`;
+      if (vOp === "<")               return `${f} < ${v}`;
+      if (vOp === "≤")               return `${f} <= ${v}`;
+      if (vOp === "between")         return `${f} BETWEEN ${v} AND ${vVal2 || "?"}`;
+      if (vOp === "is one of")       return `${f} IN (${v})`;
+      if (vOp === "is not one of")   return `${f} NOT IN (${v})`;
+      if (vOp === "equals")          return `${f} = '${v}'`;
+      if (vOp === "not equals")      return `${f} != '${v}'`;
+      if (vOp === "contains")        return `${f} ILIKE '%${v}%'`;
+      if (vOp === "matches regex")   return `${f} ~ /${v}/`;
+      if (vOp === "starts with")     return `${f} ILIKE '${v}%'`;
+      if (vOp === "ends with")       return `${f} ILIKE '%${v}'`;
+      if (vOp === "is after")        return `${f} > '${v}'`;
+      if (vOp === "is before")       return `${f} < '${v}'`;
+      if (vOp === "is recent within") return `${f} >= NOW() - INTERVAL '${v}'`;
+    }
+    if (kind === "SLO") {
+      if (sloDim === "freshness")    return `p95(ingest_lag) < ${sloN}${sloU}`;
+      if (sloDim === "completeness") return `fill_rate(${sloField}) > ${sloN}%`;
+      if (sloDim === "uniqueness")   return `count_distinct(${sloField}) / count(*) > ${sloN / 100}`;
+    }
+    if (kind === "ACCESS") {
+      const scope = accScope === "pii" ? "fields(pii=true)" : accScope === "all" ? "fields(*)" : accField;
+      return `${scope} → require role:${accRole || "?"}`;
+    }
+    return rawExpr;
+  }
+
+  const expr = buildExpr();
+  const ops  = opsFor(vField);
+  const needsVal  = !["is not null", "is true", "is false"].includes(vOp);
+  const needsVal2 = vOp === "between";
+
+  const sevStyle = s => s === "ERROR" ? { bg: "var(--coral-fill)", c: "var(--coral)" }
+                      : s === "WARN"  ? { bg: "var(--gold-fill)",  c: "var(--gold)"  }
+                      :                 { bg: "var(--chip)",        c: "var(--ink-3)" };
+
+  const sel = { border: "1px solid var(--line)", borderRadius: 8, padding: "8px 10px", fontSize: 12.5, fontFamily: "inherit", color: "var(--ink)", background: "var(--bg-canvas)", outline: "none", cursor: "pointer" };
+  const inp = { border: "1px solid var(--line)", borderRadius: 8, padding: "8px 10px", fontSize: 12.5, fontFamily: "inherit", color: "var(--ink)", background: "var(--bg-canvas)", outline: "none", boxSizing: "border-box" };
+  const lbl = { display: "block", fontFamily: "JetBrains Mono", fontSize: 9.5, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 7 };
+
+  // Shortcuts: optional one-click pre-fill, no separate screen
+  const shortcuts = [
+    { label: "Required field", apply: () => { setKind("VALIDATE"); setVOp("is not null"); setSev("ERROR"); setManual(false); } },
+    { label: "Non-negative",   apply: () => { setKind("VALIDATE"); const f = props.find(p => p.type === "decimal" || p.type === "float")?.name || vField; setVField(f); setVOp("≥"); setVVal("0"); setSev("ERROR"); setManual(false); } },
+    { label: "Format check",   apply: () => { setKind("VALIDATE"); const f = props.find(p => p.type === "string")?.name || vField; setVField(f); setVOp("matches regex"); setVVal(""); setSev("WARN"); setManual(false); } },
+    { label: "Enum values",    apply: () => { setKind("VALIDATE"); const f = props.find(p => p.type?.startsWith("enum"))?.name || vField; setVField(f); setVOp("is one of"); setVVal(""); setSev("WARN"); setManual(false); } },
+    { label: "Freshness SLO",  apply: () => { setKind("SLO"); setSloDim("freshness"); setSloN("30"); setSloU("m"); setSev("WARN"); setManual(false); } },
+    { label: "PII gate",       apply: () => { setKind("ACCESS"); setAccScope("pii"); setSev("ERROR"); setManual(false); } },
+  ];
 
   return (
     <div className="flow-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="flow-shell" style={{ maxWidth: 820, maxHeight: 660 }}>
+      <div className="flow-shell" style={{ maxWidth: 660, maxHeight: 680 }}>
 
         <div className="flow-head">
           <div>
             <div className="flow-eyebrow">NEW RULE · {node.label.toUpperCase()}</div>
-            <div className="flow-title" style={{ fontSize: 18 }}>
-              {step === 1 ? "Choose a starting point" : step === 2 ? (template ? template.title : "Define rule") : "Review & save"}
+            <div style={{ fontSize: 17, fontWeight: 600, color: "var(--ink)", marginTop: 3 }}>
+              {step === 1 ? "Define rule" : "Review & save"}
             </div>
           </div>
           <div className="flow-head-right">
-            <span className="flow-stage-pill">Step <b>{step}</b> / 3</span>
+            <span className="flow-stage-pill">Step <b>{step}</b> / 2</span>
             <button className="flow-close" onClick={onClose}>✕</button>
           </div>
         </div>
 
-        <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
-          <div className="flow-steps" style={{ width: 196, flexShrink: 0 }}>
-            {[
-              { n: 1, label: "Template", hint: "Pick a starting point" },
-              { n: 2, label: "Define",   hint: template?.title || "Rule details" },
-              { n: 3, label: "Review",   hint: "Preview before saving" },
-            ].map(s => (
-              <button key={s.n} className={"flow-step" + (step === s.n ? " on" : step > s.n ? " done" : "")}
-                onClick={() => step > s.n && setStep(s.n)}>
-                <span className="flow-step-n">{step > s.n ? "✓" : s.n}</span>
-                <div className="flow-step-text">
-                  <div className="flow-step-label">{s.label}</div>
-                  <div className="flow-step-hint">{s.hint}</div>
-                </div>
-              </button>
-            ))}
-          </div>
+        <div className="flow-main">
 
-          <div className="flow-main" style={{ flex: 1, paddingTop: 24 }}>
+          {step === 1 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-            {step === 1 && (
-              <>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                  {RULE_TEMPLATES.map(t => (
-                    <button key={t.id} onClick={() => pickTemplate(t)}
-                      style={{ textAlign: "left", border: "1px solid var(--line)", borderRadius: 10, padding: "14px 15px", background: "var(--bg-canvas)", cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", gap: 6 }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--ink-3)"; e.currentTarget.style.background = "var(--panel-2)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--line)";   e.currentTarget.style.background = "var(--bg-canvas)"; }}>
-                      <span className={"rule-kind rule-kind-" + t.kind.toLowerCase()}>{t.kind}</span>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", marginTop: 2 }}>{t.title}</div>
-                      <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.4 }}>{t.desc}</div>
-                      <code style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", marginTop: 2 }}>{t.exprHint}</code>
-                    </button>
-                  ))}
-                </div>
-                <button onClick={() => setStep(2)}
-                  style={{ width: "100%", border: "1px dashed var(--line)", borderRadius: 10, padding: "11px 16px", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, color: "var(--ink-3)" }}>
-                  Start from blank
-                </button>
-              </>
-            )}
-
-            {step === 2 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 520 }}>
-                <div>
-                  <label style={{ display: "block", fontFamily: "JetBrains Mono", fontSize: 10, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 7 }}>Rule type</label>
-                  <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+              {/* Kind + Title */}
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
+                <div style={{ flexShrink: 0 }}>
+                  <div style={lbl}>Kind</div>
+                  <div style={{ display: "flex", gap: 5 }}>
                     {["VALIDATE","COMPUTE","SLO","ACCESS","INFER"].map(k => (
-                      <button key={k} onClick={() => setForm(f => ({ ...f, kind: k }))}
+                      <button key={k} onClick={() => { setKind(k); setManual(false); }}
                         className={"rule-kind rule-kind-" + k.toLowerCase()}
-                        style={{ cursor: "pointer", border: form.kind === k ? "2px solid currentColor" : "2px solid transparent", opacity: form.kind === k ? 1 : 0.45, padding: "5px 10px", fontSize: 10.5 }}>
+                        style={{ cursor: "pointer", border: kind === k ? "2px solid currentColor" : "2px solid transparent", opacity: kind === k ? 1 : 0.38, padding: "5px 8px", fontSize: 10 }}>
                         {k}
                       </button>
                     ))}
                   </div>
                 </div>
-                <div>
-                  <label style={{ display: "block", fontFamily: "JetBrains Mono", fontSize: 10, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 7 }}>Title</label>
-                  <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                    placeholder={template ? template.title : "e.g. Account must have an owner"}
-                    style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontFamily: "JetBrains Mono", fontSize: 10, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 7 }}>Expression</label>
-                  <textarea value={form.expr} onChange={e => setForm(f => ({ ...f, expr: e.target.value }))}
-                    placeholder={template ? template.exprHint : "e.g. field IS NOT NULL"}
-                    rows={3}
-                    style={{ ...inputStyle, fontFamily: "JetBrains Mono", fontSize: 12, resize: "vertical", lineHeight: 1.6 }} />
-                  {template && <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", marginTop: 5 }}>Template: {template.exprTemplate}</div>}
-                </div>
-                <div>
-                  <label style={{ display: "block", fontFamily: "JetBrains Mono", fontSize: 10, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 7 }}>Severity</label>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {["ERROR","WARN","INFO"].map(s => {
-                      const { bg, color } = sevStyle(s);
-                      return (
-                        <button key={s} onClick={() => setForm(f => ({ ...f, severity: s }))}
-                          style={{ fontFamily: "JetBrains Mono", fontSize: 10, padding: "5px 12px", borderRadius: 5, border: form.severity === s ? "2px solid "+color : "2px solid transparent", background: bg, color, cursor: "pointer", fontWeight: 600, letterSpacing: "0.4px" }}>
-                          {s}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 4 }}>
-                  <button onClick={() => setStep(1)} className="btn-ghost">Back</button>
-                  <button onClick={() => setStep(3)} className="btn-dark" disabled={!form.title && !form.expr}>Review →</button>
+                <div style={{ flex: 1 }}>
+                  <div style={lbl}>Title</div>
+                  <input value={title} onChange={e => setTitle(e.target.value)}
+                    placeholder="e.g. ARR must be non-negative"
+                    style={{ ...inp, width: "100%" }} />
                 </div>
               </div>
-            )}
 
-            {step === 3 && (
-              <div style={{ maxWidth: 520 }}>
-                <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 14 }}>Rule preview</div>
-                <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", marginBottom: 24 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "15px 18px", borderBottom: "1px solid var(--line-2)" }}>
-                    <span className={"rule-kind rule-kind-" + form.kind.toLowerCase()} style={{ flexShrink: 0, minWidth: 68, textAlign: "center" }}>{form.kind}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)", marginBottom: 4 }}>{form.title || template?.title || "(untitled)"}</div>
-                      <code style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)" }}>{form.expr || "(no expression)"}</code>
+              {/* Shortcut pills */}
+              <div>
+                <div style={{ ...lbl, marginBottom: 8 }}>
+                  Shortcuts
+                  <span style={{ fontFamily: "inherit", fontSize: 11, letterSpacing: 0, textTransform: "none", color: "var(--ink-3)", marginLeft: 6 }}>— click to pre-fill the builder below</span>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {shortcuts.map(s => (
+                    <button key={s.label} onClick={s.apply}
+                      style={{ fontSize: 12, padding: "5px 12px", border: "1px solid var(--line)", borderRadius: 99, background: "var(--bg-canvas)", cursor: "pointer", color: "var(--ink-2)", fontFamily: "inherit" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "var(--chip)"; e.currentTarget.style.borderColor = "var(--ink-3)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "var(--bg-canvas)"; e.currentTarget.style.borderColor = "var(--line)"; }}>
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ borderTop: "1px solid var(--line-2)" }} />
+
+              {/* Builder — VALIDATE */}
+              {kind === "VALIDATE" && !manual && (
+                <div>
+                  <div style={lbl}>Condition</div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <select value={vField} onChange={e => onFieldChange(e.target.value)} style={sel}>
+                      {props.map(p => <option key={p.name} value={p.name}>{p.name} · {p.type}</option>)}
+                    </select>
+                    <select value={vOp} onChange={e => setVOp(e.target.value)} style={sel}>
+                      {ops.map(op => <option key={op} value={op}>{op}</option>)}
+                    </select>
+                    {needsVal && (
+                      <input value={vVal} onChange={e => setVVal(e.target.value)}
+                        placeholder={vOp === "is one of" ? "val1, val2, val3" : vOp === "matches regex" ? "^[a-z]+$" : vOp === "is recent within" ? "30m" : "value"}
+                        style={{ ...inp, width: 148 }} />
+                    )}
+                    {needsVal2 && (
+                      <>
+                        <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)" }}>and</span>
+                        <input value={vVal2} onChange={e => setVVal2(e.target.value)} placeholder="value" style={{ ...inp, width: 100 }} />
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Builder — SLO */}
+              {kind === "SLO" && !manual && (
+                <div>
+                  <div style={lbl}>SLO target</div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <select value={sloDim} onChange={e => setSloDim(e.target.value)} style={sel}>
+                      <option value="freshness">Freshness — p95 ingest lag</option>
+                      <option value="completeness">Completeness — fill rate</option>
+                      <option value="uniqueness">Uniqueness ratio</option>
+                    </select>
+                    {sloDim !== "freshness" && (
+                      <select value={sloField} onChange={e => setSloField(e.target.value)} style={sel}>
+                        {props.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                      </select>
+                    )}
+                    <span style={{ fontFamily: "JetBrains Mono", fontSize: 12, color: "var(--ink-3)" }}>
+                      {sloDim === "freshness" ? "< " : "> "}
+                    </span>
+                    <input value={sloN} onChange={e => setSloN(e.target.value)} placeholder="30" style={{ ...inp, width: 60 }} />
+                    <select value={sloU} onChange={e => setSloU(e.target.value)} style={sel}>
+                      {sloDim === "freshness"
+                        ? <><option value="m">min</option><option value="h">hr</option><option value="d">day</option></>
+                        : <option value="%">%</option>}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Builder — ACCESS */}
+              {kind === "ACCESS" && !manual && (
+                <div>
+                  <div style={lbl}>Access rule</div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <select value={accScope} onChange={e => setAccScope(e.target.value)} style={sel}>
+                      <option value="pii">All PII fields</option>
+                      <option value="all">All fields</option>
+                      <option value="specific">Specific field</option>
+                    </select>
+                    {accScope === "specific" && (
+                      <select value={accField} onChange={e => setAccField(e.target.value)} style={sel}>
+                        {props.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                      </select>
+                    )}
+                    <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)" }}>→ require role:</span>
+                    <input value={accRole} onChange={e => setAccRole(e.target.value)} placeholder="e.g. acct_admin" style={{ ...inp, width: 148 }} />
+                  </div>
+                </div>
+              )}
+
+              {/* COMPUTE / INFER — direct expression */}
+              {(kind === "COMPUTE" || kind === "INFER") && (
+                <div>
+                  <div style={lbl}>{kind === "COMPUTE" ? "Formula" : "Relationship pattern"}</div>
+                  <textarea value={rawExpr} onChange={e => setRawExpr(e.target.value)}
+                    placeholder={kind === "COMPUTE" ? "risk_score := agent:cust_health.score" : "Person :PREVIOUSLY_AT Account"}
+                    rows={2}
+                    style={{ ...inp, width: "100%", fontFamily: "JetBrains Mono", fontSize: 12, resize: "vertical", lineHeight: 1.6 }} />
+                </div>
+              )}
+
+              {/* Expression preview + manual toggle */}
+              {(kind === "VALIDATE" || kind === "SLO" || kind === "ACCESS") && (
+                <div style={{ border: "1px solid var(--line-2)", borderRadius: 8, background: "var(--panel-2)", overflow: "hidden" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", borderBottom: "1px dashed var(--line-2)" }}>
+                    <span style={{ fontFamily: "JetBrains Mono", fontSize: 9.5, letterSpacing: "0.5px", color: "var(--ink-3)", textTransform: "uppercase" }}>Generated expression</span>
+                    <button onClick={() => { setManual(!manual); if (!manual) setRawExpr(expr); }}
+                      style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--blue)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                      {manual ? "← Use builder" : "Edit manually →"}
+                    </button>
+                  </div>
+                  <div style={{ padding: "10px 12px" }}>
+                    {manual
+                      ? <textarea value={rawExpr} onChange={e => setRawExpr(e.target.value)} rows={2}
+                          style={{ width: "100%", border: "none", background: "transparent", fontFamily: "JetBrains Mono", fontSize: 12.5, color: "var(--ink)", outline: "none", resize: "none", boxSizing: "border-box", lineHeight: 1.6 }} />
+                      : <code style={{ fontFamily: "JetBrains Mono", fontSize: 12.5, color: expr.includes("?") ? "var(--ink-3)" : "var(--ink)" }}>
+                          {expr || "fill in the condition above"}
+                        </code>
+                    }
+                  </div>
+                </div>
+              )}
+
+              {/* Severity */}
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={lbl}>Severity</div>
+                <div style={{ display: "flex", gap: 7 }}>
+                  {["ERROR","WARN","INFO"].map(s => {
+                    const { bg, c } = sevStyle(s);
+                    return (
+                      <button key={s} onClick={() => setSev(s)}
+                        style={{ fontFamily: "JetBrains Mono", fontSize: 10, padding: "5px 13px", borderRadius: 5, border: sev === s ? "2px solid "+c : "2px solid transparent", background: bg, color: c, cursor: "pointer", fontWeight: 600, letterSpacing: "0.4px" }}>
+                        {s}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 2 }}>
+                <button onClick={() => setStep(2)} className="btn-dark" disabled={!title}>Review →</button>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div>
+              <div style={{ fontFamily: "JetBrains Mono", fontSize: 9.5, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 14 }}>Rule preview</div>
+              <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", marginBottom: 24 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "15px 18px", borderBottom: "1px solid var(--line-2)" }}>
+                  <span className={"rule-kind rule-kind-" + kind.toLowerCase()} style={{ flexShrink: 0, minWidth: 68, textAlign: "center" }}>{kind}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)", marginBottom: 4 }}>{title}</div>
+                    <code style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)" }}>{expr || "(no expression)"}</code>
+                  </div>
+                  {(() => { const { bg, c } = sevStyle(sev); return (
+                    <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, padding: "3px 8px", borderRadius: 4, background: bg, color: c, fontWeight: 600, letterSpacing: "0.4px", flexShrink: 0 }}>{sev}</span>
+                  ); })()}
+                </div>
+                <div style={{ display: "flex", gap: 1, background: "var(--line-2)" }}>
+                  {[["Node", node.label], ["Runs on", "Every ingest"], ["Status", "Will be enabled"]].map(([k, v], i) => (
+                    <div key={i} style={{ flex: 1, padding: "11px 16px", background: "var(--panel-2)" }}>
+                      <div style={{ fontFamily: "JetBrains Mono", fontSize: 9, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 3 }}>{k}</div>
+                      <div style={{ fontSize: 12.5, color: k === "Status" ? "var(--green)" : "var(--ink)", fontWeight: k === "Status" ? 500 : 400 }}>{v}</div>
                     </div>
-                    {(() => { const { bg, color } = sevStyle(form.severity); return (
-                      <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, padding: "3px 8px", borderRadius: 4, background: bg, color, fontWeight: 600, letterSpacing: "0.4px", flexShrink: 0 }}>{form.severity}</span>
-                    ); })()}
-                  </div>
-                  <div style={{ display: "flex", gap: 0, background: "var(--line-2)" }}>
-                    {[["Node", node.label], ["Runs on", "Every ingest"], ["Status", "Will be enabled"]].map(([k, v], i) => (
-                      <div key={i} style={{ flex: 1, padding: "11px 16px", background: "var(--panel-2)" }}>
-                        <div style={{ fontFamily: "JetBrains Mono", fontSize: 9, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 3 }}>{k}</div>
-                        <div style={{ fontSize: 12.5, color: k === "Status" ? "var(--green)" : "var(--ink)", fontWeight: k === "Status" ? 500 : 400 }}>{v}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                  <button onClick={() => setStep(2)} className="btn-ghost">Back</button>
-                  <button onClick={onClose} className="btn-dark">Save rule</button>
+                  ))}
                 </div>
               </div>
-            )}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button onClick={() => setStep(1)} className="btn-ghost">Back</button>
+                <button onClick={onClose} className="btn-dark">Save rule</button>
+              </div>
+            </div>
+          )}
 
-          </div>
         </div>
       </div>
     </div>
