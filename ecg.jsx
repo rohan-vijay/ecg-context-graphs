@@ -2,7 +2,7 @@ const { useState, useRef, useEffect, useMemo, useCallback } = React;
 
 // ---------- DATA ------------------------------------------------------------
 
-const NODES = [
+const _ENT_NODES = [
   // ENTITIES (circle, blue)
   { id: "account",      label: "Account",       type: "entity", state: "core",     cat: "core",    x: 0,    y: 60,   size: 34, instances: "2.8K", instancesN: 2840,  props: 18, edges: 12, fill: 94, conf: 97, fresh: "24m", pii: 4, change: "HIGH",   desc: "Customer or prospect organization" },
   { id: "person",       label: "Person",        type: "entity", state: "core",     cat: "core",    x: -240, y: -10,  size: 30, instances: "18K",  instancesN: 18420, props: 14, edges: 8,  fill: 81, conf: 92, fresh: "1.2h", pii: 4, change: "MEDIUM", desc: "Individual contact across the customer lifecycle" },
@@ -31,7 +31,7 @@ const NODES = [
   { id: "snowflake",    label: "Snowflake Warehouse",  type: "source", state: "core", cat: "source", x: -120, y: 540,  size: 28, instances: "—", instancesN: 0, props: 36, edges: 5, fill: 96, conf: 98, fresh: "12h", pii: 0, change: "MEDIUM", desc: "Warehouse landing zone for product telemetry" },
 ];
 
-const EDGES = [
+const _ENT_EDGES = [
   // direct edges
   { s: "person",       t: "account",      label: "WORKS_AT",        kind: "direct" },
   { s: "person",       t: "account",      label: "PREVIOUSLY_AT",   kind: "inferred", curve: -36 },
@@ -68,7 +68,80 @@ const EDGES = [
   { s: "snowflake",    t: "interaction",  label: "SOURCES",         kind: "source" },
 ];
 
-const SIDEBAR_NODES = [...NODES].sort((a, b) => a.label.localeCompare(b.label));
+// ─── PRODUCT SPECIALIST GRAPH ───────────────────────────────────────────────
+
+const PS_NODES = [
+  // ENTITIES
+  { id: "dealer",       label: "Dealer",       type: "entity", state: "core",   cat: "core",    x: -220, y: 0,    size: 32, instances: "840",  instancesN: 840,   props: 16, edges: 8,  fill: 92, conf: 96, fresh: "30m", pii: 2, change: "LOW",    desc: "Dealership organization — the customer being onboarded or supported by the PS team" },
+  { id: "project",      label: "Project",      type: "entity", state: "core",   cat: "core",    x: 0,    y: 0,    size: 34, instances: "1.2K", instancesN: 1200,  props: 22, edges: 14, fill: 88, conf: 94, fresh: "15m", pii: 0, change: "MEDIUM", desc: "PS delivery project tracking the full engagement lifecycle from SOW through go-live" },
+  { id: "workorder",    label: "Work Order",   type: "entity", state: "core",   cat: "core",    x: 200,  y: -80,  size: 30, instances: "8.4K", instancesN: 8400,  props: 18, edges: 10, fill: 91, conf: 95, fresh: "10m", pii: 0, change: "HIGH",   desc: "Atomic unit of PS delivery — a scoped configuration or implementation task" },
+  { id: "pem",          label: "PEM",          type: "entity", state: "core",   cat: "core",    x: -80,  y: -200, size: 26, instances: "126",  instancesN: 126,   props: 12, edges: 6,  fill: 86, conf: 92, fresh: "1h",  pii: 3, change: "LOW",    desc: "Project Engagement Manager — PS lead accountable for delivery outcomes" },
+  { id: "bsa",          label: "BSA",          type: "entity", state: "core",   cat: "core",    x: 120,  y: -200, size: 26, instances: "84",   instancesN: 84,    props: 11, edges: 5,  fill: 84, conf: 90, fresh: "1h",  pii: 3, change: "LOW",    desc: "Business Solutions Architect — technical design lead for the engagement" },
+  { id: "champion",     label: "Champion",     type: "entity", state: "core",   cat: "core",    x: -380, y: -100, size: 24, instances: "920",  instancesN: 920,   props: 10, edges: 4,  fill: 78, conf: 88, fresh: "2h",  pii: 2, change: "LOW",    desc: "Customer champion and internal advocate at the dealership" },
+  { id: "resource",     label: "Resource",     type: "entity", state: "core",   cat: "core",    x: 300,  y: -200, size: 24, instances: "340",  instancesN: 340,   props: 14, edges: 5,  fill: 82, conf: 91, fresh: "4h",  pii: 2, change: "LOW",    desc: "PS team member assigned to one or more work orders" },
+  { id: "milestone",    label: "Milestone",    type: "entity", state: "signal", cat: "core",    x: 60,   y: -340, size: 24, instances: "4.8K", instancesN: 4800,  props: 9,  edges: 5,  fill: 94, conf: 97, fresh: "30m", pii: 0, change: "MEDIUM", desc: "Delivery milestone gating phase completion and go-live readiness" },
+  { id: "sow",          label: "SOW",          type: "entity", state: "core",   cat: "core",    x: -200, y: 180,  size: 26, instances: "1.2K", instancesN: 1200,  props: 15, edges: 5,  fill: 96, conf: 99, fresh: "1d",  pii: 0, change: "LOW",    desc: "Statement of Work — commercial contract scoping the engagement" },
+  { id: "sdd",          label: "SDD",          type: "entity", state: "core",   cat: "derived", x: 200,  y: 160,  size: 24, instances: "980",  instancesN: 980,   props: 13, edges: 4,  fill: 85, conf: 93, fresh: "1d",  pii: 0, change: "MEDIUM", desc: "Solution Design Document — technical blueprint authored by the BSA" },
+  { id: "raid",         label: "RAID",         type: "entity", state: "risk",   cat: "derived", x: 360,  y: 0,    size: 24, instances: "3.2K", instancesN: 3200,  props: 16, edges: 5,  fill: 80, conf: 87, fresh: "1h",  pii: 0, change: "HIGH",   desc: "Risks, Assumptions, Issues and Dependencies log for the project" },
+  { id: "signal",       label: "Signal",       type: "entity", state: "signal", cat: "derived", x: 440,  y: -160, size: 24, instances: "28K",  instancesN: 28000, props: 8,  edges: 5,  fill: 88, conf: 94, fresh: "6m",  pii: 0, change: "HIGH",   desc: "Health and quality signal derived from delivery activity and TOC platform data" },
+
+  // DATA SOURCES
+  { id: "salesforce",   label: "Salesforce",   type: "source", state: "core",   cat: "source",  x: -480, y: -260, size: 26, instances: "—", instancesN: 0, props: 28, edges: 4, fill: 98, conf: 99, fresh: "5m",  pii: 4, change: "LOW",    desc: "CRM — dealer accounts, PS contacts, opportunities, and cases" },
+  { id: "apc",          label: "APC 2.0",      type: "source", state: "core",   cat: "source",  x: -60,  y: -440, size: 24, instances: "—", instancesN: 0, props: 22, edges: 2, fill: 96, conf: 98, fresh: "10m", pii: 0, change: "LOW",    desc: "PS project management platform — projects and work order lifecycle" },
+  { id: "arc",          label: "ARC Platform", type: "source", state: "core",   cat: "source",  x: 560,  y: 80,   size: 24, instances: "—", instancesN: 0, props: 18, edges: 2, fill: 94, conf: 97, fresh: "15m", pii: 0, change: "LOW",    desc: "Tekion delivery platform — milestone tracking and RAID logs" },
+  { id: "toc_im",       label: "TOC: IM",      type: "source", state: "core",   cat: "source",  x: 520,  y: -280, size: 22, instances: "—", instancesN: 0, props: 14, edges: 1, fill: 92, conf: 96, fresh: "2m",  pii: 0, change: "MEDIUM", desc: "TOC Incident Management — incidents feeding delivery health signals" },
+  { id: "toc_st",       label: "TOC: Tickets", type: "source", state: "core",   cat: "source",  x: 520,  y: -100, size: 22, instances: "—", instancesN: 0, props: 16, edges: 2, fill: 90, conf: 95, fresh: "5m",  pii: 0, change: "MEDIUM", desc: "TOC Service Tickets — open issues and blockers tied to work orders" },
+  { id: "toc_forms",    label: "TOC: Forms",   type: "source", state: "core",   cat: "source",  x: -260, y: 360,  size: 22, instances: "—", instancesN: 0, props: 12, edges: 1, fill: 88, conf: 94, fresh: "30m", pii: 0, change: "LOW",    desc: "TOC Forms — structured configuration capture for work order completion" },
+  { id: "toc_support",  label: "TOC: Support", type: "source", state: "core",   cat: "source",  x: -480, y: 200,  size: 22, instances: "—", instancesN: 0, props: 10, edges: 1, fill: 86, conf: 93, fresh: "15m", pii: 0, change: "LOW",    desc: "TOC Support Portal — dealer-submitted requests and engagement feedback" },
+  { id: "toc_prism",    label: "TOC: PRISM",   type: "source", state: "core",   cat: "source",  x: 380,  y: 280,  size: 22, instances: "—", instancesN: 0, props: 20, edges: 1, fill: 92, conf: 96, fresh: "1h",  pii: 0, change: "LOW",    desc: "TOC PRISM — project readiness and implementation scoring" },
+  { id: "toc_acctmgmt", label: "TOC: Acct Mgmt", type: "source", state: "core", cat: "source", x: -560, y: 80,   size: 22, instances: "—", instancesN: 0, props: 14, edges: 1, fill: 88, conf: 94, fresh: "1h",  pii: 2, change: "LOW",    desc: "TOC Account Management (LUS) — dealer onboarding and account status" },
+  { id: "skilljar",     label: "Skilljar",     type: "source", state: "core",   cat: "source",  x: 200,  y: 380,  size: 22, instances: "—", instancesN: 0, props: 12, edges: 2, fill: 94, conf: 97, fresh: "1d",  pii: 1, change: "LOW",    desc: "Training platform — resource certifications and dealer training completion" },
+  { id: "chronicleai",  label: "ChronicleAI",  type: "source", state: "core",   cat: "source",  x: 580,  y: -200, size: 22, instances: "—", instancesN: 0, props: 16, edges: 1, fill: 90, conf: 95, fresh: "30m", pii: 0, change: "MEDIUM", desc: "AI-native platform providing behavioral signals and delivery quality insights" },
+];
+
+const PS_EDGES = [
+  // Entity relationships
+  { s: "dealer",       t: "project",   label: "HAS_PROJECT",   kind: "direct" },
+  { s: "project",      t: "workorder", label: "INCLUDES",      kind: "direct" },
+  { s: "project",      t: "sow",       label: "GOVERNED_BY",   kind: "direct" },
+  { s: "project",      t: "sdd",       label: "DOCUMENTED_IN", kind: "direct" },
+  { s: "project",      t: "raid",      label: "TRACKED_IN",    kind: "direct" },
+  { s: "project",      t: "milestone", label: "HAS_MILESTONE", kind: "direct" },
+  { s: "pem",          t: "project",   label: "MANAGES",       kind: "direct" },
+  { s: "bsa",          t: "project",   label: "DESIGNS",       kind: "direct" },
+  { s: "workorder",    t: "resource",  label: "ASSIGNED_TO",   kind: "direct" },
+  { s: "workorder",    t: "milestone", label: "DELIVERS",      kind: "direct" },
+  { s: "champion",     t: "dealer",    label: "REPRESENTS",    kind: "direct" },
+  { s: "signal",       t: "workorder", label: "OBSERVED_ON",   kind: "direct" },
+  { s: "signal",       t: "project",   label: "MEASURED_FOR",  kind: "inferred" },
+  { s: "sow",          t: "sdd",       label: "INFORMS",       kind: "inferred" },
+  { s: "pem",          t: "workorder", label: "OWNS",          kind: "inferred", curve: -40 },
+  // Source → entity
+  { s: "salesforce",   t: "dealer",    label: "SOURCES", kind: "source" },
+  { s: "salesforce",   t: "pem",       label: "SOURCES", kind: "source" },
+  { s: "salesforce",   t: "sow",       label: "SOURCES", kind: "source" },
+  { s: "salesforce",   t: "champion",  label: "SOURCES", kind: "source" },
+  { s: "apc",          t: "project",   label: "SOURCES", kind: "source" },
+  { s: "apc",          t: "workorder", label: "SOURCES", kind: "source" },
+  { s: "arc",          t: "milestone", label: "SOURCES", kind: "source" },
+  { s: "arc",          t: "raid",      label: "SOURCES", kind: "source" },
+  { s: "toc_im",       t: "signal",    label: "SOURCES", kind: "source" },
+  { s: "toc_st",       t: "signal",    label: "SOURCES", kind: "source" },
+  { s: "toc_st",       t: "workorder", label: "SOURCES", kind: "source" },
+  { s: "toc_forms",    t: "workorder", label: "SOURCES", kind: "source" },
+  { s: "toc_support",  t: "dealer",    label: "SOURCES", kind: "source" },
+  { s: "toc_prism",    t: "workorder", label: "SOURCES", kind: "source" },
+  { s: "toc_acctmgmt", t: "dealer",    label: "SOURCES", kind: "source" },
+  { s: "skilljar",     t: "resource",  label: "SOURCES", kind: "source" },
+  { s: "skilljar",     t: "pem",       label: "SOURCES", kind: "source" },
+  { s: "chronicleai",  t: "signal",    label: "SOURCES", kind: "source" },
+];
+
+const IS_PS_GRAPH = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("graph") === "ps";
+const NODES = IS_PS_GRAPH ? PS_NODES : _ENT_NODES;
+const EDGES = IS_PS_GRAPH ? PS_EDGES : _ENT_EDGES;
+
+const SIDEBAR_NODES = [...NODES].filter(n => n.type !== "agent").sort((a, b) => a.label.localeCompare(b.label));
 
 // ---------- HELPERS ---------------------------------------------------------
 
@@ -223,7 +296,7 @@ function Header({ tab, onTab, onAddNode }) {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
         <div className="hdr-title">
-          <div className="hdr-title-row">Enterprise Context Graph</div>
+          <div className="hdr-title-row">{IS_PS_GRAPH ? "Product Specialist Graph" : "Enterprise Context Graph"}</div>
           <div className="hdr-sub">
             <span className="dot-live" />
             <span className="sub-strong">LIVE</span>
@@ -292,7 +365,6 @@ function Sidebar({ open, onToggle, filter, setFilter, query, setQuery, selected,
       <div className="sb-chips">
         <button className={"chip" + (filter === "all" ? " on" : "")} onClick={() => setFilter("all")}>All <span className="chip-n">{counts.all}</span></button>
         <button className={"chip" + (filter === "entity" ? " on" : "")} onClick={() => setFilter("entity")}>Entities <span className="chip-n">{counts.entity}</span></button>
-        <button className={"chip" + (filter === "agent" ? " on" : "")} onClick={() => setFilter("agent")}>Agents <span className="chip-n">{counts.agent}</span></button>
         <button className={"chip" + (filter === "source" ? " on" : "")} onClick={() => setFilter("source")}>Sources <span className="chip-n">{counts.source}</span></button>
       </div>
 
@@ -603,8 +675,9 @@ function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filte
 
   // saved-view dim sets
   const savedViewSet = useMemo(() => {
-    if (savedView === "Sales flow")    return new Set(["account","person","subscription","agreement","invoice","rev_fore","netsuite"]);
-    if (savedView === "Health inputs") return new Set(["account","interaction","signal","cust_health","ticket","incident","snowflake"]);
+    if (IS_PS_GRAPH) return null;
+    if (savedView === "Sales flow")    return new Set(["account","person","subscription","agreement","invoice","netsuite"]);
+    if (savedView === "Health inputs") return new Set(["account","interaction","signal","ticket","incident","snowflake"]);
     if (savedView === "PII surfaces")  return new Set(["person","employee","okta","account"]);
     return null;
   }, [savedView]);
@@ -931,10 +1004,6 @@ function Legend({ filter, setFilter }) {
       <button className={"legend-pill" + (filter === "entity" || filter === "all" ? "" : " off")} onClick={() => setFilter(filter === "entity" ? "all" : "entity")}>
         <svg width="14" height="14" viewBox="-12 -12 24 24"><circle r="8.5" fill="var(--blue-fill)" stroke="var(--blue)" strokeWidth="1.4" /></svg>
         Entities
-      </button>
-      <button className={"legend-pill" + (filter === "agent" || filter === "all" ? "" : " off")} onClick={() => setFilter(filter === "agent" ? "all" : "agent")}>
-        <svg width="14" height="14" viewBox="-12 -12 24 24"><polygon points="-8,0 -4,-7 4,-7 8,0 4,7 -4,7" fill="var(--purple-fill)" stroke="var(--purple)" strokeWidth="1.4" /></svg>
-        Agents
       </button>
       <button className={"legend-pill" + (filter === "source" || filter === "all" ? "" : " off")} onClick={() => setFilter(filter === "source" ? "all" : "source")}>
         <svg width="14" height="14" viewBox="-12 -12 24 24"><rect x="-8" y="-8" width="16" height="16" rx="1.5" fill="var(--green-fill)" stroke="var(--green)" strokeWidth="1.4" /></svg>
@@ -3253,7 +3322,7 @@ function App() {
   const [hover, setHover] = useState(null);
   const [savedView, setSavedView] = useState("Full schema");
   const [viewport, setViewport] = useState({ zoom: 0.95, panX: 0, panY: 0 });
-  const [nodes, setNodes] = useState(NODES);
+  const [nodes, setNodes] = useState(NODES.filter(n => n.type !== "agent"));
   const canvasSize = useRef({ w: 1000, h: 700 });
 
   const selectedNode = nodes.find(n => n.id === selected);
