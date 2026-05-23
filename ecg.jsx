@@ -2678,6 +2678,7 @@ function NewRuleModal({ node, onClose }) {
 function RulesPane({ rules, node }) {
   const [filter, setFilter]     = useState("all");
   const [showNewRule, setShowNewRule] = useState(false);
+  const [violationRule, setViolationRule] = useState(null);
   const KINDS = ["all","VALIDATE","COMPUTE","SLO","ACCESS","INFER"];
   const filtered = filter === "all" ? rules : rules.filter(r => r.kind === filter);
   const counts   = KINDS.reduce((acc, k) => { acc[k] = k === "all" ? rules.length : rules.filter(r => r.kind === k).length; return acc; }, {});
@@ -2732,8 +2733,12 @@ function RulesPane({ rules, node }) {
                   <code style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.expr || r.id}</code>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 18, flexShrink: 0 }}>
-                  <div style={{ textAlign: "right", minWidth: 100 }}>
-                    <div style={{ fontFamily: "JetBrains Mono", fontSize: 12, fontWeight: 600, color: hasViol ? "var(--coral)" : "var(--ink-3)" }}>
+                  <div
+                    style={{ textAlign: "right", minWidth: 100, cursor: hasViol ? "pointer" : "default" }}
+                    onClick={() => hasViol && setViolationRule(r)}
+                    title={hasViol ? "Click to investigate violations" : undefined}
+                  >
+                    <div style={{ fontFamily: "JetBrains Mono", fontSize: 12, fontWeight: 600, color: hasViol ? "var(--coral)" : "var(--ink-3)", textDecoration: hasViol ? "underline" : "none" }}>
                       {r.violations !== undefined ? r.violations + " violations" : r.last}
                     </div>
                     {r.compliance !== undefined && (
@@ -2752,8 +2757,166 @@ function RulesPane({ rules, node }) {
         </div>
       </div>
 
+      {violationRule && <ViolationsPanel rule={violationRule} node={node} onClose={() => setViolationRule(null)} />}
       {showNewRule && <NewRuleModal node={node} onClose={() => setShowNewRule(false)} />}
     </>
+  );
+}
+
+// ─── VIOLATIONS PANEL ────────────────────────────────────────────────────────
+
+function ViolationsPanel({ rule, node, onClose }) {
+  const [actionDone, setActionDone] = useState(null);
+
+  const SAMPLES = {
+    domain_format: [
+      { id: "acc_84921", field: "domain", value: "ACME Corp",          created: "2026-05-21", source: "HubSpot Marketing" },
+      { id: "acc_72103", field: "domain", value: "Riverside Motors#2", created: "2026-05-20", source: "HubSpot Marketing" },
+      { id: "acc_61847", field: "domain", value: "Summit Auto & RV",   created: "2026-05-19", source: "Manual / Admin UI" },
+      { id: "acc_55290", field: "domain", value: "Valley Ford!",       created: "2026-05-18", source: "HubSpot Marketing" },
+      { id: "acc_48134", field: "domain", value: "Peak Auto>>",        created: "2026-05-17", source: "HubSpot Marketing" },
+    ],
+  };
+
+  const records = SAMPLES[rule.id] || Array.from({ length: Math.min(rule.violations || 3, 5) }, (_, i) => ({
+    id: node.id + "_" + (10000 + i * 37 + node.id.charCodeAt(0)),
+    field: (rule.expr || "field").match(/\b(\w+)\b/)?.[1] || "field",
+    value: "(invalid value)",
+    created: "2026-05-" + String(22 - i).padStart(2, "0"),
+    source: i < 3 ? "Primary source" : "Manual / Admin UI",
+  }));
+
+  const rootCause = rule.id === "domain_format"
+    ? "10 of 12 violations originate from the HubSpot Marketing integration — company domain values arrive without URL-format validation, causing failures against the /^[a-z0-9-.]+$/ pattern. The integration team was notified on 2026-05-19 but no fix has been deployed."
+    : `${rule.violations} records fail the rule expression. Check the source pipeline for data quality issues upstream — the most recent batch from the primary source shows elevated error rates.`;
+
+  const sourceBreakdown = rule.id === "domain_format"
+    ? [{ name: "HubSpot Marketing", pct: 83, status: "degraded" }, { name: "Manual / Admin UI", pct: 17, status: "healthy" }]
+    : [{ name: "Primary source", pct: 100, status: "degraded" }];
+
+  const totalEval = rule.violations > 0 && rule.compliance < 100
+    ? Math.round(rule.violations / Math.max(0.001, (100 - rule.compliance) / 100))
+    : 2840;
+
+  const ACTIONS = [
+    { id: "quarantine", label: `Quarantine ${rule.violations} records`, desc: "Flag violating records — blocks them from downstream consumption", tone: "dark" },
+    { id: "suppress",   label: "Suppress violations",                   desc: "Acknowledge and snooze this violation class with a reason",       tone: "ghost" },
+    { id: "issue",      label: "Create remediation issue",              desc: "File a ticket and assign to the data owner",                      tone: "ghost" },
+    { id: "notify",     label: "Notify source owner",                   desc: "Alert the team responsible for the upstream source",              tone: "ghost" },
+    { id: "edit-rule",  label: "Adjust rule expression",               desc: "Open the rule editor to modify the threshold or expression",      tone: "ghost" },
+  ];
+
+  return (
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 300, position: "fixed", inset: 0, background: "rgba(20,22,16,0.45)", backdropFilter: "blur(2px)", display: "grid", placeItems: "center", padding: 24 }}>
+      <div className="modal" style={{ maxWidth: 700, width: "100%", maxHeight: "88vh", overflowY: "auto", background: "var(--panel)", borderRadius: 14, border: "1px solid var(--line-2)", boxShadow: "0 24px 80px rgba(0,0,0,0.18)" }} onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <div className="modal-eyebrow">VIOLATIONS · {rule.kind} · {node.label}</div>
+            <div className="modal-title" style={{ fontSize: 22 }}>{rule.title || rule.label}</div>
+          </div>
+          <button className="modal-close" onClick={onClose}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+          </button>
+        </div>
+
+        <div className="modal-body" style={{ gap: 22 }}>
+          {/* Rule summary */}
+          <div style={{ display: "flex", gap: 16, padding: 14, background: "var(--panel-2)", borderRadius: 10, border: "1px solid var(--line-2)" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.5px", marginBottom: 6 }}>RULE EXPRESSION</div>
+              <code style={{ fontFamily: "JetBrains Mono", fontSize: 12.5, color: "var(--ink)", display: "block", overflowX: "auto" }}>{rule.expr}</code>
+            </div>
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              <div style={{ fontFamily: "Instrument Serif", fontSize: 36, color: "var(--coral)", lineHeight: 1 }}>{rule.violations}</div>
+              <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", marginTop: 2 }}>violations</div>
+            </div>
+          </div>
+
+          {/* Compliance bar */}
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "JetBrains Mono", fontSize: 10.5, color: "var(--ink-3)", marginBottom: 6 }}>
+              <span>Compliance</span>
+              <span style={{ color: "var(--ink)", fontWeight: 600 }}>{rule.compliance}% · {rule.violations} failing of {totalEval.toLocaleString()} evaluated</span>
+            </div>
+            <div style={{ height: 7, background: "var(--line)", borderRadius: 4, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: rule.compliance + "%", background: rule.compliance >= 99 ? "var(--green)" : rule.compliance >= 90 ? "var(--gold)" : "var(--coral)", borderRadius: 4, transition: "width 600ms" }} />
+            </div>
+          </div>
+
+          {/* Source attribution */}
+          <div>
+            <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 10 }}>Source attribution</div>
+            {sourceBreakdown.map((s, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.status === "degraded" ? "var(--coral)" : "var(--green)", flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: "var(--ink)", flex: 1 }}>{s.name}</span>
+                {s.status === "degraded" && <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--coral)", background: "var(--coral-fill)", padding: "1px 6px", borderRadius: 3 }}>degraded</span>}
+                <div style={{ flex: 2, height: 4, background: "var(--line-2)", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: s.pct + "%", background: s.status === "degraded" ? "var(--coral)" : "var(--green)", transition: "width 600ms" }} />
+                </div>
+                <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)", flexShrink: 0, minWidth: 30, textAlign: "right" }}>{s.pct}%</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Failing records */}
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.5px", textTransform: "uppercase" }}>
+                Failing records <span style={{ color: "var(--coral)", marginLeft: 6 }}>{rule.violations} total</span>
+              </div>
+              <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 10px" }}>Export CSV ↓</button>
+            </div>
+            <div style={{ border: "1px solid var(--line-2)", borderRadius: 8, overflow: "hidden" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr 1.4fr 1fr", padding: "8px 14px", background: "var(--panel-2)", borderBottom: "1px solid var(--line)", fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.5px", textTransform: "uppercase" }}>
+                <div>Record ID</div><div>Field</div><div>Failing value</div><div>Source</div>
+              </div>
+              {records.map((r, i) => (
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr 1.4fr 1fr", padding: "10px 14px", borderBottom: i < records.length - 1 ? "1px solid var(--line-2)" : "none", alignItems: "center" }}>
+                  <code style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--blue)" }}>{r.id}</code>
+                  <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)" }}>{r.field}</span>
+                  <span style={{ fontSize: 12.5, color: "var(--coral)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>"{r.value}"</span>
+                  <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{r.source}</span>
+                </div>
+              ))}
+              {rule.violations > records.length && (
+                <div style={{ padding: "8px 14px", fontFamily: "JetBrains Mono", fontSize: 10.5, color: "var(--ink-4)", borderTop: "1px solid var(--line-2)" }}>
+                  +{rule.violations - records.length} more — Export CSV to view all
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Root cause */}
+          <div style={{ background: "var(--gold-fill)", border: "1px solid var(--gold)", borderRadius: 10, padding: "14px 16px" }}>
+            <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--gold)", letterSpacing: "0.5px", marginBottom: 8 }}>ROOT CAUSE</div>
+            <p style={{ fontSize: 13.5, color: "var(--ink-2)", lineHeight: 1.6, margin: 0 }}>{rootCause}</p>
+          </div>
+
+          {/* Actions */}
+          <div>
+            <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 10 }}>Actions</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {ACTIONS.map(a => (
+                <button
+                  key={a.id}
+                  className={actionDone === a.id ? "btn-ghost" : a.tone === "dark" ? "btn-dark" : "btn-ghost"}
+                  onClick={() => setActionDone(a.id)}
+                  disabled={!!actionDone && actionDone !== a.id}
+                  style={{ width: "100%", justifyContent: "flex-start", gap: 12, padding: "10px 14px", textAlign: "left" }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 500, fontSize: 13 }}>{a.label}</div>
+                    <div style={{ fontSize: 11.5, color: a.tone === "dark" && actionDone !== a.id ? "rgba(255,255,255,0.65)" : "var(--ink-3)", marginTop: 2 }}>{a.desc}</div>
+                  </div>
+                  {actionDone === a.id && <span style={{ fontFamily: "JetBrains Mono", fontSize: 12, color: "var(--green)", fontWeight: 600 }}>✓ Done</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -2762,27 +2925,123 @@ function RulesPane({ rules, node }) {
 function QualityPane({ node, properties }) {
   const seed = node.id.charCodeAt(0) + node.id.length;
 
-  // 30-day sparkline data per dimension
-  function spark(base, variance, seed2) {
+  function spark(base, variance, s2) {
     return Array.from({ length: 30 }, (_, i) => {
-      const r = Math.sin((seed2 + i) * 0.7) * variance + Math.cos((seed2 * 2 + i) * 0.3) * (variance * 0.5);
+      const r = Math.sin((s2 + i) * 0.7) * variance + Math.cos((s2 * 2 + i) * 0.3) * (variance * 0.5);
       return Math.max(0, Math.min(100, base + r));
     });
   }
 
   const dims = [
-    { id: "completeness", label: "Completeness",    value: node.fill, target: 92, data: spark(node.fill, 3, seed),     unit: "%" },
-    { id: "conformance",  label: "Conformance",     value: node.conf, target: 95, data: spark(node.conf, 2, seed+7),   unit: "%" },
-    { id: "freshness",    label: "Freshness (p95)", value: 88,        target: 85, data: spark(88, 6, seed+13),          unit: "%" },
-    { id: "uniqueness",   label: "Uniqueness",       value: 100 - (seed % 3), target: 99, data: spark(99, 1, seed+21), unit: "%" },
-    { id: "validity",     label: "Validity",         value: 91 + (seed%7), target: 95, data: spark(92, 4, seed+17),    unit: "%" },
-    { id: "identity",     label: "Identity match",  value: 91 - (seed%6), target: 90, data: spark(89, 5, seed+29),     unit: "%" },
+    { id: "completeness", label: "Completeness",    value: node.fill,       target: 92, data: spark(node.fill, 3, seed)     },
+    { id: "conformance",  label: "Conformance",     value: node.conf,       target: 95, data: spark(node.conf, 2, seed+7)   },
+    { id: "freshness",    label: "Freshness (p95)", value: 88,              target: 85, data: spark(88, 6, seed+13)          },
+    { id: "uniqueness",   label: "Uniqueness",      value: 100-(seed%3),    target: 99, data: spark(99, 1, seed+21)          },
+    { id: "validity",     label: "Validity",        value: 91+(seed%7),     target: 95, data: spark(92, 4, seed+17)          },
+    { id: "identity",     label: "Identity match",  value: 91-(seed%6),     target: 90, data: spark(89, 5, seed+29)          },
   ];
 
   const [selDim, setSelDim] = useState("completeness");
-  const dim = dims.find(d => d.id === selDim);
+  const [expandedProp, setExpandedProp] = useState(null);
+  const [actionFired, setActionFired] = useState({});
 
-  function MiniSparkline({ data, color, w=120, h=32 }) {
+  const dim = dims.find(d => d.id === selDim);
+  const tc = (v, t) => v >= t ? "var(--green)" : v >= t - 5 ? "var(--gold)" : "var(--coral)";
+  const tone = tc(dim.value, dim.target);
+  const isAbove = dim.value >= dim.target;
+  const gap = Math.max(0, dim.target - dim.value);
+  const affected = Math.round((100 - dim.value) / 100 * (node.instancesN || 1000));
+  const affectedStr = affected > 1000 ? (affected / 1000).toFixed(1) + "K" : affected.toLocaleString();
+
+  const nullFields = properties.filter((_, i) => i % 3 === 0 || i % 5 === 0).slice(0, 2).map(p => p.name);
+
+  const DIM_META = {
+    completeness: {
+      sources: [
+        { name: "HubSpot Marketing", pct: 68, status: "degraded" },
+        { name: "Manual / Admin UI", pct: 24, status: "healthy"  },
+        { name: "Salesforce CRM",    pct: 8,  status: "healthy"  },
+      ],
+      rootCause: `${nullFields.join(", ") || "Several fields"} show elevated null rates. The HubSpot Marketing integration is sending incomplete records — 14 ingestion errors in the last 24h are the primary driver. Most nulls appear on records created after the 2026-05-20 connector update.`,
+      actions: [
+        { id: "backfill", label: "Trigger backfill",    desc: "Reprocess affected records from the primary source",       tone: "dark"  },
+        { id: "alert",    label: "Alert source team",   desc: "Notify HubSpot integration owners of the null rate spike", tone: "ghost" },
+        { id: "rule",     label: "Add not-null rule",   desc: "Create a VALIDATE rule for null-critical fields",          tone: "ghost" },
+        { id: "export",   label: "Export null records", desc: "Download records with null values for manual review",      tone: "ghost" },
+        { id: "monitor",  label: "Set SLO alert",       desc: "Alert if completeness drops below 90%",                   tone: "ghost" },
+      ],
+    },
+    conformance: {
+      sources: [
+        { name: "NetSuite ERP",        pct: 52, status: "degraded" },
+        { name: "Snowflake Warehouse", pct: 34, status: "healthy"  },
+        { name: "Other",               pct: 14, status: "healthy"  },
+      ],
+      rootCause: "Non-conforming values originate from schema drift in the NetSuite ERP feed — arr_usd is arriving as a float string (e.g., \"1234.56\") instead of a numeric type, causing 4% of records to fail conformance checks. The issue started after the NetSuite v8.2 upgrade on 2026-05-18.",
+      actions: [
+        { id: "schema",    label: "Update field schema",   desc: "Modify field type to accept float strings natively",    tone: "dark"  },
+        { id: "quarantine",label: "Quarantine records",    desc: "Flag non-conforming records from downstream consumption",tone: "ghost" },
+        { id: "notify",    label: "Notify source team",   desc: "Alert NetSuite integration team of the type drift",     tone: "ghost" },
+        { id: "export",    label: "Export non-conforming",desc: "Download failing records for manual review",            tone: "ghost" },
+      ],
+    },
+    freshness: {
+      sources: [
+        { name: "Snowflake Warehouse", pct: 80, status: "degraded" },
+        { name: "Salesforce CRM",      pct: 20, status: "healthy"  },
+      ],
+      rootCause: `Snowflake Warehouse pipeline lag detected. Last successful incremental sync: 2h 14m ago vs. 30m SLO. An upstream dbt model failure at 08:42 UTC on 2026-05-23 caused a cascade delay on signal and interaction tables. Current p95 latency: ${node.fresh}.`,
+      actions: [
+        { id: "pipeline", label: "Check pipeline logs",   desc: "View dbt run logs and source connector status",         tone: "dark"  },
+        { id: "sync",     label: "Trigger sync",          desc: "Force an immediate incremental sync from source",       tone: "ghost" },
+        { id: "slo",      label: "Adjust SLO target",     desc: "Update the freshness target threshold for this entity", tone: "ghost" },
+        { id: "oncall",   label: "Page oncall",           desc: "Alert the data platform oncall engineer",               tone: "ghost" },
+      ],
+    },
+    uniqueness: {
+      sources: [
+        { name: "Salesforce CRM",    pct: 60, status: "degraded" },
+        { name: "Manual / Admin UI", pct: 40, status: "degraded" },
+      ],
+      rootCause: `${Math.max(1, Math.ceil(affected / 2))} duplicate ${node.label} entries detected — created by concurrent writes from Salesforce and Manual/Admin UI during the 2026-05-20 maintenance window. The conflict resolution policy is not yet enforced for this entity.`,
+      actions: [
+        { id: "dedup",   label: "Find duplicates",      desc: "View all duplicate record pairs for review",              tone: "dark"  },
+        { id: "merge",   label: "Auto-merge low-risk",  desc: "Automatically merge confirmed duplicate pairs",          tone: "ghost" },
+        { id: "alert",   label: "Set uniqueness alert", desc: "Alert if uniqueness drops below 99.5%",                  tone: "ghost" },
+        { id: "export",  label: "Export duplicate pairs",desc: "Download all duplicates for manual resolution",         tone: "ghost" },
+      ],
+    },
+    validity: {
+      sources: [
+        { name: "Snowflake Warehouse", pct: 70, status: "degraded" },
+        { name: "Manual / Admin UI",   pct: 30, status: "healthy"  },
+      ],
+      rootCause: `Validity failures are concentrated in computed fields — ${(seed%3)+2} risk_score values outside the [0,100] range originating from a cold-start edge case in the scoring model. Records with no historical activity receive a sentinel value of 101 which fails validation.`,
+      actions: [
+        { id: "investigate", label: "Investigate failing records", desc: "View all records that fail validation rules",  tone: "dark"  },
+        { id: "fix",         label: "Fix at source",              desc: "Navigate to the scoring model configuration",  tone: "ghost" },
+        { id: "quarantine",  label: "Quarantine invalids",        desc: "Block invalid records from downstream use",    tone: "ghost" },
+        { id: "export",      label: "Export invalid records",     desc: "Download failing records for review",          tone: "ghost" },
+      ],
+    },
+    identity: {
+      sources: [
+        { name: "Okta Identity",     pct: 55, status: "degraded" },
+        { name: "HubSpot Marketing", pct: 45, status: "degraded" },
+      ],
+      rootCause: "68% of identity match failures are caused by missing email_domain — Person records from HubSpot lack a normalized email field, preventing linkage to the Employee graph. The remaining 32% are name format variations (e.g., \"J. Smith\" vs \"John Smith\") that the fuzzy matcher cannot resolve.",
+      actions: [
+        { id: "resolve",  label: "Run entity resolution", desc: "Trigger the identity stitching pipeline",              tone: "dark"  },
+        { id: "review",   label: "Review candidates",     desc: "See unmatched records with suggested links",           tone: "ghost" },
+        { id: "alert",    label: "Set match alert",       desc: "Alert if identity match drops below 88%",              tone: "ghost" },
+        { id: "export",   label: "Export unmatched",      desc: "Download unmatched entity pairs",                      tone: "ghost" },
+      ],
+    },
+  };
+
+  const meta = DIM_META[selDim] || DIM_META.completeness;
+
+  function MiniSparkline({ data, color, w = 120, h = 32 }) {
     const max = Math.max(...data), min = Math.min(...data);
     const range = max - min || 1;
     const pts = data.map((v, i) => {
@@ -2799,7 +3058,7 @@ function QualityPane({ node, properties }) {
     );
   }
 
-  function BigSparkline({ data, color, w=640, h=80 }) {
+  function TrendChart({ data, color, target, w = 640, h = 90 }) {
     const max = Math.max(...data), min = Math.min(...data);
     const range = max - min || 1;
     const pts = data.map((v, i) => {
@@ -2808,92 +3067,206 @@ function QualityPane({ node, properties }) {
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(" ");
     const area = pts + ` ${w},${h} 0,${h}`;
-    const target = h - ((dim.target - min) / range) * (h - 8) - 4;
+    const tgtY = h - ((target - min) / range) * (h - 8) - 4;
+    const dips = data.map((v, i) => v < target ? i : null).filter(i => i !== null);
     return (
       <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: "block" }}>
-        <polygon points={area} fill={color} opacity="0.1" />
+        <polygon points={area} fill={color} opacity="0.09" />
         <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" />
-        <line x1="0" y1={target} x2={w} y2={target} stroke={color} strokeWidth="1" strokeDasharray="4 4" opacity="0.6" />
-        <text x="4" y={target - 4} fontSize="9" fill={color} fontFamily="JetBrains Mono, monospace">target {dim.target}%</text>
+        {tgtY > 0 && tgtY < h && (
+          <>
+            <line x1="0" y1={tgtY} x2={w} y2={tgtY} stroke={color} strokeWidth="0.9" strokeDasharray="4 4" opacity="0.55" />
+            <text x="5" y={Math.max(10, tgtY - 4)} fontSize="9" fill={color} fontFamily="JetBrains Mono, monospace" opacity="0.8">target {target}%</text>
+          </>
+        )}
+        {dips.slice(0, 4).map(i => {
+          const ptPairs = pts.split(" ")[i]?.split(",");
+          if (!ptPairs) return null;
+          return <circle key={i} cx={parseFloat(ptPairs[0])} cy={parseFloat(ptPairs[1])} r="3.5" fill="var(--coral)" opacity="0.75" />;
+        })}
       </svg>
     );
   }
 
-  const tc = (v, t) => v >= t ? "var(--green)" : v >= t - 5 ? "var(--gold)" : "var(--coral)";
+  const propData = properties.map((p, i) => {
+    const pseed = (seed + i * 7) % 17;
+    const fill = Math.min(100, p.fill + (i % 3 === 0 ? -8 : i % 5 === 0 ? -15 : 0));
+    const conf = Math.min(100, p.conf + (i % 4 === 0 ? -6 : 0));
+    const nulls = Math.floor((100 - fill) / 100 * (node.instancesN || 100));
+    const viols = i % 7 === 0 ? Math.floor(pseed * 4) : 0;
+    const ok = fill >= 90 && conf >= 92 && viols === 0;
+    return { ...p, fill, conf, nulls, viols, ok };
+  });
+
+  const fireAction = (dimId, actionId) => setActionFired(prev => ({ ...prev, [dimId + "_" + actionId]: true }));
+  const isFired = (dimId, actionId) => !!actionFired[dimId + "_" + actionId];
 
   return (
     <div className="quality-pane">
-      {/* KPI cards */}
+      {/* ── KPI cards ── */}
       <div className="quality-kpis">
-        {dims.map(d => (
-          <button key={d.id} className={"qkpi" + (selDim === d.id ? " on" : "")} onClick={() => setSelDim(d.id)}>
-            <div className="qkpi-top">
-              <span className="qkpi-label">{d.label}</span>
-              <span className="qkpi-v" style={{ color: tc(d.value, d.target) }}>{d.value}%</span>
-            </div>
-            <MiniSparkline data={d.data} color={tc(d.value, d.target)} />
-            <div className="qkpi-target">target {d.target}%</div>
-          </button>
-        ))}
+        {dims.map(d => {
+          const c = tc(d.value, d.target);
+          const g = Math.max(0, d.target - d.value);
+          return (
+            <button key={d.id} className={"qkpi" + (selDim === d.id ? " on" : "")} onClick={() => setSelDim(d.id)}>
+              <div className="qkpi-top">
+                <span className="qkpi-label">{d.label}</span>
+                <span className="qkpi-v" style={{ color: c }}>{d.value}%</span>
+              </div>
+              <MiniSparkline data={d.data} color={c} />
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span className="qkpi-target">target {d.target}%</span>
+                {g > 0
+                  ? <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--coral)", fontWeight: 600 }}>−{g.toFixed(1)}%</span>
+                  : <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--green)" }}>✓ above</span>
+                }
+              </div>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Selected dimension detail */}
+      {/* ── Drill-down detail panel ── */}
       <div className="card quality-detail">
-        <div className="card-head card-head-row">
-          <div>{dim.label} <span className="card-head-sub">30-day trend · rolling 24h window</span></div>
-          <div className="card-head-actions">
+        {/* Impact summary stats */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 1, background: "var(--line-2)", borderBottom: "1px solid var(--line-2)" }}>
+          {[
+            { label: "Current",   val: dim.value + "%",                                                          color: tone },
+            { label: "Target",    val: dim.target + "%",                                                          color: "var(--ink)" },
+            { label: "Gap",       val: isAbove ? "— above target" : "−" + gap.toFixed(1) + "% below target",    color: isAbove ? "var(--green)" : "var(--coral)" },
+            { label: "Affected",  val: isAbove ? "0 records" : affectedStr + " records",                         color: "var(--ink)" },
+          ].map(({ label, val, color }) => (
+            <div key={label} style={{ padding: "12px 18px", background: "var(--panel-2)" }}>
+              <div style={{ fontFamily: "JetBrains Mono", fontSize: 9.5, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+              <div style={{ fontFamily: "Instrument Serif", fontSize: 21, color, lineHeight: 1 }}>{val}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Trend chart */}
+        <div style={{ padding: "0 20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0 10px" }}>
+            <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)" }}>{dim.label} <span style={{ fontSize: 12, fontWeight: 400, color: "var(--ink-3)" }}>· 30-day trend · rolling 24h window</span></span>
             <select className="input input-select input-sm" defaultValue="30d" style={{ width: 90 }}>
               <option value="7d">7 days</option>
               <option value="30d">30 days</option>
               <option value="90d">90 days</option>
             </select>
           </div>
+          <TrendChart data={dim.data} color={tone} target={dim.target} />
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", paddingBottom: 14 }}>
+            <span>30 days ago</span>
+            <span style={{ color: "var(--coral)" }}>● below-target anomaly</span>
+            <span>today</span>
+          </div>
         </div>
-        <div style={{ padding: "16px 20px" }}>
-          <BigSparkline data={dim.data} color={tc(dim.value, dim.target)} />
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontFamily: "JetBrains Mono", fontSize: 10.5, color: "var(--ink-3)" }}>
-            <span>30 days ago</span><span>today</span>
+
+        {/* Source attribution */}
+        <div style={{ padding: "14px 20px 18px", borderTop: "1px solid var(--line-2)" }}>
+          <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 12 }}>Source attribution</div>
+          {meta.sources.map((s, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: s.status === "degraded" ? "var(--coral)" : "var(--green)" }} />
+              <span style={{ fontSize: 13, color: "var(--ink)", minWidth: 170 }}>{s.name}</span>
+              {s.status === "degraded" && <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--coral)", background: "var(--coral-fill)", padding: "1px 6px", borderRadius: 3, flexShrink: 0 }}>degraded</span>}
+              <div style={{ flex: 1, height: 5, background: "var(--line)", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: s.pct + "%", background: s.status === "degraded" ? "var(--coral)" : "var(--green)", transition: "width 600ms" }} />
+              </div>
+              <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)", minWidth: 34, textAlign: "right" }}>{s.pct}%</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Root cause + actions */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderTop: "1px solid var(--line-2)" }}>
+          <div style={{ padding: "18px 20px", borderRight: "1px solid var(--line-2)" }}>
+            <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 10 }}>Root cause</div>
+            <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.65, margin: 0 }}>{meta.rootCause}</p>
+          </div>
+          <div style={{ padding: "18px 20px" }}>
+            <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 10 }}>Recommended actions</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              {meta.actions.map(a => (
+                <button
+                  key={a.id}
+                  className={isFired(selDim, a.id) ? "btn-ghost" : a.tone === "dark" ? "btn-dark" : "btn-ghost"}
+                  onClick={() => fireAction(selDim, a.id)}
+                  style={{ justifyContent: "flex-start", gap: 8, padding: "8px 12px", fontSize: 12.5, textAlign: "left" }}
+                  title={a.desc}
+                >
+                  <span style={{ flex: 1 }}>{a.label}</span>
+                  {isFired(selDim, a.id) && <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--green)", fontWeight: 600 }}>✓</span>}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Per-property breakdown */}
+      {/* ── Per-property breakdown ── */}
       <div className="card">
         <div className="card-head card-head-row">
-          <div>Per-property breakdown <span className="card-head-sub">for {dim.label.toLowerCase()}</span></div>
+          <div>Per-property breakdown <span className="card-head-sub">for {dim.label.toLowerCase()} · click row to drill into failing records</span></div>
           <div className="card-head-actions">
-            <button className="btn-ghost">Export CSV</button>
+            <button className="btn-ghost" style={{ fontSize: 12 }}>Export CSV ↓</button>
           </div>
         </div>
         <div className="qprop-table">
           <div className="qprop-head">
             <div>Property</div><div>Type</div><div className="qprop-num">Fill %</div><div className="qprop-num">Conformance %</div><div className="qprop-num">Nulls</div><div className="qprop-num">Violations</div><div>Status</div>
           </div>
-          {properties.map((p, i) => {
-            const pseed = (seed + i * 7) % 17;
-            const fill = Math.min(100, p.fill + (i % 3 === 0 ? -8 : i % 5 === 0 ? -15 : 0));
-            const conf = Math.min(100, p.conf + (i % 4 === 0 ? -6 : 0));
-            const nulls = Math.floor((100 - fill) / 100 * (node.instancesN || 100));
-            const viols = i % 7 === 0 ? Math.floor(pseed * 4) : 0;
-            const ok = fill >= 90 && conf >= 92 && viols === 0;
-            return (
-              <div key={i} className="qprop-row">
-                <div className="qprop-name"><span className="snap-n">{p.name}</span>{p.pii && <span className="snap-tag snap-pii">PII</span>}</div>
+          {propData.map((p, i) => (
+            <React.Fragment key={i}>
+              <div
+                className="qprop-row"
+                style={{ cursor: (p.nulls > 0 || p.viols > 0) ? "pointer" : "default", background: expandedProp === i ? "var(--panel-2)" : "" }}
+                onClick={() => setExpandedProp(expandedProp === i ? null : (p.nulls > 0 || p.viols > 0) ? i : null)}
+              >
+                <div className="qprop-name">
+                  <span className="snap-n">{p.name}</span>
+                  {p.pii && <span className="snap-tag snap-pii">PII</span>}
+                  {(p.nulls > 0 || p.viols > 0) && <span style={{ marginLeft: 4, fontSize: 9, color: "var(--ink-4)" }}>{expandedProp === i ? "▲" : "▼"}</span>}
+                </div>
                 <div className="prop-type">{p.type}</div>
                 <div className="qprop-num">
-                  <div className="nv-bar"><div className="nv-bar-fill" style={{ width: fill + "%", background: metricColor(fill) }} /></div>
-                  <span className="nv-bar-v" style={{ color: metricColor(fill) }}>{fill}%</span>
+                  <div className="nv-bar"><div className="nv-bar-fill" style={{ width: p.fill + "%", background: metricColor(p.fill) }} /></div>
+                  <span className="nv-bar-v" style={{ color: metricColor(p.fill) }}>{p.fill}%</span>
                 </div>
                 <div className="qprop-num">
-                  <div className="nv-bar"><div className="nv-bar-fill" style={{ width: conf + "%", background: metricColor(conf) }} /></div>
-                  <span className="nv-bar-v" style={{ color: metricColor(conf) }}>{conf}%</span>
+                  <div className="nv-bar"><div className="nv-bar-fill" style={{ width: p.conf + "%", background: metricColor(p.conf) }} /></div>
+                  <span className="nv-bar-v" style={{ color: metricColor(p.conf) }}>{p.conf}%</span>
                 </div>
-                <div className="qprop-num" style={{ fontFamily: "JetBrains Mono", fontSize: 12, color: nulls > 0 ? "var(--gold)" : "var(--ink-3)" }}>{nulls.toLocaleString()}</div>
-                <div className="qprop-num" style={{ fontFamily: "JetBrains Mono", fontSize: 12, color: viols > 0 ? "var(--coral)" : "var(--ink-3)" }}>{viols}</div>
-                <div><span className={"qstatus qstatus-" + (ok ? "ok" : viols > 0 ? "fail" : "warn")}>{ok ? "passing" : viols > 0 ? "failing" : "warning"}</span></div>
+                <div className="qprop-num" style={{ fontFamily: "JetBrains Mono", fontSize: 12, color: p.nulls > 0 ? "var(--gold)" : "var(--ink-3)" }}>{p.nulls.toLocaleString()}</div>
+                <div className="qprop-num" style={{ fontFamily: "JetBrains Mono", fontSize: 12, color: p.viols > 0 ? "var(--coral)" : "var(--ink-3)" }}>{p.viols}</div>
+                <div><span className={"qstatus qstatus-" + (p.ok ? "ok" : p.viols > 0 ? "fail" : "warn")}>{p.ok ? "passing" : p.viols > 0 ? "failing" : "warning"}</span></div>
               </div>
-            );
-          })}
+              {expandedProp === i && (
+                <div style={{ background: "var(--panel-2)", borderBottom: "1px solid var(--line-2)", padding: "14px 18px" }}>
+                  <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.5px", marginBottom: 10 }}>
+                    {p.nulls > 0 ? `${p.nulls.toLocaleString()} records with null ${p.name}` : `${p.viols} records failing validation on ${p.name}`} — sample
+                  </div>
+                  <div style={{ border: "1px solid var(--line)", borderRadius: 7, overflow: "hidden", background: "var(--panel)", marginBottom: 12 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", padding: "7px 12px", background: "var(--bg-canvas)", borderBottom: "1px solid var(--line)", fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.4px", textTransform: "uppercase" }}>
+                      <div>Record ID</div><div>Value</div><div>Source</div>
+                    </div>
+                    {Array.from({ length: Math.min(3, p.nulls || p.viols || 1) }, (_, ri) => (
+                      <div key={ri} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", padding: "9px 12px", borderBottom: ri < 2 ? "1px solid var(--line-2)" : "none", alignItems: "center" }}>
+                        <code style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--blue)" }}>{node.id}_{(10000 + ri * 1337 + i * 73).toString(36).toUpperCase()}</code>
+                        <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: p.viols > 0 ? "var(--coral)" : "var(--gold)" }}>{p.viols > 0 ? "(invalid)" : "null"}</span>
+                        <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{ri === 0 ? "HubSpot Marketing" : ri === 1 ? "Salesforce CRM" : "Manual / Admin UI"}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="btn-ghost" style={{ fontSize: 11.5, padding: "5px 10px" }}>Export {p.nulls || p.viols} records ↓</button>
+                    <button className="btn-ghost" style={{ fontSize: 11.5, padding: "5px 10px" }}>Trigger backfill</button>
+                    <button className="btn-ghost" style={{ fontSize: 11.5, padding: "5px 10px" }}>Create issue ↗</button>
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
+          ))}
         </div>
       </div>
     </div>
