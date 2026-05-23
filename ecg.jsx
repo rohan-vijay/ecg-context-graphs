@@ -1014,22 +1014,23 @@ function generateSources(node) {
 
 const RULES_BY_NODE = {
   account: [
-    { kind: "VALIDATE", id: "arr_nonneg",         label: "arr_usd ≥ 0",                          on: true,  last: "0 fails / 24h" },
-    { kind: "COMPUTE",  id: "tier_buckets",       label: "tier := arr_usd → {SMB,MM,ENT}",       on: true,  last: "2,840 evaluated" },
-    { kind: "COMPUTE",  id: "risk_score",         label: "risk_score from cust_health agent",   on: true,  last: "2,712 written" },
-    { kind: "VALIDATE", id: "domain_format",      label: "domain matches /^[a-z0-9-.]+$/",      on: true,  last: "12 violations" },
-    { kind: "ACCESS",   id: "pii_role",           label: "PII fields gated on role:acct_admin", on: true,  last: "audit logged" },
-    { kind: "SLO",      id: "freshness_30m",      label: "freshness p95 < 30m",                  on: true,  last: "OK (p95 = 4m 12s)" },
-    { kind: "INFER",    id: "previously_at",      label: "Person :PREVIOUSLY_AT Account",        on: true,  last: "18 inferred today" },
+    { kind: "VALIDATE", id: "arr_nonneg",    title: "ARR is non-negative",                  expr: "arr_usd >= 0",                                label: "arr_usd ≥ 0",                          severity: "ERROR", violations: 0,  compliance: 100, on: true, last: "0 fails / 24h" },
+    { kind: "VALIDATE", id: "domain_format", title: "Domain format is valid",                expr: 'domain ~ /^[a-z0-9-.]+$/',                   label: "domain matches /^[a-z0-9-.]+$/",      severity: "WARN",  violations: 12, compliance: 99,  on: true, last: "12 violations" },
+    { kind: "COMPUTE",  id: "tier_buckets",  title: "Tier derived from ARR bands",           expr: "tier := arr_usd → {SMB, MM, ENT}",           label: "tier := arr_usd → {SMB,MM,ENT}",       severity: "ERROR", violations: 0,  compliance: 100, on: true, last: "2,840 evaluated" },
+    { kind: "COMPUTE",  id: "risk_score",    title: "Risk score from Customer Health agent", expr: "risk_score := agent:cust_health.score",      label: "risk_score from cust_health agent",   severity: "WARN",  violations: 0,  compliance: 100, on: true, last: "2,712 written" },
+    { kind: "ACCESS",   id: "pii_role",      title: "PII fields require acct_admin role",   expr: "fields(pii=true) → require role:acct_admin", label: "PII fields gated on role:acct_admin", severity: "ERROR", violations: 0,  compliance: 100, on: true, last: "audit logged" },
+    { kind: "SLO",      id: "freshness_30m", title: "Freshness p95 under 30 minutes",        expr: "p95(ingest_lag) < 30m",                      label: "freshness p95 < 30m",                  severity: "WARN",  violations: 0,  compliance: 100, on: true, last: "OK (p95 = 4m 12s)" },
+    { kind: "INFER",    id: "previously_at", title: "Infer past employer relationships",     expr: "Person :PREVIOUSLY_AT Account",              label: "Person :PREVIOUSLY_AT Account",        severity: "INFO",  violations: 0,  compliance: 100, on: true, last: "18 inferred today" },
   ],
 };
 
 function generateRules(node) {
   if (RULES_BY_NODE[node.id]) return RULES_BY_NODE[node.id];
+  const missing = 100 - node.fill;
   return [
-    { kind: "VALIDATE", id: node.id+"_id_unique", label: node.id+"_id is unique",       on: true, last: "0 fails / 24h" },
-    { kind: "SLO",      id: "freshness",          label: "freshness p95 < " + node.fresh, on: true, last: node.fresh },
-    { kind: "VALIDATE", id: "required_fields",    label: "required fields present",     on: true, last: (100-node.fill) + "% missing" },
+    { kind: "VALIDATE", id: node.id+"_id_unique", title: node.label+" ID is unique",       expr: node.id+"_id IS UNIQUE",                label: node.id+"_id is unique",       severity: "ERROR", violations: 0,      compliance: 100,      on: true, last: "0 fails / 24h" },
+    { kind: "SLO",      id: "freshness",          title: "Freshness SLO",                  expr: "p95(ingest_lag) < "+node.fresh,         label: "freshness p95 < "+node.fresh, severity: "WARN",  violations: 0,      compliance: 100,      on: true, last: node.fresh },
+    { kind: "VALIDATE", id: "required_fields",    title: "Required fields are present",    expr: "required_fields IS NOT NULL",          label: "required fields present",     severity: "ERROR", violations: missing, compliance: node.fill, on: true, last: missing+"% missing" },
   ];
 }
 
@@ -2271,43 +2272,260 @@ function SourcesPane({ sources, node }) {
   );
 }
 
-function RulesPane({ rules, node }) {
-  const [filter, setFilter] = useState("all");
-  const LinkSourceFlow = window.LinkSourceFlow;
-  const KINDS = ["all","VALIDATE","COMPUTE","SLO","ACCESS","INFER"];
-  const filtered = filter === "all" ? rules : rules.filter(r => r.kind === filter);
-  const counts = KINDS.reduce((acc, k) => { acc[k] = k === "all" ? rules.length : rules.filter(r=>r.kind===k).length; return acc; }, {});
+const RULE_TEMPLATES = [
+  { id: "required",     kind: "VALIDATE", title: "Required field",       desc: "Assert a field is never null or empty.",              exprTemplate: "{field} IS NOT NULL",                         exprHint: "owner_id IS NOT NULL",                          severity: "ERROR" },
+  { id: "range",        kind: "VALIDATE", title: "Value range",          desc: "Numeric field stays within defined bounds.",          exprTemplate: "{field} BETWEEN {min} AND {max}",             exprHint: "arr_usd >= 0",                                  severity: "ERROR" },
+  { id: "format",       kind: "VALIDATE", title: "Format / Pattern",     desc: "Field value must match a regex pattern.",             exprTemplate: "{field} ~ /{pattern}/",                       exprHint: 'email ~ /^[^@]+@[^@]+$/',                       severity: "WARN"  },
+  { id: "enum",         kind: "VALIDATE", title: "Enum membership",      desc: "Field value must be one of a known set.",             exprTemplate: "{field} IN ({values})",                       exprHint: "tier IN (SMB, GROWTH, ENT)",                    severity: "WARN"  },
+  { id: "cross_field",  kind: "VALIDATE", title: "Cross-field rule",     desc: "If field A is set, field B must also be present.",    exprTemplate: "IF {field_a} IS NOT NULL THEN {field_b} IS NOT NULL", exprHint: "IF tier = STRATEGIC THEN csm_id IS NOT NULL", severity: "WARN" },
+  { id: "freshness",    kind: "SLO",      title: "Freshness SLO",        desc: "Data must arrive within a time budget.",              exprTemplate: "p95(ingest_lag) < {duration}",                exprHint: "p95(ingest_lag) < 30m",                         severity: "WARN"  },
+  { id: "completeness", kind: "SLO",      title: "Completeness SLO",     desc: "Fill rate must stay above a threshold.",              exprTemplate: "fill_rate({field}) > {threshold}%",           exprHint: "fill_rate(owner_id) > 95%",                     severity: "WARN"  },
+  { id: "pii_gate",     kind: "ACCESS",   title: "PII access gate",      desc: "Restrict PII fields to users with a required role.",  exprTemplate: "fields(pii=true) → require role:{role}",      exprHint: "fields(pii=true) → require role:acct_admin",    severity: "ERROR" },
+];
+
+function NewRuleModal({ node, onClose }) {
+  const [step, setStep]       = useState(1);
+  const [template, setTemplate] = useState(null);
+  const [form, setForm]       = useState({ title: "", expr: "", severity: "ERROR", kind: "VALIDATE" });
+
+  function pickTemplate(t) {
+    setTemplate(t);
+    setForm({ title: "", expr: t.exprTemplate, severity: t.severity, kind: t.kind });
+    setStep(2);
+  }
+
+  const sevStyle = s => s === "ERROR"
+    ? { bg: "var(--coral-fill)", color: "var(--coral)" }
+    : s === "WARN"
+    ? { bg: "var(--gold-fill)",  color: "var(--gold)"  }
+    : { bg: "var(--chip)",       color: "var(--ink-3)" };
+
+  const inputStyle = { width: "100%", border: "1px solid var(--line)", borderRadius: 8, padding: "10px 12px", fontSize: 13, fontFamily: "inherit", color: "var(--ink)", background: "var(--bg-canvas)", outline: "none", boxSizing: "border-box" };
 
   return (
-    <div className="card">
-      <div className="card-head card-head-row">
-        <div className="rule-filter-chips">
-          {KINDS.map(k => counts[k] > 0 || k === "all" ? (
-            <button key={k} className={"chip" + (filter === k ? " on" : "")} onClick={() => setFilter(k)}>
-              {k} <span className="chip-n">{counts[k]}</span>
-            </button>
-          ) : null)}
-        </div>
-        <div className="card-head-actions"><button className="btn-dark">+ New rule</button></div>
-      </div>
-      <div className="rule-list">
-        {filtered.map((r, i) => (
-          <div key={i} className="rule-row">
-            <span className={"rule-kind rule-kind-" + r.kind.toLowerCase()}>{r.kind}</span>
-            <div className="rule-text">
-              <div className="rule-id">{r.id}</div>
-              <div className="rule-lbl">{r.label}</div>
+    <div className="flow-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="flow-shell" style={{ maxWidth: 820, maxHeight: 660 }}>
+
+        <div className="flow-head">
+          <div>
+            <div className="flow-eyebrow">NEW RULE · {node.label.toUpperCase()}</div>
+            <div className="flow-title" style={{ fontSize: 18 }}>
+              {step === 1 ? "Choose a starting point" : step === 2 ? (template ? template.title : "Define rule") : "Review & save"}
             </div>
-            <div className="rule-result">
-              <span className={"rule-result-dot " + (r.last.includes("fail") || r.last.includes("violation") ? "warn" : "ok")} />
-              <span className="rule-last">{r.last}</span>
-            </div>
-            <button className="rule-run" title="Run now">▶</button>
-            <label className="switch"><input type="checkbox" defaultChecked={r.on} /><span className="switch-track" /></label>
           </div>
-        ))}
+          <div className="flow-head-right">
+            <span className="flow-stage-pill">Step <b>{step}</b> / 3</span>
+            <button className="flow-close" onClick={onClose}>✕</button>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
+          <div className="flow-steps" style={{ width: 196, flexShrink: 0 }}>
+            {[
+              { n: 1, label: "Template", hint: "Pick a starting point" },
+              { n: 2, label: "Define",   hint: template?.title || "Rule details" },
+              { n: 3, label: "Review",   hint: "Preview before saving" },
+            ].map(s => (
+              <button key={s.n} className={"flow-step" + (step === s.n ? " on" : step > s.n ? " done" : "")}
+                onClick={() => step > s.n && setStep(s.n)}>
+                <span className="flow-step-n">{step > s.n ? "✓" : s.n}</span>
+                <div className="flow-step-text">
+                  <div className="flow-step-label">{s.label}</div>
+                  <div className="flow-step-hint">{s.hint}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="flow-main" style={{ flex: 1, paddingTop: 24 }}>
+
+            {step === 1 && (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                  {RULE_TEMPLATES.map(t => (
+                    <button key={t.id} onClick={() => pickTemplate(t)}
+                      style={{ textAlign: "left", border: "1px solid var(--line)", borderRadius: 10, padding: "14px 15px", background: "var(--bg-canvas)", cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", gap: 6 }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--ink-3)"; e.currentTarget.style.background = "var(--panel-2)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--line)";   e.currentTarget.style.background = "var(--bg-canvas)"; }}>
+                      <span className={"rule-kind rule-kind-" + t.kind.toLowerCase()}>{t.kind}</span>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", marginTop: 2 }}>{t.title}</div>
+                      <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.4 }}>{t.desc}</div>
+                      <code style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", marginTop: 2 }}>{t.exprHint}</code>
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setStep(2)}
+                  style={{ width: "100%", border: "1px dashed var(--line)", borderRadius: 10, padding: "11px 16px", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, color: "var(--ink-3)" }}>
+                  Start from blank
+                </button>
+              </>
+            )}
+
+            {step === 2 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 520 }}>
+                <div>
+                  <label style={{ display: "block", fontFamily: "JetBrains Mono", fontSize: 10, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 7 }}>Rule type</label>
+                  <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+                    {["VALIDATE","COMPUTE","SLO","ACCESS","INFER"].map(k => (
+                      <button key={k} onClick={() => setForm(f => ({ ...f, kind: k }))}
+                        className={"rule-kind rule-kind-" + k.toLowerCase()}
+                        style={{ cursor: "pointer", border: form.kind === k ? "2px solid currentColor" : "2px solid transparent", opacity: form.kind === k ? 1 : 0.45, padding: "5px 10px", fontSize: 10.5 }}>
+                        {k}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: "block", fontFamily: "JetBrains Mono", fontSize: 10, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 7 }}>Title</label>
+                  <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                    placeholder={template ? template.title : "e.g. Account must have an owner"}
+                    style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontFamily: "JetBrains Mono", fontSize: 10, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 7 }}>Expression</label>
+                  <textarea value={form.expr} onChange={e => setForm(f => ({ ...f, expr: e.target.value }))}
+                    placeholder={template ? template.exprHint : "e.g. field IS NOT NULL"}
+                    rows={3}
+                    style={{ ...inputStyle, fontFamily: "JetBrains Mono", fontSize: 12, resize: "vertical", lineHeight: 1.6 }} />
+                  {template && <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", marginTop: 5 }}>Template: {template.exprTemplate}</div>}
+                </div>
+                <div>
+                  <label style={{ display: "block", fontFamily: "JetBrains Mono", fontSize: 10, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 7 }}>Severity</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {["ERROR","WARN","INFO"].map(s => {
+                      const { bg, color } = sevStyle(s);
+                      return (
+                        <button key={s} onClick={() => setForm(f => ({ ...f, severity: s }))}
+                          style={{ fontFamily: "JetBrains Mono", fontSize: 10, padding: "5px 12px", borderRadius: 5, border: form.severity === s ? "2px solid "+color : "2px solid transparent", background: bg, color, cursor: "pointer", fontWeight: 600, letterSpacing: "0.4px" }}>
+                          {s}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 4 }}>
+                  <button onClick={() => setStep(1)} className="btn-ghost">Back</button>
+                  <button onClick={() => setStep(3)} className="btn-dark" disabled={!form.title && !form.expr}>Review →</button>
+                </div>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div style={{ maxWidth: 520 }}>
+                <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 14 }}>Rule preview</div>
+                <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", marginBottom: 24 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "15px 18px", borderBottom: "1px solid var(--line-2)" }}>
+                    <span className={"rule-kind rule-kind-" + form.kind.toLowerCase()} style={{ flexShrink: 0, minWidth: 68, textAlign: "center" }}>{form.kind}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)", marginBottom: 4 }}>{form.title || template?.title || "(untitled)"}</div>
+                      <code style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)" }}>{form.expr || "(no expression)"}</code>
+                    </div>
+                    {(() => { const { bg, color } = sevStyle(form.severity); return (
+                      <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, padding: "3px 8px", borderRadius: 4, background: bg, color, fontWeight: 600, letterSpacing: "0.4px", flexShrink: 0 }}>{form.severity}</span>
+                    ); })()}
+                  </div>
+                  <div style={{ display: "flex", gap: 0, background: "var(--line-2)" }}>
+                    {[["Node", node.label], ["Runs on", "Every ingest"], ["Status", "Will be enabled"]].map(([k, v], i) => (
+                      <div key={i} style={{ flex: 1, padding: "11px 16px", background: "var(--panel-2)" }}>
+                        <div style={{ fontFamily: "JetBrains Mono", fontSize: 9, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 3 }}>{k}</div>
+                        <div style={{ fontSize: 12.5, color: k === "Status" ? "var(--green)" : "var(--ink)", fontWeight: k === "Status" ? 500 : 400 }}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <button onClick={() => setStep(2)} className="btn-ghost">Back</button>
+                  <button onClick={onClose} className="btn-dark">Save rule</button>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
       </div>
     </div>
+  );
+}
+
+function RulesPane({ rules, node }) {
+  const [filter, setFilter]     = useState("all");
+  const [showNewRule, setShowNewRule] = useState(false);
+  const KINDS = ["all","VALIDATE","COMPUTE","SLO","ACCESS","INFER"];
+  const filtered = filter === "all" ? rules : rules.filter(r => r.kind === filter);
+  const counts   = KINDS.reduce((acc, k) => { acc[k] = k === "all" ? rules.length : rules.filter(r => r.kind === k).length; return acc; }, {});
+
+  const totalViolations = rules.reduce((sum, r) => sum + (r.violations || 0), 0);
+  const avgCompliance   = Math.round(rules.reduce((sum, r) => sum + (r.compliance ?? 100), 0) / rules.length);
+
+  const sevStyle = s => s === "ERROR"
+    ? { bg: "var(--coral-fill)", color: "var(--coral)" }
+    : s === "WARN"
+    ? { bg: "var(--gold-fill)",  color: "var(--gold)"  }
+    : { bg: "var(--chip)",       color: "var(--ink-3)" };
+
+  return (
+    <>
+      <div className="card">
+        <div className="card-head card-head-row">
+          <div className="rule-filter-chips">
+            {KINDS.map(k => (counts[k] > 0 || k === "all") ? (
+              <button key={k} className={"chip" + (filter === k ? " on" : "")} onClick={() => setFilter(k)}>
+                {k} <span className="chip-n">{counts[k]}</span>
+              </button>
+            ) : null)}
+          </div>
+          <div className="card-head-actions">
+            <button className="btn-dark" onClick={() => setShowNewRule(true)}>+ New rule</button>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 1, background: "var(--line-2)", borderBottom: "1px solid var(--line-2)" }}>
+          {[
+            ["Total violations", totalViolations, totalViolations > 0 ? "var(--coral)" : "var(--green)"],
+            ["Avg compliance",   avgCompliance + "%", "var(--ink)"],
+            ["Active rules",     rules.filter(r => r.on).length, "var(--ink)"],
+          ].map(([label, val, color]) => (
+            <div key={label} style={{ flex: 1, padding: "12px 18px", background: "var(--panel-2)" }}>
+              <div style={{ fontFamily: "JetBrains Mono", fontSize: 9.5, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+              <div style={{ fontFamily: "Instrument Serif", fontSize: 24, color }}>{val}</div>
+            </div>
+          ))}
+        </div>
+
+        <div>
+          {filtered.map((r, i) => {
+            const { bg, color } = sevStyle(r.severity || "INFO");
+            const hasViol = (r.violations || 0) > 0;
+            return (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 16, padding: "15px 18px", borderBottom: i < filtered.length - 1 ? "1px solid var(--line-2)" : "none" }}>
+                <span className={"rule-kind rule-kind-" + r.kind.toLowerCase()} style={{ flexShrink: 0, minWidth: 68, textAlign: "center" }}>{r.kind}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)", marginBottom: 4 }}>{r.title || r.label}</div>
+                  <code style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.expr || r.id}</code>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 18, flexShrink: 0 }}>
+                  <div style={{ textAlign: "right", minWidth: 100 }}>
+                    <div style={{ fontFamily: "JetBrains Mono", fontSize: 12, fontWeight: 600, color: hasViol ? "var(--coral)" : "var(--ink-3)" }}>
+                      {r.violations !== undefined ? r.violations + " violations" : r.last}
+                    </div>
+                    {r.compliance !== undefined && (
+                      <div style={{ fontFamily: "JetBrains Mono", fontSize: 10.5, color: "var(--ink-3)", marginTop: 2 }}>{r.compliance}%</div>
+                    )}
+                  </div>
+                  <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, padding: "3px 8px", borderRadius: 4, background: bg, color, fontWeight: 600, letterSpacing: "0.4px", flexShrink: 0 }}>{r.severity || "INFO"}</span>
+                  <label className="switch" style={{ flexShrink: 0 }}>
+                    <input type="checkbox" defaultChecked={r.on} />
+                    <span className="switch-track" />
+                  </label>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {showNewRule && <NewRuleModal node={node} onClose={() => setShowNewRule(false)} />}
+    </>
   );
 }
 
