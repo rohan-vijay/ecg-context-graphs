@@ -1584,60 +1584,132 @@ function GlobalSourcesView() {
   );
 }
 
-// ---------- EDIT SCHEMA MODAL -----------------------------------------------
+// ---------- EDIT SCHEMA VIEW (full-page) ------------------------------------
 
 const PROP_TYPES = ["uuid","string","int","decimal","float","bool","date","timestamp","enum","enum(n)","struct","fk","string[]"];
 
-function EditSchemaModal({ node, properties: initProps, onClose }) {
-  const [activeTab, setActiveTab] = useState("Schema");
-  const [label, setLabel]   = useState(node.label);
-  const [desc, setDesc]     = useState(node.desc);
-  const [owner, setOwner]   = useState(node.cat === "source" ? "data-platform" : "data-platform");
-  const [domain, setDomain] = useState(node.cat === "core" ? "customer" : node.cat === "support" ? "service" : node.cat === "derived" ? "analytics" : "ingest");
-  const [tags, setTags]     = useState(["pii","core-entity","slo:30m","agent-input"]);
+function EditSchemaView({ node, properties: initProps, onClose }) {
+  const [section, setSection] = useState("Identity");
+  const [label, setLabel]     = useState(node.label);
+  const [desc, setDesc]       = useState(node.desc);
+  const [owner, setOwner]     = useState("data-platform");
+  const [domain, setDomain]   = useState(node.cat === "core" ? "customer" : node.cat === "support" ? "service" : node.cat === "derived" ? "analytics" : "ingest");
+  const [cat, setCat]         = useState(node.cat);
+  const [nodeState, setNodeState] = useState(node.state);
+  const [tags, setTags]       = useState(["pii","core-entity","slo:30m","agent-input"]);
   const [tagInput, setTagInput] = useState("");
-  const [props, setProps]   = useState(initProps.map((p, i) => ({ ...p, _id: i })));
+  const [stewards, setStewards] = useState("morgan.lee, ramin.k");
+  const [runbook, setRunbook]   = useState("go/account-runbook");
+  const [slackChan, setSlackChan] = useState("#schema-account");
+  const [props, setProps]     = useState(initProps.map((p, i) => ({ ...p, _id: i })));
   const [published, setPublished] = useState(false);
+  const [saved, setSaved]     = useState(false);
   const nextId = useRef(initProps.length);
 
   const addProp = () => setProps(ps => [...ps, { _id: nextId.current++, name: "", type: "string", required: false, indexed: false, pii: false, pk: false, fill: 0, conf: 0, source: "manual" }]);
   const updProp = (id, key, val) => setProps(ps => ps.map(p => p._id === id ? { ...p, [key]: val } : p));
   const delProp = (id) => setProps(ps => ps.filter(p => p._id !== id));
 
-  const handlePublish = () => { setPublished(true); setTimeout(onClose, 900); };
+  const piiProps  = props.filter(p => p.pii);
+  const c = colorForNode(node);
+  const fldStyle  = { padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 7, fontSize: 13, fontFamily: "Geist, system-ui", background: "var(--bg-canvas)", color: "var(--ink)", width: "100%", boxSizing: "border-box" };
+  const lblStyle  = { fontSize: 10, fontWeight: 700, letterSpacing: "1px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 6, display: "block" };
 
-  const fldStyle = { padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 6, fontSize: 13, fontFamily: "Geist, system-ui", background: "var(--bg-canvas)", color: "var(--ink)", width: "100%", boxSizing: "border-box" };
-  const lblStyle = { fontSize: 11, fontWeight: 600, letterSpacing: "0.8px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 5, display: "block" };
-  const piiProps = props.filter(p => p.pii);
+  const SECTIONS = [
+    { id: "Identity",   label: "Identity",        sub: "Label, kind & description" },
+    { id: "Properties", label: "Properties",      sub: `${props.length} fields · ${props.filter(p=>p.required).length} required` },
+    { id: "Access",     label: "Access",          sub: `${piiProps.length} PII fields · 4 roles` },
+    { id: "Governance", label: "Governance",      sub: "Tags, domain, stewards" },
+    { id: "Review",     label: "Review & Publish",sub: published ? "Published ✓" : "Ready to publish" },
+  ];
 
   return (
-    <div className="modal-overlay" style={{ zIndex: 400, position: "fixed", inset: 0, background: "rgba(20,22,16,0.45)", backdropFilter: "blur(2px)", display: "grid", placeItems: "center", padding: 24 }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ width: 900, maxWidth: "96vw", maxHeight: "90vh", display: "flex", flexDirection: "column", padding: 0 }}>
-
-        {/* ── header ── */}
-        <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "flex-start", gap: 16 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "1px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 4 }}>SCHEMA · EDIT DRAFT</div>
-            <div style={{ fontSize: 18, fontWeight: 600, color: "var(--ink)" }}>{node.label}</div>
+    <div className="detail-view" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* ── header ── */}
+      <div className="detail-head" style={{ flexShrink: 0 }}>
+        <div className="detail-crumb">
+          <button className="crumb-back" onClick={onClose}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+            {node.label}
+          </button>
+          <span className="crumb-sep">/</span>
+          <span className="crumb-here">Edit schema</span>
+          <span className="crumb-tail">
+            <span className="dot-live" /> LIVE
+            <span className="crumb-dot">·</span> v3.2
+            <span className="crumb-dot">·</span> branch <b>main</b>
+            <span className="crumb-dot">·</span> <span className="crumb-warn">draft in progress</span>
+          </span>
+        </div>
+        <div className="detail-title-row">
+          <div className="detail-title-left">
+            <svg width="44" height="44" viewBox="-22 -22 44 44">
+              {node.type === "source" ? <rect x="-15" y="-15" width="30" height="30" rx="3" fill={c.fill} stroke={c.stroke} strokeWidth="1.6" /> : <circle r="15" fill={c.fill} stroke={c.stroke} strokeWidth="1.6" />}
+            </svg>
+            <div>
+              <div className="detail-title-name">Edit schema <span style={{ color: "var(--ink-3)", fontWeight: 400 }}>— {node.label}</span></div>
+              <div className="detail-title-desc">Draft changes · requires schema owner review before publish · auto-saved every 30s</div>
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            {["Schema","Properties","Access"].map(t => (
-              <button key={t} onClick={() => setActiveTab(t)} style={{ padding: "5px 14px", borderRadius: 6, border: "1px solid var(--line)", background: activeTab === t ? "var(--ink)" : "transparent", color: activeTab === t ? "#fff" : "var(--ink-2)", fontSize: 12, fontFamily: "Geist, system-ui", cursor: "pointer", fontWeight: activeTab === t ? 600 : 400 }}>
-                {t}{t === "Properties" ? <span style={{ marginLeft: 5, opacity: 0.7 }}>{props.length}</span> : t === "Access" ? <span style={{ marginLeft: 5, opacity: 0.7, color: piiProps.length ? "var(--coral)" : "inherit" }}>{piiProps.length}</span> : null}
-              </button>
+          <div className="detail-title-right">
+            <button className="btn-ghost" onClick={onClose}>Cancel</button>
+            <button className="btn-ghost" onClick={() => setSaved(true)} style={{ color: saved ? "var(--green)" : undefined }}>
+              {saved ? "Saved ✓" : "Save draft"}
+            </button>
+            <button className="btn-dark" onClick={() => { setPublished(true); setTimeout(onClose, 1000); }}
+              style={{ background: published ? "var(--green)" : undefined, minWidth: 100 }}>
+              {published ? "Published ✓" : "Publish"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── body: left nav | content | right preview ── */}
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+
+        {/* Left nav */}
+        <div style={{ width: 236, borderRight: "1px solid var(--line)", padding: "20px 12px", display: "flex", flexDirection: "column", gap: 2, background: "var(--panel)", flexShrink: 0, overflowY: "auto" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "1px", color: "var(--ink-3)", textTransform: "uppercase", padding: "0 10px", marginBottom: 10 }}>Sections</div>
+          {SECTIONS.map((s, i) => (
+            <button key={s.id} onClick={() => setSection(s.id)} style={{ textAlign: "left", padding: "10px 12px", borderRadius: 8, border: "none", background: section === s.id ? "var(--panel-2)" : "transparent", borderLeft: `3px solid ${section === s.id ? "var(--ink)" : "transparent"}`, cursor: "pointer", width: "100%" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ width: 20, height: 20, borderRadius: "50%", background: section === s.id ? "var(--ink)" : "var(--line-2)", color: section === s.id ? "#fff" : "var(--ink-3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
+                <span style={{ fontSize: 13, fontWeight: section === s.id ? 600 : 400, color: section === s.id ? "var(--ink)" : "var(--ink-2)" }}>{s.label}</span>
+              </div>
+              <div style={{ fontSize: 11, color: "var(--ink-3)", marginLeft: 28, marginTop: 2 }}>{s.sub}</div>
+            </button>
+          ))}
+          <div style={{ marginTop: "auto", padding: 14, background: "var(--panel-2)", borderRadius: 8, border: "1px solid var(--line-2)" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.8px", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 8 }}>Validation</div>
+            {[
+              { label: "Label is valid & unique", ok: label.length > 0 },
+              { label: "Node kind set", ok: true },
+              { label: "Access roles assigned", ok: true },
+              { label: "Stewards defined", ok: stewards.length > 0 },
+            ].map(v => (
+              <div key={v.label} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5, fontSize: 11, color: v.ok ? "var(--ink-2)" : "var(--coral)" }}>
+                <span style={{ color: v.ok ? "var(--green)" : "var(--coral)", fontSize: 14, lineHeight: 1 }}>{v.ok ? "●" : "○"}</span>
+                {v.label}
+              </div>
             ))}
-            <button onClick={onClose} style={{ marginLeft: 8, background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", fontSize: 20, lineHeight: 1, padding: "0 4px" }}>×</button>
           </div>
         </div>
 
-        {/* ── body ── */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+        {/* Main content */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "36px 40px" }}>
 
-          {/* Schema tab */}
-          {activeTab === "Schema" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          {/* IDENTITY */}
+          {section === "Identity" && (
+            <div style={{ maxWidth: 640, display: "flex", flexDirection: "column", gap: 24 }}>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 600, marginBottom: 6 }}>Identity</div>
+                <div style={{ fontSize: 13, color: "var(--ink-3)" }}>The label and description become the canonical name in every query, agent prompt, and dashboard filter. Choose a singular noun in PascalCase. Renaming after publishing is a breaking change.</div>
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                <label><span style={lblStyle}>Label</span><input value={label} onChange={e => setLabel(e.target.value)} style={fldStyle} /></label>
+                <label><span style={lblStyle}>Label <span style={{ color: "var(--coral)" }}>REQUIRED</span></span>
+                  <input value={label} onChange={e => setLabel(e.target.value)} style={fldStyle} placeholder="e.g. VendorContract" />
+                  <div style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 4 }}>PascalCase singular noun</div>
+                </label>
                 <label><span style={lblStyle}>Owner team</span>
                   <select value={owner} onChange={e => setOwner(e.target.value)} style={fldStyle}>
                     {["data-platform","applied-ml","cs-platform","fin-ops","growth","governance","billing"].map(o => <option key={o}>{o}</option>)}
@@ -1645,32 +1717,231 @@ function EditSchemaModal({ node, properties: initProps, onClose }) {
                 </label>
               </div>
               <label><span style={lblStyle}>Description</span>
-                <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={3} style={{ ...fldStyle, resize: "vertical" }} />
+                <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={4} style={{ ...fldStyle, resize: "vertical" }} placeholder="What real-world concept does this node represent?" />
               </label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+              <div>
+                <span style={lblStyle}>Node kind <span style={{ color: "var(--coral)" }}>REQUIRED</span></span>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 6 }}>
+                  {[
+                    { kind: "entity", title: "Entity", sub: "A domain object — Account, Person, Contract. The nouns of your graph." },
+                    { kind: "source", title: "Data Source", sub: "A system of record or pipeline — Salesforce, Kafka. Populates entities." },
+                  ].map(k => {
+                    const kc = colorForNode({ type: k.kind, state: "core" });
+                    return (
+                      <div key={k.kind} style={{ padding: 16, border: `2px solid ${node.type === k.kind ? "var(--ink)" : "var(--line)"}`, borderRadius: 10, background: node.type === k.kind ? "var(--panel-2)" : "var(--bg-canvas)", opacity: node.type === k.kind ? 1 : 0.55 }}>
+                        <svg width="24" height="24" viewBox="-12 -12 24 24" style={{ marginBottom: 8, display: "block" }}>
+                          {k.kind === "source" ? <rect x="-9" y="-9" width="18" height="18" rx="2" fill={kc.fill} stroke={kc.stroke} strokeWidth="1.4" /> : <circle r="9" fill={kc.fill} stroke={kc.stroke} strokeWidth="1.4" />}
+                        </svg>
+                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{k.title}</div>
+                        <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{k.sub}</div>
+                        {node.type === k.kind && <div style={{ marginTop: 8, fontSize: 10, fontWeight: 700, color: "var(--ink-3)", letterSpacing: "0.8px" }}>CURRENT</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <label><span style={lblStyle}>Category</span>
+                  <select value={cat} onChange={e => setCat(e.target.value)} style={fldStyle}>
+                    {["core","support","derived","source"].map(v => <option key={v}>{v}</option>)}
+                  </select>
+                </label>
+                <label><span style={lblStyle}>State</span>
+                  <select value={nodeState} onChange={e => setNodeState(e.target.value)} style={fldStyle}>
+                    {["core","signal","risk","incident"].map(v => <option key={v}>{v}</option>)}
+                  </select>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* PROPERTIES */}
+          {section === "Properties" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 600, marginBottom: 6 }}>Properties</div>
+                <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Each property maps to a column in the entity's canonical table. Required fields must be non-null. Indexed fields are optimised for filtering.</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                {[["all", `All ${props.length}`],["required","Required"],["indexed","Indexed"],["pii","PII"],["computed","Computed"]].map(([f, lbl]) => (
+                  <button key={f} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid var(--line)", background: "transparent", color: "var(--ink-2)", fontSize: 12, cursor: "pointer" }}>{lbl}</button>
+                ))}
+                <button onClick={addProp} style={{ marginLeft: "auto", padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--ink)", color: "#fff", fontSize: 12, fontFamily: "Geist, system-ui", cursor: "pointer", fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg> Add property
+                </button>
+              </div>
+              <div style={{ border: "1px solid var(--line)", borderRadius: 8, overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: "var(--panel-2)", borderBottom: "1px solid var(--line)" }}>
+                      {["#","Name","Type","Req","Idx","PII","PK","Source","Fill",""].map((h, i) => (
+                        <th key={i} style={{ padding: "9px 8px", textAlign: "left", fontWeight: 700, fontSize: 10, letterSpacing: "0.8px", textTransform: "uppercase", color: "var(--ink-3)", whiteSpace: "nowrap" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {props.map((p, idx) => (
+                      <tr key={p._id} style={{ borderBottom: "1px solid var(--line-2)", background: idx % 2 ? "var(--panel-2)" : "transparent" }}>
+                        <td style={{ padding: "6px 8px", color: "var(--ink-4)", fontSize: 11, width: 24 }}>{idx + 1}</td>
+                        <td style={{ padding: "6px 6px" }}>
+                          <input value={p.name} onChange={e => updProp(p._id, "name", e.target.value)}
+                            style={{ width: 148, padding: "4px 7px", border: "1px solid var(--line)", borderRadius: 5, fontSize: 12, fontFamily: "JetBrains Mono", background: "var(--bg-canvas)", color: "var(--ink)" }} />
+                        </td>
+                        <td style={{ padding: "6px 6px" }}>
+                          <select value={p.type} onChange={e => updProp(p._id, "type", e.target.value)}
+                            style={{ padding: "4px 6px", border: "1px solid var(--line)", borderRadius: 5, fontSize: 11, fontFamily: "JetBrains Mono", background: "var(--bg-canvas)", color: "var(--ink)" }}>
+                            {PROP_TYPES.map(t => <option key={t}>{t}</option>)}
+                          </select>
+                        </td>
+                        {["required","indexed","pii","pk"].map(flag => (
+                          <td key={flag} style={{ padding: "6px 6px", textAlign: "center" }}>
+                            <input type="checkbox" checked={!!p[flag]} onChange={e => updProp(p._id, flag, e.target.checked)}
+                              style={{ cursor: "pointer", width: 14, height: 14, accentColor: flag === "pii" ? "var(--coral)" : "var(--ink)" }} />
+                          </td>
+                        ))}
+                        <td style={{ padding: "6px 6px" }}>
+                          <input value={p.source || ""} onChange={e => updProp(p._id, "source", e.target.value)}
+                            style={{ width: 100, padding: "4px 6px", border: "1px solid var(--line)", borderRadius: 5, fontSize: 11, fontFamily: "JetBrains Mono", background: "var(--bg-canvas)", color: "var(--ink-2)" }} />
+                        </td>
+                        <td style={{ padding: "6px 6px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <div style={{ width: 40, height: 3, background: "var(--line-2)", borderRadius: 2, overflow: "hidden" }}>
+                              <div style={{ width: (p.fill || 0) + "%", height: "100%", background: (p.fill || 0) < 80 ? "var(--gold)" : "var(--green)" }} />
+                            </div>
+                            <span style={{ fontSize: 10, color: "var(--ink-3)" }}>{p.fill || 0}%</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: "6px 6px" }}>
+                          <button onClick={() => delProp(p._id)} title="Remove"
+                            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", fontSize: 14, padding: "0 4px", lineHeight: 1 }}>✕</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ padding: "10px 16px", background: "var(--panel-2)", borderRadius: 8, border: "1px solid var(--line-2)", fontSize: 12, display: "flex", gap: 20, flexWrap: "wrap", color: "var(--ink-2)" }}>
+                <span><b style={{ color: "var(--ink)" }}>{props.length}</b> total</span>
+                <span><b style={{ color: "var(--ink)" }}>{props.filter(p => p.required).length}</b> required</span>
+                <span><b style={{ color: "var(--ink)" }}>{props.filter(p => p.indexed).length}</b> indexed</span>
+                <span><b style={{ color: piiProps.length ? "var(--coral)" : "var(--ink)" }}>{piiProps.length}</b> PII</span>
+                <span><b>{props.filter(p => p.pk).length}</b> primary key</span>
+                <span><b>{props.filter(p => p.computed).length}</b> computed</span>
+              </div>
+            </div>
+          )}
+
+          {/* ACCESS */}
+          {section === "Access" && (
+            <div style={{ maxWidth: 680, display: "flex", flexDirection: "column", gap: 24 }}>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 600, marginBottom: 6 }}>Access controls</div>
+                <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Define who can read and write this entity's data. PII fields require a specific role and are audit-logged on every access.</div>
+              </div>
+              <section className="card">
+                <div className="card-head" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  PII fields
+                  <span style={{ padding: "2px 8px", background: piiProps.length ? "#fff2ef" : "var(--panel-2)", border: "1px solid " + (piiProps.length ? "var(--coral)" : "var(--line)"), borderRadius: 4, fontSize: 11, color: piiProps.length ? "var(--coral)" : "var(--ink-3)" }}>{piiProps.length} flagged</span>
+                  <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--ink-3)" }}>Flag PII in Properties</span>
+                </div>
+                <div className="card-body">
+                  {piiProps.length === 0
+                    ? <div style={{ color: "var(--ink-3)", fontSize: 13 }}>No PII-flagged properties.</div>
+                    : piiProps.map(p => (
+                      <div key={p._id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--line-2)", fontSize: 12 }}>
+                        <span style={{ fontFamily: "JetBrains Mono", color: "var(--coral)", minWidth: 160 }}>{p.name}</span>
+                        <span style={{ color: "var(--ink-3)", fontSize: 11 }}>{p.type}</span>
+                        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                          <span style={{ padding: "2px 8px", background: "#fff2ef", border: "1px solid var(--coral)", borderRadius: 4, fontSize: 10, color: "var(--coral)" }}>PII</span>
+                          <span style={{ padding: "2px 8px", background: "var(--panel-2)", border: "1px solid var(--line-2)", borderRadius: 4, fontSize: 10, color: "var(--ink-3)" }}>audit-logged</span>
+                        </div>
+                      </div>
+                    ))
+                  }
+                </div>
+              </section>
+              <section className="card">
+                <div className="card-head">Role-based access</div>
+                <div className="card-body">
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead><tr style={{ background: "var(--panel-2)" }}>
+                      {["Role","Access level","Scope",""].map(h => <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, letterSpacing: "0.8px", textTransform: "uppercase", color: "var(--ink-3)", borderBottom: "1px solid var(--line)" }}>{h}</th>)}
+                    </tr></thead>
+                    <tbody>
+                      {[
+                        { role: "role:acct_admin",   access: "Read + Write", scope: "All fields" },
+                        { role: "role:cs_rep",        access: "Read only",    scope: "Non-PII fields" },
+                        { role: "role:analyst",       access: "Read only",    scope: "Aggregated only" },
+                        { role: "role:data_platform", access: "Read + Write", scope: "All fields" },
+                      ].map((r, i) => (
+                        <tr key={i} style={{ borderBottom: "1px solid var(--line-2)" }}>
+                          <td style={{ padding: "9px 10px", fontFamily: "JetBrains Mono", fontSize: 11 }}>{r.role}</td>
+                          <td style={{ padding: "9px 10px" }}>
+                            <select defaultValue={r.access} style={{ padding: "4px 8px", border: "1px solid var(--line)", borderRadius: 5, fontSize: 12, background: "var(--bg-canvas)", color: "var(--ink)" }}>
+                              {["Read + Write","Read only","No access"].map(a => <option key={a}>{a}</option>)}
+                            </select>
+                          </td>
+                          <td style={{ padding: "9px 10px", color: "var(--ink-2)" }}>{r.scope}</td>
+                          <td style={{ padding: "9px 10px" }}>
+                            <button style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", fontSize: 14 }}>✕</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <button style={{ marginTop: 12, padding: "8px 14px", border: "1px dashed var(--line)", borderRadius: 6, background: "transparent", color: "var(--ink-2)", fontSize: 12, cursor: "pointer" }}>+ Add role</button>
+                </div>
+              </section>
+              <section className="card">
+                <div className="card-head">Retention & deletion</div>
+                <div className="card-body">
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                    <label><span style={lblStyle}>Retention period</span>
+                      <select defaultValue="7 years" style={fldStyle}>
+                        {["90 days","1 year","3 years","7 years","Indefinite"].map(v => <option key={v}>{v}</option>)}
+                      </select>
+                    </label>
+                    <label><span style={lblStyle}>Deletion strategy</span>
+                      <select defaultValue="Soft delete" style={fldStyle}>
+                        {["Soft delete","Hard delete","Anonymise"].map(v => <option key={v}>{v}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {/* GOVERNANCE */}
+          {section === "Governance" && (
+            <div style={{ maxWidth: 640, display: "flex", flexDirection: "column", gap: 24 }}>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 600, marginBottom: 6 }}>Governance</div>
+                <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Ownership, domain assignment, and discoverability metadata. Tags are used to filter entities in the catalog and in agent context assembly.</div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 <label><span style={lblStyle}>Domain</span>
                   <select value={domain} onChange={e => setDomain(e.target.value)} style={fldStyle}>
                     {["customer","service","analytics","ingest","finance","identity"].map(d => <option key={d}>{d}</option>)}
                   </select>
                 </label>
                 <label><span style={lblStyle}>Category</span>
-                  <select defaultValue={node.cat} style={fldStyle}>
-                    {["core","support","derived","source"].map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </label>
-                <label><span style={lblStyle}>State</span>
-                  <select defaultValue={node.state} style={fldStyle}>
-                    {["core","signal","risk","incident"].map(s => <option key={s}>{s}</option>)}
+                  <select value={cat} onChange={e => setCat(e.target.value)} style={fldStyle}>
+                    {["core","support","derived","source"].map(v => <option key={v}>{v}</option>)}
                   </select>
                 </label>
               </div>
+              <label><span style={lblStyle}>Stewards</span>
+                <input value={stewards} onChange={e => setStewards(e.target.value)} style={fldStyle} placeholder="e.g. morgan.lee, ramin.k" />
+                <div style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 4 }}>Comma-separated aliases. Stewards receive review requests on publish.</div>
+              </label>
               <div>
                 <span style={lblStyle}>Tags</span>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 6, background: "var(--bg-canvas)", minHeight: 40 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 7, background: "var(--bg-canvas)", minHeight: 46 }}>
                   {tags.map(t => (
-                    <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", background: "var(--panel-2)", border: "1px solid var(--line-2)", borderRadius: 4, fontSize: 11, fontFamily: "JetBrains Mono" }}>
+                    <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", background: "var(--panel-2)", border: "1px solid var(--line-2)", borderRadius: 4, fontSize: 11, fontFamily: "JetBrains Mono" }}>
                       {t}
-                      <button onClick={() => setTags(ts => ts.filter(x => x !== t))} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", padding: 0, lineHeight: 1, fontSize: 12 }}>×</button>
+                      <button onClick={() => setTags(ts => ts.filter(x => x !== t))} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", padding: 0, fontSize: 13, lineHeight: 1 }}>×</button>
                     </span>
                   ))}
                   <input value={tagInput} onChange={e => setTagInput(e.target.value)}
@@ -1679,154 +1950,103 @@ function EditSchemaModal({ node, properties: initProps, onClose }) {
                 </div>
                 <div style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 4 }}>Press Enter or comma to add</div>
               </div>
-              <div style={{ padding: 16, background: "var(--panel-2)", borderRadius: 8, border: "1px solid var(--line-2)", display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.6px", textTransform: "uppercase", color: "var(--ink-3)" }}>Additional metadata</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  {[["Stewards","morgan.lee, ramin.k"],["Runbook","go/account-runbook"],["Slack channel","#schema-account"],["Schema rank","#3 of 18"]].map(([k,v]) => (
-                    <label key={k}><span style={{ ...lblStyle, marginBottom: 4 }}>{k}</span><input defaultValue={v} style={{ ...fldStyle, fontSize: 12 }} /></label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <label><span style={lblStyle}>Runbook</span>
+                  <input value={runbook} onChange={e => setRunbook(e.target.value)} style={fldStyle} />
+                </label>
+                <label><span style={lblStyle}>Slack channel</span>
+                  <input value={slackChan} onChange={e => setSlackChan(e.target.value)} style={fldStyle} />
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* REVIEW */}
+          {section === "Review" && (
+            <div style={{ maxWidth: 680, display: "flex", flexDirection: "column", gap: 24 }}>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 600, marginBottom: 6 }}>Review & publish</div>
+                <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Review your changes before publishing. Publishing creates a new schema version and triggers downstream re-validation.</div>
+              </div>
+              <section className="card">
+                <div className="card-head">Change summary <span className="card-head-sub">v3.2 → v3.3 draft</span></div>
+                <div className="card-body">
+                  {[
+                    { field: "label",       old: node.label,           nw: label,       changed: label !== node.label },
+                    { field: "description", old: node.desc.slice(0,36)+"…", nw: desc.slice(0,36)+"…", changed: desc !== node.desc },
+                    { field: "domain",      old: "customer",           nw: domain,      changed: domain !== "customer" },
+                    { field: "category",    old: node.cat,             nw: cat,         changed: cat !== node.cat },
+                    { field: "state",       old: node.state,           nw: nodeState,   changed: nodeState !== node.state },
+                    { field: "properties",  old: `${initProps.length} fields`, nw: `${props.length} fields`, changed: props.length !== initProps.length },
+                  ].map(ch => (
+                    <div key={ch.field} style={{ display: "flex", gap: 12, padding: "9px 0", borderBottom: "1px solid var(--line-2)", fontSize: 12, alignItems: "flex-start" }}>
+                      <div style={{ width: 90, fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)", flexShrink: 0 }}>{ch.field}</div>
+                      {ch.changed ? (
+                        <>
+                          <div style={{ flex: 1, color: "var(--coral)", textDecoration: "line-through" }}>{ch.old}</div>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginTop: 1 }}><path d="M5 12h14m-7-7l7 7-7 7" stroke="var(--ink-3)" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                          <div style={{ flex: 1, color: "var(--green)" }}>{ch.nw}</div>
+                        </>
+                      ) : (
+                        <div style={{ flex: 1, color: "var(--ink-3)" }}>unchanged</div>
+                      )}
+                    </div>
                   ))}
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Properties tab */}
-          {activeTab === "Properties" && (
-            <div>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ background: "var(--panel-2)" }}>
-                      {["Name","Type","Req","Idx","PII","PK","Source",""].map(h => (
-                        <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontWeight: 700, fontSize: 10, letterSpacing: "0.8px", textTransform: "uppercase", color: "var(--ink-3)", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {props.map(p => (
-                      <tr key={p._id} style={{ borderBottom: "1px solid var(--line-2)" }}>
-                        <td style={{ padding: "6px 8px" }}>
-                          <input value={p.name} onChange={e => updProp(p._id, "name", e.target.value)}
-                            style={{ width: 150, padding: "4px 6px", border: "1px solid var(--line)", borderRadius: 4, fontSize: 12, fontFamily: "JetBrains Mono, monospace", background: "var(--bg-canvas)", color: "var(--ink)" }} />
-                        </td>
-                        <td style={{ padding: "6px 8px" }}>
-                          <select value={p.type} onChange={e => updProp(p._id, "type", e.target.value)}
-                            style={{ padding: "4px 6px", border: "1px solid var(--line)", borderRadius: 4, fontSize: 11, fontFamily: "JetBrains Mono", background: "var(--bg-canvas)", color: "var(--ink)" }}>
-                            {PROP_TYPES.map(t => <option key={t}>{t}</option>)}
-                          </select>
-                        </td>
-                        {["required","indexed","pii","pk"].map(flag => (
-                          <td key={flag} style={{ padding: "6px 8px", textAlign: "center" }}>
-                            <input type="checkbox" checked={!!p[flag]} onChange={e => updProp(p._id, flag, e.target.checked)} style={{ cursor: "pointer", width: 14, height: 14 }} />
-                          </td>
-                        ))}
-                        <td style={{ padding: "6px 8px" }}>
-                          <input value={p.source || ""} onChange={e => updProp(p._id, "source", e.target.value)}
-                            style={{ width: 110, padding: "4px 6px", border: "1px solid var(--line)", borderRadius: 4, fontSize: 11, fontFamily: "JetBrains Mono", background: "var(--bg-canvas)", color: "var(--ink-2)" }} />
-                        </td>
-                        <td style={{ padding: "6px 8px" }}>
-                          <button onClick={() => delProp(p._id)} title="Remove property"
-                            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", fontSize: 15, padding: "0 4px", lineHeight: 1 }}>✕</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <button onClick={addProp}
-                style={{ marginTop: 12, padding: "10px 0", border: "1px dashed var(--line)", borderRadius: 6, background: "transparent", color: "var(--ink-2)", fontSize: 13, fontFamily: "Geist, system-ui", cursor: "pointer", width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg> Add property
-              </button>
-              <div style={{ marginTop: 16, padding: "12px 16px", background: "var(--panel-2)", borderRadius: 8, border: "1px solid var(--line-2)", fontSize: 12, color: "var(--ink-2)", display: "flex", gap: 24 }}>
-                <span><b style={{ color: "var(--ink)" }}>{props.length}</b> total</span>
-                <span><b style={{ color: "var(--ink)" }}>{props.filter(p=>p.required).length}</b> required</span>
-                <span><b style={{ color: "var(--ink)" }}>{props.filter(p=>p.indexed).length}</b> indexed</span>
-                <span><b style={{ color: piiProps.length ? "var(--coral)" : "var(--ink)" }}>{piiProps.length}</b> PII</span>
-                <span><b style={{ color: "var(--ink)" }}>{props.filter(p=>p.pk).length}</b> primary key</span>
-              </div>
-            </div>
-          )}
-
-          {/* Access tab */}
-          {activeTab === "Access" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              <div style={{ padding: 16, background: "var(--panel-2)", borderRadius: 8, border: "1px solid var(--line)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-                  PII fields
-                  <span style={{ padding: "2px 8px", background: piiProps.length ? "#fff2ef" : "var(--panel-2)", border: "1px solid " + (piiProps.length ? "var(--coral)" : "var(--line)"), borderRadius: 4, fontSize: 11, color: piiProps.length ? "var(--coral)" : "var(--ink-3)" }}>{piiProps.length} fields</span>
-                </div>
-                {piiProps.length === 0 ? (
-                  <div style={{ color: "var(--ink-3)", fontSize: 12 }}>No PII-flagged fields. Mark fields as PII in the Properties tab.</div>
-                ) : piiProps.map(p => (
-                  <div key={p._id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--line-2)", fontSize: 12 }}>
-                    <span style={{ fontFamily: "JetBrains Mono", color: "var(--coral)", minWidth: 160 }}>{p.name}</span>
-                    <span style={{ color: "var(--ink-3)", fontSize: 11 }}>{p.type}</span>
-                    <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-                      <span style={{ padding: "2px 8px", background: "#fff2ef", border: "1px solid var(--coral)", borderRadius: 4, fontSize: 10, color: "var(--coral)" }}>PII</span>
-                      <span style={{ padding: "2px 8px", background: "var(--bg-canvas)", border: "1px solid var(--line-2)", borderRadius: 4, fontSize: 10, color: "var(--ink-3)" }}>audit-logged</span>
+              </section>
+              <section className="card">
+                <div className="card-head">Downstream impact</div>
+                <div className="card-body">
+                  {[
+                    { name: "Revenue Forecaster agent",  kind: "agent",     impact: "none" },
+                    { name: "CS — Account health 360",   kind: "dashboard", impact: "none" },
+                    { name: "warehouse.account_dim",     kind: "pipeline",  impact: props.length !== initProps.length ? "schema drift" : "none" },
+                  ].map(d => (
+                    <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--line-2)", fontSize: 12 }}>
+                      <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)", minWidth: 76 }}>{d.kind}</span>
+                      <span style={{ flex: 1, color: "var(--ink-2)" }}>{d.name}</span>
+                      <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 700, background: d.impact === "none" ? "#e8f5e9" : "#fff2ef", color: d.impact === "none" ? "var(--green)" : "var(--coral)", border: "1px solid " + (d.impact === "none" ? "var(--green)" : "var(--coral)") }}>
+                        {d.impact === "none" ? "NO IMPACT" : d.impact.toUpperCase()}
+                      </span>
                     </div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ padding: 16, background: "var(--panel-2)", borderRadius: 8, border: "1px solid var(--line)" }}>
-                <div style={{ fontWeight: 600, marginBottom: 12 }}>Role-based access</div>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                  <thead><tr style={{ background: "var(--bg-canvas)" }}>
-                    {["Role","Access","Scope",""].map(h => <th key={h} style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, letterSpacing: "0.8px", textTransform: "uppercase", color: "var(--ink-3)", borderBottom: "1px solid var(--line)" }}>{h}</th>)}
-                  </tr></thead>
-                  <tbody>
-                    {[
-                      { role: "role:acct_admin",   access: "Read + Write", scope: "All fields",       editable: false },
-                      { role: "role:cs_rep",        access: "Read only",    scope: "Non-PII fields",   editable: true },
-                      { role: "role:analyst",       access: "Read only",    scope: "Aggregated only",  editable: true },
-                      { role: "role:data_platform", access: "Read + Write", scope: "All fields",       editable: false },
-                    ].map((r, i) => (
-                      <tr key={i} style={{ borderBottom: "1px solid var(--line-2)" }}>
-                        <td style={{ padding: "8px 10px", fontFamily: "JetBrains Mono", fontSize: 11 }}>{r.role}</td>
-                        <td style={{ padding: "8px 10px" }}>
-                          <select defaultValue={r.access} style={{ padding: "3px 6px", border: "1px solid var(--line)", borderRadius: 4, fontSize: 11, fontFamily: "Geist, system-ui", background: "var(--bg-canvas)", color: "var(--ink)" }}>
-                            {["Read + Write","Read only","No access"].map(a => <option key={a}>{a}</option>)}
-                          </select>
-                        </td>
-                        <td style={{ padding: "8px 10px", color: "var(--ink-2)" }}>{r.scope}</td>
-                        <td style={{ padding: "8px 10px" }}>
-                          <button style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", fontSize: 15 }}>✕</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <button style={{ marginTop: 12, padding: "8px 14px", border: "1px dashed var(--line)", borderRadius: 6, background: "transparent", color: "var(--ink-2)", fontSize: 12, cursor: "pointer" }}>+ Add role</button>
-              </div>
-              <div style={{ padding: 16, background: "var(--panel-2)", borderRadius: 8, border: "1px solid var(--line-2)", fontSize: 12, color: "var(--ink-2)" }}>
-                <div style={{ fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>Retention policy</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <label><span style={{ ...lblStyle, fontSize: 10 }}>Retention period</span>
-                    <select style={{ ...fldStyle, fontSize: 12 }} defaultValue="7 years">
-                      {["90 days","1 year","3 years","7 years","Indefinite"].map(v => <option key={v}>{v}</option>)}
-                    </select>
-                  </label>
-                  <label><span style={{ ...lblStyle, fontSize: 10 }}>Deletion strategy</span>
-                    <select style={{ ...fldStyle, fontSize: 12 }} defaultValue="Soft delete">
-                      {["Soft delete","Hard delete","Anonymise"].map(v => <option key={v}>{v}</option>)}
-                    </select>
-                  </label>
+                  ))}
                 </div>
+              </section>
+              <div style={{ padding: 28, background: published ? "#e8f5e9" : "var(--panel-2)", borderRadius: 12, border: "1px solid " + (published ? "var(--green)" : "var(--line)"), textAlign: "center" }}>
+                <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 6, color: published ? "var(--green)" : "var(--ink)" }}>
+                  {published ? "Schema published" : "Ready to publish"}
+                </div>
+                <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 20 }}>
+                  {published ? "v3.3 is live — downstream consumers will re-validate within 60s." : "Creates v3.3 and notifies 2 stewards for review."}
+                </div>
+                {!published && (
+                  <button onClick={() => { setPublished(true); setTimeout(onClose, 1200); }}
+                    style={{ padding: "12px 40px", borderRadius: 8, border: "none", background: "var(--ink)", color: "#fff", fontSize: 14, fontFamily: "Geist, system-ui", cursor: "pointer", fontWeight: 600 }}>
+                    Publish v3.3
+                  </button>
+                )}
               </div>
             </div>
           )}
         </div>
 
-        {/* ── footer ── */}
-        <div style={{ padding: "14px 24px", borderTop: "1px solid var(--line)", display: "flex", gap: 8, alignItems: "center" }}>
-          <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid var(--line)", background: "transparent", color: "var(--ink-2)", fontSize: 13, fontFamily: "Geist, system-ui", cursor: "pointer" }}>Cancel</button>
-          <button style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid var(--line)", background: "transparent", color: "var(--ink)", fontSize: 13, fontFamily: "Geist, system-ui", cursor: "pointer" }}>Save draft</button>
-          <div style={{ flex: 1 }} />
-          <div style={{ fontSize: 11, color: "var(--ink-3)" }}>v3.2 → draft — will require review before merge</div>
-          <button onClick={handlePublish}
-            style={{ padding: "8px 22px", borderRadius: 6, border: "none", background: published ? "var(--green)" : "var(--ink)", color: "#fff", fontSize: 13, fontFamily: "Geist, system-ui", cursor: "pointer", fontWeight: 600, minWidth: 100, transition: "background 0.2s" }}>
-            {published ? "Published ✓" : "Publish"}
-          </button>
+        {/* Right: live schema snapshot */}
+        <div style={{ width: 260, borderLeft: "1px solid var(--line)", padding: 20, background: "var(--panel)", flexShrink: 0, overflowY: "auto" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.8px", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 12 }}>Schema snapshot</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>{label || node.label}</div>
+          <div style={{ fontSize: 11, color: "var(--ink-3)", marginBottom: 14 }}>{props.length} props · {props.filter(p => p.required).length} required · {piiProps.length} PII</div>
+          {props.slice(0, 14).map(p => (
+            <div key={p._id} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 0", borderBottom: "1px solid var(--line-2)", fontSize: 11 }}>
+              <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+                {p.pk && <span style={{ fontSize: 8, fontWeight: 700, color: "var(--ink-3)", background: "var(--panel-2)", border: "1px solid var(--line-2)", borderRadius: 3, padding: "0 3px" }}>PK</span>}
+                {p.pii && <span style={{ fontSize: 8, fontWeight: 700, color: "var(--coral)", background: "#fff2ef", border: "1px solid var(--coral)", borderRadius: 3, padding: "0 3px" }}>PII</span>}
+                {p.indexed && !p.pk && <span style={{ fontSize: 8, fontWeight: 700, color: "var(--ink-3)", background: "var(--panel-2)", border: "1px solid var(--line-2)", borderRadius: 3, padding: "0 3px" }}>IDX</span>}
+              </div>
+              <span style={{ flex: 1, fontFamily: "JetBrains Mono", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--ink-2)" }}>{p.name || <span style={{ color: "var(--ink-4)" }}>unnamed</span>}</span>
+              <span style={{ color: "var(--ink-3)", fontSize: 10, flexShrink: 0 }}>{p.type}</span>
+            </div>
+          ))}
+          {props.length > 14 && <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 8 }}>+{props.length - 14} more</div>}
         </div>
       </div>
     </div>
@@ -1842,6 +2062,7 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
   const [tab, setTab] = useState("Overview");
   const [editOpen, setEditOpen] = useState(false);
   if (!node) return null;
+  if (editOpen) return <EditSchemaView node={node} properties={generateProps(node)} onClose={() => setEditOpen(false)} />;
 
   const c = colorForNode(node);
   const properties = generateProps(node);
@@ -1988,7 +2209,6 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
         {tab === "Sample"     && <SamplePane node={node} properties={properties} />}
       </div>
 
-      {editOpen && <EditSchemaModal node={node} properties={properties} onClose={() => setEditOpen(false)} />}
     </div>
   );
 }
