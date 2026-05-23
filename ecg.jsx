@@ -337,6 +337,7 @@ function Inspector({ node, onClose }) {
   const outgoing = EDGES.filter(e => e.s === node.id);
   const properties = generateProps(node);
   const sources = generateSources(node);
+  const rules = generateRules(node);
 
   // synthesized quality numbers based on node id so they're stable
   const seed = node.id.charCodeAt(0) + node.id.length;
@@ -444,24 +445,24 @@ function Inspector({ node, onClose }) {
 
         {tab === "Props" && (
           <div className="ih-block">
-            <div className="ih-prop-list">
+            <div className="ih-block-head">Properties <span className="ih-block-sub">{properties.length} total · {piiProps} PII</span></div>
+            <div>
               {properties.map((p, i) => (
-                <div key={i} className="ih-prop-row">
-                  <div className="ih-prop-name">
-                    {p.pk && <span className="snap-tag snap-pk">PK</span>}
-                    <span className="snap-n">{p.name}</span>
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < properties.length - 1 ? "1px dashed var(--line-2)" : "none" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 3 }}>
+                      {p.pk  && <span className="snap-tag snap-pk">PK</span>}
+                      {p.pii && <span className="snap-tag snap-pii">PII</span>}
+                      <span style={{ fontSize: 12.5, color: "var(--ink)", fontWeight: p.pk ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <span className="snap-type">{p.type}</span>
+                      {p.required && <span className="snap-tag">REQ</span>}
+                      {p.indexed  && <span className="snap-tag snap-idx">IDX</span>}
+                      {p.computed && <span className="snap-tag snap-comp">FX</span>}
+                    </div>
                   </div>
-                  <div className="ih-prop-type">{p.type}</div>
-                  <div className="ih-prop-flags">
-                    {p.required && <span className="snap-tag">req</span>}
-                    {p.indexed && <span className="snap-tag snap-idx">idx</span>}
-                    {p.pii && <span className="snap-tag snap-pii">PII</span>}
-                    {p.computed && <span className="snap-tag snap-comp">fx</span>}
-                  </div>
-                  <div className="ih-prop-bar">
-                    <div className="meter-bar" style={{ width: 60, height: 5 }}><div className="meter-fill" style={{ width: p.fill + "%", background: metricColor(p.fill) }} /></div>
-                    <span style={{ fontFamily: "JetBrains Mono", fontSize: 10.5, color: metricColor(p.fill), fontWeight: 500 }}>{p.fill}%</span>
-                  </div>
+                  <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: metricColor(p.fill), fontWeight: 600, flexShrink: 0 }}>{p.fill}%</span>
                 </div>
               ))}
             </div>
@@ -469,37 +470,74 @@ function Inspector({ node, onClose }) {
         )}
 
         {tab === "Edges" && (
-          <div className="ih-block">
-            <div className="ih-edge-detail-list">
-              {outgoing.map((e, i) => {
-                const target = NODES.find(n => n.id === e.t);
-                if (!target) return null;
-                const card = (seed + i * 11) % 100 < 70 ? "1:N" : "N:N";
-                const inst = ((seed + i * 17) % 800) + 50;
-                return (
-                  <div key={i} className="ih-edge-detail">
-                    <div className="ih-edge-det-label">:{e.label || "RELATED"}</div>
-                    <div className="ih-edge-det-arrow">→</div>
-                    <ListGlyph node={target} size={18} />
-                    <div className="ih-edge-det-target">{target.label}</div>
-                    <div className="ih-edge-det-card">{card}</div>
-                    <div className="ih-edge-det-inst">{inst.toLocaleString()}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <>
+            {outgoing.length > 0 && (
+              <div className="ih-block">
+                <div className="ih-block-head">Outgoing <span className="ih-block-sub">{outgoing.length} edge types</span></div>
+                <div className="ih-edges">
+                  {outgoing.map((e, i) => {
+                    const target = NODES.find(n => n.id === e.t);
+                    if (!target) return null;
+                    const card = (seed + i * 11) % 100 < 70 ? "1:N" : "N:N";
+                    const inst = ((seed + i * 17) % 800) + 50;
+                    return (
+                      <div key={i} className={"ih-edge ih-edge-" + e.kind}>
+                        <span className="ih-edge-lbl">:{e.label}</span>
+                        <span className="ih-edge-dir">→</span>
+                        <span className="ih-edge-other"><ListGlyph node={target} size={14} />{target.label}</span>
+                        <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", fontFamily: "JetBrains Mono", fontSize: 10.5, color: "var(--ink-3)" }}>
+                          <span>{card}</span><span>{inst.toLocaleString()}</span>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {incoming.length > 0 && (
+              <div className="ih-block">
+                <div className="ih-block-head">Incoming <span className="ih-block-sub">{incoming.length} edge types</span></div>
+                <div className="ih-edges">
+                  {incoming.map((e, i) => {
+                    const src = NODES.find(n => n.id === e.s);
+                    if (!src) return null;
+                    const card = (seed + i * 13) % 100 < 70 ? "N:1" : "N:N";
+                    const inst = ((seed + i * 19) % 600) + 30;
+                    return (
+                      <div key={i} className={"ih-edge ih-edge-" + e.kind}>
+                        <span className="ih-edge-lbl">:{e.label}</span>
+                        <span className="ih-edge-dir">←</span>
+                        <span className="ih-edge-other"><ListGlyph node={src} size={14} />{src.label}</span>
+                        <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", fontFamily: "JetBrains Mono", fontSize: 10.5, color: "var(--ink-3)" }}>
+                          <span>{card}</span><span>{inst.toLocaleString()}</span>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {tab === "Sources" && (
           <div className="ih-block">
-            <div className="ih-src-list">
+            <div className="ih-block-head">Data sources <span className="ih-block-sub">{sources.length} connected</span></div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {sources.map((s, i) => (
-                <div key={i} className="ih-src-row">
-                  <div className="ih-src-name">{s.name}</div>
-                  <span className="snap-tag">{s.type}</span>
-                  <div className="ih-src-freq">{s.freq}</div>
-                  <span className={"src-status src-status-" + s.status}>{s.status}</span>
+                <div key={i} style={{ border: "1px solid var(--line-2)", borderRadius: 8, padding: "12px 14px", background: "var(--panel-2)", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>{s.name}</div>
+                      <div style={{ fontFamily: "JetBrains Mono", fontSize: 10.5, color: "var(--ink-3)", marginTop: 3 }}>{s.freq}</div>
+                    </div>
+                    <span className={"src-status src-status-" + s.status} style={{ flexShrink: 0 }}>{s.status}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span className="snap-tag">{s.type.toUpperCase()}</span>
+                    {s.rows !== "—" && <span style={{ fontFamily: "JetBrains Mono", fontSize: 10.5, color: "var(--ink-3)" }}>{s.rows} rows</span>}
+                    {s.errors > 0 && <span style={{ fontFamily: "JetBrains Mono", fontSize: 10.5, color: "var(--coral)", marginLeft: "auto" }}>{s.errors} errors</span>}
+                  </div>
                 </div>
               ))}
             </div>
@@ -508,12 +546,16 @@ function Inspector({ node, onClose }) {
 
         {tab === "Rules" && (
           <div className="ih-block">
-            <div className="ih-rule-list">
-              {["VALIDATE email format", "COMPUTE health_score", "SLO freshness ≤ 30m", "ACCESS mask PII for viewer"].map((rule, i) => (
-                <div key={i} className="ih-rule-row">
-                  <div className="ih-rule-kind">{rule.split(" ")[0]}</div>
-                  <div className="ih-rule-desc">{rule.split(" ").slice(1).join(" ")}</div>
-                  <span className={"rule-result-dot " + (i < 3 ? "ok" : "warn")} />
+            <div className="ih-block-head">Rules <span className="ih-block-sub">{rules.length} active</span></div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {rules.map((r, i) => (
+                <div key={i} style={{ border: "1px solid var(--line-2)", borderRadius: 8, padding: "10px", background: "var(--panel-2)", display: "flex", flexDirection: "column", gap: 6 }}>
+                  <span className={"rule-kind rule-kind-" + r.kind.toLowerCase()} style={{ alignSelf: "flex-start" }}>{r.kind}</span>
+                  <span style={{ fontSize: 12, color: "var(--ink)", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{r.label}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: "auto" }}>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: r.on ? "var(--green)" : "var(--coral)", flexShrink: 0 }} />
+                    <span style={{ fontFamily: "JetBrains Mono", fontSize: 9.5, color: "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.last}</span>
+                  </div>
                 </div>
               ))}
             </div>
