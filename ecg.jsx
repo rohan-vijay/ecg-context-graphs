@@ -2061,8 +2061,10 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
   const node = NODES.find(n => n.id === nodeId);
   const [tab, setTab] = useState("Overview");
   const [editOpen, setEditOpen] = useState(false);
+  const [violationRule, setViolationRule] = useState(null);
   if (!node) return null;
   if (editOpen) return <EditSchemaView node={node} properties={generateProps(node)} onClose={() => setEditOpen(false)} />;
+  if (violationRule) return <ViolationDetailView rule={violationRule} node={node} onClose={() => setViolationRule(null)} />;
 
   const c = colorForNode(node);
   const properties = generateProps(node);
@@ -2202,7 +2204,7 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
         {tab === "Properties" && <PropertiesPane node={node} properties={properties} />}
         {tab === "Edges"      && <EdgesPane node={node} outgoing={outgoing} incoming={incoming} />}
         {tab === "Sources"    && <SourcesPane sources={sources} node={node} />}
-        {tab === "Rules"      && <RulesPane rules={rules} node={node} />}
+        {tab === "Rules"      && <RulesPane rules={rules} node={node} onViolationClick={setViolationRule} />}
         {tab === "Quality"    && <QualityPane node={node} properties={properties} />}
         {tab === "Access"     && <AccessPane node={node} properties={properties} />}
         {tab === "History"    && <HistoryPane node={node} />}
@@ -3158,10 +3160,9 @@ function NewRuleModal({ node, onClose }) {
   );
 }
 
-function RulesPane({ rules, node }) {
+function RulesPane({ rules, node, onViolationClick }) {
   const [filter, setFilter]     = useState("all");
   const [showNewRule, setShowNewRule] = useState(false);
-  const [violationRule, setViolationRule] = useState(null);
   const KINDS = ["all","VALIDATE","COMPUTE","SLO","ACCESS","INFER"];
   const filtered = filter === "all" ? rules : rules.filter(r => r.kind === filter);
   const counts   = KINDS.reduce((acc, k) => { acc[k] = k === "all" ? rules.length : rules.filter(r => r.kind === k).length; return acc; }, {});
@@ -3218,7 +3219,7 @@ function RulesPane({ rules, node }) {
                 <div style={{ display: "flex", alignItems: "center", gap: 18, flexShrink: 0 }}>
                   <div
                     style={{ textAlign: "right", minWidth: 100, cursor: hasViol ? "pointer" : "default" }}
-                    onClick={() => hasViol && setViolationRule(r)}
+                    onClick={() => hasViol && onViolationClick(r)}
                     title={hasViol ? "Click to investigate violations" : undefined}
                   >
                     <div style={{ fontFamily: "JetBrains Mono", fontSize: 12, fontWeight: 600, color: hasViol ? "var(--coral)" : "var(--ink-3)", textDecoration: hasViol ? "underline" : "none" }}>
@@ -3240,162 +3241,354 @@ function RulesPane({ rules, node }) {
         </div>
       </div>
 
-      {violationRule && <ViolationsPanel rule={violationRule} node={node} onClose={() => setViolationRule(null)} />}
       {showNewRule && <NewRuleModal node={node} onClose={() => setShowNewRule(false)} />}
     </>
   );
 }
 
-// ─── VIOLATIONS PANEL ────────────────────────────────────────────────────────
+// ─── VIOLATION DETAIL VIEW ────────────────────────────────────────────────────
 
-function ViolationsPanel({ rule, node, onClose }) {
-  const [actionDone, setActionDone] = useState(null);
+function ViolationDetailView({ rule, node, onClose }) {
+  const [selected, setSelected] = useState(new Set());
+  const [recordStates, setRecordStates] = useState({});
+  const [expandedId, setExpandedId] = useState(null);
+  const [filterSrc, setFilterSrc] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [ruleActionDone, setRuleActionDone] = useState(null);
 
-  const SAMPLES = {
-    domain_format: [
-      { id: "acc_84921", field: "domain", value: "ACME Corp",          created: "2026-05-21", source: "HubSpot Marketing" },
-      { id: "acc_72103", field: "domain", value: "Riverside Motors#2", created: "2026-05-20", source: "HubSpot Marketing" },
-      { id: "acc_61847", field: "domain", value: "Summit Auto & RV",   created: "2026-05-19", source: "Manual / Admin UI" },
-      { id: "acc_55290", field: "domain", value: "Valley Ford!",       created: "2026-05-18", source: "HubSpot Marketing" },
-      { id: "acc_48134", field: "domain", value: "Peak Auto>>",        created: "2026-05-17", source: "HubSpot Marketing" },
-    ],
-  };
+  const DOMAIN_RECORDS = [
+    { id: "acc_84921", field: "domain", value: "ACME Corp",          created: "2026-05-21", source: "HubSpot Marketing" },
+    { id: "acc_72103", field: "domain", value: "Riverside Motors#2", created: "2026-05-20", source: "HubSpot Marketing" },
+    { id: "acc_61847", field: "domain", value: "Summit Auto & RV",   created: "2026-05-19", source: "Manual / Admin UI" },
+    { id: "acc_55290", field: "domain", value: "Valley Ford!",       created: "2026-05-18", source: "HubSpot Marketing" },
+    { id: "acc_48134", field: "domain", value: "Peak Auto>>",        created: "2026-05-17", source: "HubSpot Marketing" },
+    { id: "acc_41209", field: "domain", value: "Green Leaf & Co",    created: "2026-05-16", source: "HubSpot Marketing" },
+    { id: "acc_38770", field: "domain", value: "Fast Track LLC!",    created: "2026-05-15", source: "HubSpot Marketing" },
+    { id: "acc_31044", field: "domain", value: "City Motors #4",     created: "2026-05-14", source: "Manual / Admin UI" },
+    { id: "acc_29183", field: "domain", value: "Bright Horizons*",   created: "2026-05-13", source: "HubSpot Marketing" },
+    { id: "acc_22091", field: "domain", value: "Auto World (East)",  created: "2026-05-12", source: "HubSpot Marketing" },
+    { id: "acc_18847", field: "domain", value: "NextGen & Partners", created: "2026-05-11", source: "HubSpot Marketing" },
+    { id: "acc_11293", field: "domain", value: "Premier Auto!",      created: "2026-05-10", source: "Manual / Admin UI" },
+  ];
 
-  const records = SAMPLES[rule.id] || Array.from({ length: Math.min(rule.violations || 3, 5) }, (_, i) => ({
-    id: node.id + "_" + (10000 + i * 37 + node.id.charCodeAt(0)),
-    field: (rule.expr || "field").match(/\b(\w+)\b/)?.[1] || "field",
-    value: "(invalid value)",
-    created: "2026-05-" + String(22 - i).padStart(2, "0"),
-    source: i < 3 ? "Primary source" : "Manual / Admin UI",
-  }));
+  const allRecords = rule.id === "domain_format" ? DOMAIN_RECORDS :
+    Array.from({ length: Math.max(rule.violations || 3, 1) }, (_, i) => ({
+      id: node.id + "_" + (10000 + i * 37 + node.id.charCodeAt(0)),
+      field: (rule.expr || "field").match(/\b(\w+)\b/)?.[1] || "field",
+      value: "(invalid value)",
+      created: "2026-05-" + String(22 - i).padStart(2, "0"),
+      source: i % 3 === 0 ? "Manual / Admin UI" : "Primary source",
+    }));
 
-  const rootCause = rule.id === "domain_format"
-    ? "10 of 12 violations originate from the HubSpot Marketing integration — company domain values arrive without URL-format validation, causing failures against the /^[a-z0-9-.]+$/ pattern. The integration team was notified on 2026-05-19 but no fix has been deployed."
-    : `${rule.violations} records fail the rule expression. Check the source pipeline for data quality issues upstream — the most recent batch from the primary source shows elevated error rates.`;
+  const getStatus = id => recordStates[id]?.status || "pending";
+  const setRecordStatus = (id, status) =>
+    setRecordStates(s => ({ ...s, [id]: { ...(s[id] || {}), status } }));
 
   const sourceBreakdown = rule.id === "domain_format"
     ? [{ name: "HubSpot Marketing", pct: 83, status: "degraded" }, { name: "Manual / Admin UI", pct: 17, status: "healthy" }]
     : [{ name: "Primary source", pct: 100, status: "degraded" }];
 
+  const rootCause = rule.id === "domain_format"
+    ? "10 of 12 violations originate from the HubSpot Marketing integration — company domain values arrive without URL-format validation, causing failures against the /^[a-z0-9-.]+$/ pattern. The integration team was notified on 2026-05-19 but no fix has been deployed."
+    : `${rule.violations} records fail this rule. Check the source pipeline for data quality issues — the most recent batch shows elevated error rates.`;
+
   const totalEval = rule.violations > 0 && rule.compliance < 100
     ? Math.round(rule.violations / Math.max(0.001, (100 - rule.compliance) / 100))
     : 2840;
 
-  const ACTIONS = [
-    { id: "quarantine", label: `Quarantine ${rule.violations} records`, desc: "Flag violating records — blocks them from downstream consumption", tone: "dark" },
-    { id: "suppress",   label: "Suppress violations",                   desc: "Acknowledge and snooze this violation class with a reason",       tone: "ghost" },
-    { id: "issue",      label: "Create remediation issue",              desc: "File a ticket and assign to the data owner",                      tone: "ghost" },
-    { id: "notify",     label: "Notify source owner",                   desc: "Alert the team responsible for the upstream source",              tone: "ghost" },
-    { id: "edit-rule",  label: "Adjust rule expression",               desc: "Open the rule editor to modify the threshold or expression",      tone: "ghost" },
-  ];
+  const allSources = [...new Set(allRecords.map(r => r.source))];
+  const filtered = allRecords.filter(r => {
+    if (filterSrc !== "all" && r.source !== filterSrc) return false;
+    const st = getStatus(r.id);
+    if (filterStatus !== "all" && st !== filterStatus) return false;
+    return true;
+  });
+
+  const statusCounts = allRecords.reduce((acc, r) => {
+    const st = getStatus(r.id);
+    acc[st] = (acc[st] || 0) + 1;
+    return acc;
+  }, {});
+  const pendingCount = statusCounts.pending ?? allRecords.length;
+  const resolved = allRecords.length - pendingCount;
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every(r => selected.has(r.id));
+  const toggleAll = () => {
+    const next = new Set(selected);
+    if (allFilteredSelected) filtered.forEach(r => next.delete(r.id));
+    else filtered.forEach(r => next.add(r.id));
+    setSelected(next);
+  };
+  const toggleRow = id => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  };
+  const applyBulk = action => {
+    selected.forEach(id => setRecordStatus(id, action));
+    setSelected(new Set());
+  };
+
+  const STATUS_MAP = {
+    pending:     { label: "Pending",     color: "var(--gold)",  bg: "var(--gold-fill)" },
+    quarantined: { label: "Quarantined", color: "var(--coral)", bg: "var(--coral-fill)" },
+    suppressed:  { label: "Suppressed",  color: "var(--ink-3)", bg: "var(--panel-2)" },
+    fixed:       { label: "Fixed",       color: "var(--green)", bg: "rgba(72,199,142,0.12)" },
+    assigned:    { label: "Assigned",    color: "var(--blue)",  bg: "rgba(99,143,255,0.12)" },
+  };
+  const StatusBadge = ({ id }) => {
+    const m = STATUS_MAP[getStatus(id)] || STATUS_MAP.pending;
+    return <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, fontWeight: 600, color: m.color, background: m.bg, padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap" }}>{m.label}</span>;
+  };
+
+  const fldStyle = { padding: "6px 10px", border: "1px solid var(--line)", borderRadius: 6, fontSize: 12, fontFamily: "Geist, system-ui", background: "var(--bg-canvas)", color: "var(--ink)" };
+  const allPending = allRecords.every(r => getStatus(r.id) === "pending");
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 300, position: "fixed", inset: 0, background: "rgba(20,22,16,0.45)", backdropFilter: "blur(2px)", display: "grid", placeItems: "center", padding: 24 }}>
-      <div className="modal" style={{ maxWidth: 700, width: "100%", maxHeight: "88vh", overflowY: "auto", background: "var(--panel)", borderRadius: 14, border: "1px solid var(--line-2)", boxShadow: "0 24px 80px rgba(0,0,0,0.18)" }} onClick={e => e.stopPropagation()}>
-        <div className="modal-head">
-          <div>
-            <div className="modal-eyebrow">VIOLATIONS · {rule.kind} · {node.label}</div>
-            <div className="modal-title" style={{ fontSize: 22 }}>{rule.title || rule.label}</div>
-          </div>
-          <button className="modal-close" onClick={onClose}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+    <div className="detail-view" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+
+      {/* Header */}
+      <div className="detail-head" style={{ flexShrink: 0 }}>
+        <div className="detail-crumb">
+          <button className="crumb-back" onClick={onClose}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+            {node.label}
           </button>
+          <span className="crumb-sep">/</span>
+          <span className="crumb-cur">Rules</span>
+          <span className="crumb-sep">/</span>
+          <span className="crumb-cur">{rule.title}</span>
         </div>
-
-        <div className="modal-body" style={{ gap: 22 }}>
-          {/* Rule summary */}
-          <div style={{ display: "flex", gap: 16, padding: 14, background: "var(--panel-2)", borderRadius: 10, border: "1px solid var(--line-2)" }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.5px", marginBottom: 6 }}>RULE EXPRESSION</div>
-              <code style={{ fontFamily: "JetBrains Mono", fontSize: 12.5, color: "var(--ink)", display: "block", overflowX: "auto" }}>{rule.expr}</code>
+        <div className="detail-title-row">
+          <div className="detail-title-left">
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--coral)", background: "var(--coral-fill)", padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>{rule.kind}</span>
+              <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)" }}>severity: {rule.severity}</span>
+              <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-4)" }}>·</span>
+              <code style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)" }}>{rule.expr}</code>
             </div>
-            <div style={{ textAlign: "right", flexShrink: 0 }}>
-              <div style={{ fontFamily: "Instrument Serif", fontSize: 36, color: "var(--coral)", lineHeight: 1 }}>{rule.violations}</div>
-              <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", marginTop: 2 }}>violations</div>
-            </div>
+            <h1 className="detail-title-name">{rule.title}</h1>
           </div>
-
-          {/* Compliance bar */}
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "JetBrains Mono", fontSize: 10.5, color: "var(--ink-3)", marginBottom: 6 }}>
-              <span>Compliance</span>
-              <span style={{ color: "var(--ink)", fontWeight: 600 }}>{rule.compliance}% · {rule.violations} failing of {totalEval.toLocaleString()} evaluated</span>
+          <div className="detail-title-right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontFamily: "Instrument Serif", fontSize: 32, color: "var(--coral)", lineHeight: 1 }}>{rule.violations}</div>
+              <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)" }}>violations</div>
             </div>
-            <div style={{ height: 7, background: "var(--line)", borderRadius: 4, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: rule.compliance + "%", background: rule.compliance >= 99 ? "var(--green)" : rule.compliance >= 90 ? "var(--gold)" : "var(--coral)", borderRadius: 4, transition: "width 600ms" }} />
+            <div style={{ width: 1, height: 36, background: "var(--line)", margin: "0 4px" }} />
+            <button className="btn-ghost" onClick={onClose}>← Back to rules</button>
+            {allPending && (
+              <button className="btn-dark" style={{ background: "var(--coral)", border: "1px solid var(--coral)" }}
+                onClick={() => allRecords.forEach(r => setRecordStatus(r.id, "quarantined"))}>
+                Quarantine all {rule.violations}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+
+        {/* Left sidebar */}
+        <div style={{ width: 256, flexShrink: 0, borderRight: "1px solid var(--line)", overflowY: "auto", padding: "20px 16px", display: "flex", flexDirection: "column", gap: 22 }}>
+
+          {/* Compliance */}
+          <div>
+            <div style={{ fontFamily: "JetBrains Mono", fontSize: 9.5, color: "var(--ink-3)", letterSpacing: "1px", textTransform: "uppercase", marginBottom: 10 }}>Compliance</div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+              <span style={{ fontFamily: "Instrument Serif", fontSize: 30, color: rule.compliance >= 99 ? "var(--green)" : "var(--gold)", lineHeight: 1 }}>{rule.compliance}%</span>
+              <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)" }}>{rule.violations} of {totalEval.toLocaleString()}</span>
+            </div>
+            <div style={{ height: 5, background: "var(--line)", borderRadius: 3, overflow: "hidden", marginBottom: 14 }}>
+              <div style={{ height: "100%", width: rule.compliance + "%", background: rule.compliance >= 99 ? "var(--green)" : rule.compliance >= 90 ? "var(--gold)" : "var(--coral)", borderRadius: 3 }} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              {[
+                { label: "Pending",     count: pendingCount,                    color: "var(--gold)",  key: "pending" },
+                { label: "Resolved",    count: resolved,                        color: "var(--green)", key: "resolved" },
+                { label: "Quarantined", count: statusCounts.quarantined || 0,   color: "var(--coral)", key: "quarantined" },
+                { label: "Assigned",    count: statusCounts.assigned || 0,      color: "var(--blue)",  key: "assigned" },
+              ].map(s => (
+                <div key={s.label}
+                  onClick={() => setFilterStatus(filterStatus === s.key ? "all" : s.key)}
+                  style={{ padding: "8px 10px", background: filterStatus === s.key ? "var(--panel-2)" : "var(--panel-2)", borderRadius: 7, border: `1px solid ${filterStatus === s.key ? s.color : "var(--line-2)"}`, cursor: "pointer", transition: "border-color 120ms" }}>
+                  <div style={{ fontFamily: "Instrument Serif", fontSize: 22, color: s.color, lineHeight: 1 }}>{s.count}</div>
+                  <div style={{ fontFamily: "JetBrains Mono", fontSize: 9, color: "var(--ink-3)", marginTop: 3 }}>{s.label}</div>
+                </div>
+              ))}
             </div>
           </div>
 
           {/* Source attribution */}
           <div>
-            <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 10 }}>Source attribution</div>
+            <div style={{ fontFamily: "JetBrains Mono", fontSize: 9.5, color: "var(--ink-3)", letterSpacing: "1px", textTransform: "uppercase", marginBottom: 10 }}>Source attribution</div>
             {sourceBreakdown.map((s, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.status === "degraded" ? "var(--coral)" : "var(--green)", flexShrink: 0 }} />
-                <span style={{ fontSize: 13, color: "var(--ink)", flex: 1 }}>{s.name}</span>
-                {s.status === "degraded" && <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--coral)", background: "var(--coral-fill)", padding: "1px 6px", borderRadius: 3 }}>degraded</span>}
-                <div style={{ flex: 2, height: 4, background: "var(--line-2)", borderRadius: 2, overflow: "hidden" }}>
+              <div key={i} style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.status === "degraded" ? "var(--coral)" : "var(--green)", flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: "var(--ink)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                  {s.status === "degraded" && <span style={{ fontFamily: "JetBrains Mono", fontSize: 9, color: "var(--coral)", background: "var(--coral-fill)", padding: "1px 5px", borderRadius: 3, flexShrink: 0 }}>degraded</span>}
+                  <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", flexShrink: 0 }}>{s.pct}%</span>
+                </div>
+                <div style={{ height: 4, background: "var(--line-2)", borderRadius: 2, overflow: "hidden" }}>
                   <div style={{ height: "100%", width: s.pct + "%", background: s.status === "degraded" ? "var(--coral)" : "var(--green)", transition: "width 600ms" }} />
                 </div>
-                <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)", flexShrink: 0, minWidth: 30, textAlign: "right" }}>{s.pct}%</span>
               </div>
             ))}
           </div>
 
-          {/* Failing records */}
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.5px", textTransform: "uppercase" }}>
-                Failing records <span style={{ color: "var(--coral)", marginLeft: 6 }}>{rule.violations} total</span>
-              </div>
-              <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 10px" }}>Export CSV ↓</button>
-            </div>
-            <div style={{ border: "1px solid var(--line-2)", borderRadius: 8, overflow: "hidden" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr 1.4fr 1fr", padding: "8px 14px", background: "var(--panel-2)", borderBottom: "1px solid var(--line)", fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.5px", textTransform: "uppercase" }}>
-                <div>Record ID</div><div>Field</div><div>Failing value</div><div>Source</div>
-              </div>
-              {records.map((r, i) => (
-                <div key={i} style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr 1.4fr 1fr", padding: "10px 14px", borderBottom: i < records.length - 1 ? "1px solid var(--line-2)" : "none", alignItems: "center" }}>
-                  <code style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--blue)" }}>{r.id}</code>
-                  <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)" }}>{r.field}</span>
-                  <span style={{ fontSize: 12.5, color: "var(--coral)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>"{r.value}"</span>
-                  <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{r.source}</span>
-                </div>
-              ))}
-              {rule.violations > records.length && (
-                <div style={{ padding: "8px 14px", fontFamily: "JetBrains Mono", fontSize: 10.5, color: "var(--ink-4)", borderTop: "1px solid var(--line-2)" }}>
-                  +{rule.violations - records.length} more — Export CSV to view all
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Root cause */}
-          <div style={{ background: "var(--gold-fill)", border: "1px solid var(--gold)", borderRadius: 10, padding: "14px 16px" }}>
-            <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--gold)", letterSpacing: "0.5px", marginBottom: 8 }}>ROOT CAUSE</div>
-            <p style={{ fontSize: 13.5, color: "var(--ink-2)", lineHeight: 1.6, margin: 0 }}>{rootCause}</p>
+          <div style={{ background: "var(--gold-fill)", border: "1px solid var(--gold)", borderRadius: 8, padding: "12px 12px" }}>
+            <div style={{ fontFamily: "JetBrains Mono", fontSize: 9, color: "var(--gold)", letterSpacing: "1px", textTransform: "uppercase", marginBottom: 6 }}>Root cause</div>
+            <p style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.55, margin: 0 }}>{rootCause}</p>
           </div>
 
-          {/* Actions */}
+          {/* Rule actions */}
           <div>
-            <div style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 10 }}>Actions</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {ACTIONS.map(a => (
-                <button
-                  key={a.id}
-                  className={actionDone === a.id ? "btn-ghost" : a.tone === "dark" ? "btn-dark" : "btn-ghost"}
-                  onClick={() => setActionDone(a.id)}
-                  disabled={!!actionDone && actionDone !== a.id}
-                  style={{ width: "100%", justifyContent: "flex-start", gap: 12, padding: "10px 14px", textAlign: "left" }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 500, fontSize: 13 }}>{a.label}</div>
-                    <div style={{ fontSize: 11.5, color: a.tone === "dark" && actionDone !== a.id ? "rgba(255,255,255,0.65)" : "var(--ink-3)", marginTop: 2 }}>{a.desc}</div>
-                  </div>
-                  {actionDone === a.id && <span style={{ fontFamily: "JetBrains Mono", fontSize: 12, color: "var(--green)", fontWeight: 600 }}>✓ Done</span>}
+            <div style={{ fontFamily: "JetBrains Mono", fontSize: 9.5, color: "var(--ink-3)", letterSpacing: "1px", textTransform: "uppercase", marginBottom: 8 }}>Rule actions</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              {[
+                { id: "issue",     label: "Create remediation issue",  desc: "File a ticket and assign to data owner" },
+                { id: "notify",    label: "Notify source team",         desc: "Alert the HubSpot integration team" },
+                { id: "edit-rule", label: "Adjust rule expression",    desc: "Modify the threshold or regex pattern" },
+                { id: "suppress",  label: "Suppress this rule class",  desc: "Snooze with reason and expiry date" },
+              ].map(a => (
+                <button key={a.id} className="btn-ghost"
+                  onClick={() => setRuleActionDone(ruleActionDone === a.id ? null : a.id)}
+                  style={{ width: "100%", padding: "8px 10px", textAlign: "left", flexDirection: "column", alignItems: "flex-start", gap: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: "var(--ink)" }}>{a.label}</div>
+                  <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{a.desc}</div>
+                  {ruleActionDone === a.id && <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--green)", marginTop: 2 }}>✓ Action taken</span>}
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* Main content */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+
+          {/* Toolbar */}
+          <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
+            {selected.size > 0 ? (
+              <>
+                <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink)", fontWeight: 600 }}>{selected.size} selected</span>
+                {[
+                  { id: "quarantined", label: "Quarantine", col: "var(--coral)" },
+                  { id: "suppressed",  label: "Suppress",   col: "var(--ink-2)" },
+                  { id: "assigned",    label: "Assign",     col: "var(--blue)" },
+                  { id: "fixed",       label: "Mark fixed", col: "var(--green)" },
+                ].map(a => (
+                  <button key={a.id} onClick={() => applyBulk(a.id)}
+                    style={{ padding: "5px 11px", border: "1px solid var(--line)", borderRadius: 6, background: "transparent", color: a.col, fontSize: 12, fontFamily: "Geist, system-ui", cursor: "pointer", fontWeight: 500 }}>
+                    {a.label}
+                  </button>
+                ))}
+                <button onClick={() => setSelected(new Set())}
+                  style={{ marginLeft: "auto", padding: "5px 10px", border: "none", background: "transparent", color: "var(--ink-3)", fontSize: 12, cursor: "pointer", fontFamily: "Geist, system-ui" }}>
+                  Clear
+                </button>
+              </>
+            ) : (
+              <>
+                <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)" }}>
+                  {filtered.length} record{filtered.length !== 1 ? "s" : ""}{filterStatus !== "all" || filterSrc !== "all" ? " · filtered" : ""}
+                </span>
+                <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+                  <select value={filterSrc} onChange={e => setFilterSrc(e.target.value)} style={fldStyle}>
+                    <option value="all">All sources</option>
+                    {allSources.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={fldStyle}>
+                    <option value="all">All statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="quarantined">Quarantined</option>
+                    <option value="suppressed">Suppressed</option>
+                    <option value="fixed">Fixed</option>
+                    <option value="assigned">Assigned</option>
+                  </select>
+                  <button className="btn-ghost" style={{ fontSize: 11, padding: "5px 10px" }}>Export CSV ↓</button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Table */}
+          <div style={{ flex: 1, overflowY: "auto" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "36px 1.3fr 0.75fr 1.6fr 1.4fr 0.9fr 115px", padding: "8px 16px", background: "var(--panel-2)", borderBottom: "1px solid var(--line)", fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.5px", textTransform: "uppercase", position: "sticky", top: 0, zIndex: 2 }}>
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <input type="checkbox" checked={allFilteredSelected} onChange={toggleAll} style={{ cursor: "pointer" }} />
+              </div>
+              <div>Record ID</div><div>Field</div><div>Failing value</div><div>Source</div><div>Detected</div><div>Status</div>
+            </div>
+
+            {filtered.length === 0 && (
+              <div style={{ padding: "32px 16px", textAlign: "center", fontFamily: "JetBrains Mono", fontSize: 12, color: "var(--ink-3)" }}>
+                No records match the current filters.
+              </div>
+            )}
+
+            {filtered.map((r) => {
+              const status = getStatus(r.id);
+              const isExpanded = expandedId === r.id;
+              const isSelected = selected.has(r.id);
+              return (
+                <div key={r.id} style={{ borderBottom: "1px solid var(--line-2)" }}>
+                  <div
+                    onClick={() => setExpandedId(isExpanded ? null : r.id)}
+                    style={{ display: "grid", gridTemplateColumns: "36px 1.3fr 0.75fr 1.6fr 1.4fr 0.9fr 115px", padding: "11px 16px", alignItems: "center", cursor: "pointer", background: isExpanded ? "var(--panel-2)" : isSelected ? "rgba(99,143,255,0.04)" : "transparent", transition: "background 100ms" }}
+                  >
+                    <div onClick={e => { e.stopPropagation(); toggleRow(r.id); }} style={{ display: "flex", alignItems: "center" }}>
+                      <input type="checkbox" checked={isSelected} readOnly style={{ cursor: "pointer" }} />
+                    </div>
+                    <code style={{ fontFamily: "JetBrains Mono", fontSize: 11.5, color: "var(--blue)" }}>{r.id}</code>
+                    <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)" }}>{r.field}</span>
+                    <span style={{ fontSize: 12.5, color: "var(--coral)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "JetBrains Mono" }}>"{r.value}"</span>
+                    <span style={{ fontSize: 12, color: "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.source}</span>
+                    <span style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-4)" }}>{r.created}</span>
+                    <StatusBadge id={r.id} />
+                  </div>
+
+                  {isExpanded && (
+                    <div style={{ padding: "10px 16px 12px 52px", background: "var(--panel-2)", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", borderTop: "1px solid var(--line-2)" }}>
+                      <span style={{ fontFamily: "JetBrains Mono", fontSize: 10.5, color: "var(--ink-4)", marginRight: 4 }}>Action:</span>
+                      {[
+                        { action: "quarantined", label: "Quarantine",   color: "var(--coral)" },
+                        { action: "suppressed",  label: "Suppress",     color: "var(--ink-2)" },
+                        { action: "fixed",       label: "Mark fixed",   color: "var(--green)" },
+                        { action: "assigned",    label: "Assign to me", color: "var(--blue)"  },
+                      ].map(a => {
+                        const active = status === a.action;
+                        return (
+                          <button key={a.action}
+                            onClick={() => setRecordStatus(r.id, active ? "pending" : a.action)}
+                            style={{ padding: "6px 13px", border: `1px solid ${active ? a.color : "var(--line)"}`, borderRadius: 6, background: active ? a.color + "18" : "transparent", color: active ? a.color : "var(--ink-3)", fontSize: 12, fontFamily: "Geist, system-ui", cursor: "pointer", fontWeight: active ? 600 : 400, transition: "all 120ms" }}>
+                            {active ? "✓ " : ""}{a.label}
+                          </button>
+                        );
+                      })}
+                      <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
+                        <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--ink-4)" }}>Detected {r.created} · via {r.source}</span>
+                        <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 10px" }}>View record →</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Progress footer */}
+          <div style={{ padding: "10px 16px", borderTop: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
+            <div style={{ flex: 1, height: 5, background: "var(--line)", borderRadius: 3, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: (resolved / allRecords.length * 100) + "%", background: "var(--green)", borderRadius: 3, transition: "width 400ms" }} />
+            </div>
+            <span style={{ fontFamily: "JetBrains Mono", fontSize: 10.5, color: "var(--ink-3)", flexShrink: 0 }}>
+              {resolved} / {allRecords.length} resolved
+            </span>
+            {resolved === allRecords.length && (
+              <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: "var(--green)", fontWeight: 600 }}>✓ All violations resolved</span>
+            )}
           </div>
         </div>
       </div>
