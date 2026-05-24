@@ -12424,13 +12424,13 @@ function GraphLandingEmpty({ onCreate, onBack }) {
       <svg width="100%" height="100%" viewBox={"0 0 " + constellation.W + " " + constellation.H} preserveAspectRatio="xMidYMid slice" style={{ position:"absolute", inset:0, pointerEvents:"none" }} aria-hidden="true">
         <defs>
           <radialGradient id="emptyHalo" cx="50%" cy="50%" r="55%">
-            <stop offset="0%"  stopColor="var(--blue)" stopOpacity="0.10" />
-            <stop offset="60%" stopColor="var(--blue)" stopOpacity="0.04" />
-            <stop offset="100%" stopColor="var(--blue)" stopOpacity="0" />
+            <stop offset="0%"  stopColor="var(--gold)" stopOpacity="0.08" />
+            <stop offset="60%" stopColor="var(--gold)" stopOpacity="0.03" />
+            <stop offset="100%" stopColor="var(--gold)" stopOpacity="0" />
           </radialGradient>
         </defs>
         <rect x="0" y="0" width={constellation.W} height={constellation.H} fill="url(#emptyHalo)" />
-        <g stroke="var(--blue)" strokeOpacity="0.18" strokeWidth="1">
+        <g stroke="var(--ink-3)" strokeOpacity="0.12" strokeWidth="1">
           {constellation.edges.map(function(e, i){
             var a = constellation.nodes[e[0]], b = constellation.nodes[e[1]];
             return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />;
@@ -12440,8 +12440,8 @@ function GraphLandingEmpty({ onCreate, onBack }) {
           {constellation.nodes.map(function(n, i){
             return (
               <g key={i}>
-                <circle cx={n.x} cy={n.y} r={n.r + 4} fill="var(--blue)" fillOpacity="0.07" />
-                <circle cx={n.x} cy={n.y} r={n.r}     fill="var(--blue)" fillOpacity={n.c ? 0.42 : 0.28} />
+                <circle cx={n.x} cy={n.y} r={n.r + 4} fill="var(--gold)" fillOpacity="0.06" />
+                <circle cx={n.x} cy={n.y} r={n.r}     fill="var(--ink-3)" fillOpacity={n.c ? 0.28 : 0.18} />
               </g>
             );
           })}
