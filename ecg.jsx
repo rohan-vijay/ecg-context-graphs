@@ -2147,7 +2147,6 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
   if (matchRule) return <MatchReviewView rule={matchRule} node={node} onClose={() => setMatchRule(null)} />;
   if (survConflict) return <SurvivorshipConflictView rule={survConflict} node={node} onClose={() => setSurvConflict(null)} />;
   if (srcLinkOpen) return <LinkSourceFlow node={node} onClose={() => setSrcLinkOpen(false)} />;
-  if (newRuleOpen) return <NewRuleFlow node={node} onClose={() => setNewRuleOpen(false)} />;
 
   const c = colorForNode(node);
   const properties = generateProps(node);
@@ -2285,6 +2284,7 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
         {tab === "Sample"     && <SamplePane node={node} properties={properties} />}
       </div>
 
+      {newRuleOpen && <NewRuleFlow node={node} onClose={() => setNewRuleOpen(false)} />}
     </div>
   );
 }
@@ -3657,34 +3657,21 @@ function NewRuleFlow({ node, onClose }) {
   const fieldGap = { display:"flex", flexDirection:"column", gap:6 };
 
   return (
-    <div className="detail-view" style={{ display:"flex", flexDirection:"column", height:"100%" }}>
+    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.48)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
+      onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ width:"88vw", maxWidth:1120, height:"87vh", background:"var(--bg-canvas)", borderRadius:14, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 28px 72px rgba(0,0,0,0.36)" }}>
 
-      {/* ── Header ── */}
-      <div className="detail-head" style={{ flexShrink:0 }}>
-        <div className="detail-crumb">
-          <button className="crumb-back" onClick={onClose}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
-            {node.label}
-          </button>
-          <span className="crumb-sep">/</span>
-          <span className="crumb-cur">Rules</span>
-          <span className="crumb-sep">/</span>
-          <span className="crumb-cur">New rule</span>
+      {/* ── Modal header ── */}
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", padding:"20px 28px 16px", borderBottom:"1px solid var(--line)", flexShrink:0 }}>
+        <div style={{ minWidth:0 }}>
+          <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:7 }}>{node.label + " · new rule"}</div>
+          <h2 style={{ fontSize:17, fontWeight:600, color:"var(--ink)", margin:"0 0 5px", lineHeight:1.3 }}>{stepTitle}</h2>
+          <p style={{ fontSize:12.5, color:"var(--ink-3)", margin:0, lineHeight:1.55, maxWidth:560 }}>{stepDesc}</p>
         </div>
-        <div className="detail-title-row">
-          <div className="detail-title-left">
-            <h1 className="detail-title-name">{stepTitle}</h1>
-            <div className="detail-title-desc">{stepDesc}</div>
-          </div>
-          <div className="detail-title-right" style={{ display:"flex", gap:8, alignItems:"center" }}>
-            <button className="btn-ghost" onClick={onClose}>Cancel</button>
-            {step > 1 && <button className="btn-ghost" onClick={function(){ setStep(function(s){ return s-1; }); }}>Back</button>}
-            {step < 5
-              ? <button className="btn-dark" disabled={!canNext} onClick={function(){ setStep(function(s){ return s+1; }); }} style={{ opacity: canNext?1:0.45 }}>Continue</button>
-              : <button className="btn-dark" onClick={onClose}>Save rule</button>
-            }
-          </div>
-        </div>
+        <button onClick={onClose}
+          style={{ width:30, height:30, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginLeft:20 }}>
+          ✕
+        </button>
       </div>
 
       {/* ── Body ── */}
@@ -4369,6 +4356,22 @@ function NewRuleFlow({ node, onClose }) {
           )}
 
         </div>
+      </div>
+
+      {/* ── Modal footer ── */}
+      <div style={{ flexShrink:0, padding:"14px 28px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"flex-end", gap:8, background:"var(--panel-2)" }}>
+        <button className="btn-ghost" onClick={onClose}>Cancel</button>
+        {step > 1 && (
+          <button className="btn-ghost" onClick={function(){ setStep(function(s){ return s-1; }); }}>
+            Back
+          </button>
+        )}
+        {step < 5
+          ? <button className="btn-dark" disabled={!canNext} onClick={function(){ setStep(function(s){ return s+1; }); }} style={{ opacity: canNext?1:0.45 }}>Continue</button>
+          : <button className="btn-dark" onClick={onClose}>Save rule</button>
+        }
+      </div>
+
       </div>
     </div>
   );
