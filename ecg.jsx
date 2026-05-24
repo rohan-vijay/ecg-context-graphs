@@ -9693,9 +9693,9 @@ function NodesView({ onSelect, onSwitchToCanvas, onAddNode }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 var NODE_CATEGORIES_CONFIG = [
-  { id:"core",    label:"Core entity",    color:"var(--blue)",   fill:"var(--blue-fill)",   desc:"A first-class business object that other entities relate to — Account, Customer, Product." },
-  { id:"support", label:"Support entity", color:"var(--green)",  fill:"var(--green-fill)",  desc:"Operational records that support the core — Ticket, Interaction, Task, Note." },
-  { id:"lookup",  label:"Lookup",         color:"var(--gold)",   fill:"var(--gold-fill)",   desc:"Reference data shared across entities — Country, Currency, Status." }
+  { id:"core",    code:"CORE", label:"Core entity",    color:"var(--blue)",   fill:"var(--blue-fill)",   desc:"A first-class business object that other entities relate to — Account, Customer, Product." },
+  { id:"support", code:"SUPP", label:"Support entity", color:"var(--green)",  fill:"var(--green-fill)",  desc:"Operational records that support the core — Ticket, Interaction, Task, Note." },
+  { id:"lookup",  code:"REF",  label:"Lookup",         color:"var(--gold)",   fill:"var(--gold-fill)",   desc:"Reference data shared across entities — Country, Currency, Status." }
 ];
 
 // Pre-built property templates by node archetype
@@ -10034,7 +10034,8 @@ function AddNodeFlow({ onClose }) {
   var [catOpen, setCatOpen] = useState(false);
 
   // Step 2 - properties + creation mode
-  var [propMode, setPropMode] = useState("template"); // manual / spreadsheet / sample / template
+  var [propMode, setPropMode] = useState(null); // manual / spreadsheet / sample / template
+  var [propModeOpen, setPropModeOpen] = useState(false);
   var [properties, setProperties] = useState([]);
   var [selectedTemplate, setSelectedTemplate] = useState(null);
   var [uploadedFileName, setUploadedFileName] = useState("");
@@ -10312,30 +10313,69 @@ function AddNodeFlow({ onClose }) {
             })()}
 
             {/* ── STEP 2: Properties ── */}
-            {step === 2 && (
+            {step === 2 && (function(){
+              var PROP_MODES = [
+                { id:"template",    label:"From template",    desc:"Start with a pre-built schema from the catalog (Contract, Customer, Ticket and more).",
+                  icon:(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="3" width="14" height="18" rx="1.5"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="13" y2="16"/></svg>) },
+                { id:"sample",      label:"Parse a document", desc:"Upload a sample (PDF, DOCX, TXT). An LLM infers the schema and you review the fields.",
+                  icon:(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M14 3 H7 a2 2 0 0 0 -2 2 v14 a2 2 0 0 0 2 2 h10 a2 2 0 0 0 2 -2 V8 z"/><polyline points="14 3 14 8 19 8"/><path d="M12 13 L13 15 L15 16 L13 17 L12 19 L11 17 L9 16 L11 15 z"/></svg>) },
+                { id:"spreadsheet", label:"From spreadsheet", desc:"Drop a CSV or Excel file. We auto-detect columns and their types as your property list.",
+                  icon:(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="1.5"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="4" x2="10" y2="20"/></svg>) },
+                { id:"manual",      label:"Define manually",  desc:"Type each field by hand. Best when you know the exact shape you want.",
+                  icon:(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4 L20 8 L9 19 L4 20 L5 15 z"/><line x1="14" y1="6" x2="18" y2="10"/></svg>) }
+              ];
+              var selectedMode = PROP_MODES.find(function(m){ return m.id === propMode; });
+              return (
               <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:960 }}>
-                {/* Mode selector — clean monogram cards, no emojis */}
+                {/* Mode picker — rich dropdown, same shape as Industry / Department */}
                 <div>
                   <label style={lbl}>HOW DO YOU WANT TO DEFINE PROPERTIES?</label>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:10 }}>
-                    {[
-                      { id:"template",    l:"From template",    d:"Pre-built schema",          mono:"T" },
-                      { id:"sample",      l:"Parse a doc",      d:"LLM infers from sample",    mono:"D" },
-                      { id:"spreadsheet", l:"From spreadsheet", d:"Detect from CSV/Excel",     mono:"S" },
-                      { id:"manual",      l:"Define manually",  d:"Type fields by hand",       mono:"M" }
-                    ].map(function(o){
-                      var isOn = propMode === o.id;
-                      return (
-                        <button key={o.id} onClick={function(){ setPropMode(o.id); if (o.id === "manual" && properties.length === 0) { setProperties([]); } }}
-                          style={{ textAlign:"left", padding:"14px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:10, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 8%, transparent)" : "none", display:"flex", alignItems:"center", gap:11 }}>
-                          <span style={{ width:30, height:30, borderRadius:7, background: isOn ? "var(--ink)" : "var(--chip)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:13, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{o.mono}</span>
-                          <div style={{ minWidth:0 }}>
-                            <div style={{ fontSize:13, fontWeight:600, color:"var(--ink)", lineHeight:1.2 }}>{o.l}</div>
-                            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3 }}>{o.d}</div>
+                  <div style={{ position:"relative" }}>
+                    <button onClick={function(){ setPropModeOpen(function(o){ return !o; }); }}
+                      style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid " + (selectedMode ? "var(--ink-2)" : "var(--line)"), borderRadius:9, background: selectedMode ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow: selectedMode ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+                      {selectedMode ? (
+                        <>
+                          <span style={{ width:34, height:34, borderRadius:7, background:"var(--ink)", color:"var(--bg-canvas)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{selectedMode.icon}</span>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{selectedMode.label}</div>
+                            <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selectedMode.desc}</div>
                           </div>
-                        </button>
-                      );
-                    })}
+                          <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>▾</span>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ width:34, height:34, borderRadius:7, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>+</span>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:14, color:"var(--ink-3)" }}>Pick a method</div>
+                            <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>Click to choose</div>
+                          </div>
+                          <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>▾</span>
+                        </>
+                      )}
+                    </button>
+                    {propModeOpen && (
+                      <>
+                        <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPropModeOpen(false); }} />
+                        <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:420, overflowY:"auto" }}>
+                          {PROP_MODES.map(function(o, i){
+                            var isSel = propMode === o.id;
+                            return (
+                              <button key={o.id} onClick={function(){ setPropMode(o.id); setPropModeOpen(false); }}
+                                style={{ display:"flex", alignItems:"flex-start", gap:12, width:"100%", padding:"10px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < PROP_MODES.length-1 ? 2 : 0 }}
+                                onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                                onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+                                <span style={{ width:32, height:32, borderRadius:6, background:"var(--ink)", color:"var(--bg-canvas)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>{o.icon}</span>
+                                <div style={{ flex:1, minWidth:0 }}>
+                                  <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{o.label}</div>
+                                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3, lineHeight:1.45 }}>{o.desc}</div>
+                                </div>
+                                {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -10465,9 +10505,10 @@ function AddNodeFlow({ onClose }) {
                   </div>
                 )}
               </div>
-            )}
+              );
+            })()}
 
-            {/* ── STEP 3: Identity ── */}
+            {/* ── STEP 3: Primary key ── */}
             {step === 3 && (
               <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:720 }}>
                 <div>
