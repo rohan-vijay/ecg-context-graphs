@@ -7778,121 +7778,230 @@ function statusMeta(s) {
   return { color:"var(--ink-3)", label:s, dot:true };
 }
 
+// Build a fake-but-stable record ID + bad-value combo for a given seed
+function pickAffectedRecord(node, seed, fieldHint) {
+  var n = Math.abs(seed);
+  var recId = node.id + "-" + (100000 + (n * 1597) % 899999);
+  var props = generateProps(node);
+  var targetProp = fieldHint && props.find(function(p){ return p.name === fieldHint; });
+  if (!targetProp) {
+    // Bias toward required / indexed / first-non-pk
+    var candidates = props.filter(function(p){ return !p.pk && (p.required || p.indexed); });
+    targetProp = (candidates[n % Math.max(candidates.length, 1)]) || props[1] || props[0];
+  }
+  return { recId: recId, prop: targetProp };
+}
+
+// Pretend-bad-value samples by failure kind
+function badValueFor(prop, seed) {
+  var n = Math.abs(seed);
+  if (prop.type === "decimal" || prop.type === "float") {
+    var samples = [-(1000 + n % 9000), null, 0, -1];
+    var v = samples[n % samples.length];
+    return v === null ? null : v.toString();
+  }
+  if (prop.type === "bool") return null;
+  if (prop.type === "timestamp" || prop.type === "date") return n % 2 ? null : "1970-01-01";
+  if (prop.type.indexOf("enum") === 0) return ["UNKNOWN_TIER","AdTech","Climate-Tech","Web3","BioPharma"][n % 5];
+  if (prop.name === "domain") return ["acme..com", "no_dot_at_all", "", "@invalid", ".badstart.com"][n % 5];
+  if (prop.name === "email") return ["jane@", "no-at-sign.com", "", "@noone", "missing@.com"][n % 5];
+  return n % 2 ? null : "";
+}
+
+function failureReason(prop, badValue, ruleExpr) {
+  if (badValue === null || badValue === "") return "value is null";
+  if (prop.type === "decimal" || prop.type === "float") {
+    var num = parseFloat(badValue);
+    if (num < 0) return "value " + badValue + " < 0";
+    return "value " + badValue + " fails " + (ruleExpr || "constraint");
+  }
+  if (prop.name === "domain")   return "'" + badValue + "' does not match /^[a-z0-9-.]+$/";
+  if (prop.name === "email")    return "'" + badValue + "' is not a valid email";
+  if (prop.type.indexOf("enum") === 0) return "'" + badValue + "' not in allowed enum";
+  return "'" + badValue + "' fails rule";
+}
+
 function generateStewardshipTasks() {
   var tasks = [];
   var idSeed = 10000;
   var entityNodes = NODES.filter(function(n){ return n.type !== "source"; });
 
+  function pickStatus(seed, severity) {
+    var pool = severity === "critical" ? ["new","new","new","in_progress"]
+             : severity === "high"     ? ["new","new","in_progress","waiting"]
+             : severity === "medium"   ? ["new","in_progress","in_progress","waiting"]
+             :                           ["new","in_progress","waiting","resolved"];
+    return pool[Math.abs(seed) % pool.length];
+  }
+  function pickSla(seed, severity, overdue) {
+    if (overdue) return "-" + ((Math.abs(seed) % 12) + 1) + "h";
+    var hours = severity === "critical" ? 4 : severity === "high" ? 24 : severity === "medium" ? 72 : 168;
+    return ((hours - (Math.abs(seed) % hours))) + "h";
+  }
+  function pickAge(seed) {
+    return ["5m ago","18m ago","42m ago","1h ago","3h ago","6h ago","12h ago","1d ago","2d ago","3d ago"][Math.abs(seed) % 10];
+  }
+  function pickAssignee(seed) { return STEWARDS[Math.abs(seed) % STEWARDS.length].id; }
+
   entityNodes.forEach(function(node, ni) {
     var rules = generateRules(node);
     var nseed = node.id.charCodeAt(0) * 31 + ni * 7;
 
-    // ─── Quality violations → VAL / DQ / ACC tasks ───
+    // ─── Each violation = one task per record ───
     (rules.quality || []).forEach(function(r, ri) {
       if ((r.violations || 0) <= 0) return;
-      var seed = nseed + ri * 17;
-      var kind = r.kind === "VALIDATE" ? "VAL"
-               : r.kind === "ACCESS"   ? "ACC"
-               : r.kind === "SLO"      ? "DQ"
-               : r.kind === "COMPUTE"  ? "DQ"
-               : r.kind === "INFER"    ? "DQ" : "VAL";
-      var sev = r.violations > 50 ? "critical" : r.violations > 15 ? "high" : r.violations > 3 ? "medium" : "low";
-      var status = sev === "critical" || (Math.abs(seed) % 4 === 0) ? "new" : (Math.abs(seed) % 4 === 1) ? "in_progress" : (Math.abs(seed) % 4 === 2) ? "waiting" : "resolved";
-      var slaHours = sev === "critical" ? 4 : sev === "high" ? 24 : sev === "medium" ? 72 : 168;
-      var slaRemaining = (slaHours - (Math.abs(seed) % slaHours)) + "h";
-      var isOverdue = Math.abs(seed) % 7 === 0;
-      tasks.push({
-        id: "TASK-" + (idSeed++),
-        kind: kind,
-        ruleKind: r.kind,
-        severity: sev,
-        title: r.violations + " " + node.label + " record" + (r.violations !== 1 ? "s" : "") + " failing: " + (r.title || r.id),
-        summary: "Validation rule \"" + (r.title || r.id) + "\" caught " + r.violations + " record" + (r.violations !== 1 ? "s" : "") + " that violate the constraint " + (r.expr || r.label || "") + ". These records were quarantined and need a steward decision: fix the source data, override with a manual value, or update the rule.",
-        nodeId: node.id, nodeLabel: node.label,
-        ruleId: r.id, ruleTitle: r.title || r.id, ruleExpr: r.expr || r.label || "—",
-        affectedCount: r.violations,
-        status: status,
-        assignee: STEWARDS[Math.abs(seed) % STEWARDS.length].id,
-        createdAgo: ["10m ago","42m ago","1h ago","3h ago","6h ago","1d ago","2d ago","3d ago"][Math.abs(seed) % 8],
-        slaRemaining: isOverdue ? ("-" + ((Math.abs(seed) % 12) + 1) + "h") : slaRemaining,
-        overdue: isOverdue
-      });
+      var perTask = Math.min(r.violations, r.kind === "VALIDATE" ? 4 : 2); // cap noise per rule
+      for (var i = 0; i < perTask; i++) {
+        var seed = nseed + ri * 17 + i * 41;
+        var kind = r.kind === "VALIDATE" ? "VAL"
+                 : r.kind === "ACCESS"   ? "ACC"
+                 : r.kind === "SLO"      ? "DQ"
+                 : r.kind === "COMPUTE"  ? "DQ"
+                 : r.kind === "INFER"    ? "DQ" : "VAL";
+        var sev = i === 0 && r.violations > 50 ? "critical" : (Math.abs(seed) % 6 === 0) ? "high" : (Math.abs(seed) % 3 === 0) ? "medium" : "low";
+        var overdue = Math.abs(seed) % 11 === 0;
+        var status = pickStatus(seed, sev);
+        var hint = r.expr && r.expr.split(/\s+/)[0]; // field name from start of expression
+        var hit = pickAffectedRecord(node, seed, hint);
+        var badV = badValueFor(hit.prop, seed);
+        var reason = failureReason(hit.prop, badV, r.expr);
+        var title;
+        if (kind === "ACC") {
+          title = "Denied " + hit.prop.name + " read on " + hit.recId;
+        } else if (kind === "DQ" && r.kind === "COMPUTE") {
+          title = "Compute failed: " + (r.title || r.id) + " on " + hit.recId;
+        } else if (kind === "DQ" && (r.kind === "SLO" || r.kind === "INFER")) {
+          continue; // SLO/INFER are pipeline-level — handled by the "hot" tasks below
+        } else {
+          title = node.label + " " + hit.recId + " — " + reason;
+        }
+        tasks.push({
+          id: "TASK-" + (idSeed++),
+          kind: kind,
+          ruleKind: r.kind,
+          severity: sev,
+          title: title,
+          summary: kind === "ACC"
+            ? "Access policy \"" + (r.title || r.id) + "\" denied a read of " + hit.prop.name + " on " + hit.recId + ". The requester does not hold one of the required roles. Steward must decide whether to grant the role, confirm denial, or escalate to security."
+            : "Record " + hit.recId + " failed validation rule \"" + (r.title || r.id) + "\" because " + reason + ". The current value violates the constraint " + (r.expr || r.label || "") + ". Decide: fix the value at source, override manually, or update the rule.",
+          recordId: hit.recId,
+          recordValue: badV,
+          fieldName: hit.prop.name,
+          fieldType: hit.prop.type,
+          nodeId: node.id,
+          nodeLabel: node.label,
+          ruleId: r.id,
+          ruleTitle: r.title || r.id,
+          ruleExpr: r.expr || r.label || "—",
+          status: status,
+          assignee: pickAssignee(seed),
+          createdAgo: pickAge(seed),
+          slaRemaining: pickSla(seed, sev, overdue),
+          overdue: overdue
+        });
+      }
     });
 
-    // ─── Match candidates → MAT tasks ───
+    // ─── Match candidates → one task per pair ───
     (rules.match || []).forEach(function(r, ri) {
       if ((r.candidates || 0) <= 0) return;
-      var seed = nseed + ri * 23 + 100;
-      var sev = r.candidates > 5 ? "high" : r.candidates > 2 ? "medium" : "low";
-      var status = (Math.abs(seed) % 3 === 0) ? "new" : (Math.abs(seed) % 3 === 1) ? "in_progress" : "waiting";
-      tasks.push({
-        id: "TASK-" + (idSeed++),
-        kind: "MAT", ruleKind: "MATCH",
-        severity: sev,
-        title: r.candidates + " " + node.label + " match candidate" + (r.candidates !== 1 ? "s" : "") + " awaiting review: " + r.title,
-        summary: "The matching rule \"" + r.title + "\" identified " + r.candidates + " pair" + (r.candidates !== 1 ? "s" : "") + " of records in the review band (score between " + r.threshold_review + " and " + r.threshold_auto + "). A steward must decide whether to merge into a canonical record, link with :IS_SAME_AS, or reject as not-a-match.",
-        nodeId: node.id, nodeLabel: node.label,
-        ruleId: r.id, ruleTitle: r.title,
-        ruleExpr: r.signals.map(function(s){ return s.strategy + "(" + s.field + ")×" + s.weight; }).join(" + "),
-        affectedCount: r.candidates,
-        status: status,
-        assignee: STEWARDS[Math.abs(seed) % STEWARDS.length].id,
-        createdAgo: ["20m ago","2h ago","5h ago","1d ago","2d ago"][Math.abs(seed) % 5],
-        slaRemaining: ((Math.abs(seed) % 48) + 2) + "h",
-        overdue: false
-      });
+      var perTask = Math.min(r.candidates, 3);
+      for (var i = 0; i < perTask; i++) {
+        var seed = nseed + ri * 23 + i * 29 + 100;
+        var sev = r.candidates > 5 ? "high" : r.candidates > 2 ? "medium" : "low";
+        var status = pickStatus(seed, sev);
+        var hit1 = pickAffectedRecord(node, seed);
+        var hit2 = pickAffectedRecord(node, seed + 777);
+        // Pretend score in the review band
+        var score = (parseFloat(r.threshold_review) + ((Math.abs(seed) % 17) * (parseFloat(r.threshold_auto) - parseFloat(r.threshold_review)) / 17)).toFixed(2);
+        tasks.push({
+          id: "TASK-" + (idSeed++),
+          kind: "MAT", ruleKind: "MATCH",
+          severity: sev,
+          title: "Possible duplicate: " + hit1.recId + " ≈ " + hit2.recId + "  ·  score " + score,
+          summary: "Matching rule \"" + r.title + "\" identified this pair of " + node.label + " records as likely the same real-world entity (score " + score + ", review band " + r.threshold_review + "–" + r.threshold_auto + "). A steward must decide: merge into a canonical record, link with :IS_SAME_AS, or reject as not-a-match.",
+          recordId: hit1.recId,
+          recordIdB: hit2.recId,
+          matchScore: parseFloat(score),
+          nodeId: node.id, nodeLabel: node.label,
+          ruleId: r.id, ruleTitle: r.title,
+          ruleExpr: r.signals.map(function(s){ return s.strategy + "(" + s.field + ")×" + s.weight; }).join(" + "),
+          status: status,
+          assignee: pickAssignee(seed),
+          createdAgo: pickAge(seed),
+          slaRemaining: pickSla(seed, sev, false),
+          overdue: false
+        });
+      }
     });
 
-    // ─── Survivorship conflicts → SUR tasks ───
+    // ─── Survivorship conflicts → one task per record ───
     (rules.survivorship || []).forEach(function(r, ri) {
       if ((r.conflicts || 0) <= 0) return;
-      var seed = nseed + ri * 29 + 200;
-      var sev = r.conflicts > 2 ? "high" : "medium";
-      var status = (Math.abs(seed) % 3 === 0) ? "new" : (Math.abs(seed) % 3 === 1) ? "in_progress" : "waiting";
-      tasks.push({
-        id: "TASK-" + (idSeed++),
-        kind: "SUR", ruleKind: "SURV",
-        severity: sev,
-        title: r.conflicts + " unresolved conflict" + (r.conflicts !== 1 ? "s" : "") + " on " + node.label + "." + r.property,
-        summary: "Multiple sources are asserting different values for " + node.label + "." + r.property + " on " + r.conflicts + " record" + (r.conflicts !== 1 ? "s" : "") + ". Strategy \"" + (r.strategy || "—") + "\" could not auto-resolve. A steward must pick the winning value or override with a manual entry.",
-        nodeId: node.id, nodeLabel: node.label,
-        ruleId: r.id, ruleTitle: r.title,
-        ruleExpr: r.property + " ← " + (r.strategy || "—") + (r.sources && r.sources.length ? " (" + r.sources.join(" > ") + ")" : ""),
-        affectedCount: r.conflicts,
-        status: status,
-        assignee: STEWARDS[Math.abs(seed) % STEWARDS.length].id,
-        createdAgo: ["1h ago","4h ago","12h ago","1d ago","3d ago"][Math.abs(seed) % 5],
-        slaRemaining: ((Math.abs(seed) % 72) + 4) + "h",
-        overdue: Math.abs(seed) % 9 === 0
-      });
+      var perTask = Math.min(r.conflicts, 2);
+      for (var i = 0; i < perTask; i++) {
+        var seed = nseed + ri * 29 + i * 37 + 200;
+        var sev = r.conflicts > 2 ? "high" : "medium";
+        var status = pickStatus(seed, sev);
+        var hit = pickAffectedRecord(node, seed, r.property);
+        // Pretend three sources disagreeing
+        var sources = (r.sources && r.sources.length ? r.sources : ["NetSuite ERP","Salesforce CRM","HubSpot Marketing"]).slice(0, 3);
+        var values = sources.map(function(s, j){ return generateValueForProp(hit.prop, seed + j * 17); });
+        tasks.push({
+          id: "TASK-" + (idSeed++),
+          kind: "SUR", ruleKind: "SURV",
+          severity: sev,
+          title: r.property + " conflict on " + node.label + " " + hit.recId,
+          summary: "On record " + hit.recId + ", " + sources.length + " sources are asserting different values for " + node.label + "." + r.property + ". Strategy \"" + (r.strategy || "—") + "\" could not auto-resolve because the variance exceeds the configured threshold. Steward must pick the winning value or set a manual override.",
+          recordId: hit.recId,
+          fieldName: r.property,
+          conflictSources: sources,
+          conflictValues: values,
+          nodeId: node.id, nodeLabel: node.label,
+          ruleId: r.id, ruleTitle: r.title,
+          ruleExpr: r.property + " ← " + (r.strategy || "—") + (r.sources && r.sources.length ? " (" + r.sources.join(" > ") + ")" : ""),
+          status: status,
+          assignee: pickAssignee(seed),
+          createdAgo: pickAge(seed),
+          slaRemaining: pickSla(seed, sev, false),
+          overdue: Math.abs(seed) % 13 === 0
+        });
+      }
     });
   });
 
-  // Inject a few extra synthetic "hot" tasks so the inbox feels lively even with low rule violation counts
-  var extraTitles = [
-    { kind:"DQ",  sev:"critical", title:"Freshness SLO breached: ingest_lag p95 = 42m (target 30m)",                summary:"The Salesforce CRM pipeline has been running 12 minutes behind its 30-minute freshness target for the last 47 minutes. Likely cause is the upstream dbt model failure at 08:42 UTC." },
-    { kind:"VAL", sev:"high",     title:"Schema drift detected on Account.industry — 4 unseen enum values",         summary:"4 records arrived from HubSpot Marketing with industry values not in the configured enum (\"AdTech\", \"Climate-Tech\", \"Web3\", \"BioPharma\"). Either widen the enum or route to quarantine." },
-    { kind:"ACC", sev:"critical", title:"PII access denied: tax_id read attempt from non-priv role",                summary:"Service account svc-bi-reporter (role: bi_read) attempted to read tax_id on 320 Account records over the past hour. All requests were denied per access policy. Review whether the role should be granted or the requests should be flagged as anomalous." },
-    { kind:"MAT", sev:"high",     title:"3 potential duplicates with score 0.97 — same domain, slightly different names", summary:"Three Account pairs were matched at score 0.97 (above auto-merge threshold of 0.92) but the company names differ by more than a typo. Recommended: review each pair manually before merging." },
-    { kind:"SUR", sev:"high",     title:"Manual override needed: arr_usd on Account ACC-91428 (3 sources disagree)", summary:"NetSuite reports $1.2M ARR, Salesforce reports $890K, and HubSpot reports $1.4M. Source priority chose NetSuite ($1.2M) but ARR variance across sources exceeds the 15% threshold — steward review required." }
+  // ─── Genuinely pipeline-level tasks (SLO / drift / bulk denials) ───
+  var pipelineTasks = [
+    { kind:"DQ",  sev:"critical", title:"Freshness SLO breached: Account pipeline p95 = 42m (target 30m)",
+      summary:"The Salesforce CRM → Account pipeline has been running 12 minutes behind its 30-minute freshness target for 47 minutes. Likely cause is the upstream dbt model failure at 08:42 UTC.",
+      nodeLabel:"Account", scope:"Account ingest pipeline" },
+    { kind:"DQ",  sev:"high",     title:"Drift detected on Account.industry — 4 unseen enum values",
+      summary:"4 records arrived from HubSpot Marketing with industry values not in the configured enum (AdTech, Climate-Tech, Web3, BioPharma). Either widen the enum or route to quarantine.",
+      nodeLabel:"Account", scope:"Account.industry, last 24h" },
+    { kind:"ACC", sev:"critical", title:"Bulk denial: svc-bi-reporter attempted tax_id read on 320 Accounts",
+      summary:"Service account svc-bi-reporter (role: bi_read) attempted to read tax_id on 320 Account records in the past hour. All requests were denied per access policy. Review whether the role should be granted or the requests should be flagged as anomalous.",
+      nodeLabel:"Account", scope:"320 records, svc-bi-reporter" }
   ];
-  extraTitles.forEach(function(e, i) {
-    var node = entityNodes[(i * 3) % entityNodes.length];
+  pipelineTasks.forEach(function(p, i){
     var seed = i * 137 + 500;
-    var status = ["new","new","in_progress","waiting"][i % 4];
     tasks.push({
       id: "TASK-" + (idSeed++),
-      kind: e.kind, ruleKind: e.kind === "VAL" ? "VALIDATE" : e.kind === "DQ" ? "SLO" : e.kind,
-      severity: e.sev,
-      title: e.title,
-      summary: e.summary,
-      nodeId: node.id, nodeLabel: node.label,
-      ruleId: "synthesised", ruleTitle: e.title, ruleExpr: "—",
-      affectedCount: 1 + (seed % 320),
-      status: status,
+      kind: p.kind,
+      ruleKind: p.kind === "DQ" ? "SLO" : "ACCESS",
+      severity: p.sev,
+      title: p.title,
+      summary: p.summary,
+      recordId: null,
+      scope: p.scope,
+      nodeId: p.nodeLabel.toLowerCase(),
+      nodeLabel: p.nodeLabel,
+      ruleId: "pipeline-" + i,
+      ruleTitle: p.title.split(":")[0],
+      ruleExpr: "—",
+      status: i === 0 ? "new" : "in_progress",
       assignee: STEWARDS[i % STEWARDS.length].id,
-      createdAgo: ["5m ago","18m ago","1h ago","4h ago","8h ago"][i % 5],
-      slaRemaining: ["2h","8h","16h","22h","1d"][i % 5],
+      createdAgo: ["5m ago","42m ago","1h ago"][i % 3],
+      slaRemaining: i === 0 ? "-2h" : "8h",
       overdue: i === 0
     });
   });
@@ -8080,8 +8189,8 @@ function StewardshipView() {
 
       {/* TABLE */}
       <div className="nv-table">
-        <div style={{ display:"grid", gridTemplateColumns:"90px 70px 80px 1fr 110px 130px 90px 100px", gap:12, padding:"10px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line)", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", alignItems:"center" }}>
-          <div>Task ID</div><div>Kind</div><div>Severity</div><div>Title</div><div>Node</div><div>Assignee</div><div style={{ textAlign:"right" }}>SLA</div><div>Status</div>
+        <div style={{ display:"grid", gridTemplateColumns:"86px 64px 70px 1fr 150px 130px 80px 100px", gap:12, padding:"10px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line)", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", alignItems:"center" }}>
+          <div>Task</div><div>Kind</div><div>Sev</div><div>What needs decision</div><div>Record</div><div>Assignee</div><div style={{ textAlign:"right" }}>SLA</div><div>Status</div>
         </div>
         {visible.length === 0 && (
           <div style={{ padding:"50px 18px", textAlign:"center", color:"var(--ink-3)", fontSize:13 }}>
@@ -8095,7 +8204,7 @@ function StewardshipView() {
           return (
             <div key={t.id}
               onClick={function(){ setSelectedId(t.id); }}
-              style={{ display:"grid", gridTemplateColumns:"90px 70px 80px 1fr 110px 130px 90px 100px", gap:12, padding:"13px 18px", borderBottom: i < visible.length-1 ? "1px solid var(--line-2)" : "none", cursor:"pointer", alignItems:"center", transition:"background 80ms" }}
+              style={{ display:"grid", gridTemplateColumns:"86px 64px 70px 1fr 150px 130px 80px 100px", gap:12, padding:"13px 18px", borderBottom: i < visible.length-1 ? "1px solid var(--line-2)" : "none", cursor:"pointer", alignItems:"center", transition:"background 80ms" }}
               onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
               onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
               <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--blue)" }}>{t.id}</code>
@@ -8106,9 +8215,9 @@ function StewardshipView() {
               <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:3, background:sm.fill, color:sm.color, fontWeight:700, letterSpacing:"0.4px", display:"inline-block", textAlign:"center" }}>{sm.label}</span>
               <div style={{ minWidth:0 }}>
                 <div style={{ fontSize:12.5, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.title}</div>
-                <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:2 }}>{t.createdAgo}</div>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:2 }}>{t.nodeLabel + " · " + t.createdAgo}</div>
               </div>
-              <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{t.nodeLabel}</span>
+              <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color: t.recordId ? "var(--blue)" : "var(--ink-4)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.recordId || (t.scope ? "—" : "pipeline")}</code>
               <AssigneeChip id={t.assignee} size={18} />
               <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color: t.overdue ? "var(--coral)" : "var(--ink-3)", textAlign:"right", fontWeight: t.overdue ? 600 : 400 }}>{t.slaRemaining}</span>
               <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontFamily:"JetBrains Mono", fontSize:11, color:stm.color, fontWeight:500 }}>
@@ -8135,19 +8244,16 @@ function StewardshipTaskDetail({ task, onBack }) {
   var node = NODES.find(function(n){ return n.id === task.nodeId; });
   var assigneeDef = STEWARDS.find(function(s){ return s.id === task.assignee; });
 
-  // Synthetic affected records list
-  var affectedSample = Array.from({ length: Math.min(8, task.affectedCount) }, function(_, i) {
-    var seed = task.id.length * 7 + i * 17;
-    return {
-      id: task.nodeId + "-" + (100000 + Math.abs(seed * 1597) % 899999),
-      issue: task.kind === "VAL" ? "value is " + (i % 2 ? "negative" : "null") + " (-" + (i*1500) + ")"
-            : task.kind === "DQ"  ? "lag = " + (35 + i*3) + "m (target 30m)"
-            : task.kind === "MAT" ? "potential dup of " + task.nodeId + "-" + (200000 + i * 1234)
-            : task.kind === "SUR" ? "NetSuite=$" + (1000+i*120) + "k · Salesforce=$" + (800+i*100) + "k"
-            : "denied access at " + new Date(Date.now()-i*3600000).toISOString().slice(11,16),
-      source: ["Salesforce CRM","NetSuite ERP","HubSpot Marketing","Manual / Admin"][i % 4]
-    };
-  });
+  // For non-pipeline tasks, fetch the actual record so we can show its context
+  var recordCtx = null;
+  if (task.recordId && node) {
+    recordCtx = buildRecordFromId(task.recordId, node);
+  }
+  var recordCtxB = null;
+  if (task.recordIdB && node) {
+    recordCtxB = buildRecordFromId(task.recordIdB, node);
+  }
+  var recordProps = node ? generateProps(node) : [];
 
   // Suggested actions per kind
   var SUGGESTIONS = {
@@ -8241,27 +8347,92 @@ function StewardshipTaskDetail({ task, onBack }) {
               </div>
             </div>
 
-            <div className="card">
-              <div className="card-head card-head-row">
-                <span>Affected records <span className="card-head-sub">{task.affectedCount.toLocaleString()} on {task.nodeLabel} · sampled below</span></span>
-                <button className="btn-ghost" style={{ fontSize:11.5 }}>View all →</button>
-              </div>
-              <div>
-                <div style={{ display:"grid", gridTemplateColumns:"1.2fr 2fr 1fr", gap:14, padding:"8px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
-                  <div>Record ID</div><div>Issue / detail</div><div>Source</div>
+            {/* RECORD CONTEXT — for record-level tasks (VAL / ACC / SUR / MAT) */}
+            {recordCtx && task.kind !== "MAT" && (
+              <div className="card">
+                <div className="card-head card-head-row">
+                  <span>The record <span className="card-head-sub"><code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--blue)" }}>{task.recordId}</code> · {task.nodeLabel}</span></span>
+                  <button className="btn-ghost" style={{ fontSize:11.5 }}>Open record →</button>
                 </div>
-                {affectedSample.map(function(r, i) {
-                  return <div key={i} style={{ display:"grid", gridTemplateColumns:"1.2fr 2fr 1fr", gap:14, padding:"10px 18px", borderBottom: i < affectedSample.length-1 ? "1px solid var(--line-2)" : "none", alignItems:"center" }}>
-                    <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--blue)" }}>{r.id}</code>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{r.issue}</span>
-                    <span style={{ fontSize:11.5, color:"var(--ink-3)" }}>{r.source}</span>
-                  </div>;
-                })}
-                {task.affectedCount > affectedSample.length && (
-                  <div style={{ padding:"10px 18px", textAlign:"center", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", background:"var(--panel-2)" }}>{"… and " + (task.affectedCount - affectedSample.length).toLocaleString() + " more"}</div>
+                {/* The failing field gets its own callout */}
+                {task.fieldName && (
+                  <div style={{ padding:"14px 18px", background: task.kind === "VAL" ? "var(--coral-fill)" : task.kind === "SUR" ? "var(--gold-fill)" : task.kind === "ACC" ? "var(--chip)" : "var(--panel-2)", borderBottom:"1px solid var(--line-2)" }}>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color: task.kind === "VAL" ? "var(--coral)" : task.kind === "SUR" ? "var(--gold)" : "var(--ink-3)", textTransform:"uppercase", marginBottom:6 }}>
+                      {task.kind === "VAL" ? "FAILING FIELD" : task.kind === "SUR" ? "FIELD IN CONFLICT" : task.kind === "ACC" ? "DENIED FIELD" : "FIELD"}
+                    </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"160px 1fr", gap:"6px 14px", alignItems:"baseline" }}>
+                      <code style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:600, color:"var(--ink)" }}>{task.fieldName}</code>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{task.fieldType || ""}</span>
+                      {task.kind === "VAL" && (
+                        <>
+                          <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>CURRENT VALUE</span>
+                          <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--coral)", fontWeight:600 }}>{task.recordValue == null ? "null" : "'" + task.recordValue + "'"}</code>
+                          <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>EXPECTED</span>
+                          <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-2)" }}>{task.ruleExpr}</code>
+                        </>
+                      )}
+                      {task.kind === "SUR" && task.conflictSources && (
+                        <>
+                          <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, alignSelf:"start" }}>SOURCES DISAGREE</span>
+                          <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                            {task.conflictSources.map(function(src, i){
+                              var isWinner = i === 0;
+                              return <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"4px 8px", borderRadius:5, background: isWinner ? "var(--green-fill)" : "transparent", border: isWinner ? "1px solid var(--green-soft)" : "1px solid var(--line-2)" }}>
+                                <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)", flex:"0 0 140px" }}>{src}</span>
+                                <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color: isWinner ? "var(--green)" : "var(--ink)", fontWeight: isWinner ? 600 : 400 }}>{String(task.conflictValues[i])}</code>
+                                {isWinner && <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:9, color:"var(--green)", fontWeight:700 }}>STRATEGY PICK</span>}
+                              </div>;
+                            })}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 )}
+                {/* Other context properties on the same record */}
+                <div style={{ padding:"4px 0" }}>
+                  <div style={{ padding:"8px 18px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>OTHER PROPERTIES ON THIS RECORD</div>
+                  {recordProps.filter(function(p){ return p.name !== task.fieldName; }).slice(0, 6).map(function(p, i, arr) {
+                    return <div key={p.name} style={{ display:"grid", gridTemplateColumns:"160px 1fr 80px", gap:14, padding:"7px 18px", borderTop:"1px solid var(--line-2)", alignItems:"center" }}>
+                      <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{p.name}</code>
+                      <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink)" }}>{String(recordCtx[p.name])}</code>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", textAlign:"right" }}>{p.type}</span>
+                    </div>;
+                  })}
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* MAT TASKS — pair of records to compare */}
+            {recordCtx && recordCtxB && task.kind === "MAT" && (
+              <div className="card">
+                <div className="card-head">Candidate pair <span className="card-head-sub">match score {task.matchScore}</span></div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", borderBottom:"1px solid var(--line-2)" }}>
+                  {[{rec:recordCtx, lbl:"RECORD A"},{rec:recordCtxB, lbl:"RECORD B"}].map(function(side, si){
+                    return <div key={si} style={{ padding:"14px 18px", borderRight: si === 0 ? "1px solid var(--line-2)" : "none" }}>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>{side.lbl}</div>
+                      <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--blue)", fontWeight:600, display:"block", marginBottom:8 }}>{side.rec.id}</code>
+                      <div style={{ display:"grid", gridTemplateColumns:"100px 1fr", gap:"4px 10px", fontFamily:"JetBrains Mono", fontSize:11 }}>
+                        {recordProps.slice(0, 5).map(function(p){
+                          return <React.Fragment key={p.name}>
+                            <span style={{ color:"var(--ink-3)" }}>{p.name}</span>
+                            <span style={{ color:"var(--ink)" }}>{String(side.rec[p.name]).slice(0, 30)}</span>
+                          </React.Fragment>;
+                        })}
+                      </div>
+                    </div>;
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* PIPELINE TASKS — no record */}
+            {!task.recordId && task.scope && (
+              <div className="card">
+                <div className="card-head">Scope</div>
+                <div className="card-body" style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-2)" }}>{task.scope}</div>
+              </div>
+            )}
 
             <div className="card">
               <div className="card-head">Discussion <span className="card-head-sub">{comments.length} comments</span></div>
@@ -8315,7 +8486,7 @@ function StewardshipTaskDetail({ task, onBack }) {
                   <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>SLA REMAINING</span>
                   <span style={{ color: task.overdue ? "var(--coral)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontWeight:600 }}>{task.slaRemaining}{task.overdue && " (overdue)"}</span>
                   <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>SCOPE</span>
-                  <span style={{ color:"var(--ink-2)" }}>{task.nodeLabel + " · " + task.affectedCount.toLocaleString() + " record" + (task.affectedCount !== 1 ? "s" : "")}</span>
+                  <span style={{ color:"var(--ink-2)" }}>{task.recordId ? (task.nodeLabel + " · " + task.recordId) : task.scope ? task.scope : task.nodeLabel}</span>
                 </div>
               </div>
             </div>
