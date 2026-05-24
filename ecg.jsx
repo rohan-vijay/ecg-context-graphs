@@ -12383,119 +12383,8 @@ function NewEdgeFlow({ onClose, onCreate, fromNode }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function GraphLandingEmpty({ onCreate, onBack }) {
-  // Deterministic constellation — same kind of nodes/edges, but spread across
-  // the full canvas at very low opacity so it reads as a backdrop, not content.
-  var constellation = useMemo(function(){
-    var W = 1600, H = 900;
-    var s = 7919 | 0;
-    function nxt(){ s = (s * 1664525 + 1013904223) | 0; return Math.abs(s); }
-    // A real-feeling graph layout: ~14 small clusters spread across the
-    // entire canvas (top band, two side bands, bottom band) so the network
-    // wraps around the hero copy instead of hiding in the corners. Tight
-    // SAFE rectangle hugs just the hero text block.
-    var clusters = [
-      // Top — two clusters on the sides + a small accent above the title
-      { cx: W*0.10, cy: H*0.14, n: 5, r: 90,  color:"var(--gold)"   },
-      { cx: W*0.50, cy: H*0.08, n: 4, r: 80,  color:"var(--purple)" },
-      { cx: W*0.90, cy: H*0.14, n: 5, r: 90,  color:"var(--green)"  },
-      // Mid-side bands
-      { cx: W*0.08, cy: H*0.52, n: 5, r: 95,  color:"var(--blue)"   },
-      { cx: W*0.92, cy: H*0.52, n: 5, r: 95,  color:"var(--coral)"  },
-      // Bottom — two side clusters + a small accent below the CTA row
-      { cx: W*0.14, cy: H*0.88, n: 5, r: 95,  color:"var(--blue)"   },
-      { cx: W*0.50, cy: H*0.96, n: 4, r: 70,  color:"var(--gold)"   },
-      { cx: W*0.86, cy: H*0.88, n: 5, r: 95,  color:"var(--coral)"  }
-    ];
-    // Tight safe zone — just the hero text + CTA + 3-step row.
-    var SAFE = { x0: W*0.30, x1: W*0.70, y0: H*0.30, y1: H*0.78 };
-    function inSafe(p){ return p.x > SAFE.x0 && p.x < SAFE.x1 && p.y > SAFE.y0 && p.y < SAFE.y1; }
-    // Line-vs-rect bbox test (conservative). Drops any edge whose bounding
-    // box overlaps SAFE — slightly over-aggressive but cheap and correct.
-    function crossesSafe(a, b){
-      if (Math.max(a.x, b.x) < SAFE.x0) return false;
-      if (Math.min(a.x, b.x) > SAFE.x1) return false;
-      if (Math.max(a.y, b.y) < SAFE.y0) return false;
-      if (Math.min(a.y, b.y) > SAFE.y1) return false;
-      return true;
-    }
-
-    var nodes = [];
-    clusters.forEach(function(c){
-      // 1 hub per cluster
-      nodes.push({ x: c.cx, y: c.cy, r: 9 + (nxt() % 5), c: true, color: c.color });
-      // satellites
-      for (var i = 0; i < c.n; i++){
-        var ang = (i / c.n) * Math.PI * 2 + (nxt() % 100) / 500;
-        var rr  = c.r * (0.55 + (nxt() % 100) / 200);
-        var n = { x: c.cx + Math.cos(ang) * rr, y: c.cy + Math.sin(ang) * rr * 0.88, r: 4 + (nxt() % 7), c: false, color: c.color };
-        if (!inSafe(n)) nodes.push(n);
-      }
-    });
-
-    // Edges: each node connects to its 2-3 nearest peers (within ~280px), and
-    // a handful of long-range "bridges" link distant clusters so the canvas
-    // reads as one network rather than disjoint blobs.
-    var edges = [];
-    nodes.forEach(function(a, i){
-      var dists = [];
-      nodes.forEach(function(b, j){
-        if (j === i) return;
-        var dx = a.x - b.x, dy = a.y - b.y;
-        var d  = Math.sqrt(dx*dx + dy*dy);
-        if (d < 280) dists.push({ j: j, d: d });
-      });
-      dists.sort(function(p, q){ return p.d - q.d; });
-      var picks = dists.slice(0, 2 + (i % 2));
-      picks.forEach(function(p){
-        var b = nodes[p.j];
-        if (crossesSafe(a, b)) return;
-        edges.push([i, p.j]);
-      });
-    });
-    // A few long bridges
-    for (var k = 0; k < 5; k++){
-      var i = nxt() % nodes.length;
-      var j = nxt() % nodes.length;
-      if (i === j) continue;
-      var a = nodes[i], b = nodes[j];
-      if (crossesSafe(a, b)) continue;
-      edges.push([i, j]);
-    }
-
-    return { nodes: nodes, edges: edges, W: W, H: H };
-  }, []);
-
   return (
     <div style={{ flex:1, position:"relative", overflow:"hidden", background:"var(--bg-canvas)", display:"flex", flexDirection:"column" }}>
-      {/* Backdrop constellation */}
-      <svg width="100%" height="100%" viewBox={"0 0 " + constellation.W + " " + constellation.H} preserveAspectRatio="xMidYMid slice" style={{ position:"absolute", inset:0, pointerEvents:"none" }} aria-hidden="true">
-        <defs>
-          <radialGradient id="emptyHalo" cx="50%" cy="50%" r="55%">
-            <stop offset="0%"  stopColor="var(--gold)" stopOpacity="0.10" />
-            <stop offset="60%" stopColor="var(--gold)" stopOpacity="0.04" />
-            <stop offset="100%" stopColor="var(--gold)" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        <rect x="0" y="0" width={constellation.W} height={constellation.H} fill="url(#emptyHalo)" />
-        <g strokeWidth="1">
-          {constellation.edges.map(function(e, i){
-            var a = constellation.nodes[e[0]], b = constellation.nodes[e[1]];
-            // Edge inherits the source-node colour so threads carry the cluster's hue.
-            return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={a.color} strokeOpacity="0.28" />;
-          })}
-        </g>
-        <g>
-          {constellation.nodes.map(function(n, i){
-            return (
-              <g key={i}>
-                <circle cx={n.x} cy={n.y} r={n.r + 4} fill={n.color} fillOpacity="0.12" />
-                <circle cx={n.x} cy={n.y} r={n.r}     fill={n.color} fillOpacity={n.c ? 0.55 : 0.38} />
-              </g>
-            );
-          })}
-        </g>
-      </svg>
-
       {/* Top corner — title chip + back hint */}
       <div style={{ position:"relative", zIndex:2, padding:"22px 32px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <span style={{ fontFamily:"Instrument Serif", fontSize:24, color:"var(--ink)", lineHeight:1 }}>Context Graphs</span>
@@ -12508,6 +12397,29 @@ function GraphLandingEmpty({ onCreate, onBack }) {
 
       {/* Centre hero */}
       <div style={{ position:"relative", zIndex:2, flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"12px 24px" }}>
+        {/* Brand mark — solid ink tile with a small graph glyph (hub + 4 satellites) */}
+        <div style={{ width:84, height:84, borderRadius:18, background:"var(--ink)", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:28, boxShadow:"0 1px 0 var(--line-2), 0 14px 36px rgba(40,40,20,0.14)" }}>
+          <svg width="46" height="46" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+            {/* edges */}
+            <g stroke="var(--bg-canvas)" strokeOpacity="0.45" strokeWidth="1.6" strokeLinecap="round">
+              <line x1="24" y1="24" x2="10" y2="10" />
+              <line x1="24" y1="24" x2="38" y2="10" />
+              <line x1="24" y1="24" x2="10" y2="38" />
+              <line x1="24" y1="24" x2="38" y2="38" />
+            </g>
+            {/* satellites */}
+            <g fill="var(--bg-canvas)" fillOpacity="0.75">
+              <circle cx="10" cy="10" r="3.4" />
+              <circle cx="38" cy="10" r="3.4" />
+              <circle cx="10" cy="38" r="3.4" />
+              <circle cx="38" cy="38" r="3.4" />
+            </g>
+            {/* hub */}
+            <circle cx="24" cy="24" r="6" fill="var(--bg-canvas)" />
+            <circle cx="24" cy="24" r="2.4" fill="var(--ink)" />
+          </svg>
+        </div>
+
         <h1 style={{ fontFamily:"Geist, system-ui, sans-serif", fontWeight:600, fontSize:"clamp(40px, 5.4vw, 64px)", lineHeight:1.08, color:"var(--ink)", margin:0, letterSpacing:"-0.022em", textAlign:"center", maxWidth:980 }}>
           Build your enterprise<br/>context graph
         </h1>
