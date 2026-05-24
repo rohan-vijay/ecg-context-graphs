@@ -10105,6 +10105,7 @@ function AddNodeFlow({ onClose }) {
 
   // Step 3 - identity
   var [pkField, setPkField] = useState("");
+  var [expandedRow, setExpandedRow] = useState(null);
   var [naturalKeys, setNaturalKeys] = useState([]);
   var [dedupStrategy, setDedupStrategy] = useState("on_natural_key"); // none / on_pk / on_natural_key / probabilistic
 
@@ -10153,8 +10154,8 @@ function AddNodeFlow({ onClose }) {
 
   function canContinue() {
     if (step === 1) return nameOk && !!category;
-    if (step === 2) return properties.length >= 1;
-    if (step === 3) return !!pkField;
+    if (step === 2) return properties.length >= 1 && !!pkField;
+    // Step 3 = Relationships (optional). Step 4 = Governance. Step 5 = Review.
     return true;
   }
 
@@ -10240,7 +10241,7 @@ function AddNodeFlow({ onClose }) {
   var inp = { border:"1px solid var(--line)", borderRadius:7, padding:"8px 11px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", outline:"none", boxSizing:"border-box", width:"100%", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6), 0 1px 0 rgba(40,40,20,0.02)" };
   var lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:6 };
 
-  var stepNames = ["Identity", "Properties", "Primary key", "Relationships", "Governance", "Review"];
+  var stepNames = ["Identity", "Properties", "Relationships", "Governance", "Review"];
 
   function NodePreview({ size }) {
     size = size || 36;
@@ -10301,15 +10302,14 @@ function AddNodeFlow({ onClose }) {
           {/* CENTER */}
           <div style={{ padding:"24px 32px 28px", overflowY:"auto" }}>
             <div style={{ marginBottom:20 }}>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / 6"}</div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / 5"}</div>
               <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>{stepNames[step-1]}</div>
               <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:680 }}>
                 {step === 1 && "Name the node type and pick its category. Use a singular capitalised noun — Account, Contract, Ticket."}
                 {step === 2 && "Define the properties this node carries. You can enter them by hand, upload a spreadsheet to auto-detect columns, parse a sample document, or start from a template."}
-                {step === 3 && "Pick the primary key and any natural keys. These drive matching, dedup, and joins across sources."}
-                {step === 4 && "Pre-declare expected edges to other node types. Optional — you can add edges later from the canvas."}
-                {step === 5 && "Classify the data, set retention, declare compliance scope, and pick an owner."}
-                {step === 6 && "Review the full schema. Activate immediately or save as a draft pending approval."}
+                {step === 3 && "Pre-declare expected edges to other node types. Optional — you can add edges later from the canvas."}
+                {step === 4 && "Classify the data, set retention, tag the entity, and pick an owner."}
+                {step === 5 && "Review the full schema. Activate immediately or save as a draft pending approval."}
               </div>
             </div>
 
@@ -10611,8 +10611,8 @@ function AddNodeFlow({ onClose }) {
                       </div>
                       <button onClick={addManualProp} className="btn-ghost" style={{ fontSize:12 }}>+ Add field</button>
                     </div>
-                    <div style={{ display:"grid", gridTemplateColumns:"1.4fr 110px 1.2fr 40px 40px 40px 40px 32px", gap:8, padding:"9px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
-                      <div>Name</div><div>Type</div><div>Description</div><div title="Primary key" style={{ textAlign:"center" }}>PK</div><div title="Required" style={{ textAlign:"center" }}>REQ</div><div title="Indexed" style={{ textAlign:"center" }}>IDX</div><div title="PII" style={{ textAlign:"center" }}>PII</div><div/>
+                    <div style={{ display:"grid", gridTemplateColumns:"24px 1.4fr 130px 1.2fr 40px 40px 40px 40px 32px", gap:8, padding:"9px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
+                      <div/><div>Name</div><div>Type</div><div>Description</div><div title="Primary key" style={{ textAlign:"center" }}>PK</div><div title="Required" style={{ textAlign:"center" }}>REQ</div><div title="Indexed" style={{ textAlign:"center" }}>IDX</div><div title="PII" style={{ textAlign:"center" }}>PII</div><div/>
                     </div>
                     {properties.length === 0 && (
                       <div style={{ padding:"50px 18px", textAlign:"center", color:"var(--ink-3)", fontSize:13 }}>
@@ -10621,20 +10621,74 @@ function AddNodeFlow({ onClose }) {
                     )}
                     {properties.map(function(p, i, arr) {
                       var isPk = p.name === pkField;
+                      var isExpanded = expandedRow === i;
                       return (
-                        <div key={i} style={{ display:"grid", gridTemplateColumns:"1.4fr 110px 1.2fr 40px 40px 40px 40px 32px", gap:8, padding:"8px 18px", alignItems:"center", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)" }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                            <input value={p.name} onChange={function(e){ updateProp(i, "name", e.target.value); }} style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12, fontFamily:"JetBrains Mono" })} />
-                            {p.confidence && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color: p.confidence >= 0.9 ? "var(--green)" : "var(--gold)", flexShrink:0, fontWeight:700 }} title={"LLM confidence " + p.confidence}>{Math.round(p.confidence * 100) + "%"}</span>}
-                            {p.detectedFrom && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", flexShrink:0 }} title={p.detectedFrom}>↩</span>}
+                        <div key={i}>
+                          <div style={{ display:"grid", gridTemplateColumns:"24px 1.4fr 130px 1.2fr 40px 40px 40px 40px 32px", gap:8, padding:"8px 18px", alignItems:"center", borderBottom: (i < arr.length-1 && !isExpanded) ? "1px solid var(--line-2)" : "none", background: isExpanded ? "var(--bg-canvas)" : (i % 2 === 1 ? "transparent" : "var(--bg-canvas)") }}>
+                            <button onClick={function(){ setExpandedRow(isExpanded ? null : i); }} title={isExpanded ? "Collapse" : "Show advanced settings"}
+                              style={{ width:22, height:22, borderRadius:5, border:"1px solid " + (isExpanded ? "var(--ink-2)" : "var(--line)"), background: isExpanded ? "var(--ink)" : "var(--panel)", color: isExpanded ? "var(--bg-canvas)" : "var(--ink-3)", cursor:"pointer", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, padding:0, transform: isExpanded ? "rotate(90deg)" : "none", transition:"transform 120ms ease" }}>›</button>
+                            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                              <input value={p.name} onChange={function(e){ updateProp(i, "name", e.target.value); }} style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12, fontFamily:"JetBrains Mono" })} />
+                              {p.confidence && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color: p.confidence >= 0.9 ? "var(--green)" : "var(--gold)", flexShrink:0, fontWeight:700 }} title={"LLM confidence " + p.confidence}>{Math.round(p.confidence * 100) + "%"}</span>}
+                              {p.detectedFrom && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", flexShrink:0 }} title={p.detectedFrom}>↩</span>}
+                            </div>
+                            <TypePicker value={p.type} onChange={function(v){ updateProp(i, "type", v); }} />
+                            <input value={p.description || ""} onChange={function(e){ updateProp(i, "description", e.target.value); }} placeholder="optional" style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12 })} />
+                            <input type="checkbox" checked={isPk} onChange={function(e){ if (e.target.checked) setPkField(p.name); else if (isPk) setPkField(""); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
+                            <input type="checkbox" checked={p.required || false} onChange={function(e){ updateProp(i, "required", e.target.checked); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
+                            <input type="checkbox" checked={p.indexed || false} onChange={function(e){ updateProp(i, "indexed", e.target.checked); }} style={{ accentColor:"var(--blue)", justifySelf:"center", width:16, height:16 }} />
+                            <input type="checkbox" checked={p.pii || false} onChange={function(e){ updateProp(i, "pii", e.target.checked); }} style={{ accentColor:"var(--coral)", justifySelf:"center", width:16, height:16 }} />
+                            <button onClick={function(){ removeProp(i); }} style={{ width:24, height:24, borderRadius:5, border:"1px solid var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", justifySelf:"center" }}>×</button>
                           </div>
-                          <TypePicker value={p.type} onChange={function(v){ updateProp(i, "type", v); }} />
-                          <input value={p.description || ""} onChange={function(e){ updateProp(i, "description", e.target.value); }} placeholder="optional" style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12 })} />
-                          <input type="checkbox" checked={isPk} onChange={function(e){ if (e.target.checked) setPkField(p.name); else if (isPk) setPkField(""); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
-                          <input type="checkbox" checked={p.required || false} onChange={function(e){ updateProp(i, "required", e.target.checked); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
-                          <input type="checkbox" checked={p.indexed || false} onChange={function(e){ updateProp(i, "indexed", e.target.checked); }} style={{ accentColor:"var(--blue)", justifySelf:"center", width:16, height:16 }} />
-                          <input type="checkbox" checked={p.pii || false} onChange={function(e){ updateProp(i, "pii", e.target.checked); }} style={{ accentColor:"var(--coral)", justifySelf:"center", width:16, height:16 }} />
-                          <button onClick={function(){ removeProp(i); }} style={{ width:24, height:24, borderRadius:5, border:"1px solid var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", justifySelf:"center" }}>×</button>
+
+                          {/* ADVANCED PANEL — inline detail for the row */}
+                          {isExpanded && (
+                            <div style={{ padding:"16px 22px 20px 60px", background:"var(--bg-canvas)", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", borderLeft:"3px solid var(--ink)" }}>
+                              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:18 }}>
+                                <div>
+                                  <label style={Object.assign({}, lbl, { marginBottom:5 })}>NEST UNDER</label>
+                                  <select value={p.nestUnder || ""} onChange={function(e){ updateProp(i, "nestUnder", e.target.value); }} style={Object.assign({}, inp, { padding:"7px 10px", fontSize:12 })}>
+                                    <option value="">— top level —</option>
+                                    {properties.filter(function(other, j){ return j !== i && other.type === "struct"; }).map(function(other){ return <option key={other.name} value={other.name}>{other.name}</option>; })}
+                                  </select>
+                                  <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", marginTop:5, lineHeight:1.5 }}>Group this field inside a struct property.</div>
+                                </div>
+                                <div>
+                                  <label style={Object.assign({}, lbl, { marginBottom:5 })}>UNIQUE KEY</label>
+                                  <label style={{ display:"flex", alignItems:"flex-start", gap:8, padding:"7px 10px", border:"1px solid " + (p.unique ? "var(--ink-2)" : "var(--line)"), borderRadius:7, background: p.unique ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer" }}>
+                                    <input type="checkbox" checked={p.unique || false} onChange={function(e){ updateProp(i, "unique", e.target.checked); }} style={{ accentColor:"var(--ink)", width:14, height:14, marginTop:2 }} />
+                                    <div>
+                                      <div style={{ fontSize:12.5, color:"var(--ink)", fontWeight:500 }}>Enforce unique values</div>
+                                      <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", marginTop:2 }}>No two records may share this value.</div>
+                                    </div>
+                                  </label>
+                                </div>
+                              </div>
+
+                              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.7px", textTransform:"uppercase", marginBottom:10, borderTop:"1px dashed var(--line-2)", paddingTop:14 }}>Advanced settings</div>
+                              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                                {[
+                                  { id:"hashing",  l:"Enable hashing",    d:"Hash the value before storing (one-way)." },
+                                  { id:"secure",   l:"Secure field",      d:"Encrypt at rest. Reads require an audit log entry." },
+                                  { id:"display",  l:"Display name",      d:"Surface this value in related records." },
+                                  { id:"search",   l:"Enable search",     d:"Index for free-text lookup." },
+                                  { id:"sort",     l:"Enable sorting",    d:"Allow records to sort by this field." },
+                                  { id:"filter",   l:"Enable filtering",  d:"Allow records to filter by this field." }
+                                ].map(function(opt){
+                                  var on = !!p[opt.id];
+                                  return (
+                                    <label key={opt.id} style={{ display:"flex", alignItems:"flex-start", gap:9, padding:"9px 11px", border:"1px solid " + (on ? "var(--ink-2)" : "var(--line)"), borderRadius:7, background: on ? "var(--panel)" : "var(--panel-2)", cursor:"pointer" }}>
+                                      <input type="checkbox" checked={on} onChange={function(e){ updateProp(i, opt.id, e.target.checked); }} style={{ accentColor:"var(--ink)", width:14, height:14, marginTop:2 }} />
+                                      <div>
+                                        <div style={{ fontSize:12.5, color:"var(--ink)", fontWeight:500 }}>{opt.l}</div>
+                                        <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", marginTop:2 }}>{opt.d}</div>
+                                      </div>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -10644,106 +10698,116 @@ function AddNodeFlow({ onClose }) {
               );
             })()}
 
-            {/* ── STEP 3: Primary key ── */}
-            {step === 3 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:720 }}>
-                <div>
-                  <label style={lbl}>PRIMARY KEY</label>
-                  <select value={pkField} onChange={function(e){ setPkField(e.target.value); }} style={inp}>
-                    <option value="">— pick a field —</option>
-                    {properties.map(function(p){ return <option key={p.name} value={p.name}>{p.name + "  ·  " + p.type}</option>; })}
-                  </select>
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>Stable, immutable, unique. Typically a uuid or system-generated id.</div>
+            {/* ── STEP 3: Relationships — visual edge cards ── */}
+            {step === 3 && (function(){
+              var KINDS = [
+                { id:"direct",   l:"Direct",   tone:{ bg:"var(--blue-fill)",   fg:"var(--blue)"   }, desc:"Resolved at sync from a join key." },
+                { id:"inferred", l:"Inferred", tone:{ bg:"var(--gold-fill)",   fg:"var(--gold)"   }, desc:"Computed from a rule each sync." },
+                { id:"agent",    l:"Agent",    tone:{ bg:"var(--purple-fill)", fg:"var(--purple)" }, desc:"Maintained by an agent." }
+              ];
+              var CARDS = [
+                { id:"1:1", t:"One ↔ One" },
+                { id:"1:N", t:"One → Many" },
+                { id:"N:1", t:"Many → One" },
+                { id:"N:N", t:"Many ↔ Many" }
+              ];
+              var nodeColor = function(n){ var c = n && n.state === "incident" ? "var(--coral)" : n && n.state === "risk" ? "var(--gold)" : n && n.state === "signal" ? "var(--purple)" : "var(--blue)"; return c; };
+              return (
+              <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.7px" }}>{relations.length + " " + (relations.length === 1 ? "edge" : "edges") + " declared"}</span>
+                  <button onClick={addRelation} className="btn-dark" style={{ fontSize:12, padding:"7px 14px", display:"inline-flex", alignItems:"center", gap:6 }}>
+                    <span style={{ fontSize:14, lineHeight:1, fontWeight:300 }}>+</span> Add edge
+                  </button>
                 </div>
-                <div>
-                  <label style={lbl}>NATURAL KEYS (USED FOR MATCHING ACROSS SOURCES)</label>
-                  <div style={{ border:"1px solid var(--line)", borderRadius:8, padding:"6px 10px" }}>
-                    {properties.length === 0 && <div style={{ padding:8, fontSize:12, color:"var(--ink-3)" }}>No fields yet.</div>}
-                    {properties.map(function(p, i, arr){
-                      var isOn = naturalKeys.indexOf(p.name) >= 0;
-                      var isPk = p.name === pkField;
-                      return (
-                        <label key={p.name} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 4px", cursor: isPk ? "default" : "pointer", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", opacity: isPk ? 0.5 : 1 }}>
-                          <input type="checkbox" checked={isOn || isPk} disabled={isPk} onChange={function(e){
-                            setNaturalKeys(function(arr2){
-                              if (e.target.checked) return arr2.indexOf(p.name) >= 0 ? arr2 : arr2.concat([p.name]);
-                              return arr2.filter(function(x){ return x !== p.name; });
-                            });
-                          }} style={{ accentColor:"var(--ink)" }} />
-                          <code style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink)", flex:1 }}>{p.name}</code>
-                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{p.type}</span>
-                          {isPk && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 5px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700 }}>PK</span>}
-                        </label>
-                      );
-                    })}
-                  </div>
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>e.g. email + domain for Customer; tax_id for Account. The PK is automatically included.</div>
-                </div>
-                <div>
-                  <label style={lbl}>DEDUPLICATION STRATEGY</label>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                    {[
-                      { id:"none",            l:"No dedup",                d:"Treat every incoming record as new." },
-                      { id:"on_pk",           l:"Exact on PK",             d:"Match only when the primary key is identical." },
-                      { id:"on_natural_key",  l:"Exact on natural key",    d:"Match when any natural key matches exactly." },
-                      { id:"probabilistic",   l:"Probabilistic fuzzy",     d:"Use a Matching rule (fuzzy / embedding / etc.) to find dups." }
-                    ].map(function(o){
-                      var isOn = dedupStrategy === o.id;
-                      return (
-                        <button key={o.id} onClick={function(){ setDedupStrategy(o.id); }}
-                          style={{ textAlign:"left", padding:"10px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit" }}>
-                          <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)" }}>{o.l}</div>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3 }}>{o.d}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
 
-            {/* ── STEP 4: Relationships ── */}
-            {step === 4 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:14, maxWidth:820 }}>
-                <div>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
-                    <label style={lbl}>EXPECTED EDGES</label>
-                    <button onClick={addRelation} className="btn-ghost" style={{ fontSize:11.5 }}>+ Add edge</button>
+                {relations.length === 0 ? (
+                  <div style={{ padding:"60px 20px", textAlign:"center", color:"var(--ink-3)", fontSize:13.5, border:"1px dashed var(--line)", borderRadius:10, background:"var(--panel)" }}>
+                    <div style={{ width:48, height:48, margin:"0 auto 14px", borderRadius:10, background:"var(--chip)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="12" r="3"/><line x1="9" y1="12" x2="15" y2="12"/></svg>
+                    </div>
+                    <div style={{ fontSize:14, color:"var(--ink-2)", fontWeight:500, marginBottom:6 }}>No edges declared yet</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", marginBottom:14 }}>Optional — you can also wire edges later from the catalog.</div>
+                    <button onClick={addRelation} className="btn-ghost" style={{ fontSize:12.5 }}>+ Add your first edge</button>
                   </div>
-                  {relations.length === 0 ? (
-                    <div style={{ padding:"30px 18px", textAlign:"center", color:"var(--ink-3)", fontSize:13, border:"1px dashed var(--line)", borderRadius:8 }}>
-                      No edges declared yet. <button onClick={addRelation} style={{ background:"none", border:"none", color:"var(--ink)", cursor:"pointer", textDecoration:"underline", fontFamily:"inherit", fontSize:13 }}>Add one</button> — or skip; you can wire edges later from the canvas.
-                    </div>
-                  ) : (
-                    <div style={{ border:"1px solid var(--line)", borderRadius:8, overflow:"hidden" }}>
-                      <div style={{ display:"grid", gridTemplateColumns:"1.2fr 1.2fr 80px 100px 32px", gap:6, background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", padding:"7px 12px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
-                        <div>Edge label</div><div>Target node</div><div>Card.</div><div>Kind</div><div/>
-                      </div>
-                      {relations.map(function(r, i, arr){
-                        return (
-                          <div key={i} style={{ display:"grid", gridTemplateColumns:"1.2fr 1.2fr 80px 100px 32px", gap:6, padding:"6px 12px", alignItems:"center", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none" }}>
-                            <input value={r.label} onChange={function(e){ updateRelation(i, "label", e.target.value.toUpperCase().replace(/[^A-Z_]/g, "")); }} placeholder="HAS_X" style={Object.assign({}, inp, { padding:"4px 7px", fontSize:11.5, fontFamily:"JetBrains Mono" })} />
-                            <select value={r.target} onChange={function(e){ updateRelation(i, "target", e.target.value); }} style={Object.assign({}, inp, { padding:"4px 7px", fontSize:11.5 })}>
-                              {NODES.filter(function(n){ return n.type !== "source"; }).map(function(n){ return <option key={n.id} value={n.id}>{n.label}</option>; })}
-                            </select>
-                            <select value={r.cardinality} onChange={function(e){ updateRelation(i, "cardinality", e.target.value); }} style={Object.assign({}, inp, { padding:"4px 7px", fontSize:11.5, fontFamily:"JetBrains Mono" })}>
-                              <option value="1:1">1:1</option><option value="1:N">1:N</option><option value="N:1">N:1</option><option value="N:N">N:N</option>
-                            </select>
-                            <select value={r.kind} onChange={function(e){ updateRelation(i, "kind", e.target.value); }} style={Object.assign({}, inp, { padding:"4px 7px", fontSize:11.5 })}>
-                              <option value="direct">direct</option><option value="inferred">inferred</option><option value="agent">agent</option>
-                            </select>
-                            <button onClick={function(){ removeRelation(i); }} style={{ width:24, height:24, borderRadius:5, border:"1px solid var(--line)", background:"var(--bg-canvas)", color:"var(--ink-3)", cursor:"pointer" }}>×</button>
+                ) : (
+                  <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                    {relations.map(function(r, i){
+                      var target = NODES.find(function(n){ return n.id === r.target; });
+                      var kindMeta = KINDS.find(function(k){ return k.id === r.kind; }) || KINDS[0];
+                      return (
+                        <div key={i} style={{ border:"1px solid var(--line)", borderRadius:11, background:"var(--panel)", padding:"16px 18px", boxShadow:"0 1px 0 var(--line-2)" }}>
+                          {/* Visual edge pattern at the top */}
+                          <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:14, padding:"6px 0" }}>
+                            <span style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"5px 10px 5px 7px", borderRadius:7, background:"var(--bg-canvas)", border:"1px solid var(--line-2)" }}>
+                              <span style={{ width:14, height:14, borderRadius:"50%", background:catDef.color, border:"1.5px solid var(--ink)" }} />
+                              <span style={{ fontFamily:"Instrument Serif", fontSize:14, color:"var(--ink)" }}>{name || "Untitled"}</span>
+                            </span>
+                            <span style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:3, position:"relative", minWidth:120 }}>
+                              {r.label && (
+                                <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700, letterSpacing:"0.5px", zIndex:1 }}>:{r.label}</span>
+                              )}
+                              <span style={{ width:"100%", height:1, background:"var(--line)", position:"relative" }}>
+                                <span style={{ position:"absolute", right:-6, top:-4, width:0, height:0, borderLeft:"7px solid var(--ink-3)", borderTop:"4px solid transparent", borderBottom:"4px solid transparent" }} />
+                              </span>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.5px" }}>{r.cardinality}</span>
+                            </span>
+                            <span style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"5px 10px 5px 7px", borderRadius:7, background:"var(--bg-canvas)", border:"1px solid var(--line-2)" }}>
+                              <span style={{ width:14, height:14, borderRadius:"50%", background: target ? nodeColor(target) : "var(--line)" }} />
+                              <span style={{ fontFamily:"Instrument Serif", fontSize:14, color: target ? "var(--ink)" : "var(--ink-4)" }}>{target ? target.label : "—"}</span>
+                            </span>
+                            <button onClick={function(){ removeRelation(i); }} style={{ width:26, height:26, borderRadius:6, border:"1px solid var(--line)", background:"var(--bg-canvas)", color:"var(--ink-3)", cursor:"pointer", fontSize:14 }}>×</button>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+
+                          {/* Controls grid */}
+                          <div style={{ display:"grid", gridTemplateColumns:"1.2fr 1.2fr", gap:14 }}>
+                            <div>
+                              <label style={Object.assign({}, lbl, { marginBottom:5 })}>EDGE LABEL</label>
+                              <div style={{ position:"relative" }}>
+                                <span style={{ position:"absolute", left:11, top:"50%", transform:"translateY(-50%)", fontFamily:"JetBrains Mono", fontSize:13, color:"var(--ink-4)", pointerEvents:"none" }}>:</span>
+                                <input value={r.label} onChange={function(e){ updateRelation(i, "label", e.target.value.toUpperCase().replace(/[^A-Z_]/g, "")); }} placeholder="WORKS_AT" style={Object.assign({}, inp, { paddingLeft:22, fontFamily:"JetBrains Mono", fontSize:12.5 })} />
+                              </div>
+                            </div>
+                            <div>
+                              <label style={Object.assign({}, lbl, { marginBottom:5 })}>TARGET NODE</label>
+                              <select value={r.target} onChange={function(e){ updateRelation(i, "target", e.target.value); }} style={Object.assign({}, inp, { fontSize:13 })}>
+                                {NODES.filter(function(n){ return n.type !== "source"; }).map(function(n){ return <option key={n.id} value={n.id}>{n.label}</option>; })}
+                              </select>
+                            </div>
+                          </div>
+                          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginTop:14 }}>
+                            <div>
+                              <label style={Object.assign({}, lbl, { marginBottom:5 })}>CARDINALITY</label>
+                              <div style={{ display:"flex", gap:5 }}>
+                                {CARDS.map(function(c){
+                                  var isOn = r.cardinality === c.id;
+                                  return <button key={c.id} title={c.t} onClick={function(){ updateRelation(i, "cardinality", c.id); }}
+                                    style={{ flex:1, padding:"7px 4px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:6, background: isOn ? "var(--ink)" : "var(--panel)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11.5, fontWeight:600, cursor:"pointer" }}>{c.id}</button>;
+                                })}
+                              </div>
+                            </div>
+                            <div>
+                              <label style={Object.assign({}, lbl, { marginBottom:5 })}>KIND</label>
+                              <div style={{ display:"flex", gap:5 }}>
+                                {KINDS.map(function(k){
+                                  var isOn = r.kind === k.id;
+                                  return <button key={k.id} title={k.desc} onClick={function(){ updateRelation(i, "kind", k.id); }}
+                                    style={{ flex:1, padding:"7px 0", border:"1px solid " + (isOn ? k.tone.fg : "var(--line)"), borderRadius:6, background: isOn ? k.tone.bg : "var(--panel)", color: isOn ? k.tone.fg : "var(--ink-2)", fontSize:12, fontWeight: isOn ? 700 : 500, cursor:"pointer" }}>{k.l}</button>;
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            )}
+              );
+            })()}
 
             {/* ── STEP 5: Governance ── */}
-            {step === 5 && (function(){
+            {step === 4 && (function(){
               return (
                 <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:820 }}>
                   {/* OWNER + RETENTION row */}
@@ -10768,35 +10832,59 @@ function AddNodeFlow({ onClose }) {
                     </div>
                   </div>
 
-                  {/* TAGS dropdown */}
+                  {/* TAGS — open multi-select with grouped suggestions */}
                   <div style={{ position:"relative" }}>
-                    <label style={lbl}>COMPLIANCE TAGS</label>
+                    <label style={lbl}>TAGS</label>
                     <button onClick={function(){ setTagsDropOpen(function(o){ return !o; }); }}
-                      style={Object.assign({}, inp, { display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer", textAlign:"left", padding:"7px 11px" })}>
-                      <span style={{ display:"flex", flexWrap:"wrap", gap:5, flex:1 }}>
-                        {complianceTags.length === 0 && <span style={{ color:"var(--ink-4)" }}>None</span>}
+                      style={Object.assign({}, inp, { display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer", textAlign:"left", padding:"9px 12px", minHeight:42 })}>
+                      <span style={{ display:"flex", flexWrap:"wrap", gap:5, flex:1, alignItems:"center" }}>
+                        {complianceTags.length === 0 && <span style={{ color:"var(--ink-4)", fontSize:13 }}>Add tags — compliance, domain, lifecycle…</span>}
                         {complianceTags.map(function(t){
-                          return <span key={t} style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{t}</span>;
+                          var tone = /SOC|GDPR|HIPAA|ISO|CCPA|PCI/.test(t) ? { bg:"var(--coral-fill)", fg:"var(--coral)" }
+                                   : /CORE|SHARED|GOLDEN|DRAFT|DEPRECATED/.test(t) ? { bg:"var(--gold-fill)", fg:"var(--gold)" }
+                                   : { bg:"var(--blue-fill)", fg:"var(--blue)" };
+                          return (
+                            <span key={t} style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"JetBrains Mono", fontSize:10.5, padding:"3px 5px 3px 8px", borderRadius:4, background:tone.bg, color:tone.fg, fontWeight:600, letterSpacing:"0.3px" }}>
+                              {t}
+                              <button onClick={function(e){ e.stopPropagation(); setComplianceTags(function(arr){ return arr.filter(function(x){ return x !== t; }); }); }} style={{ background:"none", border:"none", color:"currentColor", cursor:"pointer", padding:0, fontSize:12, lineHeight:1, opacity:0.6 }}>×</button>
+                            </span>
+                          );
                         })}
                       </span>
-                      <span style={{ color:"var(--ink-3)", marginLeft:6 }}>{tagsDropOpen ? "▴" : "▾"}</span>
+                      <span style={{ color:"var(--ink-3)", marginLeft:8, fontFamily:"JetBrains Mono", fontSize:11 }}>▾</span>
                     </button>
                     {tagsDropOpen && (
                       <>
                         <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setTagsDropOpen(false); }} />
-                        <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 8px 28px rgba(0,0,0,0.14)", padding:6 }}>
-                          {["SOC2","GDPR","HIPAA","ISO27001","CCPA","PCI-DSS"].map(function(t){
-                            var isOn = complianceTags.indexOf(t) >= 0;
-                            return <button key={t} onClick={function(){
-                              setComplianceTags(function(arr){ return isOn ? arr.filter(function(x){ return x !== t; }) : arr.concat([t]); });
-                            }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 10px", borderRadius:5, border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, color:"var(--ink)", textAlign:"left" }}>
-                              <span style={{ width:14, height:14, borderRadius:3, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--ink)" : "transparent", color:"var(--bg-canvas)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:9 }}>{isOn ? "✓" : ""}</span>
-                              <code style={{ fontFamily:"JetBrains Mono", fontSize:12 }}>{t}</code>
-                            </button>;
+                        <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:380, overflowY:"auto" }}>
+                          {[
+                            { group:"Compliance", tone:{ bg:"var(--coral-fill)", fg:"var(--coral)" }, items:["SOC2","GDPR","HIPAA","ISO27001","CCPA","PCI-DSS"] },
+                            { group:"Domain",     tone:{ bg:"var(--blue-fill)",  fg:"var(--blue)"  }, items:["Customer","Finance","Product","Sales","Support","Marketing","HR"] },
+                            { group:"Lifecycle",  tone:{ bg:"var(--gold-fill)",  fg:"var(--gold)"  }, items:["Core","Shared","Golden record","Draft","Deprecated"] }
+                          ].map(function(grp){
+                            return (
+                              <div key={grp.group} style={{ marginBottom:4 }}>
+                                <div style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"6px 10px 4px", color:"var(--ink-4)", letterSpacing:"0.7px", textTransform:"uppercase" }}>{grp.group}</div>
+                                <div style={{ display:"flex", flexWrap:"wrap", gap:4, padding:"0 8px 6px" }}>
+                                  {grp.items.map(function(t){
+                                    var isOn = complianceTags.indexOf(t) >= 0;
+                                    return (
+                                      <button key={t} onClick={function(){
+                                        setComplianceTags(function(arr){ return isOn ? arr.filter(function(x){ return x !== t; }) : arr.concat([t]); });
+                                      }} style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"JetBrains Mono", fontSize:10.5, padding:"4px 8px", borderRadius:4, background: isOn ? grp.tone.bg : "transparent", color: isOn ? grp.tone.fg : "var(--ink-2)", border:"1px solid " + (isOn ? grp.tone.fg + "55" : "var(--line)"), fontWeight: isOn ? 700 : 500, cursor:"pointer", letterSpacing:"0.3px" }}>
+                                        {isOn && <span style={{ fontWeight:700 }}>✓</span>}
+                                        {t}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
                           })}
                         </div>
                       </>
                     )}
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6, lineHeight:1.5 }}>Surface this node for the right audience — compliance frameworks, business domain, lifecycle stage.</div>
                   </div>
 
                   {/* PERMISSIONS */}
@@ -10812,8 +10900,8 @@ function AddNodeFlow({ onClose }) {
               );
             })()}
 
-            {/* ── STEP 6: Review — comprehensive, dashed summary rows like enterprise tools ── */}
-            {step === 6 && (
+            {/* ── STEP 5: Review — comprehensive, dashed summary rows like enterprise tools ── */}
+            {step === 5 && (
               <div style={{ display:"flex", flexDirection:"column", gap:22, maxWidth:880 }}>
                 {/* Headline — bigger, more confident */}
                 <div>
@@ -10932,10 +11020,10 @@ function AddNodeFlow({ onClose }) {
         {/* FOOTER */}
         <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
           <button className="btn-ghost" onClick={function(){ if (step > 1) setStep(function(s){ return s - 1; }); }} disabled={step === 1} style={{ opacity: step === 1 ? 0.4 : 1 }}>← Back</button>
-          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of 6 · " + stepNames[step-1]}</span>
+          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of 5 · " + stepNames[step-1]}</span>
           <div style={{ display:"flex", gap:8 }}>
             <button className="btn-ghost" onClick={onClose}>Cancel</button>
-            {step < 6
+            {step < 5
               ? <button className="btn-dark" disabled={!canContinue()} onClick={function(){ setStep(function(s){ return s + 1; }); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Continue →</button>
               : <button className="btn-dark" onClick={onClose}>{activate ? "Create node type ↵" : "Save draft ↵"}</button>
             }
