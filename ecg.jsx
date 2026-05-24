@@ -12389,21 +12389,25 @@ function GraphLandingEmpty({ onCreate, onBack }) {
     var W = 1600, H = 900;
     var s = 7919 | 0;
     function nxt(){ s = (s * 1664525 + 1013904223) | 0; return Math.abs(s); }
-    // Each cluster gets its own hue from the workspace palette — hints at the
-    // variety of context graphs you'll spin up (revenue, support, finance, …).
+    // Clusters hug the corners + side edges. Each carries its own hue so the
+    // backdrop hints at the variety of graphs you'll build. The central
+    // 36%–64% × 22%–82% rectangle is reserved for hero copy and stays clear.
     var clusters = [
-      { cx: W*0.18, cy: H*0.32, n: 9,  r: 110, color:"var(--gold)"   },
-      { cx: W*0.40, cy: H*0.72, n: 7,  r: 90,  color:"var(--blue)"   },
-      { cx: W*0.62, cy: H*0.28, n: 8,  r: 100, color:"var(--green)"  },
-      { cx: W*0.82, cy: H*0.62, n: 9,  r: 120, color:"var(--coral)"  },
-      { cx: W*0.50, cy: H*0.50, n: 5,  r: 70,  color:"var(--purple)" }
+      { cx: W*0.10, cy: H*0.20, n: 9, r: 110, color:"var(--gold)"   },
+      { cx: W*0.90, cy: H*0.20, n: 8, r: 100, color:"var(--green)"  },
+      { cx: W*0.08, cy: H*0.80, n: 9, r: 120, color:"var(--blue)"   },
+      { cx: W*0.92, cy: H*0.78, n: 9, r: 120, color:"var(--coral)"  },
+      { cx: W*0.50, cy: H*0.08, n: 5, r: 80,  color:"var(--purple)" }
     ];
+    var SAFE = { x0: W*0.30, x1: W*0.70, y0: H*0.22, y1: H*0.86 };
+    function inSafe(p){ return p.x > SAFE.x0 && p.x < SAFE.x1 && p.y > SAFE.y0 && p.y < SAFE.y1; }
     var nodes = [];
     clusters.forEach(function(c){
       for (var i = 0; i < c.n; i++){
         var ang = (i / c.n) * Math.PI * 2 + (nxt() % 100) / 600;
         var rr  = c.r * (0.55 + (nxt() % 100) / 220);
-        nodes.push({ x: c.cx + Math.cos(ang) * rr, y: c.cy + Math.sin(ang) * rr * 0.85, r: 5 + (nxt() % 9), c: i % c.n === 0, color: c.color });
+        var n = { x: c.cx + Math.cos(ang) * rr, y: c.cy + Math.sin(ang) * rr * 0.85, r: 5 + (nxt() % 9), c: i % c.n === 0, color: c.color };
+        if (!inSafe(n)) nodes.push(n);
       }
     });
     var edges = [];
@@ -12411,10 +12415,13 @@ function GraphLandingEmpty({ onCreate, onBack }) {
       var k = 1 + (nxt() % 2);
       for (var j = 0; j < k; j++){
         var t = nxt() % nodes.length;
-        if (t !== i){
-          var dx = nodes[i].x - nodes[t].x, dy = nodes[i].y - nodes[t].y;
-          if (Math.sqrt(dx*dx + dy*dy) < 260) edges.push([i, t]);
-        }
+        if (t === i) continue;
+        var a = nodes[i], b = nodes[t];
+        var dx = a.x - b.x, dy = a.y - b.y;
+        if (Math.sqrt(dx*dx + dy*dy) >= 260) continue;
+        // Drop edges whose midpoint sits in the hero-copy safe zone.
+        if (inSafe({ x:(a.x+b.x)/2, y:(a.y+b.y)/2 })) continue;
+        edges.push([i, t]);
       }
     });
     return { nodes: nodes, edges: edges, W: W, H: H };
