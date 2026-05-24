@@ -10607,20 +10607,27 @@ function AddNodeFlow({ onClose }) {
               </pre>
             </div>
             <div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>VALIDATION</div>
-              <div style={{ display:"flex", flexDirection:"column", gap:6, fontFamily:"JetBrains Mono", fontSize:11 }}>
-                {[
-                  { ok: nameOk, l:"Name valid" },
-                  { ok: properties.length > 0, l:"At least one field" },
-                  { ok: !!pkField, l:"Primary key picked" },
-                  { ok: permsAdmin.length > 0 || step < 5, l:"Admin assigned" }
-                ].map(function(v, i){
-                  return <div key={i} style={{ display:"flex", alignItems:"center", gap:8, color: v.ok ? "var(--green)" : "var(--ink-4)" }}>
-                    <span style={{ width:7, height:7, borderRadius:"50%", background: v.ok ? "var(--green)" : "var(--line)" }} />
-                    <span style={{ color:"var(--ink-2)" }}>{v.l}</span>
-                    {v.ok && <span style={{ marginLeft:"auto", fontWeight:700, color:"var(--green)" }}>✓</span>}
-                  </div>;
-                })}
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>DOWNSTREAM IMPACT</div>
+              <div style={{ padding:"14px 14px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:6 }}>
+                <div style={{ display:"flex", alignItems:"baseline", gap:10 }}>
+                  <div style={{ fontFamily:"Instrument Serif", fontSize:32, color:"var(--ink)", lineHeight:1 }}>0</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:11.5, color:"var(--ink-2)", lineHeight:1.4 }}>surfaces will pick this up</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", marginTop:2 }}>on publish to draft</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>READY TO PUBLISH</div>
+              <div style={{ padding:"12px 14px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:6 }}>
+                <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:4 }}>
+                  <div style={{ fontFamily:"Instrument Serif", fontSize:24, color:"var(--ink)", lineHeight:1 }}>{Math.round((((nameOk?1:0) + (properties.length>0?1:0) + (pkField?1:0) + ((permsAdmin.length > 0 || step < 5)?1:0)) / 4) * 100)}%</div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>complete</div>
+                </div>
+                <div style={{ width:"100%", height:4, background:"var(--line-2)", borderRadius:2, overflow:"hidden" }}>
+                  <div style={{ width:(((nameOk?1:0) + (properties.length>0?1:0) + (pkField?1:0) + ((permsAdmin.length > 0 || step < 5)?1:0)) / 4 * 100) + "%", height:"100%", background: ((nameOk?1:0) + (properties.length>0?1:0) + (pkField?1:0) + ((permsAdmin.length > 0 || step < 5)?1:0)) === 4 ? "var(--green)" : "var(--ink-3)", transition:"width 200ms ease" }} />
+                </div>
               </div>
             </div>
             {properties.length > 0 && (
