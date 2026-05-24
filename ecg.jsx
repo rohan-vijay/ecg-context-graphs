@@ -10764,58 +10764,112 @@ var GRAPH_FUNCTIONS = [
 ];
 
 // Per-entity metadata: short description + a few representative properties.
-// Used by Step 2 / Step 3 preview cards to make blueprints feel concrete.
+// Property names mirror Microsoft Common Data Model (github.com/microsoft/CDM)
+// where the vertical has clean CDM coverage — Sales, Marketing, Customer
+// Service, Banking, Healthcare (FHIR-aligned), HR. For verticals where CDM
+// is sparse or D365-internal (Manufacturing internals, Retail Commerce
+// internals) we keep analyst-friendly names.
 var ENTITY_META = {
-  "Account":         { desc:"A buying organisation or company.",               props:["account_id","name","industry","arr","tier"] },
-  "Contact":         { desc:"A person at an account.",                         props:["contact_id","email","role","account_id"] },
-  "Opportunity":     { desc:"A potential deal in the pipeline.",               props:["opportunity_id","stage","amount","close_date","owner"] },
+  // ── CRM Sales (CDM crmCommon/sales) ────────────────────────────────────
+  "Account":         { desc:"A buying organisation or company.",               props:["account_id","name","account_number","revenue","industry"] },
+  "Contact":         { desc:"A person at an account.",                         props:["contact_id","full_name","email_address","job_title","account_id"] },
+  "Lead":            { desc:"An unqualified prospect.",                        props:["lead_id","full_name","company_name","subject","lead_source_code","estimated_amount"] },
+  "Opportunity":     { desc:"A potential deal in the pipeline.",               props:["opportunity_id","name","estimated_value","close_probability","estimated_close_date","budget_amount"] },
+  "Quote":           { desc:"A formal offer with pricing and terms.",          props:["quote_id","quote_number","name","effective_from","expires_on","discount_amount"] },
   "Subscription":    { desc:"An active product subscription.",                 props:["subscription_id","plan","mrr","status","renews_on"] },
-  "Invoice":         { desc:"A billing document issued to a customer.",        props:["invoice_id","amount","status","issued_on","due_on"] },
+  "Invoice":         { desc:"A billing document issued to a customer.",        props:["invoice_id","invoice_number","due_date","date_delivered","discount_amount","payment_terms_code"] },
   "Usage Event":     { desc:"A product usage signal from an account.",         props:["event_id","feature","timestamp","account_id"] },
-  "Ticket":          { desc:"A support or customer-service case.",             props:["ticket_id","subject","priority","status","opened_at"] },
+
+  // ── Customer Service (CDM crmCommon/service) ───────────────────────────
+  "Case":            { desc:"A customer service incident.",                    props:["incident_id","title","case_origin_code","case_type_code","priority_code","customer_satisfaction_code"] },
+  "Ticket":          { desc:"A support case (alias of Case).",                 props:["ticket_id","subject","priority","status","opened_at"] },
+  "Case Resolution": { desc:"How a case was resolved.",                        props:["subject","time_spent","resolution","incident_id"] },
+  "Entitlement":     { desc:"What support a customer is entitled to.",         props:["entitlement_id","name","start_date","end_date","allocation_type_code","remaining_terms"] },
+  "Knowledge Article": { desc:"A published help-centre article.",              props:["article_id","title","content","key_words","publish_on","language_locale_id"] },
+  "SLA":             { desc:"A service-level agreement.",                      props:["sla_id","name","applicable_from","sla_type","first_response_in_minutes"] },
+  "Queue":           { desc:"A routing queue for cases.",                      props:["queue_id","name","queue_type","incoming_email","default_mailbox"] },
   "Customer":        { desc:"A person or org you serve.",                      props:["customer_id","name","status","ltv","segment"] },
   "Interaction":     { desc:"Any touchpoint with a customer.",                 props:["interaction_id","channel","sentiment","timestamp"] },
   "Health Score":    { desc:"Composite indicator of account health.",          props:["score","trend","computed_at","drivers"] },
   "Renewal":         { desc:"An upcoming or completed contract renewal.",      props:["renewal_id","arr","stage","decision_by"] },
+
+  // ── Marketing (CDM crmCommon + marketing solutions) ────────────────────
+  "Campaign":        { desc:"A marketing initiative.",                         props:["campaign_id","name","code_name","actual_start","budgeted_cost","expected_revenue","objective"] },
+  "Marketing List":  { desc:"A targeted list of contacts or leads.",           props:["list_id","list_name","purpose","member_type","member_count","last_used_on"] },
+  "Marketing Email": { desc:"A campaign email send.",                          props:["email_id","name","subject","from_email","from_name","reply_to_email"] },
+  "Customer Journey":{ desc:"A multi-step marketing journey.",                 props:["journey_id","name","start_datetime","end_datetime","is_recurring","workflow_definition"] },
+  "Segment":         { desc:"A defined audience cohort.",                      props:["segment_id","segment_name","segment_type","filter_query","activation_status","member_count"] },
+  "Marketing Form":  { desc:"A web form that captures leads.",                 props:["form_id","name","fields","submit_action","double_optin"] },
+
+  // ── Banking / Financial Services (CDM accelerators/financialServices) ──
+  "Bank":            { desc:"A banking institution.",                          props:["bank_id","bank_code","bank_name","country","state","telephone_no"] },
+  "Branch":          { desc:"A bank branch.",                                  props:["branch_id","branch_code","branch_name","bank_id","branch_manager_id"] },
+  "Financial Product": { desc:"A loan, deposit or other product instance.",    props:["product_id","branch_id","available_balance","disbursed_amount","installment_amount","delinquency_status","days_past_due"] },
+  "Collateral":      { desc:"Asset pledged against a financial product.",      props:["collateral_id","collateral_type","collateral_value","coverage","date_of_valuation"] },
+  "KYC Case":        { desc:"Know-Your-Customer due-diligence case.",          props:["kyc_id","customer_id","status","risk_rating","reviewer","opened_on"] },
+  "Mortgage Application":{ desc:"A mortgage loan application.",                props:["application_id","customer_id","property_value","loan_amount","status","submitted_on"] },
   "Transaction":     { desc:"A money-movement event.",                         props:["txn_id","amount","currency","direction","posted_at"] },
   "Risk Signal":     { desc:"A flagged anomaly or risk indicator.",            props:["signal_id","type","severity","detected_at"] },
   "Hold":            { desc:"A regulatory or fraud hold on an account.",       props:["hold_id","reason","placed_on","cleared_on"] },
   "Compliance Case": { desc:"An open regulatory or compliance investigation.", props:["case_id","regulator","status","opened_on"] },
-  "Patient":         { desc:"An individual receiving care.",                   props:["patient_id","dob","mrn","primary_provider"] },
-  "Provider":        { desc:"A clinician, practice or facility.",              props:["provider_id","npi","specialty","facility"] },
-  "Encounter":       { desc:"A clinical visit or interaction.",                props:["encounter_id","type","date","provider_id"] },
-  "Diagnosis":       { desc:"A coded clinical condition.",                     props:["diagnosis_id","icd10","date","severity"] },
+
+  // ── Healthcare (CDM accelerators/healthCare/EMR, FHIR-aligned) ─────────
+  "Patient":         { desc:"An individual receiving care (CDM extends Contact).", props:["patient_id","date_of_birth","gender","mrn","primary_provider_id"] },
+  "Provider":        { desc:"A practitioner or facility (CDM PractitionerRole).", props:["practitioner_id","name","npi","specialty","practitioner_role"] },
+  "Encounter":       { desc:"A clinical visit or admission.",                  props:["encounter_identifier","encounter_class","encounter_status","period_start","period_end","priority"] },
+  "Condition":       { desc:"A clinical condition or diagnosis.",              props:["clinical_status","verification_status","asserted_date","onset_date","abatement_date","subject_type"] },
+  "Observation":     { desc:"A measurement, finding or vital sign.",           props:["identifier","status","effective_start","value_quantity_unit","value_range_high","value_range_low"] },
+  "Procedure":       { desc:"A procedure performed on a patient.",             props:["procedure_identifier","status","performed_start_date","performed_end_date","not_done","description"] },
+  "Medication":      { desc:"A medicinal product.",                            props:["name","amount","is_brand","is_over_the_counter","form"] },
+  "Allergy Intolerance":{ desc:"An allergy or intolerance record.",            props:["code","type","criticality","verification_status","name"] },
+  "Care Plan":       { desc:"A care plan for a patient.",                      props:["care_plan_id","status","intent","title","period_start","period_end"] },
+  "Diagnostic Report":{ desc:"A diagnostic report (labs, imaging, etc.).",     props:["report_id","status","category","effective_date","conclusion"] },
+  "Healthcare Service":{ desc:"A service offered by a provider.",              props:["service_id","name","comment","appointment_required","eligibility"] },
   "Claim":           { desc:"A healthcare insurance claim.",                   props:["claim_id","amount","status","filed_on"] },
-  "Outcome":         { desc:"A measured clinical or operational result.",      props:["outcome_id","measure","value","date"] },
-  "Order":           { desc:"A customer purchase transaction.",                props:["order_id","total","status","placed_at","channel"] },
+
+  // ── Commerce / Retail (clean names — D365 Commerce internals are noisy) ──
+  "Order":           { desc:"A customer purchase transaction.",                props:["sales_order_id","order_number","date_fulfilled","ship_to_city","payment_terms_code","shipping_method_code"] },
   "Product":         { desc:"A sellable SKU or service.",                      props:["sku","name","category","price","status"] },
   "Shipment":        { desc:"A fulfilment shipment.",                          props:["shipment_id","carrier","tracking","status","shipped_at"] },
   "Return":          { desc:"A returned order or item.",                       props:["return_id","reason","amount","status"] },
   "Inventory":       { desc:"On-hand stock at a location.",                    props:["sku","location","on_hand","reserved"] },
+  "Store":           { desc:"A physical retail location.",                     props:["store_id","name","format","region"] },
+  "Loyalty Account": { desc:"A customer loyalty membership.",                  props:["loyalty_id","tier","points","since"] },
+  "Promotion":       { desc:"A marketing offer or campaign.",                  props:["promo_id","name","discount","valid_until"] },
+
+  // ── Supply Chain / Manufacturing (analyst-friendly — D365 SCM is internal) ──
   "Supplier":        { desc:"A vendor of materials or services.",              props:["supplier_id","name","tier","status"] },
   "Purchase Order":  { desc:"A procurement contract.",                         props:["po_id","amount","supplier_id","status"] },
   "Item":            { desc:"A material or part SKU.",                         props:["item_id","name","uom","cost"] },
   "BOM":             { desc:"A bill of materials for an assembly.",            props:["bom_id","parent_item","components","revision"] },
   "Plant":           { desc:"A manufacturing facility.",                       props:["plant_id","name","region","capacity"] },
+
+  // ── Finance / Ledger ───────────────────────────────────────────────────
   "GL Account":      { desc:"A general-ledger account.",                       props:["gl_code","name","type","currency"] },
   "Journal Entry":   { desc:"A double-entry ledger posting.",                  props:["je_id","date","debit","credit","memo"] },
   "Payment":         { desc:"A payment instrument settlement.",                props:["payment_id","amount","method","received_at"] },
   "Control":         { desc:"A compliance or audit control.",                  props:["control_id","name","framework","owner"] },
   "Policy":          { desc:"A governance or risk policy.",                    props:["policy_id","name","version","effective"] },
-  "Employee":        { desc:"A person on the payroll.",                        props:["employee_id","name","email","title","manager_id"] },
+
+  // ── HR (CDM operationsCommon/HumanResources, "Hcm" prefix) ─────────────
+  "Employee":        { desc:"A person on the payroll (CDM HcmWorker).",        props:["personnel_number","name","name_alias","known_as","primary_contact_email","language_id"] },
+  "Worker":          { desc:"Any worker (employee or contractor).",            props:["personnel_number","party_number","worker_type","name","primary_contact_email"] },
+  "Position":        { desc:"A staffed role at a point in time.",              props:["position_id","title","department","position_type","full_time_equivalent","activation","retirement"] },
+  "Job":             { desc:"A job definition.",                               props:["job_id","title","description","job_type","function","maximum_number_of_positions"] },
+  "Employment":      { desc:"An employment record.",                           props:["worker","personnel_number","employment_start_date","employment_end_date","legal_entity","worker_type"] },
   "Role":            { desc:"A defined job role.",                             props:["role_id","title","level","department"] },
   "Team":            { desc:"An organisational unit.",                         props:["team_id","name","function","leader_id"] },
   "Manager Chain":   { desc:"Cached reporting hierarchy.",                     props:["employee_id","chain","depth"] },
   "Compensation":    { desc:"Pay and equity data.",                            props:["base","bonus","equity","effective"] },
-  "Store":           { desc:"A physical retail location.",                     props:["store_id","name","format","region"] },
-  "Loyalty Account": { desc:"A customer loyalty membership.",                  props:["loyalty_id","tier","points","since"] },
-  "Promotion":       { desc:"A marketing offer or campaign.",                  props:["promo_id","name","discount","valid_until"] },
-  "Contract":        { desc:"A binding commercial agreement.",                 props:["contract_id","arr","start","end","status"] },
+  "Pay Cycle":       { desc:"A payroll pay-cycle.",                            props:["pay_cycle_id","name","frequency","starts_on"] },
+  "Tenure":          { desc:"Cached service-length facts.",                    props:["employee_id","years","start_date"] },
+
+  // ── Cross-cutting ──────────────────────────────────────────────────────
+  "Contract":        { desc:"A binding commercial agreement.",                 props:["contract_id","contract_number","active_on","expires_on","billing_frequency_code","net_price"] },
   "Asset":           { desc:"A managed company asset.",                        props:["asset_id","type","assignee","status"] },
   "Location":        { desc:"A physical or logical place.",                    props:["location_id","name","region","type"] },
   "Device":          { desc:"An issued endpoint or laptop.",                   props:["device_id","model","serial","assignee"] },
-  "Access Grant":    { desc:"A system or resource permission.",                props:["grant_id","resource","level","granted_on"] },
-  "Tenure":          { desc:"Cached service-length facts.",                    props:["employee_id","years","start_date"] }
+  "Access Grant":    { desc:"A system or resource permission.",                props:["grant_id","resource","level","granted_on"] }
 };
 function entityMeta(name){ return ENTITY_META[name] || { desc:"Custom entity — you can describe it once the graph is live.", props:[] }; }
 
@@ -10842,21 +10896,37 @@ var GRAPH_STARTING_POINTS = [
     accent:"var(--blue)" },
 
   // ── Function-focused ───────────────────────────────────────────────────
-  { id:"saas-revenue",   industry:["saas"],          fn:["revenue","customer"],    name:"Customer Revenue Graph", more:8, desc:"Account-led B2B: pipeline → subscription → expansion. Joins the sales motion to product telemetry.",
-    entities:["Account","Contact","Opportunity","Subscription","Invoice","Usage Event","Ticket"],
-    edges:[["Account","HAS_CONTACT","Contact"],["Account","HAS_OPPORTUNITY","Opportunity"],["Account","SUBSCRIBES_TO","Subscription"],["Subscription","BILLED_AS","Invoice"],["Account","EMITS","Usage Event"],["Account","OPENED","Ticket"]],
-    accent:"var(--blue)" },
-  { id:"saas-success",   industry:["saas"],          fn:["customer","operations"], name:"Customer Health Graph",  more:6, desc:"Brings health scores, tickets, NPS and usage trends into one canonical Customer entity.",
-    entities:["Account","Customer","Ticket","Interaction","Health Score","Renewal"],
-    edges:[["Account","HAS_CUSTOMER","Customer"],["Customer","OPENED","Ticket"],["Customer","HAD","Interaction"],["Customer","SCORED_AS","Health Score"],["Account","RENEWS_AS","Renewal"]],
-    accent:"var(--green)" },
-  { id:"fintech-risk",   industry:["fintech"],       fn:["risk","operations"],     name:"Customer Risk Graph",    more:10, desc:"Customer → Account → Transaction with KYC, fraud signals and regulatory holds.",
-    entities:["Customer","Account","Transaction","Risk Signal","Hold","Compliance Case"],
-    edges:[["Customer","HOLDS","Account"],["Account","RECORDS","Transaction"],["Transaction","RAISES","Risk Signal"],["Account","SUBJECT_TO","Hold"],["Risk Signal","ESCALATES_TO","Compliance Case"]],
+  { id:"marketing-engagement", industry:["any","saas","retail","media","professional","fintech"], fn:["marketing","customer"],
+    name:"Marketing Engagement Graph", more:7,
+    desc:"Aligned to Microsoft CDM marketing solution: Campaign → Marketing List → Lead → Customer Journey → Segment, with email sends and form captures.",
+    entities:["Campaign","Marketing List","Lead","Contact","Customer Journey","Segment","Marketing Email","Marketing Form"],
+    edges:[["Campaign","TARGETS","Marketing List"],["Marketing List","CONTAINS","Lead"],["Marketing List","CONTAINS","Contact"],["Campaign","ENROLS_IN","Customer Journey"],["Customer Journey","SENDS","Marketing Email"],["Segment","DEFINES","Marketing List"],["Marketing Form","CAPTURES","Lead"]],
+    accent:"var(--purple)" },
+  { id:"customer-service-graph", industry:["any","saas","fintech","retail","manufacturing","healthcare","professional"], fn:["support","customer","operations"],
+    name:"Customer Service Graph", more:8,
+    desc:"Aligned to Microsoft CDM service accelerator: Case → SLA → Queue → Knowledge Article, governed by Contract and Entitlement. The substrate for support operations.",
+    entities:["Case","Case Resolution","Contract","Entitlement","Knowledge Article","SLA","Queue","Contact"],
+    edges:[["Contact","OPENED","Case"],["Case","RESOLVED_AS","Case Resolution"],["Case","GOVERNED_BY","SLA"],["Case","ROUTED_TO","Queue"],["Case","REFERENCES","Knowledge Article"],["Contract","INCLUDES","Entitlement"],["Entitlement","COVERS","Case"]],
     accent:"var(--coral)" },
-  { id:"healthcare-ops", industry:["healthcare"],    fn:["operations","customer"], name:"Patient Journey Graph",  more:11, desc:"Patient encounters joined with providers, claims, diagnoses and outcomes.",
-    entities:["Patient","Provider","Encounter","Diagnosis","Claim","Outcome"],
-    edges:[["Patient","SAW","Provider"],["Patient","HAD","Encounter"],["Encounter","RESULTED_IN","Diagnosis"],["Encounter","BILLED_VIA","Claim"],["Diagnosis","TRACKED_AS","Outcome"]],
+  { id:"saas-revenue",   industry:["saas"],          fn:["revenue","customer"],    name:"Customer Revenue Graph", more:8,
+    desc:"Aligned to Microsoft CDM CRM/Sales: Account → Contact → Lead → Opportunity → Quote → Subscription → Invoice. Joins the sales motion to product telemetry.",
+    entities:["Account","Contact","Lead","Opportunity","Quote","Subscription","Invoice","Usage Event"],
+    edges:[["Account","HAS_CONTACT","Contact"],["Lead","QUALIFIED_AS","Opportunity"],["Account","HAS_OPPORTUNITY","Opportunity"],["Opportunity","QUOTED_AS","Quote"],["Quote","CONVERTS_TO","Subscription"],["Subscription","BILLED_AS","Invoice"],["Account","EMITS","Usage Event"]],
+    accent:"var(--blue)" },
+  { id:"saas-success",   industry:["saas"],          fn:["customer","support","operations"], name:"Customer Health Graph",  more:6,
+    desc:"Brings health scores, tickets, NPS and usage trends into one canonical Customer entity. Uses Case + Entitlement from the CDM service accelerator.",
+    entities:["Account","Customer","Case","Entitlement","Interaction","Health Score","Renewal"],
+    edges:[["Account","HAS_CUSTOMER","Customer"],["Customer","OPENED","Case"],["Account","HOLDS","Entitlement"],["Customer","HAD","Interaction"],["Customer","SCORED_AS","Health Score"],["Account","RENEWS_AS","Renewal"]],
+    accent:"var(--green)" },
+  { id:"fintech-risk",   industry:["fintech"],       fn:["risk","operations","it-security"],     name:"Customer Risk Graph",    more:10,
+    desc:"Aligned to Microsoft CDM banking accelerator: Customer 360 → Account → Financial Product → Transaction, with branches, collateral, KYC and regulatory holds.",
+    entities:["Customer","Account","Branch","Financial Product","Transaction","Collateral","KYC Case","Mortgage Application","Risk Signal","Hold","Compliance Case"],
+    edges:[["Customer","HOLDS","Account"],["Account","AT","Branch"],["Account","OF_TYPE","Financial Product"],["Financial Product","SECURED_BY","Collateral"],["Account","RECORDS","Transaction"],["Customer","SUBJECT_TO","KYC Case"],["Customer","SUBMITTED","Mortgage Application"],["Transaction","RAISES","Risk Signal"],["Account","UNDER","Hold"],["Risk Signal","ESCALATES_TO","Compliance Case"]],
+    accent:"var(--coral)" },
+  { id:"healthcare-ops", industry:["healthcare"],    fn:["operations","customer","support"], name:"Patient Journey Graph",  more:11,
+    desc:"FHIR-aligned (Microsoft CDM healthcare accelerator): Patient encounters joined with providers, conditions, observations, procedures, medications and care plans.",
+    entities:["Patient","Provider","Encounter","Condition","Observation","Procedure","Medication","Care Plan","Diagnostic Report","Claim"],
+    edges:[["Patient","SEEN_BY","Provider"],["Patient","HAD","Encounter"],["Encounter","RECORDED","Condition"],["Encounter","RECORDED","Observation"],["Encounter","PERFORMED","Procedure"],["Patient","PRESCRIBED","Medication"],["Patient","FOLLOWS","Care Plan"],["Encounter","PRODUCED","Diagnostic Report"],["Encounter","BILLED_VIA","Claim"]],
     accent:"var(--purple)" },
   { id:"retail-commerce",industry:["retail"],        fn:["revenue","operations"],  name:"Order Fulfilment Graph", more:7, desc:"Customer → Order → Product → Shipment → Return, with inventory and pricing linked in.",
     entities:["Customer","Order","Product","Shipment","Return","Inventory"],
