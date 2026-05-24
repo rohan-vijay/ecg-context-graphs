@@ -10023,6 +10023,23 @@ function PermRow({ k, label, list, setList, tone, desc }) {
   );
 }
 
+// Type → colour + short glyph. Used by the Review & edit fields table so
+// each row reads at a glance.
+var TYPE_META = {
+  "uuid":      { color:"var(--purple)", glyph:"ID"  },
+  "string":    { color:"var(--blue)",   glyph:"T"   },
+  "string[]":  { color:"var(--blue)",   glyph:"[T]" },
+  "decimal":   { color:"var(--gold)",   glyph:"#"   },
+  "float":     { color:"var(--gold)",   glyph:".5"  },
+  "bool":      { color:"var(--coral)",  glyph:"01"  },
+  "timestamp": { color:"var(--green)",  glyph:"TS"  },
+  "date":      { color:"var(--green)",  glyph:"DT"  },
+  "datetime":  { color:"var(--green)",  glyph:"DT"  },
+  "enum":      { color:"var(--purple)", glyph:"E"   },
+  "struct":    { color:"var(--ink-3)",  glyph:"{}"  }
+};
+var TYPE_OPTIONS = ["uuid", "string", "string[]", "decimal", "float", "bool", "timestamp", "date", "datetime", "enum", "struct"];
+
 function AddNodeFlow({ onClose }) {
   var [step, setStep] = useState(1);
 
@@ -10043,6 +10060,45 @@ function AddNodeFlow({ onClose }) {
   }, [step]);
   var [properties, setProperties] = useState([]);
   var [selectedTemplate, setSelectedTemplate] = useState(null);
+  var [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+
+  // Inline type picker for the Review & edit fields table. Per-row open state
+  // is kept locally so each pill manages its own popover.
+  function TypePicker({ value, onChange }) {
+    var [open, setOpen] = useState(false);
+    var meta = TYPE_META[value] || TYPE_META.string;
+    return (
+      <div style={{ position:"relative" }}>
+        <button onClick={function(){ setOpen(function(o){ return !o; }); }}
+          style={{ display:"flex", alignItems:"center", gap:7, width:"100%", padding:"5px 8px", border:"1px solid var(--line)", borderRadius:6, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.5)" }}>
+          <span style={{ minWidth:22, height:18, padding:"0 5px", borderRadius:4, background:meta.color, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{meta.glyph}</span>
+          <span style={{ flex:1, fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)" }}>{value}</span>
+          <span style={{ color:"var(--ink-3)", fontSize:9, fontFamily:"JetBrains Mono" }}>▾</span>
+        </button>
+        {open && (
+          <>
+            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setOpen(false); }} />
+            <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:8, boxShadow:"0 10px 28px rgba(0,0,0,0.14)", padding:4, minWidth:150, maxHeight:280, overflowY:"auto" }}>
+              {TYPE_OPTIONS.map(function(t){
+                var m = TYPE_META[t] || TYPE_META.string;
+                var isSel = value === t;
+                return (
+                  <button key={t} onClick={function(){ onChange(t); setOpen(false); }}
+                    style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"5px 8px", borderRadius:5, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
+                    onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                    onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+                    <span style={{ minWidth:24, height:18, padding:"0 5px", borderRadius:4, background:m.color, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, flexShrink:0 }}>{m.glyph}</span>
+                    <span style={{ flex:1, fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)" }}>{t}</span>
+                    {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:11 }}>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
   var [uploadedFileName, setUploadedFileName] = useState("");
   var [parseStatus, setParseStatus] = useState("idle"); // idle / parsing / done
   var [parseModel, setParseModel] = useState("claude-3.5-sonnet");
@@ -10215,7 +10271,7 @@ function AddNodeFlow({ onClose }) {
           <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)" }}>✕</button>
         </div>
 
-        <div style={{ flex:1, display:"grid", gridTemplateColumns:"240px minmax(0, 1fr) 320px", minHeight:0 }}>
+        <div style={{ flex:1, display:"grid", gridTemplateColumns:"240px minmax(0, 1fr)", minHeight:0 }}>
 
           {/* SIDEBAR */}
           <div style={{ background:"var(--panel-2)", borderRight:"1px solid var(--line)", padding:"20px 14px", display:"flex", flexDirection:"column", gap:4, overflowY:"auto" }}>
@@ -10400,27 +10456,66 @@ function AddNodeFlow({ onClose }) {
                   </div>
                 </div>
 
-                {/* TEMPLATE MODE — clean dropdown selector */}
-                {propMode === "template" && (
-                  <div style={{ padding:"16px 18px", border:"1px solid var(--line)", borderRadius:10, background:"var(--panel)" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                      <label style={Object.assign({}, lbl, { marginBottom:0, flexShrink:0 })}>TEMPLATE</label>
-                      <select value={selectedTemplate || ""} onChange={function(e){ if (e.target.value) applyTemplate(e.target.value); }}
-                        style={Object.assign({}, inp, { maxWidth:420, fontSize:13.5 })}>
-                        <option value="">— pick a template —</option>
-                        {NODE_TEMPLATES.map(function(t){
-                          return <option key={t.id} value={t.id}>{t.name + " · " + t.brief + " (" + t.properties.length + " fields)"}</option>;
-                        })}
-                      </select>
-                      {selectedTemplate && (
-                        <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--green)", display:"flex", alignItems:"center", gap:5 }}>
-                          <span style={{ fontWeight:700 }}>✓</span>
-                          {NODE_TEMPLATES.find(function(t){ return t.id === selectedTemplate; }).properties.length + " fields applied"}
-                        </span>
-                      )}
+                {/* TEMPLATE MODE — custom rich dropdown */}
+                {propMode === "template" && (function(){
+                  var selT = NODE_TEMPLATES.find(function(t){ return t.id === selectedTemplate; });
+                  return (
+                    <div>
+                      <label style={lbl}>TEMPLATE</label>
+                      <div style={{ position:"relative" }}>
+                        <button onClick={function(){ setTemplatePickerOpen(function(o){ return !o; }); }}
+                          style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid " + (selT ? "var(--ink-2)" : "var(--line)"), borderRadius:9, background: selT ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow: selT ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+                          {selT ? (
+                            <>
+                              <span style={{ width:34, height:34, borderRadius:7, background:"var(--blue-fill)", color:"var(--blue)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0 }}>{selT.icon || selT.name.slice(0,2).toUpperCase()}</span>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{selT.name}</div>
+                                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selT.brief}</div>
+                              </div>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:"var(--green-fill)", color:"var(--green)", fontWeight:700, letterSpacing:"0.4px" }}>{selT.properties.length + " FIELDS"}</span>
+                              <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>▾</span>
+                            </>
+                          ) : (
+                            <>
+                              <span style={{ width:34, height:34, borderRadius:7, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>+</span>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontSize:14, color:"var(--ink-3)" }}>Pick a template</div>
+                                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>Start with a curated schema</div>
+                              </div>
+                              <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>▾</span>
+                            </>
+                          )}
+                        </button>
+                        {templatePickerOpen && (
+                          <>
+                            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setTemplatePickerOpen(false); }} />
+                            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:440, overflowY:"auto" }}>
+                              {NODE_TEMPLATES.map(function(t, i){
+                                var isSel = selectedTemplate === t.id;
+                                return (
+                                  <button key={t.id} onClick={function(){ applyTemplate(t.id); setTemplatePickerOpen(false); }}
+                                    style={{ display:"flex", alignItems:"flex-start", gap:12, width:"100%", padding:"10px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < NODE_TEMPLATES.length-1 ? 2 : 0 }}
+                                    onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                                    onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+                                    <span style={{ width:32, height:32, borderRadius:6, background:"var(--blue-fill)", color:"var(--blue)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1, fontFamily:"JetBrains Mono", fontSize:10.5, fontWeight:700 }}>{t.icon || t.name.slice(0,2).toUpperCase()}</span>
+                                    <div style={{ flex:1, minWidth:0 }}>
+                                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                                        <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{t.name}</span>
+                                        <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", fontWeight:600, letterSpacing:"0.3px" }}>{t.properties.length + " FIELDS"}</span>
+                                      </div>
+                                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3, lineHeight:1.45 }}>{t.brief}</div>
+                                    </div>
+                                    {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* SAMPLE PARSE MODE */}
                 {propMode === "sample" && (
@@ -10463,11 +10558,33 @@ function AddNodeFlow({ onClose }) {
                 {/* SPREADSHEET MODE */}
                 {propMode === "spreadsheet" && (
                   <div>
-                    <label style={lbl}>UPLOAD A SPREADSHEET</label>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+                      <label style={Object.assign({}, lbl, { marginBottom:0 })}>UPLOAD A SPREADSHEET</label>
+                      <button onClick={function(){
+                        var csv = "field_name,type,required,indexed,pii,description\n" +
+                                  "id,uuid,true,true,false,Primary identifier\n" +
+                                  "name,string,true,true,false,Display name\n" +
+                                  "email,string,true,false,true,Primary contact email\n" +
+                                  "status,enum,false,false,false,Status code (active|inactive)\n" +
+                                  "created_at,datetime,true,true,false,Record creation timestamp\n" +
+                                  "amount,decimal,false,false,false,Monetary amount\n";
+                        var blob = new Blob([csv], { type:"text/csv;charset=utf-8" });
+                        var url = URL.createObjectURL(blob);
+                        var a = document.createElement("a");
+                        a.href = url; a.download = "node-property-template.csv";
+                        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                        setTimeout(function(){ URL.revokeObjectURL(url); }, 100);
+                      }} className="btn-ghost" style={{ fontSize:11, display:"inline-flex", alignItems:"center", gap:6, padding:"4px 10px" }}>
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3 V11" /><polyline points="5 8 8 11 11 8" /><line x1="3" y1="14" x2="13" y2="14" /></svg>
+                        Download template
+                      </button>
+                    </div>
                     {!uploadedFileName ? (
                       <div onClick={simulateUpload}
                         style={{ border:"2px dashed var(--line)", borderRadius:10, padding:"36px 20px", textAlign:"center", cursor:"pointer", background:"var(--panel)" }}>
-                        <div style={{ width:42, height:42, borderRadius:10, background:"var(--chip)", color:"var(--ink-2)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:18, fontWeight:700, margin:"0 auto 10px" }}>S</div>
+                        <div style={{ width:42, height:42, borderRadius:10, background:"var(--green-fill)", color:"var(--green)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}>
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="1.5"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="4" x2="10" y2="20"/></svg>
+                        </div>
                         <div style={{ fontSize:14, color:"var(--ink)", fontWeight:500, marginBottom:5 }}>Drop a CSV or Excel file</div>
                         <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", lineHeight:1.6 }}>We'll read the header row and a sample of values to auto-detect types</div>
                       </div>
@@ -10511,9 +10628,7 @@ function AddNodeFlow({ onClose }) {
                             {p.confidence && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color: p.confidence >= 0.9 ? "var(--green)" : "var(--gold)", flexShrink:0, fontWeight:700 }} title={"LLM confidence " + p.confidence}>{Math.round(p.confidence * 100) + "%"}</span>}
                             {p.detectedFrom && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", flexShrink:0 }} title={p.detectedFrom}>↩</span>}
                           </div>
-                          <select value={p.type} onChange={function(e){ updateProp(i, "type", e.target.value); }} style={Object.assign({}, inp, { padding:"6px 8px", fontSize:11.5, fontFamily:"JetBrains Mono" })}>
-                            <option value="string">string</option><option value="string[]">string[]</option><option value="uuid">uuid</option><option value="decimal">decimal</option><option value="float">float</option><option value="bool">bool</option><option value="timestamp">timestamp</option><option value="date">date</option><option value="enum">enum</option><option value="struct">struct</option>
-                          </select>
+                          <TypePicker value={p.type} onChange={function(v){ updateProp(i, "type", v); }} />
                           <input value={p.description || ""} onChange={function(e){ updateProp(i, "description", e.target.value); }} placeholder="optional" style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12 })} />
                           <input type="checkbox" checked={isPk} onChange={function(e){ if (e.target.checked) setPkField(p.name); else if (isPk) setPkField(""); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
                           <input type="checkbox" checked={p.required || false} onChange={function(e){ updateProp(i, "required", e.target.checked); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
@@ -10812,52 +10927,6 @@ function AddNodeFlow({ onClose }) {
 
           </div>
 
-          {/* RIGHT PREVIEW */}
-          <div style={{ background:"var(--panel-2)", borderLeft:"1px solid var(--line)", padding:"20px 18px", overflowY:"auto", display:"flex", flexDirection:"column", gap:18 }}>
-            <div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>NODE PREVIEW</div>
-              <div style={{ padding:"16px 14px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:6, display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
-                <NodePreview size={52} />
-                <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{name || "Untitled"}</div>
-                <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 7px", borderRadius:4, background:catDef.fill, color:catDef.color, fontWeight:700, letterSpacing:"0.5px", textTransform:"uppercase" }}>{catDef.label}</span>
-              </div>
-            </div>
-            <div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>CYPHER</div>
-              <pre style={{ fontFamily:"JetBrains Mono", fontSize:11, color:catDef.color, margin:0, padding:"10px 12px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:6, whiteSpace:"pre-wrap", lineHeight:1.55 }}>
-                {"CREATE NODE TYPE :" + (name.replace(/\s/g,"") || "?") + "\n  KIND " + (shape === "agent" ? "AGENT" : shape === "source" ? "SOURCE" : "ENTITY") + "\n  PRIMARY KEY (" + (pkField || "?") + ")" + (naturalKeys.length ? "\n  NATURAL KEY (" + naturalKeys.join(", ") + ")" : "")}
-              </pre>
-            </div>
-            <div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>DOWNSTREAM IMPACT</div>
-              <div style={{ padding:"14px 14px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:6 }}>
-                <div style={{ display:"flex", alignItems:"baseline", gap:10 }}>
-                  <div style={{ fontFamily:"Instrument Serif", fontSize:32, color:"var(--ink)", lineHeight:1 }}>0</div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:11.5, color:"var(--ink-2)", lineHeight:1.4 }}>surfaces will pick this up</div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", marginTop:2 }}>on publish to draft</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            {properties.length > 0 && (
-              <div>
-                <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>SCHEMA SNAPSHOT</div>
-                <div style={{ padding:"10px 12px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:6, maxHeight:280, overflowY:"auto" }}>
-                  {properties.map(function(p, i){
-                    return (
-                      <div key={i} style={{ display:"flex", alignItems:"center", gap:6, padding:"3px 0", fontFamily:"JetBrains Mono", fontSize:10.5 }}>
-                        {p.name === pkField && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"0 4px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700 }}>PK</span>}
-                        <code style={{ color:"var(--ink-2)", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</code>
-                        <span style={{ color:"var(--ink-3)" }}>{p.type}</span>
-                        {p.pii && <span style={{ color:"var(--coral)", fontWeight:700, fontSize:8.5 }}>PII</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* FOOTER */}
