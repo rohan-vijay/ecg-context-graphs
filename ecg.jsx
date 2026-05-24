@@ -12460,13 +12460,8 @@ function GraphLandingEmpty({ onCreate, onBack }) {
 
       {/* Centre hero */}
       <div style={{ position:"relative", zIndex:2, flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"40px 24px" }}>
-        <div style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"5px 12px", borderRadius:999, background:"var(--panel)", border:"1px solid var(--line)", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", letterSpacing:"0.8px", marginBottom:22 }}>
-          <span style={{ width:6, height:6, borderRadius:"50%", background:"var(--blue)" }} />
-          WORKSPACE · 0 GRAPHS
-        </div>
-
         <h1 style={{ fontFamily:"Geist, system-ui, sans-serif", fontWeight:600, fontSize:"clamp(40px, 5.4vw, 64px)", lineHeight:1.08, color:"var(--ink)", margin:0, letterSpacing:"-0.022em", textAlign:"center", maxWidth:980 }}>
-          Build your enterprise context graph
+          Build your enterprise<br/>context graph
         </h1>
 
         <p style={{ fontFamily:"Geist, system-ui, sans-serif", fontSize:"clamp(14px, 1.25vw, 17px)", color:"var(--ink-2)", lineHeight:1.6, margin:"20px 0 0", maxWidth:680, textAlign:"center" }}>
