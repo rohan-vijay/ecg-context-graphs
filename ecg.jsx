@@ -1659,6 +1659,7 @@ function GlobalEdgesView() {
   const [kindFilter, setKindFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState({ col: "label", dir: "asc" });
+  const [newEdgeOpen, setNewEdgeOpen] = useState(false);
 
   const allEdges = useMemo(() => {
     return EDGES.map((e, i) => {
@@ -1708,9 +1709,11 @@ function GlobalEdgesView() {
         </div>
         <div className="nv-head-right">
           <button className="btn-ghost">Bulk export</button>
-          <button className="btn-dark">+ New edge type</button>
+          <button className="btn-dark" onClick={() => setNewEdgeOpen(true)}>+ New edge type</button>
         </div>
       </div>
+
+      {newEdgeOpen && <NewEdgeFlow onClose={() => setNewEdgeOpen(false)} onCreate={() => setNewEdgeOpen(false)} />}
 
       <div className="nv-chips-row">
         <div className="nv-chips">
@@ -11635,6 +11638,601 @@ function NewGraphFlow({ onClose, onCreate }) {
             {step < 5
               ? <button className="btn-dark" disabled={!canContinue()} onClick={function(){ setStep(function(s){ return s + 1; }); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Continue →</button>
               : <button className="btn-dark" disabled={!canContinue()} onClick={function(){ if (onCreate) onCreate({ name: graphName }); onClose(); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Create graph ↵</button>
+            }
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW EDGE FLOW — create a new edge type (relationship) in the schema
+// Mirrors NewGraphFlow's shell: 5 steps, sidebar left, content right, no rail.
+// Steps: Basics → Population → Properties → Governance → Review
+// Population is the conceptually-novel step — it asks where edge instances
+// come from. Four mutually-exclusive options keep it concrete (no Cypher).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function NewEdgeFlow({ onClose, onCreate, fromNode }) {
+  var [step, setStep]                 = useState(1);
+  var [label, setLabel]               = useState("");
+  var [desc, setDesc]                 = useState("");
+  var [fromId, setFromId]             = useState(fromNode ? fromNode.id : null);
+  var [toId, setToId]                 = useState(null);
+  var [cardinality, setCardinality]   = useState("1:N");
+  var [inverseLabel, setInverseLabel] = useState("");
+  var [requiredAtFrom, setRequiredAtFrom] = useState(false);
+  var [symmetric, setSymmetric]       = useState(false);
+  // Population
+  var [populationKind, setPopulationKind] = useState(null);
+  var [popSourceId, setPopSourceId]   = useState(null);
+  var [popFromColumn, setPopFromColumn] = useState("");
+  var [popToColumn, setPopToColumn]   = useState("");
+  var [popRuleText, setPopRuleText]   = useState("");
+  var [popAgentId, setPopAgentId]     = useState(null);
+  // Properties
+  var [edgeProps, setEdgeProps]       = useState([]);
+  // Governance
+  var [owner, setOwner]               = useState("morgan.lee");
+  var [permsRead,  setPermsRead]      = useState([{ kind:"group", id:"everyone",      label:"Everyone in org" }]);
+  var [permsWrite, setPermsWrite]     = useState([{ kind:"group", id:"data-platform", label:"data-platform team" }]);
+  var [permsAdmin, setPermsAdmin]     = useState([{ kind:"user",  id:"morgan.lee",    label:"Morgan Lee (you)" }]);
+
+  var stepNames = ["Basics", "Population", "Properties", "Governance", "Review"];
+
+  var nodeOptions   = NODES.filter(function(n){ return n.type === "entity"; });
+  var sourceOptions = NODES.filter(function(n){ return n.type === "source"; });
+  var agentOptions  = NODES.filter(function(n){ return n.type === "agent"; });
+  var fromN = nodeOptions.find(function(n){ return n.id === fromId; });
+  var toN   = nodeOptions.find(function(n){ return n.id === toId; });
+
+  function canContinue() {
+    if (step === 1) return label.trim().length >= 3 && /^[A-Z_]+$/.test(label.trim()) && !!fromId && !!toId;
+    if (step === 2) {
+      if (!populationKind) return false;
+      if (populationKind === "source")   return !!popSourceId && popFromColumn.trim().length > 0 && popToColumn.trim().length > 0;
+      if (populationKind === "inferred") return popRuleText.trim().length >= 8;
+      if (populationKind === "agent")    return !!popAgentId;
+      return true; // manual
+    }
+    if (step === 4) return permsAdmin.length > 0;
+    return true;
+  }
+
+  var inp = { border:"1px solid var(--line)", borderRadius:7, padding:"8px 11px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", outline:"none", boxSizing:"border-box", width:"100%", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" };
+  var lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:6 };
+
+  var DIRECTORY = [
+    { kind:"group", id:"everyone",        label:"Everyone in org" },
+    { kind:"group", id:"data-platform",   label:"data-platform team" },
+    { kind:"group", id:"customer-ops",    label:"customer-ops team" },
+    { kind:"group", id:"finance-ops",     label:"finance-ops team" },
+    { kind:"group", id:"engineering",     label:"engineering team" },
+    { kind:"group", id:"security",        label:"security team" },
+    { kind:"user",  id:"morgan.lee",      label:"Morgan Lee" },
+    { kind:"user",  id:"ramin.k",         label:"Ramin K" },
+    { kind:"user",  id:"jordan.s",        label:"Jordan S" }
+  ];
+
+  // Local node-picker: shows label + state colour. Used for From / To.
+  function NodePicker({ value, onChange, placeholder, disabled }) {
+    var [open, setOpen] = useState(false);
+    var sel = nodeOptions.find(function(n){ return n.id === value; });
+    function dot(n){ var c = n.state === "incident" ? "var(--coral)" : n.state === "risk" ? "var(--gold)" : n.state === "signal" ? "var(--purple)" : "var(--blue)"; return c; }
+    return (
+      <div style={{ position:"relative" }}>
+        <button disabled={disabled} onClick={function(){ if (!disabled) setOpen(function(o){ return !o; }); }}
+          style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", border:"1px solid " + (sel ? "var(--ink-2)" : "var(--line)"), borderRadius:8, background: disabled ? "var(--panel-2)" : sel ? "var(--bg-canvas)" : "var(--panel)", cursor: disabled ? "default" : "pointer", fontFamily:"inherit", textAlign:"left", opacity: disabled ? 0.85 : 1 }}>
+          {sel ? (
+            <>
+              <span style={{ width:10, height:10, borderRadius:"50%", background: dot(sel), flexShrink:0 }} />
+              <span style={{ flex:1, fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{sel.label}</span>
+              {disabled && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", letterSpacing:"0.5px" }}>LOCKED</span>}
+              {!disabled && <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>▾</span>}
+            </>
+          ) : (
+            <>
+              <span style={{ flex:1, fontSize:13.5, color:"var(--ink-3)" }}>{placeholder}</span>
+              <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>▾</span>
+            </>
+          )}
+        </button>
+        {open && (
+          <>
+            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setOpen(false); }} />
+            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:5, maxHeight:300, overflowY:"auto" }}>
+              {nodeOptions.map(function(n){
+                var isSel = n.id === value;
+                return (
+                  <button key={n.id} onClick={function(){ onChange(n.id); setOpen(false); }}
+                    style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"8px 10px", borderRadius:6, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", fontSize:13, color:"var(--ink)" }}
+                    onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                    onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+                    <span style={{ width:10, height:10, borderRadius:"50%", background: dot(n), flexShrink:0 }} />
+                    <span style={{ flex:1 }}>{n.label}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{n.instances}</span>
+                    {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:12 }}>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // Permission row (same RBAC pattern as NewGraphFlow)
+  function PermRow({ k, label, list, setList, tone, desc }) {
+    var [open, setOpen] = useState(false);
+    function toggle(entry){
+      setList(function(arr){
+        var exists = arr.find(function(x){ return x.kind === entry.kind && x.id === entry.id; });
+        if (exists) return arr.filter(function(x){ return !(x.kind === entry.kind && x.id === entry.id); });
+        return arr.concat([entry]);
+      });
+    }
+    return (
+      <div style={{ padding:"12px 16px", borderBottom:"1px solid var(--line-2)" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:7 }}>
+          <div>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 7px", borderRadius:4, background:tone.bg, color:tone.fg, fontWeight:700, letterSpacing:"0.5px" }}>{k.toUpperCase()}</span>
+              <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{label}</span>
+            </div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3 }}>{desc}</div>
+          </div>
+          <div style={{ position:"relative" }}>
+            <button onClick={function(){ setOpen(function(o){ return !o; }); }} className="btn-ghost" style={{ fontSize:11.5 }}>+ Add</button>
+            {open && (
+              <>
+                <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setOpen(false); }} />
+                <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 8px 28px rgba(0,0,0,0.14)", padding:5, minWidth:240, maxHeight:280, overflowY:"auto" }}>
+                  {DIRECTORY.map(function(d){
+                    var selected = list.find(function(x){ return x.kind === d.kind && x.id === d.id; });
+                    return (
+                      <button key={d.kind + "_" + d.id} onClick={function(){ toggle(d); }}
+                        style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"6px 8px", borderRadius:5, border:"none", background: selected ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", fontSize:12, color:"var(--ink)", textAlign:"left" }}>
+                        <span style={{ width:16, height:16, borderRadius: d.kind === "user" ? "50%" : 3, background: d.kind === "user" ? "var(--ink-2)" : "var(--ink-3)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:8, fontWeight:700, flexShrink:0 }}>{d.kind === "user" ? d.label.split(" ").map(function(s){ return s[0]; }).join("").slice(0,2) : "G"}</span>
+                        <span style={{ flex:1 }}>{d.label}</span>
+                        {selected && <span style={{ color:"var(--green)", fontWeight:700 }}>✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+        <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+          {list.length === 0 && <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", fontStyle:"italic" }}>nobody</span>}
+          {list.map(function(e, i){
+            return (
+              <span key={i} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 5px 3px 7px", borderRadius:5, background:"var(--chip)", border:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)" }}>
+                <span style={{ width:12, height:12, borderRadius: e.kind === "user" ? "50%" : 3, background: e.kind === "user" ? "var(--ink-2)" : "var(--ink-3)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:7.5, fontWeight:700 }}>{e.kind === "user" ? e.label.split(" ").map(function(s){ return s[0]; }).join("").slice(0,2) : "G"}</span>
+                {e.label}
+                <button onClick={function(){ setList(function(arr){ return arr.filter(function(x){ return !(x.kind === e.kind && x.id === e.id); }); }); }} style={{ background:"none", border:"none", color:"var(--ink-3)", cursor:"pointer", padding:0, fontSize:12, lineHeight:1 }}>×</button>
+              </span>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ── POPULATION OPTIONS ────────────────────────────────────────────────
+  var populationOptions = [
+    { id:"source", title:"From a data source",   tag:"RECOMMENDED",
+      desc:"Join two tables. Pick the system that already has this relationship and tell us which column on each side identifies it.",
+      best:"Best when the relationship is already represented as a foreign key in your data (e.g. orders.customer_id → customers.id)." },
+    { id:"inferred", title:"Inferred by a rule", tag:"",
+      desc:"Create the edge whenever a plain-English condition is met. We translate the rule into a query at sync time.",
+      best:"Best when the relationship can be computed from existing properties of the two nodes." },
+    { id:"agent", title:"Maintained by an agent", tag:"AGENT",
+      desc:"An agent watches your data and adds or removes edges as things change.",
+      best:"Best when the relationship needs ongoing judgement — risk attribution, identity resolution, semantic links." },
+    { id:"manual", title:"Created manually",      tag:"",
+      desc:"Admins and stewards add or remove instances through the catalog UI. The graph holds no automatic logic.",
+      best:"Best when the relationship is curated by humans — canonical mappings, golden-record overrides, exception lists." }
+  ];
+
+  // ── COMMON EDGE PROPERTY EXAMPLES ─────────────────────────────────────
+  var EDGE_PROPERTY_TEMPLATES = [
+    { name:"weight",         type:"number",   hint:"Strength of the relationship (0–1)" },
+    { name:"confidence",     type:"number",   hint:"How sure the source/agent is" },
+    { name:"since",          type:"datetime", hint:"When the relationship started" },
+    { name:"until",          type:"datetime", hint:"When the relationship ended (null = active)" },
+    { name:"source_system",  type:"string",   hint:"Which system asserted the edge" },
+    { name:"is_primary",     type:"boolean",  hint:"Is this the canonical/primary link" }
+  ];
+
+  function addProp(template){
+    setEdgeProps(function(arr){ return arr.concat([{ name: template.name, type: template.type, required: false }]); });
+  }
+  function updateProp(idx, patch){
+    setEdgeProps(function(arr){ return arr.map(function(p, i){ return i === idx ? Object.assign({}, p, patch) : p; }); });
+  }
+  function removeProp(idx){
+    setEdgeProps(function(arr){ return arr.filter(function(_, i){ return i !== idx; }); });
+  }
+
+  return (
+    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
+      onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ width:"92vw", maxWidth:1180, height:"94vh", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
+
+        {/* HEADER */}
+        <div style={{ flexShrink:0, height:56, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 22px", background:"var(--panel)" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:20, color:"var(--ink)" }}>{label ? ":" + label : "New edge type"}</div>
+            {fromN && toN && (
+              <div style={{ display:"flex", alignItems:"center", gap:6, fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>
+                <span>{fromN.label}</span>
+                <span style={{ color:"var(--ink-4)" }}>—{cardinality}→</span>
+                <span>{toN.label}</span>
+              </div>
+            )}
+          </div>
+          <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)" }}>✕</button>
+        </div>
+
+        <div style={{ flex:1, display:"grid", gridTemplateColumns:"240px minmax(0, 1fr)", minHeight:0 }}>
+
+          {/* SIDEBAR */}
+          <div style={{ background:"var(--panel-2)", borderRight:"1px solid var(--line)", padding:"20px 14px", display:"flex", flexDirection:"column", gap:4, overflowY:"auto" }}>
+            {stepNames.map(function(nm, i){
+              var n = i + 1;
+              var isOn = step === n;
+              var isDone = step > n;
+              var sub = n === 1 ? (label && fromN && toN ? ":" + label : "Label & endpoints")
+                      : n === 2 ? (populationKind ? (populationOptions.find(function(o){return o.id===populationKind;}) || {}).title : "How instances are created")
+                      : n === 3 ? (edgeProps.length === 0 ? "None — optional" : edgeProps.length + " propert" + (edgeProps.length === 1 ? "y" : "ies"))
+                      : n === 4 ? "Owner & access"
+                      : "Publish";
+              return (
+                <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
+                  style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", alignItems:"center" }}>
+                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize: isDone ? 13 : 12, fontWeight:700, flexShrink:0, lineHeight:1 }}>{isDone ? "✓" : n}</span>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400, lineHeight:1.2 }}>{nm}</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{sub}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* CENTER */}
+          <div style={{ padding:"24px 32px 28px", overflowY:"auto" }}>
+            <div style={{ marginBottom:20 }}>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / 5"}</div>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:28, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>{stepNames[step-1]}</div>
+              <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55 }}>
+                {step === 1 && "Name the relationship and pick the two node types it connects. The label reads like a verb — :WORKS_AT, :BILLED_AS, :OWNS."}
+                {step === 2 && "Where do edge instances actually come from? Pick one — we'll wire up the right machinery so the graph stays current as your data changes."}
+                {step === 3 && "Optional. Add properties that vary per edge — like a weight, a confidence score, or when the relationship started. Skip if every instance is identical."}
+                {step === 4 && "Who owns the edge type and who can use it. Same model as nodes and graphs."}
+                {step === 5 && "Last look before this edge type becomes available to agents, queries and the schema."}
+              </div>
+            </div>
+
+            {/* STEP 1 — Basics */}
+            {step === 1 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+                  <div>
+                    <label style={lbl}>LABEL <span style={{ color:"var(--coral)", marginLeft:4 }}>required</span></label>
+                    <div style={{ position:"relative" }}>
+                      <span style={{ position:"absolute", left:11, top:"50%", transform:"translateY(-50%)", fontFamily:"JetBrains Mono", fontSize:13, color:"var(--ink-4)", pointerEvents:"none" }}>:</span>
+                      <input value={label} onChange={function(e){ setLabel(e.target.value.toUpperCase().replace(/[^A-Z_]/g, "")); }} placeholder="WORKS_AT" style={Object.assign({}, inp, { paddingLeft:22, fontFamily:"JetBrains Mono" })} autoFocus />
+                    </div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:5 }}>UPPER_SNAKE_CASE · 3–32 chars</div>
+                  </div>
+                  <div>
+                    <label style={lbl}>CARDINALITY</label>
+                    <div style={{ display:"flex", gap:6 }}>
+                      {[
+                        { v:"1:1", h:"One on each side" },
+                        { v:"1:N", h:"One source, many targets" },
+                        { v:"N:1", h:"Many sources, one target" },
+                        { v:"N:M", h:"Many on each side" }
+                      ].map(function(o){
+                        var isOn = cardinality === o.v;
+                        return <button key={o.v} title={o.h} onClick={function(){ setCardinality(o.v); }}
+                          style={{ flex:1, padding:"8px 0", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--panel)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontSize:12, fontFamily:"JetBrains Mono", cursor:"pointer", fontWeight:600 }}>{o.v}</button>;
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={lbl}>DESCRIPTION <span style={{ color:"var(--ink-4)", marginLeft:4, fontWeight:400 }}>optional</span></label>
+                  <textarea value={desc} onChange={function(e){ setDesc(e.target.value); }} rows={2} placeholder="What does this edge represent? Read it both directions out loud — does it work?" style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.55 })} />
+                </div>
+
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 60px 1fr", gap:12, alignItems:"end" }}>
+                  <div>
+                    <label style={lbl}>FROM <span style={{ color:"var(--coral)", marginLeft:4 }}>required</span></label>
+                    <NodePicker value={fromId} onChange={setFromId} placeholder="— pick the source node —" disabled={!!fromNode} />
+                  </div>
+                  <div style={{ paddingBottom:10, textAlign:"center", fontFamily:"JetBrains Mono", fontSize:14, color:"var(--ink-3)" }}>—{cardinality}→</div>
+                  <div>
+                    <label style={lbl}>TO <span style={{ color:"var(--coral)", marginLeft:4 }}>required</span></label>
+                    <NodePicker value={toId} onChange={setToId} placeholder="— pick the target node —" />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={lbl}>INVERSE LABEL <span style={{ color:"var(--ink-4)", marginLeft:4, fontWeight:400 }}>optional</span></label>
+                  <div style={{ position:"relative" }}>
+                    <span style={{ position:"absolute", left:11, top:"50%", transform:"translateY(-50%)", fontFamily:"JetBrains Mono", fontSize:13, color:"var(--ink-4)", pointerEvents:"none" }}>:</span>
+                    <input value={inverseLabel} onChange={function(e){ setInverseLabel(e.target.value.toUpperCase().replace(/[^A-Z_]/g, "")); }} placeholder="HAS_EMPLOYEE" style={Object.assign({}, inp, { paddingLeft:22, fontFamily:"JetBrains Mono", maxWidth:340 })} />
+                  </div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:5 }}>Lets queries traverse the reverse direction by name without recomputing.</div>
+                </div>
+
+                <div>
+                  <label style={lbl}>FLAGS</label>
+                  <div style={{ display:"flex", gap:10 }}>
+                    {[
+                      { v:requiredAtFrom, set:setRequiredAtFrom, l:"Required at From", d:"Every source instance must have at least one of these edges." },
+                      { v:symmetric,      set:setSymmetric,      l:"Symmetric / undirected", d:"Direction doesn't matter — useful for peer relationships." }
+                    ].map(function(o, i){
+                      return (
+                        <label key={i} title={o.d}
+                          style={{ flex:1, display:"flex", alignItems:"center", gap:8, padding:"10px 12px", border:"1px solid " + (o.v ? "var(--ink-2)" : "var(--line)"), borderRadius:7, background: o.v ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer" }}>
+                          <input type="checkbox" checked={o.v} onChange={function(){ o.set(!o.v); }} style={{ accentColor:"var(--ink)", width:14, height:14 }} />
+                          <div>
+                            <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)" }}>{o.l}</div>
+                            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:2 }}>{o.d}</div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 2 — Population */}
+            {step === 2 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  {populationOptions.map(function(o){
+                    var isOn = populationKind === o.id;
+                    var tagColor = o.tag === "RECOMMENDED" ? "var(--green)" : o.tag === "AGENT" ? "var(--purple)" : "var(--ink-3)";
+                    return (
+                      <div key={o.id} onClick={function(){ setPopulationKind(o.id); }}
+                        style={{ padding:"14px 16px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:10, background: isOn ? "var(--bg-canvas)" : "var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", cursor:"pointer" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:5 }}>
+                          <span style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{o.title}</span>
+                          {o.tag && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px", borderRadius:3, border:"1px solid " + tagColor, color:tagColor, fontWeight:700, letterSpacing:"0.5px" }}>{o.tag}</span>}
+                          {isOn && <span style={{ marginLeft:"auto", color:"var(--green)", fontWeight:700, fontSize:14 }}>✓</span>}
+                        </div>
+                        <div style={{ fontSize:12.5, color:"var(--ink-2)", lineHeight:1.5 }}>{o.desc}</div>
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:6, lineHeight:1.5 }}>{o.best}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Inline config for the selected method */}
+                {populationKind === "source" && (
+                  <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, padding:"16px 18px", boxShadow:"0 1px 0 var(--line-2)" }}>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:10 }}>Source &amp; join keys</div>
+                    <div style={{ marginBottom:12 }}>
+                      <label style={lbl}>SOURCE SYSTEM</label>
+                      <select value={popSourceId || ""} onChange={function(e){ setPopSourceId(e.target.value || null); }} style={inp}>
+                        <option value="">— pick a connected source —</option>
+                        {sourceOptions.map(function(s){ return <option key={s.id} value={s.id}>{s.label}</option>; })}
+                      </select>
+                    </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr auto 1fr", gap:12, alignItems:"end" }}>
+                      <div>
+                        <label style={lbl}>{(fromN ? fromN.label : "From") + " KEY"}</label>
+                        <input value={popFromColumn} onChange={function(e){ setPopFromColumn(e.target.value); }} placeholder="e.g. account_id" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono" })} />
+                      </div>
+                      <div style={{ paddingBottom:10, fontFamily:"JetBrains Mono", fontSize:13, color:"var(--ink-3)" }}>=</div>
+                      <div>
+                        <label style={lbl}>{(toN ? toN.label : "To") + " KEY"}</label>
+                        <input value={popToColumn} onChange={function(e){ setPopToColumn(e.target.value); }} placeholder="e.g. customer_id" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono" })} />
+                      </div>
+                    </div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:8, lineHeight:1.5 }}>
+                      One edge will be created for every row where these two columns match. Re-evaluated on each sync.
+                    </div>
+                  </div>
+                )}
+                {populationKind === "inferred" && (
+                  <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, padding:"16px 18px", boxShadow:"0 1px 0 var(--line-2)" }}>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:10 }}>Inference rule</div>
+                    <textarea value={popRuleText} onChange={function(e){ setPopRuleText(e.target.value); }} rows={3} placeholder={"e.g. When a " + (fromN ? fromN.label : "node") + "'s email_domain matches a " + (toN ? toN.label : "node") + "'s primary_domain, create an edge."} style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.55 })} />
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:8, lineHeight:1.5 }}>
+                      Write the rule in plain English. We'll translate it into a query on sync. You can refine it later from the edge detail page.
+                    </div>
+                  </div>
+                )}
+                {populationKind === "agent" && (
+                  <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, padding:"16px 18px", boxShadow:"0 1px 0 var(--line-2)" }}>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:10 }}>Maintaining agent</div>
+                    <select value={popAgentId || ""} onChange={function(e){ setPopAgentId(e.target.value || null); }} style={inp}>
+                      <option value="">— pick an agent —</option>
+                      {agentOptions.map(function(a){ return <option key={a.id} value={a.id}>{a.label}</option>; })}
+                    </select>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:8, lineHeight:1.5 }}>
+                      The agent will own the lifecycle of these edges — adding, removing and updating them as it sees fit.
+                    </div>
+                  </div>
+                )}
+                {populationKind === "manual" && (
+                  <div className="card" style={{ background:"var(--panel-2)", border:"1px dashed var(--line)", borderRadius:10, padding:"16px 18px" }}>
+                    <div style={{ fontSize:12.5, color:"var(--ink-2)", lineHeight:1.55 }}>
+                      No automatic logic. Anyone with <b>Write</b> access on this edge type will be able to add or remove instances from the catalog UI or via the API.
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* STEP 3 — Properties */}
+            {step === 3 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+                {edgeProps.length === 0 ? (
+                  <div style={{ padding:"20px 22px", border:"1px dashed var(--line)", borderRadius:10, background:"var(--panel-2)" }}>
+                    <div style={{ fontSize:13.5, color:"var(--ink-2)", lineHeight:1.55, marginBottom:6 }}>No properties yet — that's fine for most edges.</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", lineHeight:1.55 }}>Add a property only if every instance can carry a different value for it.</div>
+                  </div>
+                ) : (
+                  <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, overflow:"hidden" }}>
+                    <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
+                      <span style={{ fontSize:13.5, fontWeight:600 }}>Edge properties</span>
+                      <span className="card-head-sub">{edgeProps.length}</span>
+                    </div>
+                    <div>
+                      {edgeProps.map(function(p, i){
+                        return (
+                          <div key={i} style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr auto auto", gap:10, padding:"10px 18px", borderBottom: i < edgeProps.length-1 ? "1px solid var(--line-2)" : "none", alignItems:"center" }}>
+                            <input value={p.name} onChange={function(e){ updateProp(i, { name: e.target.value }); }} placeholder="property name" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12 })} />
+                            <select value={p.type} onChange={function(e){ updateProp(i, { type: e.target.value }); }} style={inp}>
+                              <option value="string">string</option>
+                              <option value="number">number</option>
+                              <option value="boolean">boolean</option>
+                              <option value="datetime">datetime</option>
+                              <option value="json">json</option>
+                            </select>
+                            <label style={{ display:"flex", alignItems:"center", gap:6, fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)" }}>
+                              <input type="checkbox" checked={p.required} onChange={function(){ updateProp(i, { required: !p.required }); }} style={{ accentColor:"var(--ink)", width:14, height:14 }} />
+                              REQUIRED
+                            </label>
+                            <button onClick={function(){ removeProp(i); }} style={{ background:"none", border:"none", color:"var(--ink-3)", cursor:"pointer", fontSize:16 }}>×</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:10 }}>Quick add — common edge properties</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                    {EDGE_PROPERTY_TEMPLATES.map(function(t){
+                      var already = edgeProps.find(function(p){ return p.name === t.name; });
+                      return (
+                        <button key={t.name} onClick={function(){ if (!already) addProp(t); }} disabled={!!already}
+                          style={{ textAlign:"left", padding:"10px 12px", border:"1px solid var(--line)", borderRadius:7, background: already ? "var(--panel-2)" : "var(--panel)", cursor: already ? "default" : "pointer", fontFamily:"inherit", opacity: already ? 0.5 : 1 }}>
+                          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                            <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, fontWeight:600, color:"var(--ink)" }}>{t.name}</span>
+                            <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-3)" }}>{t.type}</span>
+                          </div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:4, lineHeight:1.4 }}>{t.hint}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <button onClick={function(){ addProp({ name:"", type:"string" }); }} className="btn-ghost" style={{ alignSelf:"flex-start", padding:"8px 14px" }}>+ Add custom property</button>
+              </div>
+            )}
+
+            {/* STEP 4 — Governance */}
+            {step === 4 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
+                <div>
+                  <label style={lbl}>OWNER</label>
+                  <select value={owner} onChange={function(e){ setOwner(e.target.value); }} style={Object.assign({}, inp, { maxWidth:360 })}>
+                    <option value="morgan.lee">Morgan Lee (you · data-platform)</option>
+                    <option value="ramin.k">Ramin K · data-platform</option>
+                    <option value="jordan.s">Jordan S · customer-ops</option>
+                  </select>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:6, lineHeight:1.5 }}>Owner gets pinged when this edge type breaks, drifts, or needs review.</div>
+                </div>
+                <div>
+                  <label style={lbl}>WHO CAN USE THIS EDGE TYPE?</label>
+                  <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, overflow:"hidden" }}>
+                    <PermRow k="read"  label="Read"  list={permsRead}  setList={setPermsRead}  tone={{ bg:"var(--blue-fill)",  fg:"var(--blue)"  }} desc="Can see this edge type and traverse it in queries." />
+                    <PermRow k="write" label="Write" list={permsWrite} setList={setPermsWrite} tone={{ bg:"var(--green-fill)", fg:"var(--green)" }} desc="Can add or remove edge instances (manual edges) and modify properties." />
+                    <PermRow k="admin" label="Admin" list={permsAdmin} setList={setPermsAdmin} tone={{ bg:"var(--coral-fill)", fg:"var(--coral)" }} desc="Can edit the edge schema, population rule, and access policies." />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 5 — Review */}
+            {step === 5 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
+                <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, overflow:"hidden" }}>
+                  <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
+                    <span style={{ fontSize:14, fontWeight:600 }}>Summary</span>
+                    <span className="card-head-sub">{cardinality + " · " + (populationKind || "no population")}</span>
+                  </div>
+                  <div>
+                    {[
+                      { k:"LABEL",       v: label ? <span style={{ fontFamily:"JetBrains Mono" }}>{":" + label}</span> : <span style={{ color:"var(--coral)" }}>not set</span> },
+                      { k:"FROM → TO",   v: (fromN && toN) ? (fromN.label + "  —" + cardinality + "→  " + toN.label) : <span style={{ color:"var(--coral)" }}>endpoints missing</span> },
+                      { k:"INVERSE",     v: inverseLabel ? <span style={{ fontFamily:"JetBrains Mono" }}>{":" + inverseLabel}</span> : <span style={{ color:"var(--ink-4)" }}>—</span> },
+                      { k:"FLAGS",       v: [requiredAtFrom && "Required at From", symmetric && "Symmetric"].filter(Boolean).join(" · ") || <span style={{ color:"var(--ink-4)" }}>none</span> },
+                      { k:"POPULATION",  v: populationKind === "source"   ? "From source · " + ((sourceOptions.find(function(s){ return s.id === popSourceId; }) || {}).label || "—") + "  ·  " + popFromColumn + " = " + popToColumn
+                                            : populationKind === "inferred" ? "Inferred · " + (popRuleText.length > 80 ? popRuleText.slice(0,80) + "…" : popRuleText)
+                                            : populationKind === "agent"    ? "Agent · " + ((agentOptions.find(function(a){ return a.id === popAgentId; }) || {}).label || "—")
+                                            : populationKind === "manual"   ? "Manual — managed by stewards"
+                                            : <span style={{ color:"var(--coral)" }}>not chosen</span> },
+                      { k:"PROPERTIES",  v: edgeProps.length === 0 ? <span style={{ color:"var(--ink-4)" }}>none</span> : edgeProps.map(function(p, i){ return <span key={i} style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)", marginRight:4 }}>{p.name + ":" + p.type}</span>; }) },
+                      { k:"DESCRIPTION", v: desc || <span style={{ color:"var(--ink-4)" }}>—</span> },
+                      { k:"OWNER",       v: owner }
+                    ].map(function(row, i, arr){
+                      return (
+                        <div key={i} style={{ display:"grid", gridTemplateColumns:"170px 1fr", gap:14, padding:"10px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"baseline" }}>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>{row.k}</span>
+                          <span style={{ fontSize:13, color:"var(--ink)", textAlign:"right" }}>{row.v}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, overflow:"hidden" }}>
+                  <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
+                    <span style={{ fontSize:14, fontWeight:600 }}>Access</span>
+                    <span className="card-head-sub">{"read " + permsRead.length + " · write " + permsWrite.length + " · admin " + permsAdmin.length}</span>
+                  </div>
+                  <div>
+                    {[{ k:"READ", list:permsRead, tone:{ bg:"var(--blue-fill)", fg:"var(--blue)" } },{ k:"WRITE", list:permsWrite, tone:{ bg:"var(--green-fill)", fg:"var(--green)" } },{ k:"ADMIN", list:permsAdmin, tone:{ bg:"var(--coral-fill)", fg:"var(--coral)" } }].map(function(row, i, arr){
+                      return (
+                        <div key={i} style={{ display:"grid", gridTemplateColumns:"100px 1fr", gap:14, padding:"12px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"center" }}>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:row.tone.bg, color:row.tone.fg, fontWeight:700, letterSpacing:"0.5px", justifySelf:"start" }}>{row.k}</span>
+                          <div style={{ display:"flex", flexWrap:"wrap", gap:5, justifyContent:"flex-end" }}>
+                            {row.list.length === 0 ? <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)", fontStyle:"italic" }}>nobody</span> : row.list.map(function(e, j){
+                              return (
+                                <span key={j} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 7px", borderRadius:5, background:"var(--chip)", border:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>
+                                  <span style={{ width:12, height:12, borderRadius: e.kind === "user" ? "50%" : 3, background: e.kind === "user" ? "var(--ink-2)" : "var(--ink-3)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:7.5, fontWeight:700, flexShrink:0 }}>{e.kind === "user" ? e.label.split(" ").map(function(s){ return s[0]; }).join("").slice(0,2) : "G"}</span>
+                                  {e.label}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+
+        {/* FOOTER */}
+        <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
+          <button className="btn-ghost" onClick={function(){ if (step > 1) setStep(function(s){ return s - 1; }); }} disabled={step === 1} style={{ opacity: step === 1 ? 0.4 : 1 }}>← Back</button>
+          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of 5 · " + stepNames[step-1]}</span>
+          <div style={{ display:"flex", gap:8 }}>
+            <button className="btn-ghost" onClick={onClose}>Cancel</button>
+            {step < 5
+              ? <button className="btn-dark" disabled={!canContinue()} onClick={function(){ setStep(function(s){ return s + 1; }); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Continue →</button>
+              : <button className="btn-dark" disabled={!canContinue()} onClick={function(){ if (onCreate) onCreate({ label: label, from: fromN, to: toN }); onClose(); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Create edge type ↵</button>
             }
           </div>
         </div>
