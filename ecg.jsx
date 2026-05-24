@@ -9810,6 +9810,209 @@ var NODE_TEMPLATES = [
   }
 ];
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// SHARED IDENTITY DIRECTORY + AccessRow (formerly PermRow)
+// Enterprise-grade access picker used everywhere — Read/Write/Admin rows across
+// AddNodeFlow, NewGraphFlow, NewEdgeFlow. Sticky search, sectioned results
+// (Everyone / Teams / People), member counts on teams, titles on users.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var IDENTITY_DIRECTORY = {
+  special: { kind:"group", id:"everyone", label:"Everyone in org", desc:"All users in the workspace", count:482 },
+  groups: [
+    { kind:"group", id:"data-platform", label:"data-platform team", count:12 },
+    { kind:"group", id:"engineering",   label:"engineering team",   count:40 },
+    { kind:"group", id:"customer-ops",  label:"customer-ops team",  count:24 },
+    { kind:"group", id:"finance-ops",   label:"finance-ops team",   count:8  },
+    { kind:"group", id:"security",      label:"security team",      count:6  },
+    { kind:"group", id:"legal",         label:"legal team",         count:4  },
+    { kind:"group", id:"people-ops",    label:"people-ops team",    count:5  },
+    { kind:"group", id:"marketing",     label:"marketing team",     count:10 },
+    { kind:"group", id:"sales",         label:"sales team",         count:32 },
+    { kind:"group", id:"support",       label:"support team",       count:18 },
+    { kind:"group", id:"product",       label:"product team",       count:15 },
+    { kind:"group", id:"compliance",    label:"compliance team",    count:7  }
+  ],
+  users: [
+    { kind:"user", id:"morgan.lee", label:"Morgan Lee",     email:"morgan.lee@workspace", title:"Data Platform Lead",   team:"data-platform" },
+    { kind:"user", id:"ramin.k",    label:"Ramin Khan",     email:"ramin.k@workspace",    title:"Senior Engineer",      team:"engineering"   },
+    { kind:"user", id:"jordan.s",   label:"Jordan Singh",   email:"jordan.s@workspace",   title:"Customer Ops Manager", team:"customer-ops"  },
+    { kind:"user", id:"priya.n",    label:"Priya Nair",     email:"priya.n@workspace",    title:"Security Engineer",    team:"security"      },
+    { kind:"user", id:"diego.r",    label:"Diego Ramos",    email:"diego.r@workspace",    title:"Compliance Analyst",   team:"legal"         },
+    { kind:"user", id:"sam.t",      label:"Sam Tan",        email:"sam.t@workspace",      title:"Finance Manager",      team:"finance-ops"   },
+    { kind:"user", id:"avery.l",    label:"Avery Lopez",    email:"avery.l@workspace",    title:"Product Manager",      team:"product"       },
+    { kind:"user", id:"lin.h",      label:"Lin Hayashi",    email:"lin.h@workspace",      title:"Sales Director",       team:"sales"         },
+    { kind:"user", id:"kai.p",      label:"Kai Patel",      email:"kai.p@workspace",      title:"Support Engineer",     team:"support"       },
+    { kind:"user", id:"noor.f",     label:"Noor Faraz",     email:"noor.f@workspace",     title:"People Ops Partner",   team:"people-ops"    },
+    { kind:"user", id:"riley.b",    label:"Riley Brooks",   email:"riley.b@workspace",    title:"Staff Engineer",       team:"engineering"   },
+    { kind:"user", id:"sasha.m",    label:"Sasha Mehra",    email:"sasha.m@workspace",    title:"Marketing Lead",       team:"marketing"     }
+  ]
+};
+function _identityInitials(label){ return (label || "").split(/\s+/).map(function(p){ return p[0]; }).filter(Boolean).slice(0,2).join("").toUpperCase(); }
+
+function PermRow({ k, label, list, setList, tone, desc }) {
+  var [open, setOpen] = useState(false);
+  var [query, setQuery] = useState("");
+
+  function isSel(entry){
+    return !!list.find(function(x){ return x.kind === entry.kind && x.id === entry.id; });
+  }
+  function toggle(entry){
+    setList(function(arr){
+      var exists = arr.find(function(x){ return x.kind === entry.kind && x.id === entry.id; });
+      if (exists) return arr.filter(function(x){ return !(x.kind === entry.kind && x.id === entry.id); });
+      return arr.concat([entry]);
+    });
+  }
+  function removeOne(entry){
+    setList(function(arr){ return arr.filter(function(x){ return !(x.kind === entry.kind && x.id === entry.id); }); });
+  }
+
+  var q = query.trim().toLowerCase();
+  var matchSpecial = !q || IDENTITY_DIRECTORY.special.label.toLowerCase().indexOf(q) >= 0;
+  var matchGroups  = IDENTITY_DIRECTORY.groups.filter(function(g){ return !q || g.label.toLowerCase().indexOf(q) >= 0; });
+  var matchUsers   = IDENTITY_DIRECTORY.users.filter(function(u){
+    if (!q) return true;
+    return [u.label, u.email, u.title, u.team].some(function(f){ return (f || "").toLowerCase().indexOf(q) >= 0; });
+  });
+  var totalShown = (matchSpecial ? 1 : 0) + matchGroups.length + matchUsers.length;
+
+  return (
+    <div style={{ padding:"12px 16px", borderBottom:"1px solid var(--line-2)" }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:7 }}>
+        <div>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 7px", borderRadius:4, background:tone.bg, color:tone.fg, fontWeight:700, letterSpacing:"0.5px" }}>{k.toUpperCase()}</span>
+            <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{label}</span>
+          </div>
+          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3 }}>{desc}</div>
+        </div>
+        <div style={{ position:"relative" }}>
+          <button onClick={function(){ setOpen(function(o){ return !o; }); setQuery(""); }} className="btn-ghost" style={{ fontSize:11.5, display:"inline-flex", alignItems:"center", gap:5 }}>
+            <span style={{ fontSize:13, lineHeight:1, color:"var(--ink-2)" }}>+</span> Add people or teams
+          </button>
+          {open && (
+            <>
+              <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setOpen(false); }} />
+              <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", width:360, maxHeight:460, display:"flex", flexDirection:"column", overflow:"hidden" }}>
+                {/* SEARCH */}
+                <div style={{ padding:"10px 12px", borderBottom:"1px solid var(--line-2)", background:"var(--panel-2)" }}>
+                  <div style={{ position:"relative" }}>
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--ink-3)" strokeWidth="1.5" style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+                      <circle cx="6.5" cy="6.5" r="4.5" />
+                      <line x1="10" y1="10" x2="14" y2="14" />
+                    </svg>
+                    <input type="text" value={query} onChange={function(e){ setQuery(e.target.value); }} placeholder="Search teams, people, titles…" autoFocus
+                      style={{ width:"100%", padding:"7px 11px 7px 28px", fontSize:12.5, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:6, outline:"none", boxSizing:"border-box" }} />
+                  </div>
+                </div>
+                {/* RESULTS */}
+                <div style={{ flex:1, overflowY:"auto", padding:"6px 0" }}>
+                  {/* Everyone (special) */}
+                  {matchSpecial && (function(){
+                    var entry = IDENTITY_DIRECTORY.special;
+                    var sel = isSel(entry);
+                    return (
+                      <button onClick={function(){ toggle(entry); }}
+                        style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"9px 12px", background: sel ? "var(--bg-canvas)" : "transparent", border:"none", cursor:"pointer", fontFamily:"inherit", textAlign:"left", borderBottom:"1px dashed var(--line-2)", marginBottom:4 }}
+                        onMouseEnter={function(e){ if (!sel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                        onMouseLeave={function(e){ if (!sel) e.currentTarget.style.background = "transparent"; }}>
+                        <span style={{ width:24, height:24, borderRadius:"50%", background:"var(--ink)", color:"var(--bg-canvas)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+                            <circle cx="8" cy="8" r="6" />
+                            <path d="M2 8 H14" />
+                            <path d="M8 2 c2.5 1.5 2.5 10.5 0 12 M8 2 c-2.5 1.5 -2.5 10.5 0 12" />
+                          </svg>
+                        </span>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{entry.label}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", marginTop:1 }}>{entry.count + " members · grants access org-wide"}</div>
+                        </div>
+                        {sel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:14 }}>✓</span>}
+                      </button>
+                    );
+                  })()}
+                  {/* Teams */}
+                  {matchGroups.length > 0 && (
+                    <div style={{ padding:"4px 0" }}>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"4px 14px", color:"var(--ink-4)", letterSpacing:"0.7px", textTransform:"uppercase" }}>{"Teams · " + matchGroups.length}</div>
+                      {matchGroups.map(function(g){
+                        var sel = isSel(g);
+                        return (
+                          <button key={g.id} onClick={function(){ toggle(g); }}
+                            style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"6px 12px", background: sel ? "var(--bg-canvas)" : "transparent", border:"none", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
+                            onMouseEnter={function(e){ if (!sel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                            onMouseLeave={function(e){ if (!sel) e.currentTarget.style.background = "transparent"; }}>
+                            <span style={{ width:22, height:22, borderRadius:4, background:"var(--ink-3)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                              <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="6" r="2" /><circle cx="11" cy="6" r="2" /><path d="M1 13.5 c0.5 -2 2 -3 4 -3 c2 0 3.5 1 4 3 z" /><path d="M7 13.5 c0.5 -2 2 -3 4 -3 c2 0 3.5 1 4 3 z" /></svg>
+                            </span>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontSize:12.5, color:"var(--ink)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{g.label}</div>
+                            </div>
+                            <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", marginRight:4 }}>{g.count}</span>
+                            {sel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {/* Users */}
+                  {matchUsers.length > 0 && (
+                    <div style={{ padding:"4px 0" }}>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"4px 14px", color:"var(--ink-4)", letterSpacing:"0.7px", textTransform:"uppercase" }}>{"People · " + matchUsers.length}</div>
+                      {matchUsers.map(function(u){
+                        var sel = isSel(u);
+                        return (
+                          <button key={u.id} onClick={function(){ toggle(u); }}
+                            style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"6px 12px", background: sel ? "var(--bg-canvas)" : "transparent", border:"none", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
+                            onMouseEnter={function(e){ if (!sel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                            onMouseLeave={function(e){ if (!sel) e.currentTarget.style.background = "transparent"; }}>
+                            <span style={{ width:22, height:22, borderRadius:"50%", background:"var(--ink-2)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:8.5, fontWeight:700, flexShrink:0 }}>{_identityInitials(u.label)}</span>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontSize:12.5, color:"var(--ink)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{u.label}</div>
+                              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", marginTop:1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{u.title + " · " + u.team}</div>
+                            </div>
+                            {sel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {/* Empty */}
+                  {totalShown === 0 && (
+                    <div style={{ padding:"36px 14px", textAlign:"center", color:"var(--ink-3)", fontSize:12 }}>
+                      <div>No matches for "{query}"</div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:4 }}>Try a team, person, or title</div>
+                    </div>
+                  )}
+                </div>
+                {/* FOOTER */}
+                <div style={{ padding:"8px 12px", borderTop:"1px solid var(--line-2)", background:"var(--panel-2)", display:"flex", alignItems:"center", justifyContent:"space-between", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>
+                  <span>{list.length + (list.length === 1 ? " grant" : " grants")} on this row</span>
+                  <button onClick={function(){ setOpen(false); }} className="btn-ghost" style={{ fontSize:11 }}>Done</button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      {/* Selected chips */}
+      <div style={{ display:"flex", flexWrap:"wrap", gap:"6px 5px" }}>
+        {list.length === 0 && <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", fontStyle:"italic" }}>nobody</span>}
+        {list.map(function(e){
+          return (
+            <span key={e.kind + "_" + e.id} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 5px 3px 7px", borderRadius:5, background:"var(--chip)", border:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)" }}>
+              <span style={{ width:13, height:13, borderRadius: e.kind === "user" ? "50%" : 3, background: e.kind === "user" ? "var(--ink-2)" : "var(--ink-3)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize: e.kind === "user" ? 7.5 : 8, fontWeight:700 }}>{e.kind === "user" ? _identityInitials(e.label) : (e.id === "everyone" ? "★" : "G")}</span>
+              {e.label}
+              <button onClick={function(){ removeOne(e); }} style={{ background:"none", border:"none", color:"var(--ink-3)", cursor:"pointer", padding:0, fontSize:12, lineHeight:1 }}>×</button>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AddNodeFlow({ onClose }) {
   var [step, setStep] = useState(1);
 
@@ -10337,76 +10540,6 @@ function AddNodeFlow({ onClose }) {
 
             {/* ── STEP 5: Governance ── */}
             {step === 5 && (function(){
-              function PermRow({ k, label, list, setList, tone, desc }) {
-                var isOpen = permPickerOpen === k;
-                function toggle(entry){
-                  setList(function(arr){
-                    var exists = arr.find(function(x){ return x.kind === entry.kind && x.id === entry.id; });
-                    if (exists) return arr.filter(function(x){ return !(x.kind === entry.kind && x.id === entry.id); });
-                    return arr.concat([entry]);
-                  });
-                }
-                return (
-                  <div style={{ padding:"14px 16px", borderBottom:"1px solid var(--line-2)" }}>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
-                      <div>
-                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                          <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 7px", borderRadius:4, background:tone.bg, color:tone.fg, fontWeight:700, letterSpacing:"0.5px" }}>{k.toUpperCase()}</span>
-                          <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{label}</span>
-                        </div>
-                        <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4 }}>{desc}</div>
-                      </div>
-                      <div style={{ position:"relative" }}>
-                        <button onClick={function(){ setPermPickerOpen(isOpen ? null : k); }} className="btn-ghost" style={{ fontSize:11.5 }}>+ Add user or group</button>
-                        {isOpen && (
-                          <>
-                            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPermPickerOpen(null); }} />
-                            <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 8px 28px rgba(0,0,0,0.14)", padding:6, minWidth:260, maxHeight:320, overflowY:"auto" }}>
-                              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase", padding:"6px 10px" }}>GROUPS</div>
-                              {DIRECTORY.filter(function(d){ return d.kind === "group"; }).map(function(d){
-                                var selected = list.find(function(x){ return x.kind === d.kind && x.id === d.id; });
-                                return (
-                                  <button key={"g_" + d.id} onClick={function(){ toggle(d); }}
-                                    style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"6px 10px", borderRadius:5, border:"none", background: selected ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", fontSize:12, color:"var(--ink)", textAlign:"left" }}>
-                                    <span style={{ width:18, height:18, borderRadius:4, background:"var(--chip)", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0 }}>G</span>
-                                    <span style={{ flex:1 }}>{d.label}</span>
-                                    {selected && <span style={{ color:"var(--green)", fontWeight:700 }}>✓</span>}
-                                  </button>
-                                );
-                              })}
-                              <div style={{ height:1, background:"var(--line-2)", margin:"4px 0" }} />
-                              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase", padding:"6px 10px" }}>USERS</div>
-                              {DIRECTORY.filter(function(d){ return d.kind === "user"; }).map(function(d){
-                                var selected = list.find(function(x){ return x.kind === d.kind && x.id === d.id; });
-                                return (
-                                  <button key={"u_" + d.id} onClick={function(){ toggle(d); }}
-                                    style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"6px 10px", borderRadius:5, border:"none", background: selected ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", fontSize:12, color:"var(--ink)", textAlign:"left" }}>
-                                    <span style={{ width:18, height:18, borderRadius:"50%", background:"var(--ink-2)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9, fontWeight:700, flexShrink:0 }}>{d.label.split(" ").map(function(s){ return s[0]; }).join("").slice(0,2)}</span>
-                                    <span style={{ flex:1 }}>{d.label}</span>
-                                    {selected && <span style={{ color:"var(--green)", fontWeight:700 }}>✓</span>}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-                      {list.length === 0 && <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)", fontStyle:"italic" }}>nobody — locked down</span>}
-                      {list.map(function(e, i){
-                        return (
-                          <span key={i} style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"4px 6px 4px 8px", borderRadius:6, background:"var(--chip)", border:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink)" }}>
-                            <span style={{ width:14, height:14, borderRadius: e.kind === "user" ? "50%" : 3, background: e.kind === "user" ? "var(--ink-2)" : "var(--ink-3)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:8, fontWeight:700, flexShrink:0 }}>{e.kind === "user" ? e.label.split(" ").map(function(s){ return s[0]; }).join("").slice(0,2) : "G"}</span>
-                            {e.label}
-                            <button onClick={function(){ setList(function(arr){ return arr.filter(function(x){ return !(x.kind === e.kind && x.id === e.id); }); }); }} style={{ background:"none", border:"none", color:"var(--ink-3)", cursor:"pointer", padding:0, fontSize:14, lineHeight:1 }}>×</button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              }
               return (
                 <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:820 }}>
                   {/* OWNER + RETENTION row */}
@@ -11259,63 +11392,6 @@ function NewGraphFlow({ onClose, onCreate }) {
     );
   }
 
-  function PermRow({ k, label, list, setList, tone, desc }) {
-    var [open, setOpen] = useState(false);
-    function toggle(entry){
-      setList(function(arr){
-        var exists = arr.find(function(x){ return x.kind === entry.kind && x.id === entry.id; });
-        if (exists) return arr.filter(function(x){ return !(x.kind === entry.kind && x.id === entry.id); });
-        return arr.concat([entry]);
-      });
-    }
-    return (
-      <div style={{ padding:"12px 16px", borderBottom:"1px solid var(--line-2)" }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:7 }}>
-          <div>
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 7px", borderRadius:4, background:tone.bg, color:tone.fg, fontWeight:700, letterSpacing:"0.5px" }}>{k.toUpperCase()}</span>
-              <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{label}</span>
-            </div>
-            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3 }}>{desc}</div>
-          </div>
-          <div style={{ position:"relative" }}>
-            <button onClick={function(){ setOpen(function(o){ return !o; }); }} className="btn-ghost" style={{ fontSize:11.5 }}>+ Add</button>
-            {open && (
-              <>
-                <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setOpen(false); }} />
-                <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 8px 28px rgba(0,0,0,0.14)", padding:5, minWidth:240, maxHeight:280, overflowY:"auto" }}>
-                  {DIRECTORY.map(function(d){
-                    var selected = list.find(function(x){ return x.kind === d.kind && x.id === d.id; });
-                    return (
-                      <button key={d.kind + "_" + d.id} onClick={function(){ toggle(d); }}
-                        style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"6px 8px", borderRadius:5, border:"none", background: selected ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", fontSize:12, color:"var(--ink)", textAlign:"left" }}>
-                        <span style={{ width:16, height:16, borderRadius: d.kind === "user" ? "50%" : 3, background: d.kind === "user" ? "var(--ink-2)" : "var(--ink-3)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:8, fontWeight:700, flexShrink:0 }}>{d.kind === "user" ? d.label.split(" ").map(function(s){ return s[0]; }).join("").slice(0,2) : "G"}</span>
-                        <span style={{ flex:1 }}>{d.label}</span>
-                        {selected && <span style={{ color:"var(--green)", fontWeight:700 }}>✓</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-        <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-          {list.length === 0 && <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", fontStyle:"italic" }}>nobody</span>}
-          {list.map(function(e, i){
-            return (
-              <span key={i} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 5px 3px 7px", borderRadius:5, background:"var(--chip)", border:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)" }}>
-                <span style={{ width:12, height:12, borderRadius: e.kind === "user" ? "50%" : 3, background: e.kind === "user" ? "var(--ink-2)" : "var(--ink-3)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:7.5, fontWeight:700 }}>{e.kind === "user" ? e.label.split(" ").map(function(s){ return s[0]; }).join("").slice(0,2) : "G"}</span>
-                {e.label}
-                <button onClick={function(){ setList(function(arr){ return arr.filter(function(x){ return !(x.kind === e.kind && x.id === e.id); }); }); }} style={{ background:"none", border:"none", color:"var(--ink-3)", cursor:"pointer", padding:0, fontSize:12, lineHeight:1 }}>×</button>
-              </span>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
       onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
@@ -11649,7 +11725,7 @@ function NewGraphFlow({ onClose, onCreate }) {
                       { k:"ENVIRONMENT",  v: environment },
                       { k:"CONTEXT",      v: industry || func ? ((GRAPH_INDUSTRIES.find(function(x){ return x.id === industry; }) || {}).label || "—") + (func ? " · " + (GRAPH_FUNCTIONS.find(function(x){ return x.id === func; }) || {}).label : "") : "Built from scratch" },
                       { k:"STARTING POINT", v: picked ? picked.name : "Blank canvas" },
-                      { k:"ENTITIES",     v: entitiesToInclude.length ? entitiesToInclude.map(function(e){ return <span key={e} style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)", marginRight:4 }}>{e}</span>; }) : <span style={{ color:"var(--ink-4)" }}>none</span> },
+                      { k:"ENTITIES",     v: entitiesToInclude.length ? <span style={{ display:"inline-flex", flexWrap:"wrap", gap:"6px 4px", justifyContent:"flex-end" }}>{entitiesToInclude.map(function(e){ return <span key={e} style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{e}</span>; })}</span> : <span style={{ color:"var(--ink-4)" }}>none</span> },
                       { k:"OWNER",        v: owner }
                     ].map(function(row, i, arr){
                       return (
@@ -11830,63 +11906,6 @@ function NewEdgeFlow({ onClose, onCreate, fromNode }) {
   }
 
   // Permission row (same RBAC pattern as NewGraphFlow)
-  function PermRow({ k, label, list, setList, tone, desc }) {
-    var [open, setOpen] = useState(false);
-    function toggle(entry){
-      setList(function(arr){
-        var exists = arr.find(function(x){ return x.kind === entry.kind && x.id === entry.id; });
-        if (exists) return arr.filter(function(x){ return !(x.kind === entry.kind && x.id === entry.id); });
-        return arr.concat([entry]);
-      });
-    }
-    return (
-      <div style={{ padding:"12px 16px", borderBottom:"1px solid var(--line-2)" }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:7 }}>
-          <div>
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 7px", borderRadius:4, background:tone.bg, color:tone.fg, fontWeight:700, letterSpacing:"0.5px" }}>{k.toUpperCase()}</span>
-              <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{label}</span>
-            </div>
-            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3 }}>{desc}</div>
-          </div>
-          <div style={{ position:"relative" }}>
-            <button onClick={function(){ setOpen(function(o){ return !o; }); }} className="btn-ghost" style={{ fontSize:11.5 }}>+ Add</button>
-            {open && (
-              <>
-                <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setOpen(false); }} />
-                <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 8px 28px rgba(0,0,0,0.14)", padding:5, minWidth:240, maxHeight:280, overflowY:"auto" }}>
-                  {DIRECTORY.map(function(d){
-                    var selected = list.find(function(x){ return x.kind === d.kind && x.id === d.id; });
-                    return (
-                      <button key={d.kind + "_" + d.id} onClick={function(){ toggle(d); }}
-                        style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"6px 8px", borderRadius:5, border:"none", background: selected ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", fontSize:12, color:"var(--ink)", textAlign:"left" }}>
-                        <span style={{ width:16, height:16, borderRadius: d.kind === "user" ? "50%" : 3, background: d.kind === "user" ? "var(--ink-2)" : "var(--ink-3)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:8, fontWeight:700, flexShrink:0 }}>{d.kind === "user" ? d.label.split(" ").map(function(s){ return s[0]; }).join("").slice(0,2) : "G"}</span>
-                        <span style={{ flex:1 }}>{d.label}</span>
-                        {selected && <span style={{ color:"var(--green)", fontWeight:700 }}>✓</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-        <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-          {list.length === 0 && <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", fontStyle:"italic" }}>nobody</span>}
-          {list.map(function(e, i){
-            return (
-              <span key={i} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 5px 3px 7px", borderRadius:5, background:"var(--chip)", border:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)" }}>
-                <span style={{ width:12, height:12, borderRadius: e.kind === "user" ? "50%" : 3, background: e.kind === "user" ? "var(--ink-2)" : "var(--ink-3)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:7.5, fontWeight:700 }}>{e.kind === "user" ? e.label.split(" ").map(function(s){ return s[0]; }).join("").slice(0,2) : "G"}</span>
-                {e.label}
-                <button onClick={function(){ setList(function(arr){ return arr.filter(function(x){ return !(x.kind === e.kind && x.id === e.id); }); }); }} style={{ background:"none", border:"none", color:"var(--ink-3)", cursor:"pointer", padding:0, fontSize:12, lineHeight:1 }}>×</button>
-              </span>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
   // ── POPULATION OPTIONS ────────────────────────────────────────────────
   var populationOptions = [
     { id:"source", title:"From a data source",   tag:"RECOMMENDED",
