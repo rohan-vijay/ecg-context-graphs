@@ -4388,7 +4388,7 @@ function LinkSourceFlow({ node, onClose }) {
               return (
                 <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
                   style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", alignItems:"center" }}>
-                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize: isDone ? 13 : 12, fontWeight:700, flexShrink:0, lineHeight:1 }}>{isDone ? "✓" : n}</span>
+                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize: 12, fontWeight:700, flexShrink:0, lineHeight:1 }}>{isDone ? <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg> : n}</span>
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400, lineHeight:1.2 }}>{name}</div>
                     <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{sub}</div>
@@ -5607,7 +5607,7 @@ function NewRuleFlow({ node, onClose }) {
               return (
                 <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
                   style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", alignItems:"center" }}>
-                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize: isDone ? 13 : 12, fontWeight:700, flexShrink:0, lineHeight:1 }}>{isDone ? "✓" : n}</span>
+                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize: 12, fontWeight:700, flexShrink:0, lineHeight:1 }}>{isDone ? <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg> : n}</span>
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400, lineHeight:1.2 }}>{name}</div>
                     <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, lineHeight:1.3 }}>
@@ -10224,7 +10224,7 @@ function AddNodeFlow({ onClose }) {
               return (
                 <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
                   style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", alignItems:"center" }}>
-                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize: isDone ? 13 : 12, fontWeight:700, flexShrink:0, lineHeight:1 }}>{isDone ? "✓" : n}</span>
+                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize: 12, fontWeight:700, flexShrink:0, lineHeight:1 }}>{isDone ? <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg> : n}</span>
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400, lineHeight:1.2 }}>{nm}</div>
                     <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{sub}</div>
@@ -11435,7 +11435,7 @@ function NewGraphFlow({ onClose, onCreate }) {
               return (
                 <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
                   style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", alignItems:"center" }}>
-                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize: isDone ? 13 : 12, fontWeight:700, flexShrink:0, lineHeight:1 }}>{isDone ? "✓" : n}</span>
+                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize: 12, fontWeight:700, flexShrink:0, lineHeight:1 }}>{isDone ? <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg> : n}</span>
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400, lineHeight:1.2 }}>{nm}</div>
                     <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{sub}</div>
@@ -11516,8 +11516,6 @@ function NewGraphFlow({ onClose, onCreate }) {
 
                 {suggestions.map(function(sp){
                   var isOn = startId === sp.id;
-                  var matchTag = sp._exactInd && sp._exactFn ? "PERFECT MATCH" : sp._exactInd ? "INDUSTRY MATCH" : sp._exactFn ? "FUNCTION MATCH" : "GENERIC";
-                  var matchColor = sp._exactInd && sp._exactFn ? "var(--green)" : (sp._exactInd || sp._exactFn) ? "var(--blue)" : "var(--ink-4)";
                   return (
                     <div key={sp.id} onClick={function(){ pickStart(sp.id); }}
                       style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"14px 16px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:10, background: isOn ? "var(--bg-canvas)" : "var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", cursor:"pointer" }}>
@@ -11525,7 +11523,6 @@ function NewGraphFlow({ onClose, onCreate }) {
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                           <span style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{sp.name}</span>
-                          <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px", borderRadius:3, background:"transparent", color:matchColor, border:"1px solid " + matchColor, fontWeight:700, letterSpacing:"0.5px" }}>{matchTag}</span>
                           {sp.cdm && (
                             <a href={cdmLink(sp.cdm)} target="_blank" rel="noopener noreferrer"
                               title={"View Microsoft CDM — " + sp.cdm + " (opens GitHub)"}
@@ -11990,7 +11987,7 @@ function NewEdgeFlow({ onClose, onCreate, fromNode }) {
               return (
                 <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
                   style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", alignItems:"center" }}>
-                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize: isDone ? 13 : 12, fontWeight:700, flexShrink:0, lineHeight:1 }}>{isDone ? "✓" : n}</span>
+                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize: 12, fontWeight:700, flexShrink:0, lineHeight:1 }}>{isDone ? <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg> : n}</span>
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400, lineHeight:1.2 }}>{nm}</div>
                     <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{sub}</div>
@@ -12553,32 +12550,57 @@ function GraphLandingView({ onOpenGraph }) {
         </div>
       ) : (
         // LIST VIEW
-        <div style={{ padding:"20px 32px 40px" }}>
-          <div className="nv-table" style={{ margin:0 }}>
-            <div style={{ display:"grid", gridTemplateColumns:"2.2fr 110px 110px 120px 90px 80px 130px", gap:14, padding:"10px 22px", background:"var(--panel-2)", borderBottom:"1px solid var(--line)", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", alignItems:"center" }}>
-              <div>Graph</div><div style={{ textAlign:"right" }}>Nodes</div><div style={{ textAlign:"right" }}>Edges</div><div style={{ textAlign:"right" }}>Sources</div><div style={{ textAlign:"right" }}>Health</div><div>Synced</div><div>Owner</div>
+        <div style={{ padding:"20px clamp(20px, 4vw, 64px) 40px", maxWidth:1400, margin:"0 auto", width:"100%", boxSizing:"border-box" }}>
+          <div style={{ border:"1px solid var(--line)", borderRadius:14, background:"var(--panel)", overflow:"hidden", boxShadow:"0 1px 0 var(--line-2)" }}>
+            {/* HEADER */}
+            <div style={{ display:"grid", gridTemplateColumns:"minmax(0, 1fr) 110px 110px 110px 110px 130px 150px", gap:16, padding:"12px 22px", background:"var(--panel-2)", borderBottom:"1px solid var(--line)", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.8px", textTransform:"uppercase", alignItems:"center" }}>
+              <div>Graph</div>
+              <div style={{ textAlign:"right" }}>Nodes</div>
+              <div style={{ textAlign:"right" }}>Edges</div>
+              <div style={{ textAlign:"right" }}>Sources</div>
+              <div style={{ textAlign:"center" }}>Health</div>
+              <div>Synced</div>
+              <div>Owner</div>
             </div>
             {filtered.map(function(g, i){
               var hColor = healthColor(g.health);
+              var initials = g.name.split(/\s+/).map(function(p){ return p[0]; }).filter(Boolean).slice(0, 3).join("").toUpperCase();
               return (
                 <div key={g.id} onClick={function(){ onOpenGraph(g.id); }}
-                  style={{ display:"grid", gridTemplateColumns:"2.2fr 110px 110px 120px 90px 80px 130px", gap:14, padding:"13px 22px", borderBottom: i < filtered.length-1 ? "1px solid var(--line-2)" : "none", cursor:"pointer", alignItems:"center", transition:"background 80ms" }}
+                  style={{ display:"grid", gridTemplateColumns:"minmax(0, 1fr) 110px 110px 110px 110px 130px 150px", gap:16, padding:"16px 22px", borderBottom: i < filtered.length-1 ? "1px solid var(--line-2)" : "none", cursor:"pointer", alignItems:"center", transition:"background 100ms" }}
                   onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
                   onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
-                  <div>
-                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      <span style={{ width:9, height:9, borderRadius:"50%", background:g.color }} />
-                      <span style={{ fontSize:13.5, fontWeight:500, color:"var(--ink)" }}>{g.name}</span>
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-3)", padding:"1px 6px", background:"var(--chip)", borderRadius:3 }}>{g.cat}</span>
+                  {/* GRAPH cell — bigger icon + name/desc */}
+                  <div style={{ display:"flex", alignItems:"center", gap:14, minWidth:0 }}>
+                    {/* Mini graph tile — uses the same GraphMiniViz, scaled down */}
+                    <div style={{ width:54, height:42, borderRadius:7, overflow:"hidden", border:"1px solid var(--line-2)", flexShrink:0, background: g.color + "10" }}>
+                      <GraphMiniViz seed={g.id.charCodeAt(0) * 977 + g.id.length * 31} color={g.color} />
                     </div>
-                    <div style={{ fontSize:11.5, color:"var(--ink-3)", marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{g.desc}</div>
+                    <div style={{ minWidth:0, flex:1 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3 }}>
+                        <span style={{ fontFamily:"Instrument Serif", fontSize:16, color:"var(--ink)", lineHeight:1.1 }}>{g.name}</span>
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.7px", color:"var(--ink-3)", padding:"1.5px 6px", background:"var(--panel-2)", border:"1px solid var(--line-2)", borderRadius:3, flexShrink:0 }}>{g.cat}</span>
+                      </div>
+                      <div style={{ fontSize:12, color:"var(--ink-3)", lineHeight:1.4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{g.desc}</div>
+                    </div>
                   </div>
-                  <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", textAlign:"right" }}>{g.nodes.toLocaleString()}</span>
-                  <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", textAlign:"right" }}>{g.edges.toLocaleString()}</span>
-                  <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", textAlign:"right" }}>{g.sources}</span>
-                  <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color: hColor, textAlign:"right", fontWeight:600 }}>{g.health + "%"}</span>
-                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{g.synced}</span>
-                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{g.owner}</span>
+                  <div style={{ fontFamily:"Instrument Serif", fontSize:17, color:"var(--ink)", textAlign:"right", lineHeight:1 }}>{g.nodes.toLocaleString()}</div>
+                  <div style={{ fontFamily:"Instrument Serif", fontSize:17, color:"var(--ink)", textAlign:"right", lineHeight:1 }}>{g.edges.toLocaleString()}</div>
+                  <div style={{ fontFamily:"Instrument Serif", fontSize:17, color:"var(--ink)", textAlign:"right", lineHeight:1 }}>{g.sources}</div>
+                  <div style={{ display:"flex", justifyContent:"center" }}>
+                    <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontFamily:"JetBrains Mono", fontSize:12, color: hColor, fontWeight:700, padding:"4px 9px", background:"var(--panel-2)", border:"1px solid " + hColor + "55", borderRadius:5 }}>
+                      <span style={{ width:7, height:7, borderRadius:"50%", background: hColor }} />
+                      {g.health + "%"}
+                    </span>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>
+                    <span style={{ width:5, height:5, borderRadius:"50%", background:"var(--green)" }} />
+                    {g.synced}
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:7, minWidth:0 }}>
+                    <span style={{ width:22, height:22, borderRadius:4, background:"var(--ink-3)", color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:8.5, fontWeight:700, flexShrink:0, letterSpacing:"0.3px" }}>{g.owner.split(/[\-\s]/).map(function(s){ return s[0]; }).join("").slice(0,2).toUpperCase()}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{g.owner}</span>
+                  </div>
                 </div>
               );
             })}
