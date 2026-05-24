@@ -8973,6 +8973,35 @@ function StewardshipTaskDetail({ task, onBack }) {
       </div>
 
       <div className="detail-body">
+        {/* PROMINENT ACTION BAR — the next-best-actions the steward should pick from */}
+        <div style={{ marginBottom:18, padding:"18px 20px", border:"1px solid " + km.color, background: km.fill, borderRadius:12, boxShadow:"0 1px 0 var(--line-2), 0 6px 18px rgba(0,0,0,0.04)" }}>
+          <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:12 }}>
+            <div style={{ display:"flex", alignItems:"baseline", gap:10 }}>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, letterSpacing:"0.8px", color:km.color, fontWeight:700, textTransform:"uppercase" }}>TAKE ACTION</span>
+              <span style={{ fontSize:13.5, color:"var(--ink)", fontWeight:600 }}>What do you want to do with this {km.long.toLowerCase()} task?</span>
+            </div>
+            <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{suggestions.length + " options"}</span>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns: "repeat(" + Math.min(suggestions.length, 4) + ", 1fr)", gap:10 }}>
+            {suggestions.map(function(s, i) {
+              var isPrimary = i === 0;
+              return (
+                <button key={i}
+                  style={{ display:"flex", flexDirection:"column", gap:6, padding:"14px 16px", borderRadius:10, border: isPrimary ? "1px solid " + km.color : "1px solid var(--line)", background: isPrimary ? km.color : "var(--bg-canvas)", color: isPrimary ? "#fff" : "var(--ink)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", transition:"transform 80ms, box-shadow 80ms" }}
+                  onMouseEnter={function(e){ e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,0,0,0.08)"; }}
+                  onMouseLeave={function(e){ e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+                    <span style={{ fontSize:14, fontWeight:600, color: isPrimary ? "#fff" : "var(--ink)" }}>{s.lbl}</span>
+                    <span style={{ width:24, height:24, borderRadius:"50%", background: isPrimary ? "rgba(255,255,255,0.18)" : "var(--chip)", color: isPrimary ? "#fff" : km.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:700, flexShrink:0 }}>→</span>
+                  </div>
+                  <span style={{ fontSize:11.5, color: isPrimary ? "rgba(255,255,255,0.85)" : "var(--ink-3)", lineHeight:1.45 }}>{s.desc}</span>
+                  {isPrimary && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"rgba(255,255,255,0.8)", fontWeight:700, marginTop:2 }}>RECOMMENDED</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div style={{ display:"grid", gridTemplateColumns:"minmax(0, 1.7fr) minmax(280px, 1fr)", gap:18 }}>
           {/* LEFT */}
           <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
@@ -9133,23 +9162,6 @@ function StewardshipTaskDetail({ task, onBack }) {
                   <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>SCOPE</span>
                   <span style={{ color:"var(--ink-2)" }}>{task.recordId ? (task.nodeLabel + " · " + task.recordId) : task.scope ? task.scope : task.nodeLabel}</span>
                 </div>
-              </div>
-            </div>
-
-            <div className="card">
-              <div className="card-head">Suggested actions</div>
-              <div style={{ display:"flex", flexDirection:"column" }}>
-                {suggestions.map(function(s, i) {
-                  return <button key={i} style={{ display:"flex", flexDirection:"column", gap:3, padding:"12px 16px", borderBottom: i < suggestions.length-1 ? "1px solid var(--line-2)" : "none", border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", transition:"background 80ms" }}
-                    onMouseEnter={function(e){ e.currentTarget.style.background = "var(--bg-canvas)"; }}
-                    onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                      <span style={{ fontSize:13, color:"var(--ink)", fontWeight:500 }}>{s.lbl}</span>
-                      <span style={{ color:"var(--ink-3)" }}>→</span>
-                    </div>
-                    <span style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.4 }}>{s.desc}</span>
-                  </button>;
-                })}
               </div>
             </div>
 
