@@ -12466,7 +12466,7 @@ function GraphLandingEmpty({ onCreate, onBack }) {
         </div>
 
         <h1 style={{ fontFamily:"Geist, system-ui, sans-serif", fontWeight:600, fontSize:"clamp(40px, 5.4vw, 64px)", lineHeight:1.08, color:"var(--ink)", margin:0, letterSpacing:"-0.022em", textAlign:"center", maxWidth:980 }}>
-          Build your context graph
+          Build your enterprise context graph
         </h1>
 
         <p style={{ fontFamily:"Geist, system-ui, sans-serif", fontSize:"clamp(14px, 1.25vw, 17px)", color:"var(--ink-2)", lineHeight:1.6, margin:"20px 0 0", maxWidth:680, textAlign:"center" }}>
