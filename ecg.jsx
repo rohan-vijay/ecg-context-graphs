@@ -10036,6 +10036,11 @@ function AddNodeFlow({ onClose }) {
   // Step 2 - properties + creation mode
   var [propMode, setPropMode] = useState(null); // manual / spreadsheet / sample / template
   var [propModeOpen, setPropModeOpen] = useState(false);
+  // Auto-open the method picker the first time the user lands on Step 2 with
+  // nothing chosen — same affordance as if they'd clicked the trigger.
+  useEffect(function(){
+    if (step === 2 && !propMode) setPropModeOpen(true);
+  }, [step]);
   var [properties, setProperties] = useState([]);
   var [selectedTemplate, setSelectedTemplate] = useState(null);
   var [uploadedFileName, setUploadedFileName] = useState("");
@@ -10327,13 +10332,13 @@ function AddNodeFlow({ onClose }) {
             {/* ── STEP 2: Properties ── */}
             {step === 2 && (function(){
               var PROP_MODES = [
-                { id:"template",    label:"From template",    desc:"Start with a pre-built schema from the catalog (Contract, Customer, Ticket and more).",
+                { id:"template",    label:"From template",    color:"var(--blue)",   desc:"Start with a pre-built schema from the catalog (Contract, Customer, Ticket and more).",
                   icon:(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="3" width="14" height="18" rx="1.5"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="13" y2="16"/></svg>) },
-                { id:"sample",      label:"Parse a document", desc:"Upload a sample (PDF, DOCX, TXT). An LLM infers the schema and you review the fields.",
+                { id:"sample",      label:"Parse a document", color:"var(--purple)", desc:"Upload a sample (PDF, DOCX, TXT). An LLM infers the schema and you review the fields.",
                   icon:(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M14 3 H7 a2 2 0 0 0 -2 2 v14 a2 2 0 0 0 2 2 h10 a2 2 0 0 0 2 -2 V8 z"/><polyline points="14 3 14 8 19 8"/><path d="M12 13 L13 15 L15 16 L13 17 L12 19 L11 17 L9 16 L11 15 z"/></svg>) },
-                { id:"spreadsheet", label:"From spreadsheet", desc:"Drop a CSV or Excel file. We auto-detect columns and their types as your property list.",
+                { id:"spreadsheet", label:"From spreadsheet", color:"var(--green)",  desc:"Drop a CSV or Excel file. We auto-detect columns and their types as your property list.",
                   icon:(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="1.5"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="4" x2="10" y2="20"/></svg>) },
-                { id:"manual",      label:"Define manually",  desc:"Type each field by hand. Best when you know the exact shape you want.",
+                { id:"manual",      label:"Define manually",  color:"var(--coral)",  desc:"Type each field by hand. Best when you know the exact shape you want.",
                   icon:(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4 L20 8 L9 19 L4 20 L5 15 z"/><line x1="14" y1="6" x2="18" y2="10"/></svg>) }
               ];
               var selectedMode = PROP_MODES.find(function(m){ return m.id === propMode; });
@@ -10347,7 +10352,7 @@ function AddNodeFlow({ onClose }) {
                       style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid " + (selectedMode ? "var(--ink-2)" : "var(--line)"), borderRadius:9, background: selectedMode ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow: selectedMode ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "inset 0 1px 0 rgba(255,255,255,0.6)" }}>
                       {selectedMode ? (
                         <>
-                          <span style={{ width:34, height:34, borderRadius:7, background:"var(--ink)", color:"var(--bg-canvas)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{selectedMode.icon}</span>
+                          <span style={{ width:34, height:34, borderRadius:7, background:selectedMode.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{selectedMode.icon}</span>
                           <div style={{ flex:1, minWidth:0 }}>
                             <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{selectedMode.label}</div>
                             <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selectedMode.desc}</div>
@@ -10376,7 +10381,7 @@ function AddNodeFlow({ onClose }) {
                                 style={{ display:"flex", alignItems:"flex-start", gap:12, width:"100%", padding:"10px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < PROP_MODES.length-1 ? 2 : 0 }}
                                 onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
                                 onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
-                                <span style={{ width:32, height:32, borderRadius:6, background:"var(--ink)", color:"var(--bg-canvas)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>{o.icon}</span>
+                                <span style={{ width:32, height:32, borderRadius:6, background:o.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>{o.icon}</span>
                                 <div style={{ flex:1, minWidth:0 }}>
                                   <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{o.label}</div>
                                   <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3, lineHeight:1.45 }}>{o.desc}</div>
