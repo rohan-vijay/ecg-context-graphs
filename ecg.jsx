@@ -9693,11 +9693,9 @@ function NodesView({ onSelect, onSwitchToCanvas, onAddNode }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 var NODE_CATEGORIES_CONFIG = [
-  { id:"core",    label:"Core entity",    color:"var(--blue)",   fill:"var(--blue-fill)",   desc:"A first-class business object that other entities relate to (Account, Customer, Product)." },
-  { id:"support", label:"Support",        color:"var(--green)",  fill:"var(--green-fill)",  desc:"Operational records that support the core (Ticket, Interaction, Task, Note)." },
-  { id:"derived", label:"Derived",        color:"var(--purple)", fill:"var(--purple-fill)", desc:"Computed or analytical entities (Account Health, Forecast, Risk Score)." },
-  { id:"agent",   label:"Agent",          color:"var(--gold)",   fill:"var(--gold-fill)",   desc:"AI agent that emits records or judgments (Customer Health agent, Churn Forecaster)." },
-  { id:"source",  label:"Source",         color:"var(--coral)",  fill:"var(--coral-fill)",  desc:"A system of record exposed as a node (Salesforce CRM, Snowflake DW)." }
+  { id:"core",    label:"Core entity",    color:"var(--blue)",   fill:"var(--blue-fill)",   desc:"A first-class business object that other entities relate to — Account, Customer, Product." },
+  { id:"support", label:"Support entity", color:"var(--green)",  fill:"var(--green-fill)",  desc:"Operational records that support the core — Ticket, Interaction, Task, Note." },
+  { id:"lookup",  label:"Lookup",         color:"var(--gold)",   fill:"var(--gold-fill)",   desc:"Reference data shared across entities — Country, Currency, Status." }
 ];
 
 // Pre-built property templates by node archetype
@@ -10032,7 +10030,8 @@ function AddNodeFlow({ onClose }) {
   var [name, setName] = useState("");
   var [category, setCategory] = useState("core");
   var [description, setDescription] = useState("");
-  var [shape, setShape] = useState("entity"); // entity / agent / source
+  var [shape, setShape] = useState("entity"); // entity / agent / source — kept for downstream code
+  var [catOpen, setCatOpen] = useState(false);
 
   // Step 2 - properties + creation mode
   var [propMode, setPropMode] = useState("template"); // manual / spreadsheet / sample / template
@@ -10175,7 +10174,7 @@ function AddNodeFlow({ onClose }) {
   var inp = { border:"1px solid var(--line)", borderRadius:7, padding:"8px 11px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", outline:"none", boxSizing:"border-box", width:"100%", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6), 0 1px 0 rgba(40,40,20,0.02)" };
   var lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:6 };
 
-  var stepNames = ["Basics", "Properties", "Identity", "Relationships", "Governance", "Review"];
+  var stepNames = ["Identity", "Properties", "Primary key", "Relationships", "Governance", "Review"];
 
   function NodePreview({ size }) {
     size = size || 36;
@@ -10240,7 +10239,7 @@ function AddNodeFlow({ onClose }) {
               <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / 6"}</div>
               <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>{stepNames[step-1]}</div>
               <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:680 }}>
-                {step === 1 && "Name the node type and pick its category. Use a singular capitalised noun (e.g. Account, Contract, Ticket)."}
+                {step === 1 && "Name the node type and pick its category. Use a singular capitalised noun — Account, Contract, Ticket."}
                 {step === 2 && "Define the properties this node carries. You can enter them by hand, upload a spreadsheet to auto-detect columns, parse a sample document, or start from a template."}
                 {step === 3 && "Pick the primary key and any natural keys. These drive matching, dedup, and joins across sources."}
                 {step === 4 && "Pre-declare expected edges to other node types. Optional — you can add edges later from the canvas."}
@@ -10249,10 +10248,11 @@ function AddNodeFlow({ onClose }) {
               </div>
             </div>
 
-            {/* ── STEP 1: Basics ── */}
-            {step === 1 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:720 }}>
-                <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:14 }}>
+            {/* ── STEP 1: Identity ── */}
+            {step === 1 && (function(){
+              var sel = NODE_CATEGORIES_CONFIG.find(function(c){ return c.id === category; }) || NODE_CATEGORIES_CONFIG[0];
+              return (
+                <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
                   <div>
                     <label style={lbl}>NAME</label>
                     <input value={name} onChange={function(e){ setName(e.target.value); }} placeholder="e.g. Contract" style={Object.assign({}, inp, { fontSize:16, fontFamily:"Instrument Serif" })} />
@@ -10260,41 +10260,56 @@ function AddNodeFlow({ onClose }) {
                       {name && !nameOk ? "Must start with a capital letter and be ≥ 2 chars" : "Singular noun. Will appear in :Cypher patterns and the catalog."}
                     </div>
                   </div>
+
                   <div>
-                    <label style={lbl}>SHAPE</label>
-                    <div style={{ display:"flex", gap:6 }}>
-                      {[{ id:"entity", l:"●" },{ id:"agent", l:"⬣" },{ id:"source", l:"■" }].map(function(o){
-                        var isOn = shape === o.id;
-                        return <button key={o.id} onClick={function(){ setShape(o.id); }}
-                          style={{ flex:1, padding:"10px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:18, color:"var(--ink-2)" }}>{o.l}</button>;
-                      })}
+                    <label style={lbl}>CATEGORY</label>
+                    <div style={{ position:"relative" }}>
+                      <button onClick={function(){ setCatOpen(function(o){ return !o; }); }}
+                        style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--ink-2)", borderRadius:9, background:"var(--bg-canvas)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"0 0 0 2px color-mix(in oklab, var(--ink) 6%, transparent)" }}>
+                        <span style={{ width:34, height:34, borderRadius:7, background:sel.fill, color:sel.color, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                          <span style={{ width:10, height:10, borderRadius:"50%", background:sel.color }} />
+                        </span>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{sel.label}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{sel.desc}</div>
+                        </div>
+                        <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>▾</span>
+                      </button>
+                      {catOpen && (
+                        <>
+                          <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setCatOpen(false); }} />
+                          <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:380, overflowY:"auto" }}>
+                            {NODE_CATEGORIES_CONFIG.map(function(o, i){
+                              var isSel = category === o.id;
+                              return (
+                                <button key={o.id} onClick={function(){ setCategory(o.id); setCatOpen(false); }}
+                                  style={{ display:"flex", alignItems:"flex-start", gap:12, width:"100%", padding:"10px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < NODE_CATEGORIES_CONFIG.length-1 ? 2 : 0 }}
+                                  onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                                  onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+                                  <span style={{ width:32, height:32, borderRadius:6, background:o.fill, color:o.color, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>
+                                    <span style={{ width:9, height:9, borderRadius:"50%", background:o.color }} />
+                                  </span>
+                                  <div style={{ flex:1, minWidth:0 }}>
+                                    <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{o.label}</div>
+                                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3, lineHeight:1.45 }}>{o.desc}</div>
+                                  </div>
+                                  {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
-                </div>
-                <div>
-                  <label style={lbl}>CATEGORY</label>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                    {NODE_CATEGORIES_CONFIG.map(function(o){
-                      var isOn = category === o.id;
-                      return (
-                        <button key={o.id} onClick={function(){ setCategory(o.id); if (o.id === "agent") setShape("agent"); else if (o.id === "source") setShape("source"); else setShape("entity"); }}
-                          style={{ textAlign:"left", padding:"11px 14px", border:"1px solid " + (isOn ? o.color : "var(--line)"), borderRadius:8, background: isOn ? o.fill : "var(--panel)", cursor:"pointer", fontFamily:"inherit" }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-                            <span style={{ width:8, height:8, borderRadius:"50%", background:o.color }} />
-                            <span style={{ fontSize:13.5, fontWeight: isOn ? 600 : 500, color:"var(--ink)" }}>{o.label}</span>
-                          </div>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", lineHeight:1.45 }}>{o.desc}</div>
-                        </button>
-                      );
-                    })}
+
+                  <div>
+                    <label style={lbl}>DESCRIPTION <span style={{ color:"var(--ink-4)", marginLeft:4, fontWeight:400, textTransform:"none", letterSpacing:0 }}>optional</span></label>
+                    <textarea value={description} onChange={function(e){ setDescription(e.target.value); }} rows={3} placeholder="What does this node represent? When is a new instance created?" style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.55 })} />
                   </div>
                 </div>
-                <div>
-                  <label style={lbl}>DESCRIPTION (OPTIONAL)</label>
-                  <textarea value={description} onChange={function(e){ setDescription(e.target.value); }} rows={3} placeholder="What does this node represent? When is a new instance created?" style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.55 })} />
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* ── STEP 2: Properties ── */}
             {step === 2 && (
