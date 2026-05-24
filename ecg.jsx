@@ -3279,244 +3279,197 @@ function EdgesPane({ node, outgoing, incoming }) {
 // ─── ADD PROPERTY FLOW ───────────────────────────────────────────────────────
 
 function AddPropertyFlowModal({ node, onClose }) {
-  const [step, setStep]           = useState(1);
   const [pName, setPName]         = useState("");
   const [pType, setPType]         = useState("string");
+  const [pTypeOpen, setPTypeOpen] = useState(false);
   const [pDesc, setPDesc]         = useState("");
   const [pRequired, setPRequired] = useState(false);
   const [pIndexed, setPIndexed]   = useState(false);
   const [pPII, setPPII]           = useState(false);
+  const [pUnique, setPUnique]     = useState(false);
   const [pComputed, setPComputed] = useState(false);
   const [pDefault, setPDefault]   = useState("");
   const [pFormula, setPFormula]   = useState("");
-  const [pSource, setPSource]     = useState("manual");
+  const [pSource, setPSource]     = useState("Salesforce CRM");
+  const [advOpen, setAdvOpen]     = useState(false);
 
-  const TYPES = ["string","decimal","float","bool","timestamp","date","enum(20)","uuid","struct","array"];
   const SOURCES = ["Salesforce CRM","HubSpot Marketing","NetSuite ERP","Manual / Admin","Computed","Okta Identity"];
-
-  const inp = { border:"1px solid var(--line)", borderRadius:8, padding:"8px 10px", fontSize:12.5, fontFamily:"inherit", color:"var(--ink)", background:"var(--bg-canvas)", outline:"none", boxSizing:"border-box" };
-  const sel = { border:"1px solid var(--line)", borderRadius:8, padding:"8px 10px", fontSize:12.5, fontFamily:"inherit", color:"var(--ink)", background:"var(--bg-canvas)", outline:"none", cursor:"pointer" };
-  const lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:7 };
-  const fg  = { display:"flex", flexDirection:"column", gap:6 };
-
-  const STEPS = [
-    { n:1, label:"Basics",      sub: pName || "Name & type" },
-    { n:2, label:"Constraints", sub: "Flags & source" },
-    { n:3, label:"Review",      sub: "Confirm & save" },
+  // Reuse the property-type colours / glyphs from the AddNode flow.
+  const TYPE_META_LOCAL = {
+    "uuid":      { color:"var(--purple)", glyph:"ID"  },
+    "string":    { color:"var(--blue)",   glyph:"T"   },
+    "string[]":  { color:"var(--blue)",   glyph:"[T]" },
+    "decimal":   { color:"var(--gold)",   glyph:"#"   },
+    "float":     { color:"var(--gold)",   glyph:".5"  },
+    "bool":      { color:"var(--coral)",  glyph:"01"  },
+    "timestamp": { color:"var(--green)",  glyph:"TS"  },
+    "date":      { color:"var(--green)",  glyph:"DT"  },
+    "enum(20)":  { color:"var(--purple)", glyph:"E"   },
+    "enum":      { color:"var(--purple)", glyph:"E"   },
+    "struct":    { color:"var(--ink-3)",  glyph:"{}"  },
+    "array":     { color:"var(--ink-3)",  glyph:"[ ]" }
+  };
+  const TYPE_LIST = [
+    { id:"string",    label:"String",    desc:"UTF-8 text of arbitrary length." },
+    { id:"decimal",   label:"Decimal",   desc:"Exact numeric — monetary values like ARR or spend." },
+    { id:"float",     label:"Float",     desc:"Floating-point numeric — scores and ratios." },
+    { id:"bool",      label:"Boolean",   desc:"True / false flag." },
+    { id:"timestamp", label:"Timestamp", desc:"Date and time with timezone (ISO 8601)." },
+    { id:"date",      label:"Date",      desc:"Calendar date without time." },
+    { id:"uuid",      label:"UUID",      desc:"Universally unique identifier — use for foreign keys." },
+    { id:"enum(20)",  label:"Enum",      desc:"Controlled vocabulary with up to 20 values." },
+    { id:"struct",    label:"Struct",    desc:"Nested JSON object for composite values." },
+    { id:"array",     label:"Array",     desc:"Ordered list of values." }
   ];
 
-  const canNext = (function(){
-    if (step === 1) return pName.trim().length > 0 && !!pType;
-    return true;
-  }());
+  const inp = { border:"1px solid var(--line)", borderRadius:7, padding:"9px 11px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", outline:"none", boxSizing:"border-box", width:"100%", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" };
+  const lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:6 };
 
-  const stepTitles = ["Define property", "Constraints & flags", "Review & save"];
-  const stepDescs  = [
-    "Give the property a name and choose its data type. The name must be unique within " + node.label + ".",
-    "Set validation constraints, access flags, and the canonical source for this property's values.",
-    "Review the property definition before adding it to the " + node.label + " schema.",
-  ];
+  const canSave = pName.trim().length > 0 && !!pType;
+  const typeMeta = TYPE_META_LOCAL[pType] || TYPE_META_LOCAL.string;
 
   return (
-    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.48)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
+    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
       onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width:"72vw", maxWidth:860, height:"80vh", background:"var(--bg-canvas)", borderRadius:14, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 28px 72px rgba(0,0,0,0.36)" }}>
+      <div style={{ width:"92vw", maxWidth:600, maxHeight:"92vh", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
 
         {/* Header */}
-        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", padding:"20px 28px 16px", borderBottom:"1px solid var(--line)", flexShrink:0 }}>
-          <div>
-            <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:7 }}>{node.label + " · add property"}</div>
-            <h2 style={{ fontSize:17, fontWeight:600, color:"var(--ink)", margin:"0 0 5px" }}>{stepTitles[step-1]}</h2>
-            <p style={{ fontSize:12.5, color:"var(--ink-3)", margin:0, lineHeight:1.55, maxWidth:480 }}>{stepDescs[step-1]}</p>
+        <div style={{ flexShrink:0, padding:"18px 22px", borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <span style={{ fontFamily:"Instrument Serif", fontSize:18, color:"var(--ink)" }}>Add property</span>
+            <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", padding:"2px 7px", borderRadius:4, background:"var(--chip)", letterSpacing:"0.4px" }}>{node.label.toUpperCase()}</span>
           </div>
-          <button onClick={onClose} style={{ width:30, height:30, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginLeft:20 }}>✕</button>
+          <button onClick={onClose} style={{ width:30, height:30, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:14, color:"var(--ink-3)" }}>✕</button>
         </div>
 
         {/* Body */}
-        <div style={{ flex:1, display:"flex", minHeight:0 }}>
+        <div style={{ flex:1, overflowY:"auto", padding:"20px 22px", display:"flex", flexDirection:"column", gap:18 }}>
 
-          {/* Sidebar */}
-          <div style={{ width:192, flexShrink:0, borderRight:"1px solid var(--line)", padding:"24px 14px", display:"flex", flexDirection:"column", gap:2 }}>
-            {STEPS.map(function(s){
-              const done = step > s.n, active = step === s.n;
-              return (
-                <button key={s.n} onClick={function(){ if (done) setStep(s.n); }}
-                  style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px", borderRadius:7, border:"none", background:active?"var(--panel-2)":"transparent", cursor:done?"pointer":"default", textAlign:"left", width:"100%" }}>
-                  <span style={{ width:22, height:22, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0, background:done?"var(--green)":active?"var(--ink)":"var(--line)", color:done||active?"#fff":"var(--ink-3)", marginTop:1 }}>
-                    {done ? "✓" : s.n}
-                  </span>
-                  <div>
-                    <div style={{ fontSize:12.5, fontWeight:active?600:400, color:active?"var(--ink)":done?"var(--ink-2)":"var(--ink-3)" }}>{s.label}</div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:2 }}>{s.sub}</div>
-                  </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr", gap:14 }}>
+            <div>
+              <label style={lbl}>NAME</label>
+              <input value={pName} onChange={function(e){ setPName(e.target.value); }}
+                placeholder="e.g. arr_usd, churn_probability, domain"
+                style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:13 })} autoFocus />
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:5 }}>snake_case recommended. Unique within {node.label}.</div>
+            </div>
+            <div>
+              <label style={lbl}>TYPE</label>
+              <div style={{ position:"relative" }}>
+                <button onClick={function(){ setPTypeOpen(function(o){ return !o; }); }}
+                  style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 9px", border:"1px solid var(--line)", borderRadius:7, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+                  <span style={{ minWidth:24, height:20, padding:"0 6px", borderRadius:4, background:typeMeta.color, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{typeMeta.glyph}</span>
+                  <span style={{ flex:1, fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink-2)" }}>{pType}</span>
+                  <span style={{ color:"var(--ink-3)", fontSize:10, fontFamily:"JetBrains Mono" }}>▾</span>
                 </button>
-              );
-            })}
+                {pTypeOpen && (
+                  <>
+                    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPTypeOpen(false); }} />
+                    <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:8, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:5, maxHeight:300, overflowY:"auto" }}>
+                      {TYPE_LIST.map(function(t){
+                        var m = TYPE_META_LOCAL[t.id] || TYPE_META_LOCAL.string;
+                        var isSel = pType === t.id;
+                        return (
+                          <button key={t.id} onClick={function(){ setPType(t.id); setPTypeOpen(false); }}
+                            style={{ display:"flex", alignItems:"flex-start", gap:10, width:"100%", padding:"7px 9px", borderRadius:6, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
+                            onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                            onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+                            <span style={{ minWidth:26, height:20, padding:"0 6px", borderRadius:4, background:m.color, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0, marginTop:1 }}>{m.glyph}</span>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", fontWeight:600 }}>{t.label} <span style={{ color:"var(--ink-3)", fontWeight:400 }}>· {t.id}</span></div>
+                              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:2 }}>{t.desc}</div>
+                            </div>
+                            {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:11, marginTop:3 }}>✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* Content */}
-          <div style={{ flex:1, overflowY:"auto", padding:"32px 36px" }}>
+          <div>
+            <label style={lbl}>DESCRIPTION <span style={{ color:"var(--ink-4)", marginLeft:4, fontWeight:400, textTransform:"none", letterSpacing:0 }}>optional</span></label>
+            <textarea value={pDesc} onChange={function(e){ setPDesc(e.target.value); }} rows={2} placeholder="What this property represents and how it should be used…"
+              style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.55 })} />
+          </div>
 
-            {/* Step 1 — Basics */}
-            {step === 1 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:520 }}>
-                <div style={fg}>
-                  <div style={lbl}>Property name</div>
-                  <input value={pName} onChange={function(e){ setPName(e.target.value); }}
-                    placeholder="e.g. arr_usd, churn_probability, domain"
-                    style={{ ...inp, width:"100%" }} />
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>snake_case recommended. Must be unique within this node type.</div>
-                </div>
-                <div style={fg}>
-                  <div style={lbl}>Data type</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    {[
-                      { type:"string",    label:"String",    desc:"UTF-8 text of arbitrary length." },
-                      { type:"decimal",   label:"Decimal",   desc:"Exact numeric — use for monetary values (e.g. ARR, spend)." },
-                      { type:"float",     label:"Float",     desc:"Floating-point numeric — use for scores and ratios." },
-                      { type:"bool",      label:"Boolean",   desc:"True / false flag." },
-                      { type:"timestamp", label:"Timestamp", desc:"Date and time with timezone (ISO 8601)." },
-                      { type:"date",      label:"Date",      desc:"Calendar date without time." },
-                      { type:"uuid",      label:"UUID",      desc:"Universally unique identifier — use for foreign keys." },
-                      { type:"enum(20)",  label:"Enum",      desc:"Controlled vocabulary with up to 20 values." },
-                      { type:"struct",    label:"Struct",    desc:"Nested JSON object for composite values." },
-                    ].map(function(t){
-                      const active = pType === t.type;
-                      return (
-                        <div key={t.type} onClick={function(){ setPType(t.type); }}
-                          style={{ display:"flex", alignItems:"center", gap:14, padding:"11px 14px", border:"2px solid "+(active?"var(--blue)":"var(--line)"), borderRadius:8, cursor:"pointer", background:active?"rgba(99,143,255,0.06)":"transparent" }}>
-                          <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, fontWeight:700, color:active?"var(--blue)":"var(--ink-3)", minWidth:68 }}>{t.type}</code>
-                          <div>
-                            <span style={{ fontSize:13, fontWeight:active?500:400, color:"var(--ink)" }}>{t.label}</span>
-                            <span style={{ fontSize:12, color:"var(--ink-3)", marginLeft:8 }}>{t.desc}</span>
-                          </div>
-                          {active && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--blue)", marginLeft:"auto" }}>SELECTED</span>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div style={fg}>
-                  <div style={lbl}>Description <span style={{ textTransform:"none", letterSpacing:0, fontSize:10, color:"var(--ink-4)" }}>(optional)</span></div>
-                  <textarea value={pDesc} onChange={function(e){ setPDesc(e.target.value); }}
-                    placeholder="What this property represents and how it should be used..."
-                    rows={3} style={{ ...inp, width:"100%", resize:"vertical", lineHeight:1.55, fontFamily:"inherit", fontSize:12.5 }} />
-                </div>
-              </div>
-            )}
+          {/* Quick toggles */}
+          <div>
+            <label style={lbl}>FLAGS</label>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+              {[
+                { id:"required", val:pRequired, set:setPRequired, l:"Required",   d:"Every record must have a value.",            tone:"var(--ink)"  },
+                { id:"indexed",  val:pIndexed,  set:setPIndexed,  l:"Indexed",    d:"Speed up lookups and filters.",              tone:"var(--blue)" },
+                { id:"unique",   val:pUnique,   set:setPUnique,   l:"Unique",     d:"No two records may share the same value.",   tone:"var(--green)"},
+                { id:"pii",      val:pPII,      set:setPPII,      l:"PII",        d:"Audit logs + access gates apply on reads.",  tone:"var(--coral)"}
+              ].map(function(f){
+                return (
+                  <label key={f.id} style={{ display:"flex", alignItems:"flex-start", gap:9, padding:"9px 11px", border:"1px solid " + (f.val ? f.tone : "var(--line)"), borderRadius:7, background: f.val ? "var(--panel)" : "var(--panel-2)", cursor:"pointer" }}>
+                    <input type="checkbox" checked={f.val} onChange={function(e){ f.set(e.target.checked); }} style={{ accentColor:f.tone, width:14, height:14, marginTop:2 }} />
+                    <div>
+                      <div style={{ fontSize:12.5, color:"var(--ink)", fontWeight:500 }}>{f.l}</div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", marginTop:2 }}>{f.d}</div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
 
-            {/* Step 2 — Constraints */}
-            {step === 2 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:28, maxWidth:520 }}>
-                <div style={fg}>
-                  <div style={lbl}>Source system</div>
-                  <select value={pSource} onChange={function(e){ setPSource(e.target.value); }} style={{ ...sel, width:"100%" }}>
+          {/* Advanced — collapsible */}
+          <div>
+            <button onClick={function(){ setAdvOpen(function(o){ return !o; }); }} className="btn-ghost"
+              style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:11, padding:"5px 10px", fontFamily:"JetBrains Mono", letterSpacing:"0.4px" }}>
+              <span style={{ display:"inline-block", transform: advOpen ? "rotate(90deg)" : "none", transition:"transform 120ms ease" }}>›</span>
+              {advOpen ? "HIDE" : "SHOW"} ADVANCED SETTINGS
+            </button>
+            {advOpen && (
+              <div style={{ marginTop:12, padding:"16px 18px", border:"1px dashed var(--line)", borderRadius:8, background:"var(--panel-2)", display:"flex", flexDirection:"column", gap:14 }}>
+                <div>
+                  <label style={lbl}>SOURCE SYSTEM</label>
+                  <select value={pSource} onChange={function(e){ setPSource(e.target.value); }} style={inp}>
                     {SOURCES.map(function(s){ return <option key={s} value={s}>{s}</option>; })}
                   </select>
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>Which upstream system is the canonical source of truth for this property.</div>
                 </div>
-
                 {pType !== "bool" && pType !== "struct" && (
-                  <div style={fg}>
-                    <div style={lbl}>Default value <span style={{ textTransform:"none", letterSpacing:0, fontSize:10, color:"var(--ink-4)" }}>(optional)</span></div>
+                  <div>
+                    <label style={lbl}>DEFAULT VALUE <span style={{ color:"var(--ink-4)", marginLeft:4, fontWeight:400, textTransform:"none", letterSpacing:0 }}>optional</span></label>
                     <input value={pDefault} onChange={function(e){ setPDefault(e.target.value); }}
                       placeholder={pType === "decimal" || pType === "float" ? "e.g. 0" : pType === "timestamp" ? "e.g. NOW()" : "e.g. unknown"}
-                      style={{ ...inp, width:"100%" }} />
+                      style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12 })} />
                   </div>
                 )}
-
+                <label style={{ display:"flex", alignItems:"flex-start", gap:9, padding:"9px 11px", border:"1px solid " + (pComputed ? "var(--green)" : "var(--line)"), borderRadius:7, background: pComputed ? "var(--panel)" : "var(--bg-canvas)", cursor:"pointer" }}>
+                  <input type="checkbox" checked={pComputed} onChange={function(e){ setPComputed(e.target.checked); }} style={{ accentColor:"var(--green)", width:14, height:14, marginTop:2 }} />
+                  <div>
+                    <div style={{ fontSize:12.5, color:"var(--ink)", fontWeight:500 }}>Computed property</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", marginTop:2 }}>Derived from a formula or agent — not written by upstream systems.</div>
+                  </div>
+                </label>
                 {pComputed && (
-                  <div style={fg}>
-                    <div style={lbl}>Formula / agent expression</div>
-                    <textarea value={pFormula} onChange={function(e){ setPFormula(e.target.value); }}
+                  <div>
+                    <label style={lbl}>FORMULA / AGENT EXPRESSION</label>
+                    <textarea value={pFormula} onChange={function(e){ setPFormula(e.target.value); }} rows={2}
                       placeholder="e.g. risk_score := agent:cust_health.score"
-                      rows={2} style={{ ...inp, width:"100%", resize:"vertical", fontFamily:"JetBrains Mono", fontSize:12, lineHeight:1.55 }} />
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>Use := for assignment. Reference agents with agent:name.property.</div>
-                  </div>
-                )}
-
-                <div style={fg}>
-                  <div style={lbl}>Flags</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                    {[
-                      { key:"required", val:pRequired, set:setPRequired, label:"Required",           desc:"Every node must have a non-null value for this property." },
-                      { key:"indexed",  val:pIndexed,  set:setPIndexed,  label:"Indexed",            desc:"Create a B-tree index on this property to speed up lookups and filters." },
-                      { key:"pii",      val:pPII,      set:setPPII,      label:"PII",                desc:"Mark as personally identifiable information. Access gates and audit logs will apply." },
-                      { key:"computed", val:pComputed, set:setPComputed, label:"Computed property",  desc:"Value is derived from a formula or agent — not written by source systems directly." },
-                    ].map(function(f){
-                      return (
-                        <div key={f.key} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 16px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel-2)" }}>
-                          <div>
-                            <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)", marginBottom:3 }}>{f.label}</div>
-                            <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.5 }}>{f.desc}</div>
-                          </div>
-                          <div onClick={function(){ f.set(!f.val); }}
-                            style={{ width:40, height:22, borderRadius:11, background:f.val?"var(--ink)":"var(--line-2)", cursor:"pointer", position:"relative", flexShrink:0, marginLeft:16, transition:"background 150ms" }}>
-                            <div style={{ position:"absolute", top:3, left:f.val?20:3, width:16, height:16, borderRadius:"50%", background:"#fff", transition:"left 150ms" }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3 — Review */}
-            {step === 3 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:520 }}>
-                <div style={{ border:"1px solid var(--line)", borderRadius:12, overflow:"hidden" }}>
-                  <div style={{ padding:"18px 22px", borderBottom:"1px solid var(--line-2)" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10 }}>
-                      <code style={{ fontFamily:"JetBrains Mono", fontSize:15, fontWeight:700, color:"var(--ink)" }}>{pName || "(unnamed)"}</code>
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"3px 10px", borderRadius:5, background:"rgba(99,143,255,0.12)", color:"var(--blue)", fontWeight:600 }}>{pType}</span>
-                      {pPII      && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 7px", borderRadius:4, background:"var(--coral-fill)", color:"var(--coral)", fontWeight:700 }}>PII</span>}
-                      {pRequired && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-3)", fontWeight:700 }}>REQ</span>}
-                      {pIndexed  && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-3)", fontWeight:700 }}>IDX</span>}
-                      {pComputed && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 7px", borderRadius:4, background:"rgba(72,199,142,0.12)", color:"var(--green)", fontWeight:700 }}>FX</span>}
-                    </div>
-                    {pDesc && <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.6 }}>{pDesc}</div>}
-                  </div>
-                  <div style={{ display:"flex", gap:1, background:"var(--line-2)" }}>
-                    {[
-                      ["Node", node.label],
-                      ["Source", pSource],
-                      ["Default", pDefault || "—"],
-                      ["Status", "Will be added"],
-                    ].map(function(kv,i){
-                      return (
-                        <div key={i} style={{ flex:1, padding:"12px 16px", background:"var(--panel-2)" }}>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:3 }}>{kv[0]}</div>
-                          <div style={{ fontSize:12.5, color:kv[0]==="Status"?"var(--green)":"var(--ink)", fontWeight:kv[0]==="Status"?500:400 }}>{kv[1]}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                {pComputed && pFormula && (
-                  <div style={{ border:"1px solid var(--line-2)", borderRadius:10, overflow:"hidden" }}>
-                    <div style={{ padding:"9px 14px", background:"var(--panel-2)", borderBottom:"1px dashed var(--line-2)" }}>
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>Formula</span>
-                    </div>
-                    <div style={{ padding:"12px 14px" }}>
-                      <code style={{ fontFamily:"JetBrains Mono", fontSize:13, color:"var(--ink)" }}>{pFormula}</code>
-                    </div>
+                      style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12, lineHeight:1.5, resize:"vertical" })} />
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:5 }}>Use := for assignment. Reference agents with agent:name.property.</div>
                   </div>
                 )}
               </div>
             )}
-
           </div>
         </div>
 
         {/* Footer */}
-        <div style={{ flexShrink:0, padding:"14px 28px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"flex-end", gap:8, background:"var(--panel-2)" }}>
-          <button className="btn-ghost" onClick={onClose}>Cancel</button>
-          {step > 1 && <button className="btn-ghost" onClick={function(){ setStep(function(s){ return s-1; }); }}>Back</button>}
-          {step < 3
-            ? <button className="btn-dark" disabled={!canNext} onClick={function(){ setStep(function(s){ return s+1; }); }} style={{ opacity:canNext?1:0.45 }}>Continue</button>
-            : <button className="btn-dark" onClick={onClose}>Add property</button>
-          }
+        <div style={{ flexShrink:0, padding:"12px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
+          <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{canSave ? "Ready to add" : "Add a name + type"}</span>
+          <div style={{ display:"flex", gap:8 }}>
+            <button className="btn-ghost" onClick={onClose}>Cancel</button>
+            <button className="btn-dark" disabled={!canSave} onClick={onClose} style={{ opacity: canSave ? 1 : 0.45 }}>Add property ↵</button>
+          </div>
         </div>
 
       </div>
