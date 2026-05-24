@@ -12389,19 +12389,21 @@ function GraphLandingEmpty({ onCreate, onBack }) {
     var W = 1600, H = 900;
     var s = 7919 | 0;
     function nxt(){ s = (s * 1664525 + 1013904223) | 0; return Math.abs(s); }
+    // Each cluster gets its own hue from the workspace palette — hints at the
+    // variety of context graphs you'll spin up (revenue, support, finance, …).
     var clusters = [
-      { cx: W*0.18, cy: H*0.32, n: 9,  r: 110 },
-      { cx: W*0.40, cy: H*0.72, n: 7,  r: 90  },
-      { cx: W*0.62, cy: H*0.28, n: 8,  r: 100 },
-      { cx: W*0.82, cy: H*0.62, n: 9,  r: 120 },
-      { cx: W*0.50, cy: H*0.50, n: 5,  r: 70  }
+      { cx: W*0.18, cy: H*0.32, n: 9,  r: 110, color:"var(--gold)"   },
+      { cx: W*0.40, cy: H*0.72, n: 7,  r: 90,  color:"var(--blue)"   },
+      { cx: W*0.62, cy: H*0.28, n: 8,  r: 100, color:"var(--green)"  },
+      { cx: W*0.82, cy: H*0.62, n: 9,  r: 120, color:"var(--coral)"  },
+      { cx: W*0.50, cy: H*0.50, n: 5,  r: 70,  color:"var(--purple)" }
     ];
     var nodes = [];
     clusters.forEach(function(c){
       for (var i = 0; i < c.n; i++){
         var ang = (i / c.n) * Math.PI * 2 + (nxt() % 100) / 600;
         var rr  = c.r * (0.55 + (nxt() % 100) / 220);
-        nodes.push({ x: c.cx + Math.cos(ang) * rr, y: c.cy + Math.sin(ang) * rr * 0.85, r: 5 + (nxt() % 9), c: i % c.n === 0 });
+        nodes.push({ x: c.cx + Math.cos(ang) * rr, y: c.cy + Math.sin(ang) * rr * 0.85, r: 5 + (nxt() % 9), c: i % c.n === 0, color: c.color });
       }
     });
     var edges = [];
@@ -12424,24 +12426,25 @@ function GraphLandingEmpty({ onCreate, onBack }) {
       <svg width="100%" height="100%" viewBox={"0 0 " + constellation.W + " " + constellation.H} preserveAspectRatio="xMidYMid slice" style={{ position:"absolute", inset:0, pointerEvents:"none" }} aria-hidden="true">
         <defs>
           <radialGradient id="emptyHalo" cx="50%" cy="50%" r="55%">
-            <stop offset="0%"  stopColor="var(--gold)" stopOpacity="0.08" />
-            <stop offset="60%" stopColor="var(--gold)" stopOpacity="0.03" />
+            <stop offset="0%"  stopColor="var(--gold)" stopOpacity="0.10" />
+            <stop offset="60%" stopColor="var(--gold)" stopOpacity="0.04" />
             <stop offset="100%" stopColor="var(--gold)" stopOpacity="0" />
           </radialGradient>
         </defs>
         <rect x="0" y="0" width={constellation.W} height={constellation.H} fill="url(#emptyHalo)" />
-        <g stroke="var(--ink-3)" strokeOpacity="0.12" strokeWidth="1">
+        <g strokeWidth="1">
           {constellation.edges.map(function(e, i){
             var a = constellation.nodes[e[0]], b = constellation.nodes[e[1]];
-            return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />;
+            // Edge inherits the source-node colour so threads carry the cluster's hue.
+            return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={a.color} strokeOpacity="0.28" />;
           })}
         </g>
         <g>
           {constellation.nodes.map(function(n, i){
             return (
               <g key={i}>
-                <circle cx={n.x} cy={n.y} r={n.r + 4} fill="var(--gold)" fillOpacity="0.06" />
-                <circle cx={n.x} cy={n.y} r={n.r}     fill="var(--ink-3)" fillOpacity={n.c ? 0.28 : 0.18} />
+                <circle cx={n.x} cy={n.y} r={n.r + 4} fill={n.color} fillOpacity="0.12" />
+                <circle cx={n.x} cy={n.y} r={n.r}     fill={n.color} fillOpacity={n.c ? 0.55 : 0.38} />
               </g>
             );
           })}
