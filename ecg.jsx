@@ -289,6 +289,19 @@ function NodeShape({ node, selected, highlighted, dimmed, hover }) {
 const TABS = ["Graph", "Nodes", "Edges", "Sources", "Records"];
 
 function Header({ tab, onTab, onAddNode }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const MENU_ITEMS = [
+    { icon: "＋", label: "Add node type",    action: onAddNode },
+    { icon: "⊞", label: "Add edge type",     action: function(){ setMenuOpen(false); } },
+    { sep: true },
+    { icon: "↗", label: "Export schema",     action: function(){ setMenuOpen(false); } },
+    { icon: "⊡", label: "Import / merge",    action: function(){ setMenuOpen(false); } },
+    { sep: true },
+    { icon: "⚙", label: "Graph settings",    action: function(){ setMenuOpen(false); } },
+    { icon: "◷", label: "Version history",   action: function(){ setMenuOpen(false); } },
+  ];
+
   return (
     <header className="hdr">
       <div className="hdr-left">
@@ -310,13 +323,45 @@ function Header({ tab, onTab, onAddNode }) {
       </div>
       <nav className="hdr-tabs">
         {TABS.map(t => (
-          <button key={t} className={"hdr-tab" + (t === tab ? " on" : "")} onClick={() => onTab(t)}>
+          <button key={t} className={"hdr-tab" + (t === tab ? " on" : "")} onClick={function(){ onTab(t); }}>
             {t}
           </button>
         ))}
       </nav>
-      <div className="hdr-right">
-        <button className="btn-dark" title="Add node" onClick={onAddNode}><span className="plus">+</span> Add node</button>
+      <div className="hdr-right" style={{ position:"relative" }}>
+        <button
+          className="btn-icon"
+          title="More actions"
+          onClick={function(){ setMenuOpen(function(o){ return !o; }); }}
+          style={{ width:36, height:36, borderRadius:9, border:"1px solid var(--line)", background: menuOpen ? "var(--chip)" : "var(--bg-canvas)", fontSize:18, color:"var(--ink-2)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}
+        >⋯</button>
+
+        {menuOpen && (
+          <div
+            style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:149 }}
+            onClick={function(){ setMenuOpen(false); }}
+          />
+        )}
+        {menuOpen && (
+          <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:150, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 8px 28px rgba(0,0,0,0.12)", padding:"6px", minWidth:196, overflow:"hidden" }}>
+            {MENU_ITEMS.map(function(item, i) {
+              if (item.sep) return (
+                <div key={i} style={{ height:1, background:"var(--line-2)", margin:"4px 0" }} />
+              );
+              return (
+                <button key={i}
+                  onClick={function(){ item.action(); setMenuOpen(false); }}
+                  style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"8px 10px", borderRadius:6, border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit", fontSize:13, color:"var(--ink-2)", textAlign:"left" }}
+                  onMouseEnter={function(e){ e.currentTarget.style.background = "var(--bg-canvas)"; e.currentTarget.style.color = "var(--ink)"; }}
+                  onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--ink-2)"; }}
+                >
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:13, color:"var(--ink-3)", width:18, textAlign:"center", flexShrink:0 }}>{item.icon}</span>
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </header>
   );
