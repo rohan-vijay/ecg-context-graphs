@@ -11730,6 +11730,7 @@ function NewGraphFlow({ onClose, onCreate }) {
   var [startId, setStartId]   = useState(null);
   var [included, setIncluded] = useState({}); // entity name → boolean
   var [customEntities, setCustomEntities] = useState([]); // [{ name, desc, props:[] }]
+  var [userPrompt, setUserPrompt] = useState("");
   var [addingEntity, setAddingEntity]     = useState(false);
   var [newEntityName, setNewEntityName]   = useState("");
   var [newEntityDesc, setNewEntityDesc]   = useState("");
@@ -11998,22 +11999,80 @@ function NewGraphFlow({ onClose, onCreate }) {
 
             {/* STEP 2 */}
             {step === 2 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                {/* Blank canvas — compact row */}
+              <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                {/* Prompt card — describe what you want, optionally on top of a template */}
                 {(function(){
-                  var isOn = startId === "__blank";
+                  var blankSelected = startId === "__blank";
+                  var hasPrompt = userPrompt.trim().length > 0;
+                  var contextActive = blankSelected || hasPrompt;
                   return (
-                    <div onClick={function(){ pickStart("__blank"); }}
-                      style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 16px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:10, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none" }}>
-                      <span style={{ width:42, height:42, borderRadius:8, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:18, fontWeight:300, flexShrink:0 }}>∅</span>
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>Blank canvas</div>
-                        <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3 }}>Start with no entities. Add everything yourself in the catalog.</div>
+                    <div style={{ border:"1px solid " + (contextActive ? "var(--ink-2)" : "var(--line)"), borderRadius:12, background:"var(--panel)", padding:"18px 20px 16px", boxShadow: contextActive ? "0 0 0 2px color-mix(in oklab, var(--ink) 6%, transparent), 0 1px 0 var(--line-2)" : "0 1px 0 var(--line-2)" }}>
+                      <div style={{ display:"flex", alignItems:"flex-start", gap:14, marginBottom:12 }}>
+                        <span style={{ width:38, height:38, borderRadius:9, background:"var(--ink)", color:"var(--bg-canvas)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 3 L13.5 8.5 L19 10 L13.5 11.5 L12 17 L10.5 11.5 L5 10 L10.5 8.5 Z" />
+                            <path d="M19 17 L19.7 19.3 L22 20 L19.7 20.7 L19 23 L18.3 20.7 L16 20 L18.3 19.3 Z" />
+                          </svg>
+                        </span>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3 }}>
+                            <span style={{ fontSize:14.5, fontWeight:600, color:"var(--ink)" }}>Describe what you want to build</span>
+                            <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700, letterSpacing:"0.5px" }}>AI</span>
+                          </div>
+                          <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.55 }}>
+                            Type a prompt to start from scratch — or pick a template below and we'll <b style={{ color:"var(--ink-2)" }}>merge your context with it</b>.
+                          </div>
+                        </div>
                       </div>
-                      {isOn && <span style={{ color:"var(--green)", fontWeight:700, fontSize:14 }}>✓</span>}
+
+                      <textarea
+                        value={userPrompt}
+                        onChange={function(e){ setUserPrompt(e.target.value); }}
+                        rows={3}
+                        placeholder="e.g. We're modelling a retail enterprise — focus on store-level inventory, loyalty members, and the link between in-store and online orders. We don't need procurement entities."
+                        style={{ width:"100%", padding:"11px 13px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--bg-canvas)", border:"1px solid var(--line)", borderRadius:8, outline:"none", boxSizing:"border-box", resize:"vertical", lineHeight:1.55, boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}
+                      />
+
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:12, gap:14, flexWrap:"wrap" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:14, fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>
+                          <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}>
+                            <span style={{ width:6, height:6, borderRadius:"50%", background: hasPrompt ? "var(--green)" : "var(--line)" }} />
+                            {hasPrompt ? userPrompt.trim().split(/\s+/).length + " words of context" : "Optional"}
+                          </span>
+                          {picked && hasPrompt && (
+                            <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}>
+                              <span style={{ color:"var(--ink-4)" }}>·</span>
+                              will merge with <b style={{ color:"var(--ink-2)" }}>{picked.name}</b>
+                            </span>
+                          )}
+                          {!picked && hasPrompt && (
+                            <span style={{ display:"inline-flex", alignItems:"center", gap:5 }}>
+                              <span style={{ color:"var(--ink-4)" }}>·</span>
+                              will start blank with this context
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display:"flex", gap:8 }}>
+                          {hasPrompt && (
+                            <button onClick={function(){ setUserPrompt(""); }} className="btn-ghost" style={{ fontSize:11, padding:"5px 11px" }}>Clear</button>
+                          )}
+                          <button onClick={function(){ if (!startId) pickStart("__blank"); }}
+                            className={blankSelected ? "btn-dark" : "btn-ghost"}
+                            style={{ fontSize:11.5, padding:"6px 14px", display:"inline-flex", alignItems:"center", gap:6 }}>
+                            {blankSelected && <span style={{ color:"var(--green)", fontWeight:700 }}>✓</span>}
+                            {blankSelected ? "Starting blank" : "Use blank canvas"}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   );
                 })()}
+
+                <div style={{ display:"flex", alignItems:"center", gap:14, padding:"4px 0" }}>
+                  <span style={{ flex:1, height:1, background:"var(--line-2)" }} />
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.7px", textTransform:"uppercase" }}>or pick a template</span>
+                  <span style={{ flex:1, height:1, background:"var(--line-2)" }} />
+                </div>
 
                 {suggestions.length === 0 && (
                   <div style={{ padding:"24px 20px", border:"1px dashed var(--line)", borderRadius:10, background:"var(--panel-2)", color:"var(--ink-3)", fontSize:12.5, lineHeight:1.55 }}>
@@ -12251,6 +12310,7 @@ function NewGraphFlow({ onClose, onCreate }) {
                       { k:"ENVIRONMENT",  v: environment },
                       { k:"CONTEXT",      v: industry || func ? ((GRAPH_INDUSTRIES.find(function(x){ return x.id === industry; }) || {}).label || "—") + (func ? " · " + (GRAPH_FUNCTIONS.find(function(x){ return x.id === func; }) || {}).label : "") : "Built from scratch" },
                       { k:"STARTING POINT", v: picked ? picked.name : "Blank canvas" },
+                      { k:"AI CONTEXT",     v: userPrompt.trim() ? userPrompt.trim() : <span style={{ color:"var(--ink-4)" }}>—</span> },
                       { k:"ENTITIES",     v: entitiesToInclude.length ? <span style={{ display:"inline-flex", flexWrap:"wrap", gap:"6px 4px", justifyContent:"flex-end" }}>{entitiesToInclude.map(function(e){ return <span key={e} style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{e}</span>; })}</span> : <span style={{ color:"var(--ink-4)" }}>none</span> },
                       { k:"OWNER",        v: owner }
                     ].map(function(row, i, arr){
