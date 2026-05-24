@@ -3886,7 +3886,7 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
             <label style={lbl}>TYPE</label>
             <div style={{ position:"relative" }}>
               <button onClick={function(){ setPTypeOpen(function(o){ return !o; }); }}
-                style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid " + (pType ? "var(--ink-3)" : "var(--line)"), borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+                style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
                 {pType ? (
                   <>
                     <span style={{ width:34, height:34, borderRadius:7, background:typeMeta.color, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{typeMeta.glyph}</span>
@@ -3963,7 +3963,7 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
                   var on = f.val;
                   return (
                     <label key={f.id}
-                      style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"13px 14px", border:"1px solid " + (on ? "var(--ink-2)" : "var(--line)"), borderRadius:9, background: on ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", boxShadow: on ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent), inset 0 1px 0 rgba(255,255,255,0.6)" : "inset 0 1px 0 rgba(255,255,255,0.6)", transition:"all 100ms" }}>
+                      style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"13px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)", transition:"all 100ms" }}>
                       <input type="checkbox" checked={on} onChange={function(e){ f.set(e.target.checked); }} style={{ accentColor:"var(--ink)", width:15, height:15, marginTop:2, flexShrink:0 }} />
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{f.l}</div>
@@ -3978,9 +3978,9 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
             {/* COMPUTED — one panel-card that owns the toggle + (when on) expression + recompute */}
             <div>
               <label style={lbl}>COMPUTED PROPERTY</label>
-              <div style={{ border:"1px solid " + (pComputed ? "var(--ink-2)" : "var(--line)"), borderRadius:10, background:"var(--panel)", boxShadow: pComputed ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent), inset 0 1px 0 rgba(255,255,255,0.6)" : "inset 0 1px 0 rgba(255,255,255,0.6)", overflow:"hidden", transition:"all 100ms" }}>
+              <div style={{ border:"1px solid var(--line)", borderRadius:10, background:"var(--panel)", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)", overflow:"hidden", transition:"all 100ms" }}>
                 {/* Toggle row */}
-                <label style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"14px 16px", cursor:"pointer", borderBottom: pComputed ? "1px solid var(--line-2)" : "none", background: pComputed ? "var(--bg-canvas)" : "transparent" }}>
+                <label style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"14px 16px", cursor:"pointer", borderBottom: pComputed ? "1px solid var(--line-2)" : "none", background:"transparent" }}>
                   <input type="checkbox" checked={pComputed} onChange={function(e){ setPComputed(e.target.checked); setPKind(e.target.checked ? "computed" : "upstream"); }} style={{ accentColor:"var(--ink)", width:15, height:15, marginTop:2, flexShrink:0 }} />
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>Derive this property from a formula or agent</div>
@@ -4014,7 +4014,6 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
             var usesAgent = /agent:/.test(pFormula);
             var COMPUTE_TYPES = [
               { id:"formula", l:"Formula",    d:"Math, string, conditional logic.",     icon:<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 13L13 3"/><circle cx="4" cy="4" r="1.2"/><circle cx="12" cy="12" r="1.2"/></svg>, color:"var(--gold)"   },
-              { id:"agent",   l:"Agent",      d:"AI / ML model — async write.",         icon:<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M8 2L9.2 6L13 7L9.2 8L8 12L6.8 8L3 7L6.8 6Z"/></svg>, color:"var(--purple)" },
               { id:"sql",     l:"SQL/Cypher", d:"Query over graph or warehouse.",       icon:<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="8" cy="4" rx="5" ry="1.5"/><path d="M3 4v4c0 0.8 2.2 1.5 5 1.5s5-0.7 5-1.5V4"/><path d="M3 8v4c0 0.8 2.2 1.5 5 1.5s5-0.7 5-1.5V8"/></svg>, color:"var(--blue)"   },
               { id:"lookup",  l:"Lookup",     d:"Reference another property or table.", icon:<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="6.5" cy="6.5" r="4"/><line x1="9.5" y1="9.5" x2="13" y2="13"/></svg>, color:"var(--green)"  }
             ];
@@ -4024,7 +4023,7 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
               return (
                 <div style={{ position:"relative" }}>
                   <button onClick={function(){ setOpen(!open); }}
-                    style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid " + (sel ? "var(--ink-3)" : "var(--line)"), borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+                    style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
                     {sel ? (
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{sel.l}</div>
@@ -4073,7 +4072,7 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
                 <label style={lbl}>COMPUTATION TYPE</label>
                 <div style={{ position:"relative" }}>
                   <button onClick={function(){ setPComputeKindOpen(function(o){ return !o; }); }}
-                    style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid " + (selectedType ? "var(--ink-3)" : "var(--line)"), borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+                    style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
                     {selectedType ? (
                       <>
                         <span style={{ width:34, height:34, borderRadius:7, background:selectedType.color, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{selectedType.icon}</span>
@@ -12262,7 +12261,7 @@ function AddNodeFlow({ onClose }) {
                     <label style={lbl}>CATEGORY</label>
                     <div style={{ position:"relative" }}>
                       <button onClick={function(){ setCatOpen(function(o){ return !o; }); }}
-                        style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid " + (sel ? "var(--ink-3)" : "var(--line)"), borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+                        style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
                         {sel ? (
                           <>
                             <span style={{ width:34, height:34, borderRadius:7, background:sel.fill, color:sel.color, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
@@ -13518,7 +13517,7 @@ function NewGraphFlow({ onClose, onCreate }) {
     return (
       <div style={{ position:"relative" }}>
         <button onClick={function(){ setOpen(function(o){ return !o; }); }}
-          style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid " + (sel ? "var(--ink-3)" : "var(--line)"), borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+          style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
           {sel ? (
             <>
               <span style={{ width:34, height:34, borderRadius:7, background:tileBg(sel), color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{tileContent(sel, 34)}</span>
@@ -14791,76 +14790,18 @@ function GraphLandingView({ onOpenGraph }) {
         </div>
       </div>
 
-      {/* GRID — hero (ECG full-row) + 3-column grid for the rest. Container centred under 1400px. */}
+      {/* GRID — all graphs render as the same card. ECG is just the first one. */}
       {view === "grid" ? (
         <div style={{ padding:"24px clamp(20px, 4vw, 64px) 40px", width:"100%", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:20 }}>
           {(function(){
-            var hero = filtered.find(function(g){ return g.id === "ecg"; });
+            // ECG first, then everything else in its current order
+            var ecg = filtered.find(function(g){ return g.id === "ecg"; });
             var rest = filtered.filter(function(g){ return g.id !== "ecg"; });
+            var ordered = ecg ? [ecg].concat(rest) : rest;
             return (
               <>
-                {hero && (function(){
-                  var g = hero;
-                  var hColor = healthColor(g.health);
-                  var seed = g.id.charCodeAt(0) * 977 + g.id.length * 31;
-                  return (
-                    <div key={g.id} onClick={function(){ onOpenGraph(g.id); }}
-                      style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:16, overflow:"hidden", cursor:"pointer", transition:"transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease", display:"grid", gridTemplateColumns:"1.35fr 1fr", minHeight:280, boxShadow:"0 1px 0 var(--line-2), 0 4px 16px rgba(40,40,20,0.04)" }}
-                      onMouseEnter={function(e){ e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 12px 32px rgba(40,40,20,0.08)"; e.currentTarget.style.borderColor = "var(--ink-3)"; }}
-                      onMouseLeave={function(e){ e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 1px 0 var(--line-2), 0 4px 16px rgba(40,40,20,0.04)"; e.currentTarget.style.borderColor = "var(--line)"; }}>
-                      {/* Hero viz on the LEFT */}
-                      <div style={{ position:"relative", overflow:"hidden", borderRight:"1px solid var(--line-2)" }}>
-                        <GraphMiniViz seed={seed} color={g.color} />
-                        <span style={{ position:"absolute", top:12, left:14, zIndex:2, fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"1.1px", color:"var(--ink-3)", padding:"3px 8px", background:"var(--panel)", border:"1px solid var(--line-2)", borderRadius:4 }}>{"PRIMARY · ENTERPRISE-WIDE"}</span>
-                        <span style={{ position:"absolute", top:14, right:16, zIndex:2, fontFamily:"JetBrains Mono", fontSize:11, color: hColor, display:"flex", alignItems:"center", gap:5, fontWeight:600, padding:"4px 9px", background:"var(--panel)", border:"1px solid var(--line-2)", borderRadius:4 }}>
-                          <span style={{ width:6, height:6, borderRadius:"50%", background: hColor }} />{g.health + "%"}
-                        </span>
-                      </div>
-                      {/* Body on the RIGHT — richer than the standard card */}
-                      <div style={{ padding:"clamp(24px, 2.4vw, 36px) clamp(26px, 2.6vw, 40px)", display:"flex", flexDirection:"column", justifyContent:"space-between", gap:20 }}>
-                        <div>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>{g.cat} · {g.owner}</div>
-                          <div style={{ fontFamily:"Instrument Serif", fontSize:"clamp(28px, 2.6vw, 40px)", color:"var(--ink)", lineHeight:1.05, marginBottom:14, letterSpacing:"-0.3px" }}>{g.name}</div>
-                          <div style={{ fontSize:"clamp(13px, 1.05vw, 16px)", color:"var(--ink-2)", lineHeight:1.6 }}>{g.desc}  Every other graph in this workspace draws from it — Customer, Sales, Support, Finance and beyond.</div>
-                        </div>
-                        <div>
-                          <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:18, paddingTop:18, borderTop:"1px dashed var(--line-2)" }}>
-                            {[
-                              { k:"NODES",   v: g.nodes.toLocaleString() },
-                              { k:"EDGES",   v: g.edges.toLocaleString() },
-                              { k:"SOURCES", v: g.sources.toString() }
-                            ].map(function(it, i){
-                              return <div key={i}>
-                                <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>{it.k}</div>
-                                <div style={{ fontFamily:"Instrument Serif", fontSize:"clamp(22px, 1.9vw, 30px)", color:"var(--ink)", marginTop:4, lineHeight:1 }}>{it.v}</div>
-                              </div>;
-                            })}
-                          </div>
-                          <div style={{ marginTop:14, display:"flex", alignItems:"center", justifyContent:"space-between", gap:14, fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>
-                            <span style={{ display:"flex", alignItems:"center", gap:6 }}>
-                              <span style={{ width:6, height:6, borderRadius:"50%", background:"var(--green)" }} />
-                              Synced {g.synced}
-                            </span>
-                            <span style={{ display:"inline-flex", alignItems:"center", gap:6, color:"var(--ink-2)", fontWeight:500 }}>
-                              View graph
-                              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6 H9 M6 3 L9 6 L6 9" /></svg>
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {rest.length > 0 && (
-                  <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginTop:6, marginBottom:-4, paddingTop:4 }}>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"1px", color:"var(--ink-3)", textTransform:"uppercase" }}>Other graphs</span>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", letterSpacing:"0.4px" }}>{rest.length + " in this workspace"}</span>
-                  </div>
-                )}
-
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(3, minmax(0, 1fr))", gap:20 }}>
-                  {rest.map(function(g, idx){
+                  {ordered.map(function(g, idx){
                     var hColor = healthColor(g.health);
                     return (
                       <div key={g.id}
