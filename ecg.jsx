@@ -12682,22 +12682,22 @@ function GraphLandingView({ onOpenGraph }) {
                         </span>
                       </div>
                       {/* Body on the RIGHT — richer than the standard card */}
-                      <div style={{ padding:"26px 30px 24px", display:"flex", flexDirection:"column", justifyContent:"space-between" }}>
+                      <div style={{ padding:"clamp(24px, 2.4vw, 36px) clamp(26px, 2.6vw, 40px)", display:"flex", flexDirection:"column", justifyContent:"space-between", gap:20 }}>
                         <div>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:6 }}>{g.cat} · {g.owner}</div>
-                          <div style={{ fontFamily:"Instrument Serif", fontSize:32, color:"var(--ink)", lineHeight:1.05, marginBottom:10, letterSpacing:"-0.3px" }}>{g.name}</div>
-                          <div style={{ fontSize:13.5, color:"var(--ink-2)", lineHeight:1.55, marginBottom:18, maxWidth:480 }}>{g.desc}  Every other graph in this workspace draws from it — Customer, Sales, Support, Finance and beyond.</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>{g.cat} · {g.owner}</div>
+                          <div style={{ fontFamily:"Instrument Serif", fontSize:"clamp(28px, 2.6vw, 40px)", color:"var(--ink)", lineHeight:1.05, marginBottom:14, letterSpacing:"-0.3px" }}>{g.name}</div>
+                          <div style={{ fontSize:"clamp(13px, 1.05vw, 16px)", color:"var(--ink-2)", lineHeight:1.6 }}>{g.desc}  Every other graph in this workspace draws from it — Customer, Sales, Support, Finance and beyond.</div>
                         </div>
                         <div>
-                          <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:18, paddingTop:16, borderTop:"1px dashed var(--line-2)" }}>
+                          <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:18, paddingTop:18, borderTop:"1px dashed var(--line-2)" }}>
                             {[
                               { k:"NODES",   v: g.nodes.toLocaleString() },
                               { k:"EDGES",   v: g.edges.toLocaleString() },
                               { k:"SOURCES", v: g.sources.toString() }
                             ].map(function(it, i){
                               return <div key={i}>
-                                <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>{it.k}</div>
-                                <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", marginTop:3, lineHeight:1 }}>{it.v}</div>
+                                <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>{it.k}</div>
+                                <div style={{ fontFamily:"Instrument Serif", fontSize:"clamp(22px, 1.9vw, 30px)", color:"var(--ink)", marginTop:4, lineHeight:1 }}>{it.v}</div>
                               </div>;
                             })}
                           </div>
