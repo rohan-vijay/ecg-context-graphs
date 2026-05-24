@@ -9693,9 +9693,9 @@ function NodesView({ onSelect, onSwitchToCanvas, onAddNode }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 var NODE_CATEGORIES_CONFIG = [
-  { id:"core",    code:"CORE", label:"Core entity",    color:"var(--blue)",   fill:"var(--blue-fill)",   desc:"A first-class business object that other entities relate to — Account, Customer, Product." },
-  { id:"support", code:"SUPP", label:"Support entity", color:"var(--green)",  fill:"var(--green-fill)",  desc:"Operational records that support the core — Ticket, Interaction, Task, Note." },
-  { id:"lookup",  code:"REF",  label:"Lookup",         color:"var(--gold)",   fill:"var(--gold-fill)",   desc:"Reference data shared across entities — Country, Currency, Status." }
+  { id:"core",      code:"CORE", label:"Core entity",      color:"var(--blue)",   fill:"var(--blue-fill)",   desc:"A first-class business object that other entities relate to — Account, Customer, Product." },
+  { id:"secondary", code:"SEC",  label:"Secondary entity", color:"var(--green)",  fill:"var(--green-fill)",  desc:"Operational records that support the core — Ticket, Interaction, Task, Note." },
+  { id:"derived",   code:"DRV",  label:"Derived entity",   color:"var(--purple)", fill:"var(--purple-fill)", desc:"Computed or analytical entities — Account Health, Forecast, Risk Score." }
 ];
 
 // Pre-built property templates by node archetype
@@ -10028,7 +10028,7 @@ function AddNodeFlow({ onClose }) {
 
   // Step 1
   var [name, setName] = useState("");
-  var [category, setCategory] = useState("core");
+  var [category, setCategory] = useState(null);
   var [description, setDescription] = useState("");
   var [shape, setShape] = useState("entity"); // entity / agent / source — kept for downstream code
   var [catOpen, setCatOpen] = useState(false);
@@ -10087,7 +10087,7 @@ function AddNodeFlow({ onClose }) {
   var nameOk = name.trim().length >= 2 && /^[A-Z]/.test(name.trim());
 
   function canContinue() {
-    if (step === 1) return nameOk;
+    if (step === 1) return nameOk && !!category;
     if (step === 2) return properties.length >= 1;
     if (step === 3) return !!pkField;
     return true;
@@ -10197,10 +10197,9 @@ function AddNodeFlow({ onClose }) {
         {/* HEADER */}
         <div style={{ flexShrink:0, height:56, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 22px", background:"var(--panel)" }}>
           <div>
-            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>SCHEMA · NEW NODE TYPE</div>
-            <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:3 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
               <NodePreview size={22} />
-              <span style={{ fontFamily:"Instrument Serif", fontSize:18, color:"var(--ink)" }}>{name || "Untitled node"}</span>
+              <span style={{ fontFamily:"Instrument Serif", fontSize:20, color:"var(--ink)" }}>{name || "Untitled node"}</span>
               {catDef && <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 7px", borderRadius:4, background:catDef.fill, color:catDef.color, fontWeight:700, letterSpacing:"0.5px", textTransform:"uppercase" }}>{catDef.label}</span>}
             </div>
           </div>
@@ -10251,7 +10250,7 @@ function AddNodeFlow({ onClose }) {
 
             {/* ── STEP 1: Identity ── */}
             {step === 1 && (function(){
-              var sel = NODE_CATEGORIES_CONFIG.find(function(c){ return c.id === category; }) || NODE_CATEGORIES_CONFIG[0];
+              var sel = NODE_CATEGORIES_CONFIG.find(function(c){ return c.id === category; });
               return (
                 <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
                   <div>
@@ -10263,18 +10262,36 @@ function AddNodeFlow({ onClose }) {
                   </div>
 
                   <div>
+                    <label style={lbl}>DESCRIPTION <span style={{ color:"var(--ink-4)", marginLeft:4, fontWeight:400, textTransform:"none", letterSpacing:0 }}>optional</span></label>
+                    <textarea value={description} onChange={function(e){ setDescription(e.target.value); }} rows={3} placeholder="What does this node represent? When is a new instance created?" style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.55 })} />
+                  </div>
+
+                  <div>
                     <label style={lbl}>CATEGORY</label>
                     <div style={{ position:"relative" }}>
                       <button onClick={function(){ setCatOpen(function(o){ return !o; }); }}
-                        style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--ink-2)", borderRadius:9, background:"var(--bg-canvas)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"0 0 0 2px color-mix(in oklab, var(--ink) 6%, transparent)" }}>
-                        <span style={{ width:34, height:34, borderRadius:7, background:sel.fill, color:sel.color, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                          <span style={{ width:10, height:10, borderRadius:"50%", background:sel.color }} />
-                        </span>
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{sel.label}</div>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{sel.desc}</div>
-                        </div>
-                        <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>▾</span>
+                        style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid " + (sel ? "var(--ink-2)" : "var(--line)"), borderRadius:9, background: sel ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow: sel ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+                        {sel ? (
+                          <>
+                            <span style={{ width:34, height:34, borderRadius:7, background:sel.fill, color:sel.color, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                              <span style={{ width:10, height:10, borderRadius:"50%", background:sel.color }} />
+                            </span>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{sel.label}</div>
+                              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{sel.desc}</div>
+                            </div>
+                            <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>▾</span>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ width:34, height:34, borderRadius:7, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>+</span>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontSize:14, color:"var(--ink-3)" }}>Pick a category</div>
+                              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>Click to choose</div>
+                            </div>
+                            <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>▾</span>
+                          </>
+                        )}
                       </button>
                       {catOpen && (
                         <>
@@ -10302,11 +10319,6 @@ function AddNodeFlow({ onClose }) {
                         </>
                       )}
                     </div>
-                  </div>
-
-                  <div>
-                    <label style={lbl}>DESCRIPTION <span style={{ color:"var(--ink-4)", marginLeft:4, fontWeight:400, textTransform:"none", letterSpacing:0 }}>optional</span></label>
-                    <textarea value={description} onChange={function(e){ setDescription(e.target.value); }} rows={3} placeholder="What does this node represent? When is a new instance created?" style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.55 })} />
                   </div>
                 </div>
               );
@@ -10816,18 +10828,6 @@ function AddNodeFlow({ onClose }) {
                     <div style={{ fontSize:11.5, color:"var(--ink-2)", lineHeight:1.4 }}>surfaces will pick this up</div>
                     <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", marginTop:2 }}>on publish to draft</div>
                   </div>
-                </div>
-              </div>
-            </div>
-            <div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>READY TO PUBLISH</div>
-              <div style={{ padding:"12px 14px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:6 }}>
-                <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:4 }}>
-                  <div style={{ fontFamily:"Instrument Serif", fontSize:24, color:"var(--ink)", lineHeight:1 }}>{Math.round((((nameOk?1:0) + (properties.length>0?1:0) + (pkField?1:0) + ((permsAdmin.length > 0 || step < 5)?1:0)) / 4) * 100)}%</div>
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>complete</div>
-                </div>
-                <div style={{ width:"100%", height:4, background:"var(--line-2)", borderRadius:2, overflow:"hidden" }}>
-                  <div style={{ width:(((nameOk?1:0) + (properties.length>0?1:0) + (pkField?1:0) + ((permsAdmin.length > 0 || step < 5)?1:0)) / 4 * 100) + "%", height:"100%", background: ((nameOk?1:0) + (properties.length>0?1:0) + (pkField?1:0) + ((permsAdmin.length > 0 || step < 5)?1:0)) === 4 ? "var(--green)" : "var(--ink-3)", transition:"width 200ms ease" }} />
                 </div>
               </div>
             </div>
