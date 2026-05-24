@@ -629,9 +629,9 @@ function Inspector({ node, onClose, onOpenDetail }) {
 
         {tab === "Rules" && (
           <div className="ih-block">
-            <div className="ih-block-head">Rules <span className="ih-block-sub">{rules.length} active</span></div>
+            <div className="ih-block-head">Rules <span className="ih-block-sub">{rules.quality.length} quality · {rules.match.length} match · {rules.survivorship.length} surv</span></div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {rules.map((r, i) => (
+              {rules.quality.map((r, i) => (
                 <div key={i} style={{ border: "1px solid var(--line-2)", borderRadius: 8, padding: "10px", background: "var(--panel-2)", display: "flex", flexDirection: "column", gap: 6 }}>
                   <span className={"rule-kind rule-kind-" + r.kind.toLowerCase()} style={{ alignSelf: "flex-start" }}>{r.kind}</span>
                   <span style={{ fontSize: 12, color: "var(--ink)", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{r.label}</span>
@@ -1093,26 +1093,111 @@ function generateSources(node) {
 }
 
 const RULES_BY_NODE = {
-  account: [
-    { kind: "VALIDATE", id: "arr_nonneg",    title: "ARR is non-negative",                  expr: "arr_usd >= 0",                                label: "arr_usd ≥ 0",                          severity: "ERROR", violations: 0,  compliance: 100, on: true, last: "0 fails / 24h" },
-    { kind: "VALIDATE", id: "domain_format", title: "Domain format is valid",                expr: 'domain ~ /^[a-z0-9-.]+$/',                   label: "domain matches /^[a-z0-9-.]+$/",      severity: "WARN",  violations: 12, compliance: 99,  on: true, last: "12 violations" },
-    { kind: "COMPUTE",  id: "tier_buckets",  title: "Tier derived from ARR bands",           expr: "tier := arr_usd → {SMB, MM, ENT}",           label: "tier := arr_usd → {SMB,MM,ENT}",       severity: "ERROR", violations: 0,  compliance: 100, on: true, last: "2,840 evaluated" },
-    { kind: "COMPUTE",  id: "risk_score",    title: "Risk score from Customer Health agent", expr: "risk_score := agent:cust_health.score",      label: "risk_score from cust_health agent",   severity: "WARN",  violations: 0,  compliance: 100, on: true, last: "2,712 written" },
-    { kind: "ACCESS",   id: "pii_role",      title: "PII fields require acct_admin role",   expr: "fields(pii=true) → require role:acct_admin", label: "PII fields gated on role:acct_admin", severity: "ERROR", violations: 0,  compliance: 100, on: true, last: "audit logged" },
-    { kind: "SLO",      id: "freshness_30m", title: "Freshness p95 under 30 minutes",        expr: "p95(ingest_lag) < 30m",                      label: "freshness p95 < 30m",                  severity: "WARN",  violations: 0,  compliance: 100, on: true, last: "OK (p95 = 4m 12s)" },
-    { kind: "INFER",    id: "previously_at", title: "Infer past employer relationships",     expr: "Person :PREVIOUSLY_AT Account",              label: "Person :PREVIOUSLY_AT Account",        severity: "INFO",  violations: 0,  compliance: 100, on: true, last: "18 inferred today" },
-  ],
+  account: {
+    quality: [
+      { kind: "VALIDATE", id: "arr_nonneg",    title: "ARR is non-negative",                  expr: "arr_usd >= 0",                                label: "arr_usd ≥ 0",                          severity: "ERROR", violations: 0,  compliance: 100, on: true, last: "0 fails / 24h" },
+      { kind: "VALIDATE", id: "domain_format", title: "Domain format is valid",                expr: 'domain ~ /^[a-z0-9-.]+$/',                   label: "domain matches /^[a-z0-9-.]+$/",      severity: "WARN",  violations: 12, compliance: 99,  on: true, last: "12 violations" },
+      { kind: "COMPUTE",  id: "tier_buckets",  title: "Tier derived from ARR bands",           expr: "tier := arr_usd → {SMB, MM, ENT}",           label: "tier := arr_usd → {SMB,MM,ENT}",       severity: "ERROR", violations: 0,  compliance: 100, on: true, last: "2,840 evaluated" },
+      { kind: "COMPUTE",  id: "risk_score",    title: "Risk score from Customer Health agent", expr: "risk_score := agent:cust_health.score",      label: "risk_score from cust_health agent",   severity: "WARN",  violations: 0,  compliance: 100, on: true, last: "2,712 written" },
+      { kind: "ACCESS",   id: "pii_role",      title: "PII fields require acct_admin role",   expr: "fields(pii=true) → require role:acct_admin", label: "PII fields gated on role:acct_admin", severity: "ERROR", violations: 0,  compliance: 100, on: true, last: "audit logged" },
+      { kind: "SLO",      id: "freshness_30m", title: "Freshness p95 under 30 minutes",        expr: "p95(ingest_lag) < 30m",                      label: "freshness p95 < 30m",                  severity: "WARN",  violations: 0,  compliance: 100, on: true, last: "OK (p95 = 4m 12s)" },
+      { kind: "INFER",    id: "previously_at", title: "Infer past employer relationships",     expr: "Person :PREVIOUSLY_AT Account",              label: "Person :PREVIOUSLY_AT Account",        severity: "INFO",  violations: 0,  compliance: 100, on: true, last: "18 inferred today" },
+    ],
+    match: [
+      { id: "domain_match",   title: "Domain-based company match",   signals: [{field:"domain",strategy:"normalized_domain",weight:0.50},{field:"company_name",strategy:"fuzzy_name",weight:0.35},{field:"billing_city",strategy:"exact",weight:0.15}], threshold_auto:0.92, threshold_review:0.75, candidates:7,  auto_resolved:24, on:true, last:"7 pending review" },
+      { id: "tax_id_match",   title: "Tax ID exact match",           signals: [{field:"tax_id",strategy:"exact",weight:1.0}],                                                                                                                              threshold_auto:1.00, threshold_review:0.95, candidates:2,  auto_resolved:8,  on:true, last:"2 pending review" },
+      { id: "topology_match", title: "Shared subscription topology", signals: [{field:"HAS_SUBSCRIPTION",strategy:"common_neighbor",weight:0.60},{field:"company_name",strategy:"fuzzy_name",weight:0.40}],                                               threshold_auto:0.88, threshold_review:0.70, candidates:3,  auto_resolved:2,  on:true, last:"3 pending review" },
+    ],
+    survivorship: [
+      { id: "srv_arr",     title: "ARR: ERP wins over CRM",              property:"arr_usd",         strategy:"source_priority",  sources:["NetSuite ERP","Salesforce CRM","HubSpot Marketing"],  conflicts:0, evaluated:2840, on:true, last:"0 conflicts" },
+      { id: "srv_domain",  title: "Domain: most complete value wins",    property:"domain",           strategy:"completeness",     sources:["Salesforce CRM","HubSpot Marketing","Manual / Admin"], conflicts:3, evaluated:2840, on:true, last:"3 conflicts" },
+      { id: "srv_name",    title: "Company name: recency with CRM bias", property:"company_name",     strategy:"recency_weighted", sources:["Salesforce CRM","HubSpot Marketing","NetSuite ERP"],   conflicts:0, evaluated:2840, on:true, last:"0 conflicts" },
+      { id: "srv_billing", title: "Billing address: trust tier",         property:"billing_address",  strategy:"source_trust",     sources:["NetSuite ERP","Salesforce CRM","Manual / Admin"],       conflicts:1, evaluated:2840, on:true, last:"1 conflict" },
+    ],
+  },
 };
 
 function generateRules(node) {
   if (RULES_BY_NODE[node.id]) return RULES_BY_NODE[node.id];
   const missing = 100 - node.fill;
-  return [
-    { kind: "VALIDATE", id: node.id+"_id_unique", title: node.label+" ID is unique",       expr: node.id+"_id IS UNIQUE",                label: node.id+"_id is unique",       severity: "ERROR", violations: 0,      compliance: 100,      on: true, last: "0 fails / 24h" },
-    { kind: "SLO",      id: "freshness",          title: "Freshness SLO",                  expr: "p95(ingest_lag) < "+node.fresh,         label: "freshness p95 < "+node.fresh, severity: "WARN",  violations: 0,      compliance: 100,      on: true, last: node.fresh },
-    { kind: "VALIDATE", id: "required_fields",    title: "Required fields are present",    expr: "required_fields IS NOT NULL",          label: "required fields present",     severity: "ERROR", violations: missing, compliance: node.fill, on: true, last: missing+"% missing" },
-  ];
+  return {
+    quality: [
+      { kind: "VALIDATE", id: node.id+"_id_unique", title: node.label+" ID is unique",     expr: node.id+"_id IS UNIQUE",               label: node.id+"_id is unique",      severity: "ERROR", violations: 0,      compliance: 100,      on: true, last: "0 fails / 24h" },
+      { kind: "SLO",      id: "freshness",          title: "Freshness SLO",                expr: "p95(ingest_lag) < "+node.fresh,        label: "freshness p95 < "+node.fresh, severity: "WARN",  violations: 0,      compliance: 100,      on: true, last: node.fresh },
+      { kind: "VALIDATE", id: "required_fields",    title: "Required fields are present",  expr: "required_fields IS NOT NULL",         label: "required fields present",    severity: "ERROR", violations: missing, compliance: node.fill, on: true, last: missing+"% missing" },
+    ],
+    match: [
+      { id: node.id+"_name_match", title: node.label+" name match", signals: [{field:"name",strategy:"fuzzy_name",weight:1.0}], threshold_auto:0.95, threshold_review:0.80, candidates:0, auto_resolved:0, on:false, last:"not configured" },
+    ],
+    survivorship: [
+      { id: "srv_"+node.id+"_name", title: "Name: most recent source wins", property:"name", strategy:"recency", sources:[], conflicts:0, evaluated:node.instancesN, on:true, last:"0 conflicts" },
+    ],
+  };
 }
+
+// ─── MATCH CANDIDATE SAMPLE DATA ─────────────────────────────────────────────
+
+const MATCH_CANDIDATES = {
+  domain_match: [
+    { id:"cand_001", score:0.88,
+      nodeA:{ id:"acc_11293", name:"Premier Automotive Group",  domain:"premierauto.com",    tier:"ENT", arr:"$2.1M",  city:"Detroit, MI",   source:"Salesforce CRM" },
+      nodeB:{ id:"acc_98421", name:"Premier Auto Group Inc.",   domain:"PREMIERAUTO.COM",    tier:"ENT", arr:"$2.1M",  city:"Detroit, MI",   source:"HubSpot Marketing" },
+      signals:[ {field:"domain",match:1.00,contribution:0.50,note:"Exact after normalization"}, {field:"company_name",match:0.87,contribution:0.30,note:"Fuzzy score: 87%"}, {field:"billing_city",match:1.00,contribution:0.15,note:"Exact match"} ], status:"pending" },
+    { id:"cand_002", score:0.81,
+      nodeA:{ id:"acc_22091", name:"Auto World East",           domain:"autoworldeast.com",  tier:"MM",  arr:"$840K",  city:"Columbus, OH",  source:"Salesforce CRM" },
+      nodeB:{ id:"acc_31044", name:"Auto World (East) LLC",    domain:"autoworld-east.co",  tier:"MM",  arr:"$840K",  city:"Columbus, OH",  source:"Manual / Admin" },
+      signals:[ {field:"domain",match:0.72,contribution:0.36,note:"Hyphen variant: 72%"}, {field:"company_name",match:0.91,contribution:0.32,note:"Fuzzy score: 91%"}, {field:"billing_city",match:1.00,contribution:0.15,note:"Exact match"} ], status:"pending" },
+    { id:"cand_003", score:0.79,
+      nodeA:{ id:"acc_48134", name:"Peak Auto",                domain:"peakauto.com",        tier:"SMB", arr:"$120K",  city:"Denver, CO",    source:"Salesforce CRM" },
+      nodeB:{ id:"acc_55290", name:"Peak Automotive",          domain:"peakautomotive.net",  tier:"SMB", arr:"$118K",  city:"Denver, CO",    source:"HubSpot Marketing" },
+      signals:[ {field:"domain",match:0.62,contribution:0.31,note:"Different TLD: 62%"}, {field:"company_name",match:0.90,contribution:0.31,note:"Fuzzy score: 90%"}, {field:"billing_city",match:1.00,contribution:0.15,note:"Exact match"} ], status:"pending" },
+  ],
+  tax_id_match: [
+    { id:"cand_t001", score:0.97,
+      nodeA:{ id:"acc_61847", name:"Summit Auto & RV",          domain:"summitautorv.com",   tier:"ENT", arr:"$3.2M",  city:"Phoenix, AZ",   source:"NetSuite ERP" },
+      nodeB:{ id:"acc_77290", name:"Summit Auto and RV",        domain:"summitauto-rv.com",  tier:"ENT", arr:"$3.2M",  city:"Phoenix, AZ",   source:"Salesforce CRM" },
+      signals:[ {field:"tax_id",match:1.00,contribution:0.97,note:"Exact match: 47-1234567"} ], status:"pending" },
+    { id:"cand_t002", score:0.95,
+      nodeA:{ id:"acc_29183", name:"Bright Horizons Motors",    domain:"bhm.co",             tier:"MM",  arr:"$520K",  city:"Austin, TX",    source:"NetSuite ERP" },
+      nodeB:{ id:"acc_38770", name:"BHM Automotive Group",      domain:"bhmauto.com",        tier:"MM",  arr:"$520K",  city:"Austin, TX",    source:"HubSpot Marketing" },
+      signals:[ {field:"tax_id",match:1.00,contribution:0.95,note:"Exact match: 74-8821903"} ], status:"pending" },
+  ],
+  topology_match: [
+    { id:"cand_tp001", score:0.83,
+      nodeA:{ id:"acc_41209", name:"Green Leaf Auto",           domain:"greenleafauto.com",  tier:"MM",  arr:"$480K",  city:"Portland, OR",  source:"Salesforce CRM" },
+      nodeB:{ id:"acc_84100", name:"Green Leaf Automotive",     domain:"greenleaf-auto.com", tier:"MM",  arr:"$480K",  city:"Portland, OR",  source:"HubSpot Marketing" },
+      signals:[ {field:"HAS_SUBSCRIPTION",match:1.00,contribution:0.60,note:"3 shared subscription IDs"}, {field:"company_name",match:0.86,contribution:0.34,note:"Fuzzy score: 86%"} ], status:"pending" },
+    { id:"cand_tp002", score:0.76,
+      nodeA:{ id:"acc_72103", name:"Riverside Motors",          domain:"riverside-motors.com",tier:"SMB",arr:"$210K",  city:"Sacramento, CA",source:"Salesforce CRM" },
+      nodeB:{ id:"acc_18840", name:"Riverside Motor Group",     domain:"riversidemg.com",    tier:"SMB", arr:"$210K",  city:"Sacramento, CA",source:"HubSpot Marketing" },
+      signals:[ {field:"HAS_SUBSCRIPTION",match:1.00,contribution:0.60,note:"2 shared subscription IDs"}, {field:"company_name",match:0.78,contribution:0.31,note:"Fuzzy score: 78%"} ], status:"pending" },
+    { id:"cand_tp003", score:0.72,
+      nodeA:{ id:"acc_84921", name:"ACME Auto Partners",        domain:"acmeauto.com",       tier:"SMB", arr:"$95K",   city:"Phoenix, AZ",   source:"Salesforce CRM" },
+      nodeB:{ id:"acc_21009", name:"ACME Automotive",           domain:"acme-auto.co",       tier:"SMB", arr:"$95K",   city:"Phoenix, AZ",   source:"NetSuite ERP" },
+      signals:[ {field:"HAS_SUBSCRIPTION",match:0.67,contribution:0.40,note:"1 shared subscription ID"}, {field:"company_name",match:0.82,contribution:0.33,note:"Fuzzy score: 82%"} ], status:"pending" },
+  ],
+};
+
+// ─── SURVIVORSHIP CONFLICT SAMPLE DATA ───────────────────────────────────────
+
+const SURV_CONFLICTS = {
+  srv_domain: [
+    { id:"acc_84921", property:"domain",
+      values:[ {source:"HubSpot Marketing",value:"ACME Corp",       confidence:0.55, updated:"2026-05-21", tier:3}, {source:"Salesforce CRM",value:"acmecorp.com",     confidence:0.95, updated:"2026-05-20", tier:2} ],
+      current_winner:"HubSpot Marketing", suggestion:"Salesforce CRM",    reason:"Higher confidence + valid domain format" },
+    { id:"acc_72103", property:"domain",
+      values:[ {source:"HubSpot Marketing",value:"Riverside Motors#2",confidence:0.40, updated:"2026-05-20", tier:3}, {source:"Salesforce CRM",value:"riverside-motors.com",confidence:0.98, updated:"2026-05-19", tier:2} ],
+      current_winner:"HubSpot Marketing", suggestion:"Salesforce CRM",    reason:"HubSpot value fails domain_format rule" },
+    { id:"acc_41209", property:"domain",
+      values:[ {source:"Manual / Admin",value:"green-leaf.co",      confidence:1.00, updated:"2026-05-16", tier:1}, {source:"Salesforce CRM",value:"greenleafauto.com", confidence:0.92, updated:"2026-05-15", tier:2}, {source:"HubSpot Marketing",value:"Green Leaf & Co",confidence:0.50, updated:"2026-05-14", tier:3} ],
+      current_winner:"Salesforce CRM",    suggestion:"Manual / Admin",     reason:"Manual entry is tier-1 authority" },
+  ],
+  srv_billing: [
+    { id:"acc_72103", property:"billing_address",
+      values:[ {source:"NetSuite ERP",value:"123 Main St, Chicago IL 60601",   confidence:1.00, updated:"2026-05-19", tier:1}, {source:"Salesforce CRM",value:"123 Main Street, Chicago IL 60601",confidence:0.90, updated:"2026-05-21", tier:2} ],
+      current_winner:"Salesforce CRM",    suggestion:"NetSuite ERP",            reason:"ERP is tier-1 authority for billing data" },
+  ],
+};
 
 const CONSUMERS_BY_NODE = {
   account: [
@@ -2062,10 +2147,14 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
   const [tab, setTab] = useState("Overview");
   const [editOpen, setEditOpen] = useState(false);
   const [violationRule, setViolationRule] = useState(null);
+  const [matchRule, setMatchRule] = useState(null);
+  const [survConflict, setSurvConflict] = useState(null);
   const [srcLinkOpen, setSrcLinkOpen] = useState(false);
   if (!node) return null;
   if (editOpen) return <EditSchemaView node={node} properties={generateProps(node)} onClose={() => setEditOpen(false)} />;
   if (violationRule) return <ViolationDetailView rule={violationRule} node={node} onClose={() => setViolationRule(null)} />;
+  if (matchRule) return <MatchReviewView rule={matchRule} node={node} onClose={() => setMatchRule(null)} />;
+  if (survConflict) return <SurvivorshipConflictView rule={survConflict} node={node} onClose={() => setSurvConflict(null)} />;
   if (srcLinkOpen) return <LinkSourceFlow node={node} onClose={() => setSrcLinkOpen(false)} />;
 
   const c = colorForNode(node);
@@ -2163,8 +2252,8 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
           </div>
           <div className="kpi">
             <div className="kpi-lbl">Active rules</div>
-            <div className="kpi-v">{rules.length}</div>
-            <div className="kpi-tail">{rules.filter(r=>r.kind==="VALIDATE").length} validate · {rules.filter(r=>r.kind==="COMPUTE").length} compute</div>
+            <div className="kpi-v">{rules.quality.length + rules.match.length + rules.survivorship.length}</div>
+            <div className="kpi-tail">{rules.quality.length} quality · {rules.match.length} match · {rules.survivorship.length} surv</div>
           </div>
           <div className="kpi">
             <div className="kpi-lbl">PII fields</div>
@@ -2188,7 +2277,7 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
             const count = t === "Properties" ? node.props
                        : t === "Edges"      ? outgoing.length + incoming.length
                        : t === "Sources"    ? sources.length
-                       : t === "Rules"      ? rules.length
+                       : t === "Rules"      ? rules.quality.length + rules.match.length + rules.survivorship.length
                        : t === "Quality"    ? properties.filter(p=>p.fill<92||p.conf<92).length || null
                        : t === "Access"     ? properties.filter(p=>p.pii).length || null
                        : null;
@@ -2206,7 +2295,7 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
         {tab === "Properties" && <PropertiesPane node={node} properties={properties} />}
         {tab === "Edges"      && <EdgesPane node={node} outgoing={outgoing} incoming={incoming} />}
         {tab === "Sources"    && <SourcesPane sources={sources} node={node} onLinkSource={() => setSrcLinkOpen(true)} />}
-        {tab === "Rules"      && <RulesPane rules={rules} node={node} onViolationClick={setViolationRule} />}
+        {tab === "Rules"      && <RulesPane rules={rules} node={node} onViolationClick={setViolationRule} onMatchClick={setMatchRule} onSurvClick={setSurvConflict} />}
         {tab === "Quality"    && <QualityPane node={node} properties={properties} />}
         {tab === "Access"     && <AccessPane node={node} properties={properties} />}
         {tab === "History"    && <HistoryPane node={node} />}
@@ -3730,15 +3819,24 @@ function NewRuleModal({ node, onClose }) {
   );
 }
 
-function RulesPane({ rules, node, onViolationClick }) {
-  const [filter, setFilter]     = useState("all");
+function RulesPane({ rules, node, onViolationClick, onMatchClick, onSurvClick }) {
+  const [cat, setCat]         = useState("quality");
+  const [qFilter, setQFilter] = useState("all");
   const [showNewRule, setShowNewRule] = useState(false);
-  const KINDS = ["all","VALIDATE","COMPUTE","SLO","ACCESS","INFER"];
-  const filtered = filter === "all" ? rules : rules.filter(r => r.kind === filter);
-  const counts   = KINDS.reduce((acc, k) => { acc[k] = k === "all" ? rules.length : rules.filter(r => r.kind === k).length; return acc; }, {});
 
-  const totalViolations = rules.reduce((sum, r) => sum + (r.violations || 0), 0);
-  const avgCompliance   = Math.round(rules.reduce((sum, r) => sum + (r.compliance ?? 100), 0) / rules.length);
+  const qRules = rules.quality || [];
+  const mRules = rules.match || [];
+  const sRules = rules.survivorship || [];
+
+  const QKINDS = ["all","VALIDATE","COMPUTE","SLO","ACCESS","INFER"];
+  const qFiltered = qFilter === "all" ? qRules : qRules.filter(r => r.kind === qFilter);
+  const qCounts = QKINDS.reduce((acc, k) => { acc[k] = k === "all" ? qRules.length : qRules.filter(r => r.kind === k).length; return acc; }, {});
+
+  const totalViolations   = qRules.reduce((sum, r) => sum + (r.violations || 0), 0);
+  const avgCompliance     = qRules.length ? Math.round(qRules.reduce((sum, r) => sum + (r.compliance ?? 100), 0) / qRules.length) : 100;
+  const pendingCandidates = mRules.reduce((sum, r) => sum + (r.candidates || 0), 0);
+  const autoResolved      = mRules.reduce((sum, r) => sum + (r.auto_resolved || 0), 0);
+  const openConflicts     = sRules.reduce((sum, r) => sum + (r.conflicts || 0), 0);
 
   const sevStyle = s => s === "ERROR"
     ? { bg: "var(--coral-fill)", color: "var(--coral)" }
@@ -3746,73 +3844,687 @@ function RulesPane({ rules, node, onViolationClick }) {
     ? { bg: "var(--gold-fill)",  color: "var(--gold)"  }
     : { bg: "var(--chip)",       color: "var(--ink-3)" };
 
+  const strategyLabel = s => ({ source_priority:"Source priority", completeness:"Most complete", recency:"Most recent", recency_weighted:"Recency weighted", source_trust:"Trust tier", confidence:"Confidence", manual:"Manual override" }[s] || s);
+  const strategyColor = s => ({ source_priority:"var(--blue)", completeness:"var(--purple)", recency:"var(--green)", recency_weighted:"var(--green)", source_trust:"var(--coral)", confidence:"var(--gold)", manual:"var(--ink-2)" }[s] || "var(--ink-3)");
+
+  const catTabs = [
+    { id:"quality",      label:"Quality",      count:qRules.length,      accent: totalViolations > 0 ? "var(--coral)" : undefined },
+    { id:"match",        label:"Match",        count:mRules.length,      accent: pendingCandidates > 0 ? "var(--gold)" : undefined },
+    { id:"survivorship", label:"Survivorship", count:sRules.length,      accent: openConflicts > 0 ? "var(--coral)" : undefined },
+  ];
+
+  const qStats = [
+    ["Total violations", totalViolations, totalViolations > 0 ? "var(--coral)" : "var(--green)"],
+    ["Avg compliance",   avgCompliance + "%", "var(--ink)"],
+    ["Active rules",     qRules.filter(r => r.on).length, "var(--ink)"],
+  ];
+  const mStats = [
+    ["Pending candidates", pendingCandidates, pendingCandidates > 0 ? "var(--gold)" : "var(--green)"],
+    ["Auto-resolved / 30d", autoResolved, "var(--ink)"],
+    ["Active rules",        mRules.filter(r => r.on).length, "var(--ink)"],
+  ];
+  const sStats = [
+    ["Open conflicts",     openConflicts,                     openConflicts > 0 ? "var(--coral)" : "var(--green)"],
+    ["Properties covered", sRules.filter(r => r.on).length,  "var(--ink)"],
+    ["Active rules",       sRules.filter(r => r.on).length,  "var(--ink)"],
+  ];
+  const activeStats = cat === "quality" ? qStats : cat === "match" ? mStats : sStats;
+
   return (
     <>
       <div className="card">
+
+        {/* ── Category header ── */}
         <div className="card-head card-head-row">
-          <div className="rule-filter-chips">
-            {KINDS.map(k => (counts[k] > 0 || k === "all") ? (
-              <button key={k} className={"chip" + (filter === k ? " on" : "")} onClick={() => setFilter(k)}>
-                {k} <span className="chip-n">{counts[k]}</span>
+          <div style={{ display:"flex", gap:4 }}>
+            {catTabs.map(ct => (
+              <button key={ct.id}
+                className={"chip" + (cat === ct.id ? " on" : "")}
+                onClick={() => setCat(ct.id)}
+                style={cat !== ct.id && ct.accent ? {} : {}}>
+                {ct.label}
+                <span className="chip-n" style={ct.accent && cat !== ct.id ? { color: ct.accent } : {}}>{ct.count}</span>
               </button>
-            ) : null)}
+            ))}
           </div>
           <div className="card-head-actions">
             <button className="btn-dark" onClick={() => setShowNewRule(true)}>+ New rule</button>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 1, background: "var(--line-2)", borderBottom: "1px solid var(--line-2)" }}>
-          {[
-            ["Total violations", totalViolations, totalViolations > 0 ? "var(--coral)" : "var(--green)"],
-            ["Avg compliance",   avgCompliance + "%", "var(--ink)"],
-            ["Active rules",     rules.filter(r => r.on).length, "var(--ink)"],
-          ].map(([label, val, color]) => (
-            <div key={label} style={{ flex: 1, padding: "12px 18px", background: "var(--panel-2)" }}>
-              <div style={{ fontFamily: "JetBrains Mono", fontSize: 9.5, letterSpacing: "0.6px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
-              <div style={{ fontFamily: "Instrument Serif", fontSize: 24, color }}>{val}</div>
+        {/* ── Stats bar ── */}
+        <div style={{ display:"flex", gap:1, background:"var(--line-2)", borderBottom:"1px solid var(--line-2)" }}>
+          {activeStats.map(([label, val, color]) => (
+            <div key={label} style={{ flex:1, padding:"12px 18px", background:"var(--panel-2)" }}>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:4 }}>{label}</div>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:24, color }}>{val}</div>
             </div>
           ))}
         </div>
 
-        <div>
-          {filtered.map((r, i) => {
-            const { bg, color } = sevStyle(r.severity || "INFO");
-            const hasViol = (r.violations || 0) > 0;
-            return (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 16, padding: "15px 18px", borderBottom: i < filtered.length - 1 ? "1px solid var(--line-2)" : "none" }}>
-                <span className={"rule-kind rule-kind-" + r.kind.toLowerCase()} style={{ flexShrink: 0, minWidth: 68, textAlign: "center" }}>{r.kind}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)", marginBottom: 4 }}>{r.title || r.label}</div>
-                  <code style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.expr || r.id}</code>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 18, flexShrink: 0 }}>
-                  <div
-                    style={{ textAlign: "right", minWidth: 100, cursor: hasViol ? "pointer" : "default" }}
-                    onClick={() => hasViol && onViolationClick(r)}
-                    title={hasViol ? "Click to investigate violations" : undefined}
-                  >
-                    <div style={{ fontFamily: "JetBrains Mono", fontSize: 12, fontWeight: 600, color: hasViol ? "var(--coral)" : "var(--ink-3)", textDecoration: hasViol ? "underline" : "none" }}>
-                      {r.violations !== undefined ? r.violations + " violations" : r.last}
+        {/* ── Quality tab ── */}
+        {cat === "quality" && (
+          <>
+            <div style={{ padding:"10px 18px", borderBottom:"1px solid var(--line-2)", display:"flex", gap:4, flexWrap:"wrap" }}>
+              {QKINDS.map(k => (qCounts[k] > 0 || k === "all") ? (
+                <button key={k} className={"chip" + (qFilter === k ? " on" : "")} onClick={() => setQFilter(k)}>
+                  {k} <span className="chip-n">{qCounts[k]}</span>
+                </button>
+              ) : null)}
+            </div>
+            <div>
+              {qFiltered.map((r, i) => {
+                const { bg, color } = sevStyle(r.severity || "INFO");
+                const hasViol = (r.violations || 0) > 0;
+                return (
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:16, padding:"15px 18px", borderBottom: i < qFiltered.length - 1 ? "1px solid var(--line-2)" : "none" }}>
+                    <span className={"rule-kind rule-kind-" + r.kind.toLowerCase()} style={{ flexShrink:0, minWidth:68, textAlign:"center" }}>{r.kind}</span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13.5, fontWeight:500, color:"var(--ink)", marginBottom:4 }}>{r.title || r.label}</div>
+                      <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", display:"block", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.expr || r.id}</code>
                     </div>
-                    {r.compliance !== undefined && (
-                      <div style={{ fontFamily: "JetBrains Mono", fontSize: 10.5, color: "var(--ink-3)", marginTop: 2 }}>{r.compliance}%</div>
-                    )}
+                    <div style={{ display:"flex", alignItems:"center", gap:18, flexShrink:0 }}>
+                      <div style={{ textAlign:"right", minWidth:100, cursor: hasViol ? "pointer" : "default" }}
+                        onClick={() => hasViol && onViolationClick(r)}
+                        title={hasViol ? "Click to investigate violations" : undefined}>
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:12, fontWeight:600, color: hasViol ? "var(--coral)" : "var(--ink-3)", textDecoration: hasViol ? "underline" : "none" }}>
+                          {r.violations !== undefined ? r.violations + " violations" : r.last}
+                        </div>
+                        {r.compliance !== undefined && (
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2 }}>{r.compliance}%</div>
+                        )}
+                      </div>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 8px", borderRadius:4, background:bg, color, fontWeight:600, letterSpacing:"0.4px", flexShrink:0 }}>{r.severity || "INFO"}</span>
+                      <label className="switch" style={{ flexShrink:0 }}>
+                        <input type="checkbox" defaultChecked={r.on} />
+                        <span className="switch-track" />
+                      </label>
+                    </div>
                   </div>
-                  <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, padding: "3px 8px", borderRadius: 4, background: bg, color, fontWeight: 600, letterSpacing: "0.4px", flexShrink: 0 }}>{r.severity || "INFO"}</span>
-                  <label className="switch" style={{ flexShrink: 0 }}>
-                    <input type="checkbox" defaultChecked={r.on} />
-                    <span className="switch-track" />
-                  </label>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {/* ── Match tab ── */}
+        {cat === "match" && (
+          <div>
+            {mRules.map((r, i) => (
+              <div key={i} style={{ padding:"18px 18px", borderBottom: i < mRules.length - 1 ? "1px solid var(--line-2)" : "none" }}>
+                <div style={{ display:"flex", alignItems:"flex-start", gap:14 }}>
+                  <span style={{ flexShrink:0, fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, letterSpacing:"0.5px", padding:"3px 8px", borderRadius:4, background:"rgba(99,143,255,0.14)", color:"var(--blue)", marginTop:2 }}>MATCH</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13.5, fontWeight:500, color:"var(--ink)", marginBottom:7 }}>{r.title}</div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginBottom:7 }}>
+                      {r.signals.map((sig, j) => (
+                        <span key={j} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 8px", borderRadius:4, background:"var(--panel-2)", border:"1px solid var(--line)", color:"var(--ink-2)" }}>
+                          {sig.field} <span style={{ color:"var(--blue)", fontWeight:700 }}>×{sig.weight}</span>
+                        </span>
+                      ))}
+                    </div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>
+                      Auto ≥{r.threshold_auto} · Review {r.threshold_review}–{r.threshold_auto}
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:12, flexShrink:0, marginTop:2 }}>
+                    {r.candidates > 0 ? (
+                      <button onClick={() => onMatchClick(r)}
+                        style={{ fontFamily:"JetBrains Mono", fontSize:11, fontWeight:600, color:"var(--gold)", background:"var(--gold-fill)", border:"1px solid var(--gold)", padding:"5px 11px", borderRadius:6, cursor:"pointer" }}>
+                        {r.candidates} candidates →
+                      </button>
+                    ) : (
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>0 candidates</span>
+                    )}
+                    <div style={{ textAlign:"right", minWidth:76 }}>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{r.auto_resolved} auto</div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)" }}>resolved / 30d</div>
+                    </div>
+                    <label className="switch" style={{ flexShrink:0 }}>
+                      <input type="checkbox" defaultChecked={r.on} />
+                      <span className="switch-track" />
+                    </label>
+                  </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Survivorship tab ── */}
+        {cat === "survivorship" && (
+          <div>
+            {sRules.map((r, i) => {
+              const sc = strategyColor(r.strategy);
+              const sl = strategyLabel(r.strategy);
+              return (
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:16, padding:"16px 18px", borderBottom: i < sRules.length - 1 ? "1px solid var(--line-2)" : "none" }}>
+                  <span style={{ flexShrink:0, minWidth:68, textAlign:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, letterSpacing:"0.5px", padding:"3px 8px", borderRadius:4, background:"rgba(144,98,255,0.12)", color:"var(--purple)" }}>SURV</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:5 }}>
+                      <span style={{ fontSize:13.5, fontWeight:500, color:"var(--ink)" }}>{r.title}</span>
+                      <code style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{r.property}</code>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, fontWeight:600, background:sc+"1a", color:sc }}>{sl}</span>
+                    </div>
+                    {r.sources && r.sources.length > 0 && (
+                      <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" }}>
+                        {r.sources.map((s, j) => (
+                          <React.Fragment key={j}>
+                            <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", background:"var(--panel-2)", border:"1px solid var(--line-2)", padding:"1px 6px", borderRadius:3 }}>{s}</span>
+                            {j < r.sources.length - 1 && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)" }}>›</span>}
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:14, flexShrink:0 }}>
+                    {r.conflicts > 0 ? (
+                      <button onClick={() => onSurvClick(r)}
+                        style={{ fontFamily:"JetBrains Mono", fontSize:11, fontWeight:600, color:"var(--coral)", background:"var(--coral-fill)", border:"1px solid var(--coral)", padding:"5px 11px", borderRadius:6, cursor:"pointer" }}>
+                        {r.conflicts} conflict{r.conflicts !== 1 ? "s" : ""} →
+                      </button>
+                    ) : (
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--green)" }}>✓ No conflicts</span>
+                    )}
+                    <div style={{ textAlign:"right", minWidth:80 }}>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{(r.evaluated || 0).toLocaleString()}</div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)" }}>evaluated</div>
+                    </div>
+                    <label className="switch" style={{ flexShrink:0 }}>
+                      <input type="checkbox" defaultChecked={r.on} />
+                      <span className="switch-track" />
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
       </div>
 
       {showNewRule && <NewRuleModal node={node} onClose={() => setShowNewRule(false)} />}
     </>
+  );
+}
+
+// ─── MATCH REVIEW VIEW ───────────────────────────────────────────────────────
+
+function MatchReviewView({ rule, node, onClose }) {
+  const [selected, setSelected] = useState(new Set());
+  const [candStates, setCandStates] = useState({});
+  const [expandedId, setExpandedId] = useState(null);
+
+  const baseCandidates = MATCH_CANDIDATES[rule.id] || [];
+  const extra = Math.max(0, (rule.candidates || 0) - baseCandidates.length);
+  const allCandidates = baseCandidates.concat(
+    Array.from({ length: extra }, (_, i) => ({
+      id: "cand_auto_" + i,
+      score: parseFloat((0.76 + i * 0.02).toFixed(2)),
+      nodeA: { id: node.id + "_" + (100 + i * 13), name: node.label + " Group " + (i + 1), source: "Salesforce CRM" },
+      nodeB: { id: node.id + "_" + (200 + i * 17), name: node.label + " " + (i + 1) + " Inc.", source: "HubSpot Marketing" },
+      signals: rule.signals.map(s => ({ field: s.field, match: 0.78 + i * 0.03, contribution: parseFloat((s.weight * (0.78 + i * 0.03)).toFixed(2)), note: "Signal match" })),
+      status: "pending",
+    }))
+  );
+
+  const getState = id => (candStates[id] || {}).action || "pending";
+  const setState = (id, action) => setCandStates(s => ({ ...s, [id]: { action } }));
+
+  const resolved = allCandidates.filter(c => getState(c.id) !== "pending").length;
+  const allSel   = allCandidates.length > 0 && allCandidates.every(c => selected.has(c.id));
+
+  const ACTIONS = [
+    { id: "merged",   label: "Merge",          color: "var(--blue)",  desc: "Create canonical node" },
+    { id: "linked",   label: "Link IS_SAME_AS", color: "var(--green)", desc: "Keep both, add identity edge" },
+    { id: "rejected", label: "Reject",          color: "var(--coral)", desc: "Keep separate, reviewed" },
+    { id: "deferred", label: "Defer",           color: "var(--ink-3)", desc: "Review later" },
+  ];
+  const AM = {
+    pending:  { label: "Pending",    color: "var(--gold)",  bg: "var(--gold-fill)" },
+    merged:   { label: "Merged",     color: "var(--blue)",  bg: "rgba(99,143,255,0.12)" },
+    linked:   { label: "IS_SAME_AS", color: "var(--green)", bg: "rgba(72,199,142,0.12)" },
+    rejected: { label: "Rejected",   color: "var(--coral)", bg: "var(--coral-fill)" },
+    deferred: { label: "Deferred",   color: "var(--ink-3)", bg: "var(--panel-2)" },
+  };
+
+  const toggleSelect = id => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  };
+
+  return (
+    <div className="detail-view" style={{ display:"flex", flexDirection:"column", height:"100%" }}>
+      <div className="detail-head" style={{ flexShrink:0 }}>
+        <div className="detail-crumb">
+          <button className="crumb-back" onClick={onClose}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+            {node.label}
+          </button>
+          <span className="crumb-sep">/</span><span className="crumb-cur">Rules</span>
+          <span className="crumb-sep">/</span><span className="crumb-cur">Match</span>
+          <span className="crumb-sep">/</span><span className="crumb-cur">{rule.title}</span>
+        </div>
+        <div className="detail-title-row">
+          <div className="detail-title-left">
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--blue)", background:"rgba(99,143,255,0.14)", padding:"2px 7px", borderRadius:4, fontWeight:600 }}>MATCH RULE</span>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>auto ≥{rule.threshold_auto} · review {rule.threshold_review}–{rule.threshold_auto}</span>
+            </div>
+            <h1 className="detail-title-name">{rule.title}</h1>
+            <p className="detail-title-desc">Review candidate pairs — decide to merge into a canonical node, link with an IS_SAME_AS edge, reject, or defer.</p>
+          </div>
+          <div className="detail-title-right" style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:32, color:"var(--gold)", lineHeight:1 }}>{allCandidates.length}</div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>candidates</div>
+            </div>
+            <div style={{ width:1, height:36, background:"var(--line)", margin:"0 4px" }} />
+            <button className="btn-ghost" onClick={onClose}>← Back to rules</button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ flex:1, display:"flex", minHeight:0 }}>
+
+        {/* Sidebar */}
+        <div style={{ width:256, flexShrink:0, borderRight:"1px solid var(--line)", overflowY:"auto", padding:"20px 16px", display:"flex", flexDirection:"column", gap:22 }}>
+          <div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"1px", textTransform:"uppercase", marginBottom:10 }}>Review progress</div>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:28, color: resolved === allCandidates.length ? "var(--green)" : "var(--gold)", lineHeight:1, marginBottom:8 }}>{resolved} / {allCandidates.length}</div>
+            <div style={{ height:5, background:"var(--line)", borderRadius:3, overflow:"hidden", marginBottom:14 }}>
+              <div style={{ height:"100%", width: allCandidates.length ? (resolved / allCandidates.length * 100) + "%" : "0%", background: resolved === allCandidates.length ? "var(--green)" : "var(--gold)", borderRadius:3, transition:"width 400ms" }} />
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+              {[["Merged","merged","var(--blue)"],["IS_SAME_AS","linked","var(--green)"],["Rejected","rejected","var(--coral)"],["Deferred","deferred","var(--ink-3)"]].map(([lbl, key, col]) => {
+                const cnt = allCandidates.filter(c => getState(c.id) === key).length;
+                return (
+                  <div key={key} style={{ padding:"8px 10px", background:"var(--panel-2)", borderRadius:7, border:"1px solid var(--line-2)" }}>
+                    <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:col, lineHeight:1 }}>{cnt}</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-3)", marginTop:3 }}>{lbl}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"1px", textTransform:"uppercase", marginBottom:10 }}>Match signals</div>
+            {rule.signals.map((sig, i) => (
+              <div key={i} style={{ marginBottom:10 }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{sig.field}</span>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--blue)", fontWeight:700 }}>×{sig.weight}</span>
+                </div>
+                <div style={{ height:4, background:"var(--line-2)", borderRadius:2, overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:(sig.weight * 100) + "%", background:"var(--blue)", transition:"width 600ms" }} />
+                </div>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", marginTop:3 }}>{sig.strategy}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ background:"rgba(99,143,255,0.07)", border:"1px solid rgba(99,143,255,0.3)", borderRadius:8, padding:"12px 12px" }}>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--blue)", letterSpacing:"1px", textTransform:"uppercase", marginBottom:6 }}>Steward guidance</div>
+            <p style={{ fontSize:12, color:"var(--ink-2)", lineHeight:1.55, margin:0 }}>Merge when records are definitely the same entity. Use IS_SAME_AS to preserve both representations. Reject if signals are coincidental. Defer if you need more context.</p>
+          </div>
+        </div>
+
+        {/* Main */}
+        <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0 }}>
+          {/* Toolbar */}
+          <div style={{ padding:"10px 16px", borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
+            <input type="checkbox" checked={allSel} onChange={() => {
+              const next = new Set(selected);
+              if (allSel) allCandidates.forEach(c => next.delete(c.id));
+              else allCandidates.forEach(c => next.add(c.id));
+              setSelected(next);
+            }} style={{ cursor:"pointer" }} />
+            {selected.size > 0 ? (
+              <>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink)", fontWeight:600 }}>{selected.size} selected</span>
+                {ACTIONS.slice(0, 3).map(a => (
+                  <button key={a.id}
+                    onClick={() => { selected.forEach(id => setState(id, a.id)); setSelected(new Set()); }}
+                    style={{ padding:"5px 11px", border:"1px solid var(--line)", borderRadius:6, background:"transparent", color:a.color, fontSize:12, fontFamily:"Geist, system-ui", cursor:"pointer", fontWeight:500 }}>
+                    {a.label}
+                  </button>
+                ))}
+                <button onClick={() => setSelected(new Set())}
+                  style={{ marginLeft:"auto", padding:"5px 10px", border:"none", background:"transparent", color:"var(--ink-3)", fontSize:12, cursor:"pointer", fontFamily:"Geist, system-ui" }}>
+                  Clear
+                </button>
+              </>
+            ) : (
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>
+                {allCandidates.length} candidate pair{allCandidates.length !== 1 ? "s" : ""} · review band {rule.threshold_review}–{rule.threshold_auto}
+              </span>
+            )}
+          </div>
+
+          {/* Table */}
+          <div style={{ flex:1, overflowY:"auto" }}>
+            <div style={{ display:"grid", gridTemplateColumns:"36px 1fr 1fr 88px 110px 110px", padding:"8px 16px", background:"var(--panel-2)", borderBottom:"1px solid var(--line)", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.5px", textTransform:"uppercase", position:"sticky", top:0, zIndex:2 }}>
+              <div /><div>Node A</div><div>Node B</div><div>Score</div><div>Source</div><div>Status</div>
+            </div>
+
+            {allCandidates.map(c => {
+              const state = getState(c.id);
+              const am = AM[state] || AM.pending;
+              const isExp = expandedId === c.id;
+              const isSel = selected.has(c.id);
+              const scoreColor = c.score >= 0.90 ? "var(--coral)" : c.score >= 0.80 ? "var(--gold)" : "var(--blue)";
+              return (
+                <div key={c.id} style={{ borderBottom:"1px solid var(--line-2)" }}>
+                  <div onClick={() => setExpandedId(isExp ? null : c.id)}
+                    style={{ display:"grid", gridTemplateColumns:"36px 1fr 1fr 88px 110px 110px", padding:"12px 16px", alignItems:"center", cursor:"pointer", background: isExp ? "var(--panel-2)" : isSel ? "rgba(99,143,255,0.04)" : "transparent", transition:"background 100ms" }}>
+                    <div onClick={e => { e.stopPropagation(); toggleSelect(c.id); }} style={{ display:"flex", alignItems:"center" }}>
+                      <input type="checkbox" checked={isSel} readOnly style={{ cursor:"pointer" }} />
+                    </div>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.nodeA.name}</div>
+                      <code style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{c.nodeA.id}</code>
+                    </div>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.nodeB.name}</div>
+                      <code style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{c.nodeB.id}</code>
+                    </div>
+                    <div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:14, fontWeight:700, color:scoreColor }}>{c.score.toFixed(2)}</div>
+                      <div style={{ height:3, background:"var(--line-2)", borderRadius:2, marginTop:3, overflow:"hidden", width:50 }}>
+                        <div style={{ height:"100%", width:(c.score * 100) + "%", background:scoreColor, borderRadius:2 }} />
+                      </div>
+                    </div>
+                    <span style={{ fontSize:11, color:"var(--ink-3)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.nodeA.source}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, fontWeight:600, color:am.color, background:am.bg, padding:"2px 7px", borderRadius:4, whiteSpace:"nowrap" }}>{am.label}</span>
+                  </div>
+
+                  {isExp && (
+                    <div style={{ padding:"12px 16px 14px 52px", background:"var(--panel-2)", borderTop:"1px solid var(--line-2)" }}>
+                      <div style={{ marginBottom:12 }}>
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.8px", textTransform:"uppercase", marginBottom:8 }}>Signal breakdown</div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                          {(c.signals || []).map((sig, j) => (
+                            <div key={j} style={{ display:"flex", alignItems:"center", gap:10 }}>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)", minWidth:160 }}>{sig.field}</span>
+                              <div style={{ flex:1, height:4, background:"var(--line-2)", borderRadius:2, overflow:"hidden" }}>
+                                <div style={{ height:"100%", width:(sig.match * 100) + "%", background: sig.match >= 0.9 ? "var(--green)" : sig.match >= 0.7 ? "var(--gold)" : "var(--coral)", borderRadius:2 }} />
+                              </div>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", minWidth:36, textAlign:"right" }}>{Math.round(sig.match * 100)}%</span>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--blue)", minWidth:56 }}>+{sig.contribution.toFixed(2)}</span>
+                              <span style={{ fontSize:11, color:"var(--ink-4)" }}>{sig.note}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginRight:4 }}>Action:</span>
+                        {ACTIONS.map(a => {
+                          const active = state === a.id;
+                          return (
+                            <button key={a.id}
+                              onClick={() => setState(c.id, active ? "pending" : a.id)}
+                              title={a.desc}
+                              style={{ padding:"6px 13px", border:"1px solid " + (active ? a.color : "var(--line)"), borderRadius:6, background: active ? a.color + "18" : "transparent", color: active ? a.color : "var(--ink-3)", fontSize:12, fontFamily:"Geist, system-ui", cursor:"pointer", fontWeight: active ? 600 : 400, transition:"all 120ms" }}>
+                              {active ? "✓ " : ""}{a.label}
+                            </button>
+                          );
+                        })}
+                        <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>Score: {c.score.toFixed(3)}</span>
+                          <button className="btn-ghost" style={{ fontSize:11, padding:"4px 10px" }}>View nodes →</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Footer */}
+          <div style={{ padding:"10px 16px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", gap:14, flexShrink:0 }}>
+            <div style={{ flex:1, height:5, background:"var(--line)", borderRadius:3, overflow:"hidden" }}>
+              <div style={{ height:"100%", width: allCandidates.length ? (resolved / allCandidates.length * 100) + "%" : "0%", background:"var(--green)", borderRadius:3, transition:"width 400ms" }} />
+            </div>
+            <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", flexShrink:0 }}>{resolved} / {allCandidates.length} reviewed</span>
+            {resolved === allCandidates.length && allCandidates.length > 0 && (
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--green)", fontWeight:600 }}>✓ All candidates reviewed</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── SURVIVORSHIP CONFLICT VIEW ───────────────────────────────────────────────
+
+function SurvivorshipConflictView({ rule, node, onClose }) {
+  const [conflictStates, setConflictStates] = useState({});
+  const [expandedId, setExpandedId] = useState(null);
+  const [ruleActionDone, setRuleActionDone] = useState(null);
+
+  const baseCf = SURV_CONFLICTS[rule.id] || [];
+  const extra  = Math.max(0, (rule.conflicts || 0) - baseCf.length);
+  const allConflicts = baseCf.concat(
+    Array.from({ length: extra }, (_, i) => ({
+      id: node.id + "_surv_" + i,
+      property: rule.property,
+      values: [
+        { source: rule.sources[0] || "Source A", value: "Value from " + (rule.sources[0] || "Source A"), confidence: 0.9, updated: "2026-05-21", tier: 1 },
+        { source: rule.sources[1] || "Source B", value: "Value from " + (rule.sources[1] || "Source B"), confidence: 0.7, updated: "2026-05-20", tier: 2 },
+      ],
+      current_winner: rule.sources[1] || "Source B",
+      suggestion:     rule.sources[0] || "Source A",
+      reason: "Higher trust tier",
+    }))
+  );
+
+  const getState  = id => conflictStates[id] || "pending";
+  const setCState = (id, action) => setConflictStates(s => ({ ...s, [id]: action }));
+  const resolved  = allConflicts.filter(c => getState(c.id) !== "pending").length;
+
+  const STRATEGY_LABELS = { source_priority:"Source priority", completeness:"Most complete", recency:"Most recent", recency_weighted:"Recency weighted", source_trust:"Trust tier", confidence:"Confidence score", manual:"Manual override" };
+  const STRATEGY_COLORS = { source_priority:"var(--blue)", completeness:"var(--purple)", recency:"var(--green)", recency_weighted:"var(--green)", source_trust:"var(--coral)", confidence:"var(--gold)", manual:"var(--ink-2)" };
+
+  const sc = STRATEGY_COLORS[rule.strategy] || "var(--ink-3)";
+  const sl = STRATEGY_LABELS[rule.strategy] || rule.strategy;
+
+  const SBADGE = {
+    pending:    { label:"Pending",     color:"var(--gold)",  bg:"var(--gold-fill)" },
+    accepted:   { label:"Accepted",    color:"var(--green)", bg:"rgba(72,199,142,0.12)" },
+    overridden: { label:"Overridden",  color:"var(--blue)",  bg:"rgba(99,143,255,0.12)" },
+    suppressed: { label:"Suppressed",  color:"var(--ink-3)", bg:"var(--panel-2)" },
+  };
+
+  return (
+    <div className="detail-view" style={{ display:"flex", flexDirection:"column", height:"100%" }}>
+      <div className="detail-head" style={{ flexShrink:0 }}>
+        <div className="detail-crumb">
+          <button className="crumb-back" onClick={onClose}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+            {node.label}
+          </button>
+          <span className="crumb-sep">/</span><span className="crumb-cur">Rules</span>
+          <span className="crumb-sep">/</span><span className="crumb-cur">Survivorship</span>
+          <span className="crumb-sep">/</span><span className="crumb-cur">{rule.title}</span>
+        </div>
+        <div className="detail-title-row">
+          <div className="detail-title-left">
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--purple)", background:"rgba(144,98,255,0.12)", padding:"2px 7px", borderRadius:4, fontWeight:600 }}>SURVIVORSHIP</span>
+              <code style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{rule.property}</code>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, fontWeight:600, background:sc+"1a", color:sc }}>{sl}</span>
+            </div>
+            <h1 className="detail-title-name">{rule.title}</h1>
+            <p className="detail-title-desc">Multiple sources assert conflicting values for this property. Accept the suggested winner, pick a specific source, or enter a manual override.</p>
+          </div>
+          <div className="detail-title-right" style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:32, color:"var(--coral)", lineHeight:1 }}>{allConflicts.length}</div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>conflicts</div>
+            </div>
+            <div style={{ width:1, height:36, background:"var(--line)", margin:"0 4px" }} />
+            <button className="btn-ghost" onClick={onClose}>← Back to rules</button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ flex:1, display:"flex", minHeight:0 }}>
+
+        {/* Sidebar */}
+        <div style={{ width:256, flexShrink:0, borderRight:"1px solid var(--line)", overflowY:"auto", padding:"20px 16px", display:"flex", flexDirection:"column", gap:22 }}>
+          <div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"1px", textTransform:"uppercase", marginBottom:10 }}>Resolution progress</div>
+            <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:8 }}>
+              <span style={{ fontFamily:"Instrument Serif", fontSize:28, color: resolved === allConflicts.length ? "var(--green)" : "var(--coral)", lineHeight:1 }}>{resolved}</span>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>of {allConflicts.length} resolved</span>
+            </div>
+            <div style={{ height:5, background:"var(--line)", borderRadius:3, overflow:"hidden" }}>
+              <div style={{ height:"100%", width: allConflicts.length ? (resolved / allConflicts.length * 100) + "%" : "0%", background: resolved === allConflicts.length ? "var(--green)" : "var(--coral)", borderRadius:3, transition:"width 400ms" }} />
+            </div>
+          </div>
+
+          {rule.sources && rule.sources.length > 0 && (
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"1px", textTransform:"uppercase", marginBottom:8 }}>Source authority order</div>
+              {rule.sources.map((s, i) => (
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", background:"var(--panel-2)", borderRadius:6, marginBottom:5, border:"1px solid var(--line-2)" }}>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", minWidth:16, textAlign:"center" }}>#{i + 1}</span>
+                  <span style={{ fontSize:12, color:"var(--ink)", flex:1 }}>{s}</span>
+                  {i === 0 && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--green)", background:"rgba(72,199,142,0.12)", padding:"1px 5px", borderRadius:3 }}>authority</span>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"1px", textTransform:"uppercase", marginBottom:8 }}>Rule actions</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+              {[
+                { id:"edit",     label:"Edit source priority",   desc:"Re-order authority tiers" },
+                { id:"strategy", label:"Change strategy",        desc:"Switch survivorship algorithm" },
+                { id:"suppress", label:"Suppress all conflicts", desc:"Accept current values, close" },
+              ].map(a => (
+                <button key={a.id} className="btn-ghost"
+                  onClick={() => setRuleActionDone(ruleActionDone === a.id ? null : a.id)}
+                  style={{ width:"100%", padding:"8px 10px", textAlign:"left", flexDirection:"column", alignItems:"flex-start", gap:1 }}>
+                  <div style={{ fontSize:12, fontWeight:500, color:"var(--ink)" }}>{a.label}</div>
+                  <div style={{ fontSize:11, color:"var(--ink-3)" }}>{a.desc}</div>
+                  {ruleActionDone === a.id && <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--green)", marginTop:2 }}>✓ Action taken</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Main */}
+        <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1.2fr 1fr 1fr 1fr 120px", padding:"8px 16px", background:"var(--panel-2)", borderBottom:"1px solid var(--line)", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.5px", textTransform:"uppercase", flexShrink:0 }}>
+            <div>Record</div><div>Current winner</div><div>Competing value</div><div>Suggestion</div><div>Status</div>
+          </div>
+
+          <div style={{ flex:1, overflowY:"auto" }}>
+            {allConflicts.length === 0 && (
+              <div style={{ padding:"32px 16px", textAlign:"center", fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-3)" }}>No conflicts to resolve.</div>
+            )}
+            {allConflicts.map(c => {
+              const state  = getState(c.id);
+              const badge  = SBADGE[state] || SBADGE.pending;
+              const isExp  = expandedId === c.id;
+              const curVal = c.values.find(v => v.source === c.current_winner);
+              return (
+                <div key={c.id} style={{ borderBottom:"1px solid var(--line-2)" }}>
+                  <div onClick={() => setExpandedId(isExp ? null : c.id)}
+                    style={{ display:"grid", gridTemplateColumns:"1.2fr 1fr 1fr 1fr 120px", padding:"12px 16px", alignItems:"center", cursor:"pointer", background: isExp ? "var(--panel-2)" : "transparent", transition:"background 100ms" }}>
+                    <code style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--blue)" }}>{c.id}</code>
+                    <div>
+                      <div style={{ fontSize:12, color:"var(--coral)", fontWeight:500, fontFamily:"JetBrains Mono", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>"{curVal ? curVal.value : "—"}"</div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.current_winner}</div>
+                    </div>
+                    <div>
+                      {c.values.filter(v => v.source !== c.current_winner).slice(0, 1).map((v, j) => (
+                        <div key={j}>
+                          <div style={{ fontSize:12, color:"var(--ink-2)", fontWeight:500, fontFamily:"JetBrains Mono", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>"{v.value}"</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{v.source}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      {c.suggestion !== c.current_winner ? (
+                        <div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--green)", fontWeight:600, marginBottom:2 }}>→ {c.suggestion}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{c.reason}</div>
+                        </div>
+                      ) : (
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>Current is optimal</span>
+                      )}
+                    </div>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, fontWeight:600, color:badge.color, background:badge.bg, padding:"2px 7px", borderRadius:4, whiteSpace:"nowrap" }}>{badge.label}</span>
+                  </div>
+
+                  {isExp && (
+                    <div style={{ padding:"12px 16px 14px 16px", background:"var(--panel-2)", borderTop:"1px solid var(--line-2)" }}>
+                      <div style={{ marginBottom:12 }}>
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.8px", textTransform:"uppercase", marginBottom:8 }}>All asserted values</div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                          {c.values.map((v, j) => (
+                            <div key={j} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 12px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:6 }}>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", minWidth:16 }}>#{v.tier}</span>
+                              <span style={{ fontSize:12, color:"var(--ink-3)", minWidth:140 }}>{v.source}</span>
+                              <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color: v.source === c.suggestion ? "var(--green)" : "var(--ink)", fontWeight: v.source === c.suggestion ? 600 : 400, flex:1 }}>"{v.value}"</code>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>conf: {Math.round(v.confidence * 100)}%</span>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{v.updated}</span>
+                              {v.source === c.current_winner && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--coral)", background:"var(--coral-fill)", padding:"1px 5px", borderRadius:3 }}>current</span>}
+                              {v.source === c.suggestion && v.source !== c.current_winner && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--green)", background:"rgba(72,199,142,0.12)", padding:"1px 5px", borderRadius:3 }}>suggested</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginRight:4 }}>Resolve:</span>
+                        {[
+                          { action:"accepted",    label:"Accept suggestion", color:"var(--green)" },
+                          { action:"overridden",  label:"Manual override",   color:"var(--blue)" },
+                          { action:"suppressed",  label:"Suppress conflict", color:"var(--ink-2)" },
+                        ].map(a => {
+                          const active = state === a.action;
+                          return (
+                            <button key={a.action}
+                              onClick={() => setCState(c.id, active ? "pending" : a.action)}
+                              style={{ padding:"6px 13px", border:"1px solid " + (active ? a.color : "var(--line)"), borderRadius:6, background: active ? a.color + "18" : "transparent", color: active ? a.color : "var(--ink-3)", fontSize:12, fontFamily:"Geist, system-ui", cursor:"pointer", fontWeight: active ? 600 : 400, transition:"all 120ms" }}>
+                              {active ? "✓ " : ""}{a.label}
+                            </button>
+                          );
+                        })}
+                        <div style={{ marginLeft:"auto" }}>
+                          <button className="btn-ghost" style={{ fontSize:11, padding:"4px 10px" }}>View record →</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Footer */}
+          <div style={{ padding:"10px 16px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", gap:14, flexShrink:0 }}>
+            <div style={{ flex:1, height:5, background:"var(--line)", borderRadius:3, overflow:"hidden" }}>
+              <div style={{ height:"100%", width: allConflicts.length ? (resolved / allConflicts.length * 100) + "%" : "0%", background:"var(--green)", borderRadius:3, transition:"width 400ms" }} />
+            </div>
+            <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", flexShrink:0 }}>{resolved} / {allConflicts.length} resolved</span>
+            {resolved === allConflicts.length && allConflicts.length > 0 && (
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--green)", fontWeight:600 }}>✓ All conflicts resolved</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
