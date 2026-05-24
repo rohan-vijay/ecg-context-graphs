@@ -660,11 +660,11 @@ function Inspector({ node, onClose, onOpenDetail }) {
       </div>
 
       {onOpenDetail && (
-        <div style={{ display: "flex", gap: 8, padding: "8px 14px 0", borderBottom: "1px solid var(--line-2)" }}>
-          <button onClick={onOpenDetail} style={{ flex: 1, padding: "7px 0", borderRadius: 6, border: "1px solid var(--line)", background: "transparent", color: "var(--ink-2)", fontSize: 12, fontFamily: "Geist, system-ui", cursor: "pointer", textAlign: "center" }}>
+        <div style={{ display: "flex", gap: 8, padding: "14px 14px 14px", borderBottom: "1px solid var(--line-2)" }}>
+          <button onClick={onOpenDetail} style={{ flex: 1, padding: "8px 0", borderRadius: 6, border: "1px solid var(--line)", background: "transparent", color: "var(--ink-2)", fontSize: 12, fontFamily: "Geist, system-ui", cursor: "pointer", textAlign: "center" }}>
             View full details →
           </button>
-          <button onClick={onOpenDetail} style={{ padding: "7px 12px", borderRadius: 6, border: "none", background: "var(--ink)", color: "#fff", fontSize: 12, fontFamily: "Geist, system-ui", cursor: "pointer", fontWeight: 500 }}>
+          <button onClick={onOpenDetail} style={{ padding: "8px 14px", borderRadius: 6, border: "none", background: "var(--ink)", color: "#fff", fontSize: 12, fontFamily: "Geist, system-ui", cursor: "pointer", fontWeight: 500 }}>
             Edit schema
           </button>
         </div>
@@ -10671,52 +10671,84 @@ var CONTEXT_GRAPHS = [
   { id:"product",    cat:"PRODUCT",     color:"var(--purple)", name:"Product Specialist Graph",     desc:"PS delivery entities — work orders, projects, milestones, and the TOC systems powering PS execution.", nodes:3127, edges:8742, agents:8, health:89, synced:"1 min ago", owner:"product-eng" },
   { id:"security",   cat:"SECURITY",    color:"var(--coral)",  name:"Security Posture Graph",       desc:"Identities, devices, secrets and access trails wired into compliance frameworks.",                 nodes:2104,  edges:6820,   agents:3,  health:95, synced:"8 min ago", owner:"security" },
   { id:"workforce",  cat:"PEOPLE",      color:"var(--blue)",   name:"Workforce Graph",              desc:"Employees, roles, teams and tenure — the organizational substrate every other graph leans on.",   nodes:1840,  edges:4920,   agents:2,  health:99, synced:"22 min ago", owner:"people-ops" },
-  { id:"risk",       cat:"RISK",        color:"var(--coral)",  name:"Compliance & Risk Graph",      desc:"Policies, controls, risks and audit evidence linked back to the records they govern.",            nodes:912,   edges:3104,   agents:4,  health:94, synced:"6 min ago", owner:"legal-ops" },
-  { id:"partner",    cat:"PARTNER",     color:"var(--purple)", name:"Partner Ecosystem Graph",      desc:"Channel partners, integrations, co-sells and the joint accounts they touch.",                     nodes:647,   edges:2678,   agents:1,  health:88, synced:"34 min ago", owner:"partnerships" }
+  { id:"risk",       cat:"RISK",        color:"var(--coral)",  name:"Compliance & Risk Graph",      desc:"Policies, controls, risks and audit evidence linked back to the records they govern.",            nodes:912,   edges:3104,   agents:4,  health:94, synced:"6 min ago", owner:"legal-ops" }
 ];
 
 // Deterministic mini-graph generator for the card thumbnails
-function generateMiniGraph(seed, count) {
-  count = count || 11;
+// Deterministic, force-directed-ish layout for graph thumbnails.
+// Anchored to a centre cluster + outer ring so the result always looks composed,
+// never random — and every node lives within a safe inset so nothing clips.
+function generateMiniGraph(seed) {
   var s = (seed || 1) | 0;
   function nxt(){ s = (s * 1664525 + 1013904223) | 0; return Math.abs(s); }
+  // viewBox is 200×120; safe inset 18 / 18.
+  var W = 200, H = 120;
   var nodes = [];
-  for (var i = 0; i < count; i++) {
-    nodes.push({ x: 8 + (nxt() % 84), y: 12 + (nxt() % 76), r: 4 + (nxt() % 9) });
+  // 1 hub
+  nodes.push({ x: W * 0.5, y: H * 0.5, r: 9 });
+  // 3 mid-ring nodes
+  var midN = 3;
+  for (var i = 0; i < midN; i++) {
+    var a = (i / midN) * Math.PI * 2 + (nxt() % 100) / 600;
+    var rad = 30 + (nxt() % 6);
+    nodes.push({ x: W*0.5 + Math.cos(a) * rad, y: H*0.5 + Math.sin(a) * rad * 0.85, r: 6 + (nxt() % 3) });
   }
+  // 7 outer-ring nodes
+  var outN = 7;
+  for (var j = 0; j < outN; j++) {
+    var b = (j / outN) * Math.PI * 2 + Math.PI / outN + (nxt() % 100) / 700;
+    var R = 56 + (nxt() % 8);
+    var x = W*0.5 + Math.cos(b) * R;
+    var y = H*0.5 + Math.sin(b) * R * 0.78;
+    // Clamp to safe inset.
+    if (x < 22) x = 22; if (x > W - 22) x = W - 22;
+    if (y < 18) y = 18; if (y > H - 18) y = H - 18;
+    nodes.push({ x: x, y: y, r: 4 + (nxt() % 3) });
+  }
+  // Edges: hub→mid, each mid→2 outer, plus a few outer→outer.
   var edges = [];
-  for (var j = 0; j < count; j++) {
-    var n = 1 + (nxt() % 2);
-    for (var k = 0; k < n; k++) {
-      var t = nxt() % count;
-      if (t !== j) edges.push([j, t]);
-    }
+  for (var m = 1; m <= midN; m++) edges.push([0, m]);
+  for (var m2 = 1; m2 <= midN; m2++) {
+    var o1 = 1 + midN + ((m2 - 1) * 2) % outN;
+    var o2 = 1 + midN + ((m2 - 1) * 2 + 1) % outN;
+    edges.push([m2, o1]);
+    edges.push([m2, o2]);
   }
-  return { nodes: nodes, edges: edges };
+  for (var k = 0; k < 3; k++) {
+    var a1 = 1 + midN + (nxt() % outN);
+    var a2 = 1 + midN + (nxt() % outN);
+    if (a1 !== a2) edges.push([a1, a2]);
+  }
+  return { nodes: nodes, edges: edges, W: W, H: H };
 }
 
-function GraphMiniViz({ seed, color, size }) {
-  var w = size || 100, h = (size || 100) * 0.62;
+function GraphMiniViz({ seed, color }) {
   var g = generateMiniGraph(seed);
   var gradId = "gradMini_" + seed;
   return (
-    <svg width="100%" height="100%" viewBox={"0 0 100 62"} preserveAspectRatio="xMidYMid meet" style={{ display:"block" }}>
+    <svg width="100%" height="100%" viewBox={"0 0 " + g.W + " " + g.H} preserveAspectRatio="xMidYMid slice" style={{ display:"block" }}>
       <defs>
-        <radialGradient id={gradId} cx="50%" cy="50%" r="60%">
-          <stop offset="0%" stopColor={color} stopOpacity="0.12" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </radialGradient>
+        <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.14" />
+          <stop offset="60%" stopColor={color} stopOpacity="0.05" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.10" />
+        </linearGradient>
       </defs>
-      <rect x="0" y="0" width="100" height="62" fill={"url(#" + gradId + ")"} />
-      <g stroke={color} strokeOpacity="0.35" strokeWidth="0.4">
-        {g.edges.slice(0, 18).map(function(e, i){
+      <rect x="0" y="0" width={g.W} height={g.H} fill={"url(#" + gradId + ")"} />
+      <g stroke={color} strokeOpacity="0.32" strokeWidth="0.8" strokeLinecap="round">
+        {g.edges.map(function(e, i){
           var a = g.nodes[e[0]], b = g.nodes[e[1]];
-          return <line key={i} x1={a.x*0.95} y1={a.y*0.7} x2={b.x*0.95} y2={b.y*0.7} />;
+          return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />;
         })}
       </g>
-      <g fill={color}>
+      <g>
         {g.nodes.map(function(n, i){
-          return <circle key={i} cx={n.x*0.95} cy={n.y*0.7} r={n.r*0.42} opacity={0.65 + (i%3)*0.12} />;
+          return (
+            <g key={i}>
+              <circle cx={n.x} cy={n.y} r={n.r + 1.5} fill={color} fillOpacity="0.12" />
+              <circle cx={n.x} cy={n.y} r={n.r} fill={color} fillOpacity={i === 0 ? 0.85 : 0.6 + (i%3)*0.08} />
+            </g>
+          );
         })}
       </g>
     </svg>
@@ -11017,7 +11049,7 @@ function NewGraphFlow({ onClose, onCreate }) {
   var [permsWrite, setPermsWrite]     = useState([{ kind:"group", id:"data-platform",  label:"data-platform team" }]);
   var [permsAdmin, setPermsAdmin]     = useState([{ kind:"user",  id:"morgan.lee",     label:"Morgan Lee (you)" }]);
 
-  var stepNames = ["Context", "Starting point", "Customise", "Identity & access", "Review"];
+  var stepNames = ["Focus", "Starting point", "Entities", "Identity & access", "Review"];
 
   // Filter + rank suggestions by current industry + function. Both axes match → higher relevance.
   var suggestions = GRAPH_STARTING_POINTS.map(function(sp){
@@ -11243,7 +11275,7 @@ function NewGraphFlow({ onClose, onCreate }) {
   return (
     <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
       onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width:"96vw", maxWidth:1480, height:"96vh", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
+      <div style={{ width:"92vw", maxWidth:1180, height:"94vh", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
 
         {/* HEADER */}
         <div style={{ flexShrink:0, height:56, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 22px", background:"var(--panel)" }}>
@@ -11297,7 +11329,7 @@ function NewGraphFlow({ onClose, onCreate }) {
 
             {/* STEP 1 */}
             {step === 1 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:760 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
                 <div>
                   <label style={lbl}>INDUSTRY OR SECTOR</label>
                   <RichDropdown
@@ -11327,7 +11359,7 @@ function NewGraphFlow({ onClose, onCreate }) {
 
             {/* STEP 2 */}
             {step === 2 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:10, maxWidth:920 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {/* Blank canvas — compact row */}
                 {(function(){
                   var isOn = startId === "__blank";
@@ -11392,7 +11424,7 @@ function NewGraphFlow({ onClose, onCreate }) {
 
             {/* STEP 3 */}
             {step === 3 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:16, maxWidth:920 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
                 {/* Summary strip */}
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", background:"var(--panel-2)", border:"1px solid var(--line-2)", borderRadius:8 }}>
                   <div>
@@ -11500,7 +11532,7 @@ function NewGraphFlow({ onClose, onCreate }) {
 
             {/* STEP 4 */}
             {step === 4 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:22, maxWidth:780 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
                 <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:14 }}>
                   <div>
                     <label style={lbl}>GRAPH NAME</label>
@@ -11541,7 +11573,7 @@ function NewGraphFlow({ onClose, onCreate }) {
 
             {/* STEP 5 — comprehensive */}
             {step === 5 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:22, maxWidth:880 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
                 <div>
                   <div style={{ fontFamily:"Instrument Serif", fontSize:30, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>Spin up "{graphName || "your graph"}"?</div>
                   <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:600 }}>Once activated it appears in the Context Graphs landing. You can rename, reshape, or delete it any time.</div>
@@ -11662,7 +11694,6 @@ function GraphLandingView({ onOpenGraph }) {
       {/* HEADER BAR — like a workspace picker */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:14, padding:"22px 32px 14px", background:"var(--bg)", borderBottom:"1px solid var(--line-2)" }}>
         <div style={{ display:"flex", alignItems:"baseline", gap:14 }}>
-          <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, letterSpacing:"1.6px", color:"var(--ink-3)", padding:"3px 8px", border:"1px solid var(--line)", borderRadius:5, background:"var(--panel-2)" }}>ECG</span>
           <span style={{ fontFamily:"Instrument Serif", fontSize:30, color:"var(--ink)", lineHeight:1, letterSpacing:"-0.3px" }}>Context Graphs</span>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
@@ -11730,9 +11761,9 @@ function GraphLandingView({ onOpenGraph }) {
         </div>
       </div>
 
-      {/* GRID */}
+      {/* GRID — max 3 columns, centred container with margin once wider than ~1400 */}
       {view === "grid" ? (
-        <div style={{ padding:"24px 32px 40px", display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(360px, 1fr))", gap:20 }}>
+        <div style={{ padding:"24px clamp(20px, 4vw, 64px) 40px", maxWidth:1400, margin:"0 auto", width:"100%", boxSizing:"border-box", display:"grid", gridTemplateColumns:"repeat(3, minmax(0, 1fr))", gap:20 }}>
           {filtered.map(function(g, idx){
             var hColor = healthColor(g.health);
             return (
@@ -11741,15 +11772,13 @@ function GraphLandingView({ onOpenGraph }) {
                 style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:14, overflow:"hidden", cursor:"pointer", transition:"transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease" }}
                 onMouseEnter={function(e){ e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 10px 28px rgba(40,40,20,0.08)"; e.currentTarget.style.borderColor = "var(--ink-3)"; }}
                 onMouseLeave={function(e){ e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = "var(--line)"; }}>
-                {/* Mini viz */}
-                <div style={{ position:"relative", height:200, background: g.color + "0d" }}>
+                {/* Mini viz — full-bleed, gradient flows edge to edge */}
+                <div style={{ position:"relative", height:180, overflow:"hidden" }}>
+                  <GraphMiniViz seed={g.id.charCodeAt(0) * 977 + g.id.length * 31} color={g.color} />
                   <span style={{ position:"absolute", top:12, left:14, zIndex:2, fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"1.1px", color:"var(--ink-3)", padding:"3px 8px", background:"var(--panel)", border:"1px solid var(--line-2)", borderRadius:4 }}>{g.cat}</span>
-                  <span style={{ position:"absolute", top:12, right:14, zIndex:2, fontFamily:"JetBrains Mono", fontSize:11, color: hColor, display:"flex", alignItems:"center", gap:5, fontWeight:600 }}>
+                  <span style={{ position:"absolute", top:12, right:14, zIndex:2, fontFamily:"JetBrains Mono", fontSize:11, color: hColor, display:"flex", alignItems:"center", gap:5, fontWeight:600, padding:"3px 8px", background:"var(--panel)", border:"1px solid var(--line-2)", borderRadius:4 }}>
                     <span style={{ width:6, height:6, borderRadius:"50%", background: hColor }} />{g.health + "%"}
                   </span>
-                  <div style={{ position:"absolute", inset:0, padding:"36px 14px 14px" }}>
-                    <GraphMiniViz seed={g.id.charCodeAt(0) * 977 + g.id.length * 31} color={g.color} />
-                  </div>
                 </div>
                 {/* Body */}
                 <div style={{ padding:"18px 22px 18px" }}>
