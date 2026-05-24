@@ -328,7 +328,10 @@ function Header({ tab, onTab, onAddNode }) {
           </button>
         ))}
       </nav>
-      <div className="hdr-right" style={{ position:"relative" }}>
+      <div className="hdr-right" style={{ position:"relative", display:"flex", alignItems:"center", gap:8 }}>
+        <button className="btn-dark" title="Publish draft changes to the live graph" style={{ padding:"8px 16px" }}>
+          Publish
+        </button>
         <button
           className="btn-icon"
           title="More actions"
@@ -1417,7 +1420,7 @@ function GlobalPropertiesView() {
     <div className="nodes-view">
       <div className="nv-head">
         <div className="nv-head-left">
-          <div className="nv-eyebrow">SCHEMA · PROPERTIES</div>
+
           <div className="nv-title">Property catalog</div>
         </div>
         <div className="nv-head-right">
@@ -1538,7 +1541,7 @@ function GlobalEdgesView() {
     <div className="nodes-view">
       <div className="nv-head">
         <div className="nv-head-left">
-          <div className="nv-eyebrow">SCHEMA · EDGES</div>
+
           <div className="nv-title">Edge catalog</div>
         </div>
         <div className="nv-head-right">
@@ -1655,7 +1658,7 @@ function GlobalSourcesView() {
     <div className="nodes-view">
       <div className="nv-head">
         <div className="nv-head-left">
-          <div className="nv-eyebrow">SCHEMA · SOURCES</div>
+
           <div className="nv-title">Source catalog</div>
         </div>
         <div className="nv-head-right">
@@ -4226,45 +4229,72 @@ function LinkSourceFlow({ node, onClose }) {
 
             {step === 1 && (
               <div>
-                <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14, flexWrap:"wrap" }}>
-                  <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                    {CONNECTOR_CATEGORIES.map(function(c){
-                      var isOn = catFilter === c.id;
-                      return <button key={c.id} onClick={function(){ setCatFilter(c.id); }}
-                        className={"chip" + (isOn ? " on" : "")}>
-                        {c.label} <span className="chip-n">{c.n}</span>
-                      </button>;
-                    })}
-                  </div>
-                  <div style={{ marginLeft:"auto", position:"relative" }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"var(--ink-3)", pointerEvents:"none" }}>
-                      <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-                    </svg>
-                    <input value={connSearch} onChange={function(e){ setConnSearch(e.target.value); }} placeholder="Search connectors…" style={{ padding:"6px 10px 6px 30px", border:"1px solid var(--line)", borderRadius:7, fontFamily:"inherit", fontSize:12, background:"var(--panel)", color:"var(--ink)", outline:"none", width:220 }} />
-                  </div>
+                {/* Search bar above categories — cleaner, more white-space */}
+                <div style={{ position:"relative", marginBottom:16, maxWidth:400 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:"var(--ink-3)", pointerEvents:"none" }}>
+                    <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                  </svg>
+                  <input value={connSearch} onChange={function(e){ setConnSearch(e.target.value); }} placeholder="Search connectors…" style={{ width:"100%", padding:"9px 12px 9px 34px", border:"1px solid var(--line)", borderRadius:8, fontFamily:"inherit", fontSize:13, background:"var(--panel)", color:"var(--ink)", outline:"none" }} />
                 </div>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:10 }}>
+
+                {/* Category filter row */}
+                <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginBottom:18 }}>
+                  {CONNECTOR_CATEGORIES.map(function(c){
+                    var isOn = catFilter === c.id;
+                    return <button key={c.id} onClick={function(){ setCatFilter(c.id); }}
+                      className={"chip" + (isOn ? " on" : "")}>
+                      {c.label} <span className="chip-n">{c.n}</span>
+                    </button>;
+                  })}
+                </div>
+
+                {/* Sleek 4-column grid — logo-led, minimal text */}
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:10 }}>
                   {filteredConnectors.map(function(c){
                     var isOn = connector === c.id;
+                    var pColor = c.paradigm === "structured" ? "var(--blue)" : c.paradigm === "documents" ? "var(--purple)" : c.paradigm === "event" ? "var(--green)" : "var(--ink-3)";
                     return (
                       <button key={c.id} onClick={function(){ setConnector(c.id); }}
-                        style={{ textAlign:"left", padding:"14px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--bg-canvas)" : "var(--panel)", borderRadius:10, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:11, boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 8%, transparent)" : "none" }}>
-                        <ConnLogo c={c} size={32} />
-                        <div style={{ minWidth:0, flex:1 }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-                            <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{c.name}</span>
-                            {c.popular && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--gold-fill)", color:"var(--gold)", fontWeight:700, letterSpacing:"0.3px" }}>POPULAR</span>}
-                          </div>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.brief}</div>
-                          <div style={{ display:"flex", gap:5, marginTop:6 }}>
-                            <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 5px", borderRadius:3, background: c.paradigm === "structured" ? "var(--blue-fill)" : c.paradigm === "documents" ? "var(--purple-fill)" : c.paradigm === "event" ? "var(--green-fill)" : "var(--chip)", color: c.paradigm === "structured" ? "var(--blue)" : c.paradigm === "documents" ? "var(--purple)" : c.paradigm === "event" ? "var(--green)" : "var(--ink-3)", fontWeight:700, letterSpacing:"0.3px", textTransform:"uppercase" }}>{c.paradigm}</span>
-                            <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)" }}>{c.auth}</span>
-                          </div>
-                        </div>
-                        {isOn && <span style={{ color:"var(--green)", fontFamily:"JetBrains Mono", fontWeight:700 }}>✓</span>}
+                        title={c.brief}
+                        style={{
+                          position:"relative",
+                          textAlign:"center",
+                          padding:"18px 12px 14px",
+                          border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"),
+                          background: isOn ? "var(--bg-canvas)" : "var(--panel)",
+                          borderRadius:10,
+                          cursor:"pointer",
+                          fontFamily:"inherit",
+                          display:"flex",
+                          flexDirection:"column",
+                          alignItems:"center",
+                          gap:8,
+                          minHeight:108,
+                          transition:"transform 80ms ease, box-shadow 80ms ease",
+                          boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 10%, transparent)" : "none"
+                        }}
+                        onMouseEnter={function(e){ if (!isOn) e.currentTarget.style.boxShadow = "0 3px 10px rgba(0,0,0,0.06)"; }}
+                        onMouseLeave={function(e){ if (!isOn) e.currentTarget.style.boxShadow = "none"; }}>
+                        {/* Top-left paradigm dot */}
+                        <span style={{ position:"absolute", top:9, left:10, width:6, height:6, borderRadius:"50%", background:pColor }} title={c.paradigm} />
+                        {/* Top-right selection check (only when selected) */}
+                        {isOn && <span style={{ position:"absolute", top:7, right:9, fontFamily:"JetBrains Mono", color:"var(--ink)", fontWeight:700, fontSize:12 }}>✓</span>}
+                        <ConnLogo c={c} size={36} />
+                        <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)", lineHeight:1.2 }}>{c.name}</span>
                       </button>
                     );
                   })}
+                </div>
+                {filteredConnectors.length === 0 && (
+                  <div style={{ padding:"40px 18px", textAlign:"center", color:"var(--ink-3)", fontSize:13 }}>No connectors match.</div>
+                )}
+
+                {/* Subtle paradigm legend */}
+                <div style={{ display:"flex", gap:18, marginTop:18, paddingTop:14, borderTop:"1px dashed var(--line-2)", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>
+                  <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}><span style={{ width:6, height:6, borderRadius:"50%", background:"var(--blue)" }} />Structured</span>
+                  <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}><span style={{ width:6, height:6, borderRadius:"50%", background:"var(--purple)" }} />Documents (LLM)</span>
+                  <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}><span style={{ width:6, height:6, borderRadius:"50%", background:"var(--green)" }} />Event</span>
+                  <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}><span style={{ width:6, height:6, borderRadius:"50%", background:"var(--ink-3)" }} />Manual</span>
                 </div>
               </div>
             )}
@@ -8367,7 +8397,7 @@ function RecordsView() {
     <div className="nodes-view">
       <div className="nv-head">
         <div className="nv-head-left">
-          <div className="nv-eyebrow">RECORDS</div>
+
           <div className="nv-title">Instance data</div>
         </div>
         <div className="nv-head-right">
@@ -8844,7 +8874,7 @@ function StewardshipView() {
       {/* HEADER */}
       <div className="nv-head">
         <div className="nv-head-left">
-          <div className="nv-eyebrow">STEWARDSHIP</div>
+
           <div className="nv-title">Open tasks</div>
         </div>
         <div className="nv-head-right">
@@ -9387,7 +9417,7 @@ function NodesView({ onSelect, onSwitchToCanvas, onAddNode }) {
     <div className="nodes-view">
       <div className="nv-head">
         <div className="nv-head-left">
-          <div className="nv-eyebrow">SCHEMA · NODE TYPES</div>
+
           <div className="nv-title">Node catalog</div>
         </div>
         <div className="nv-head-right">
