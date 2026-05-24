@@ -10818,15 +10818,15 @@ function AddNodeFlow({ onClose }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 var CONTEXT_GRAPHS = [
-  { id:"ecg",        cat:"GLOBAL",      color:"var(--blue)",   name:"Enterprise Context Graph",     desc:"The unified context layer connecting every entity, system, and decision across the organization.", nodes:28431, edges:183202, agents:41, health:96, synced:"2 min ago", owner:"data-platform" },
-  { id:"customer",   cat:"CUSTOMER",    color:"var(--gold)",   name:"Customer 360 Graph",           desc:"Identity-resolved customer entities unifying CRM, support, billing and product.",                  nodes:9482,  edges:41200,  agents:7,  health:93, synced:"4 min ago", owner:"customer-ops" },
-  { id:"sales",      cat:"REVENUE",     color:"var(--gold)",   name:"Sales Graph",                  desc:"Pipeline, opportunities, accounts and the early signals — across CRM, billing and product — that the agents reason on to close revenue.", nodes:6204,  edges:21380,  agents:9,  health:92, synced:"5 min ago", owner:"revenue-ops" },
-  { id:"support",    cat:"SUPPORT",     color:"var(--gold)",   name:"Support Graph",                desc:"Tickets, incidents, escalations and resolution paths across every support channel.",               nodes:11402, edges:33840,  agents:6,  health:91, synced:"3 min ago", owner:"customer-ops" },
-  { id:"finance",    cat:"FINANCE",     color:"var(--green)",  name:"Finance Graph",                desc:"Ledger entities, controls, policies and audit lineage spanning systems of record.",                nodes:4218,  edges:14502,  agents:5,  health:98, synced:"12 min ago", owner:"finance-ops" },
-  { id:"product",    cat:"PRODUCT",     color:"var(--purple)", name:"Product Specialist Graph",     desc:"PS delivery entities — work orders, projects, milestones, and the TOC systems powering PS execution.", nodes:3127, edges:8742, agents:8, health:89, synced:"1 min ago", owner:"product-eng" },
-  { id:"security",   cat:"SECURITY",    color:"var(--coral)",  name:"Security Posture Graph",       desc:"Identities, devices, secrets and access trails wired into compliance frameworks.",                 nodes:2104,  edges:6820,   agents:3,  health:95, synced:"8 min ago", owner:"security" },
-  { id:"workforce",  cat:"PEOPLE",      color:"var(--blue)",   name:"Workforce Graph",              desc:"Employees, roles, teams and tenure — the organizational substrate every other graph leans on.",   nodes:1840,  edges:4920,   agents:2,  health:99, synced:"22 min ago", owner:"people-ops" },
-  { id:"risk",       cat:"RISK",        color:"var(--coral)",  name:"Compliance & Risk Graph",      desc:"Policies, controls, risks and audit evidence linked back to the records they govern.",            nodes:912,   edges:3104,   agents:4,  health:94, synced:"6 min ago", owner:"legal-ops" }
+  { id:"ecg",        cat:"GLOBAL",      color:"var(--blue)",   name:"Enterprise Context Graph",     desc:"The unified context layer connecting every entity, system, and decision across the organization.", nodes:28431, edges:183202, sources:12, health:96, synced:"2 min ago", owner:"data-platform" },
+  { id:"customer",   cat:"CUSTOMER",    color:"var(--gold)",   name:"Customer 360 Graph",           desc:"Identity-resolved customer entities unifying CRM, support, billing and product.",                  nodes:9482,  edges:41200,  sources:6, health:93, synced:"4 min ago", owner:"customer-ops" },
+  { id:"sales",      cat:"REVENUE",     color:"var(--gold)",   name:"Sales Graph",                  desc:"Pipeline, opportunities, accounts and the early signals — across CRM, billing and product — that the agents reason on to close revenue.", nodes:6204,  edges:21380,  sources:5, health:92, synced:"5 min ago", owner:"revenue-ops" },
+  { id:"support",    cat:"SUPPORT",     color:"var(--gold)",   name:"Support Graph",                desc:"Tickets, incidents, escalations and resolution paths across every support channel.",               nodes:11402, edges:33840,  sources:4, health:91, synced:"3 min ago", owner:"customer-ops" },
+  { id:"finance",    cat:"FINANCE",     color:"var(--green)",  name:"Finance Graph",                desc:"Ledger entities, controls, policies and audit lineage spanning systems of record.",                nodes:4218,  edges:14502,  sources:7, health:98, synced:"12 min ago", owner:"finance-ops" },
+  { id:"product",    cat:"PRODUCT",     color:"var(--purple)", name:"Product Specialist Graph",     desc:"PS delivery entities — work orders, projects, milestones, and the TOC systems powering PS execution.", nodes:3127, edges:8742, sources:5, health:89, synced:"1 min ago", owner:"product-eng" },
+  { id:"security",   cat:"SECURITY",    color:"var(--coral)",  name:"Security Posture Graph",       desc:"Identities, devices, secrets and access trails wired into compliance frameworks.",                 nodes:2104,  edges:6820,   sources:8, health:95, synced:"8 min ago", owner:"security" },
+  { id:"workforce",  cat:"PEOPLE",      color:"var(--blue)",   name:"Workforce Graph",              desc:"Employees, roles, teams and tenure — the organizational substrate every other graph leans on.",   nodes:1840,  edges:4920,   sources:3, health:99, synced:"22 min ago", owner:"people-ops" },
+  { id:"risk",       cat:"RISK",        color:"var(--coral)",  name:"Compliance & Risk Graph",      desc:"Policies, controls, risks and audit evidence linked back to the records they govern.",            nodes:912,   edges:3104,   sources:6, health:94, synced:"6 min ago", owner:"legal-ops" }
 ];
 
 // Deterministic mini-graph generator for the card thumbnails
@@ -12362,14 +12362,13 @@ function GraphLandingView({ onOpenGraph }) {
     if (sort === "nodes")  return b.nodes - a.nodes;
     if (sort === "recent") return parseInt(a.synced) - parseInt(b.synced);
     if (sort === "alpha")  return a.name.localeCompare(b.name);
-    return b.agents - a.agents; // active
+    return b.nodes - a.nodes; // active fallback — largest first
   });
 
   var totals = CONTEXT_GRAPHS.reduce(function(acc, g){
-    acc.nodes += g.nodes; acc.edges += g.edges; acc.agents += g.agents; acc.health += g.health;
+    acc.nodes += g.nodes; acc.edges += g.edges; acc.sources += g.sources;
     return acc;
-  }, { nodes:0, edges:0, agents:0, health:0 });
-  var avgHealth = Math.round(totals.health / CONTEXT_GRAPHS.length);
+  }, { nodes:0, edges:0, sources:0 });
 
   function healthColor(h){ return h >= 95 ? "var(--green)" : h >= 90 ? "var(--blue)" : h >= 80 ? "var(--gold)" : "var(--coral)"; }
 
@@ -12432,10 +12431,9 @@ function GraphLandingView({ onOpenGraph }) {
         <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", letterSpacing:"0.3px" }}>{filtered.length + " of " + CONTEXT_GRAPHS.length + " context graphs"}</span>
         <div style={{ display:"flex", alignItems:"baseline", gap:32 }}>
           {[
-            { lbl:"TOTAL NODES",   v: totals.nodes.toLocaleString(),  color:"var(--ink)" },
-            { lbl:"TOTAL EDGES",   v: totals.edges.toLocaleString(),  color:"var(--ink)" },
-            { lbl:"ACTIVE AGENTS", v: totals.agents.toLocaleString(), color:"var(--ink)" },
-            { lbl:"AVG HEALTH",    v: avgHealth + "%",                color: healthColor(avgHealth) }
+            { lbl:"TOTAL NODES",   v: totals.nodes.toLocaleString(),   color:"var(--ink)" },
+            { lbl:"TOTAL EDGES",   v: totals.edges.toLocaleString(),   color:"var(--ink)" },
+            { lbl:"TOTAL SOURCES", v: totals.sources.toLocaleString(), color:"var(--ink)" }
           ].map(function(k, i){
             return <div key={i} style={{ display:"flex", flexDirection:"column", gap:3, paddingLeft: i > 0 ? 28 : 0, borderLeft: i > 0 ? "1px solid var(--line-2)" : "none" }}>
               <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>{k.lbl}</span>
@@ -12478,12 +12476,11 @@ function GraphLandingView({ onOpenGraph }) {
                           <div style={{ fontSize:13.5, color:"var(--ink-2)", lineHeight:1.55, marginBottom:18, maxWidth:480 }}>{g.desc}  Every other graph in this workspace draws from it — Customer, Sales, Support, Finance and beyond.</div>
                         </div>
                         <div>
-                          <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:18, paddingTop:16, borderTop:"1px dashed var(--line-2)" }}>
+                          <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:18, paddingTop:16, borderTop:"1px dashed var(--line-2)" }}>
                             {[
                               { k:"NODES",   v: g.nodes.toLocaleString() },
                               { k:"EDGES",   v: g.edges.toLocaleString() },
-                              { k:"AGENTS",  v: g.agents.toString() },
-                              { k:"SOURCES", v: "12" }
+                              { k:"SOURCES", v: g.sources.toString() }
                             ].map(function(it, i){
                               return <div key={i}>
                                 <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>{it.k}</div>
@@ -12534,7 +12531,7 @@ function GraphLandingView({ onOpenGraph }) {
                           <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", lineHeight:1.15, marginBottom:8 }}>{g.name}</div>
                           <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.55, marginBottom:14, minHeight:36, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{g.desc}</div>
                           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14, paddingTop:12, borderTop:"1px dashed var(--line-2)" }}>
-                            {[{ k:"NODES", v: g.nodes.toLocaleString() },{ k:"EDGES", v: g.edges.toLocaleString() },{ k:"AGENTS", v: g.agents.toString() }].map(function(it, i){
+                            {[{ k:"NODES", v: g.nodes.toLocaleString() },{ k:"EDGES", v: g.edges.toLocaleString() },{ k:"SOURCES", v: g.sources.toString() }].map(function(it, i){
                               return <div key={i}>
                                 <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>{it.k}</div>
                                 <div style={{ fontFamily:"Instrument Serif", fontSize:17, color:"var(--ink)", marginTop:2, lineHeight:1 }}>{it.v}</div>
@@ -12559,7 +12556,7 @@ function GraphLandingView({ onOpenGraph }) {
         <div style={{ padding:"20px 32px 40px" }}>
           <div className="nv-table" style={{ margin:0 }}>
             <div style={{ display:"grid", gridTemplateColumns:"2.2fr 110px 110px 120px 90px 80px 130px", gap:14, padding:"10px 22px", background:"var(--panel-2)", borderBottom:"1px solid var(--line)", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", alignItems:"center" }}>
-              <div>Graph</div><div style={{ textAlign:"right" }}>Nodes</div><div style={{ textAlign:"right" }}>Edges</div><div style={{ textAlign:"right" }}>Agents</div><div style={{ textAlign:"right" }}>Health</div><div>Synced</div><div>Owner</div>
+              <div>Graph</div><div style={{ textAlign:"right" }}>Nodes</div><div style={{ textAlign:"right" }}>Edges</div><div style={{ textAlign:"right" }}>Sources</div><div style={{ textAlign:"right" }}>Health</div><div>Synced</div><div>Owner</div>
             </div>
             {filtered.map(function(g, i){
               var hColor = healthColor(g.health);
@@ -12578,7 +12575,7 @@ function GraphLandingView({ onOpenGraph }) {
                   </div>
                   <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", textAlign:"right" }}>{g.nodes.toLocaleString()}</span>
                   <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", textAlign:"right" }}>{g.edges.toLocaleString()}</span>
-                  <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", textAlign:"right" }}>{g.agents}</span>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", textAlign:"right" }}>{g.sources}</span>
                   <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color: hColor, textAlign:"right", fontWeight:600 }}>{g.health + "%"}</span>
                   <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{g.synced}</span>
                   <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{g.owner}</span>
