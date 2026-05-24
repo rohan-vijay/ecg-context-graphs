@@ -10728,32 +10728,111 @@ function GraphMiniViz({ seed, color, size }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 var GRAPH_INDUSTRIES = [
-  { id:"saas",          label:"SaaS / B2B Software",    desc:"Subscriptions, accounts, product usage" },
-  { id:"fintech",       label:"Financial Services",     desc:"Customers, accounts, transactions, risk" },
-  { id:"healthcare",    label:"Healthcare / Life Sci",  desc:"Patients, providers, claims, encounters" },
-  { id:"retail",        label:"Retail / eCommerce",     desc:"Customers, orders, products, fulfilment" },
-  { id:"manufacturing", label:"Manufacturing",          desc:"Supply chain, inventory, BOMs, suppliers" },
-  { id:"logistics",     label:"Logistics & Supply",     desc:"Shipments, routes, warehouses, carriers" },
-  { id:"media",         label:"Media & Entertainment",  desc:"Content, audiences, subscriptions, rights" },
-  { id:"professional",  label:"Professional Services",  desc:"Clients, engagements, billable hours" },
-  { id:"public",        label:"Public Sector / Edu",    desc:"Citizens, programs, grants, casework" }
+  { id:"any",           code:"ANY",  label:"Any / cross-industry",        desc:"Horizontal use case — works across sectors",  accent:"var(--ink-3)" },
+  { id:"saas",          code:"SaaS", label:"SaaS / B2B Software",         desc:"Subscriptions, accounts, product telemetry",  accent:"var(--blue)" },
+  { id:"fintech",       code:"FIN",  label:"Financial Services",          desc:"Customers, accounts, transactions, risk",     accent:"var(--coral)" },
+  { id:"healthcare",    code:"HC",   label:"Healthcare / Life Sciences",  desc:"Patients, providers, claims, encounters",     accent:"var(--purple)" },
+  { id:"retail",        code:"RTL",  label:"Retail / eCommerce",          desc:"Customers, orders, products, fulfilment",     accent:"var(--gold)" },
+  { id:"manufacturing", code:"MFG",  label:"Manufacturing",               desc:"Supply chain, inventory, BOMs, suppliers",    accent:"var(--green)" },
+  { id:"logistics",     code:"LOG",  label:"Logistics & Supply",          desc:"Shipments, routes, warehouses, carriers",     accent:"var(--blue)" },
+  { id:"media",         code:"MED",  label:"Media & Entertainment",       desc:"Content, audiences, subscriptions, rights",   accent:"var(--purple)" },
+  { id:"professional",  code:"PRO",  label:"Professional Services",       desc:"Clients, engagements, billable hours",        accent:"var(--coral)" },
+  { id:"public",        code:"PUB",  label:"Public Sector / Education",   desc:"Citizens, programs, grants, casework",        accent:"var(--gold)" }
 ];
 
 var GRAPH_FUNCTIONS = [
-  { id:"revenue",       label:"Sales & Revenue" },
-  { id:"customer",      label:"Customer Success" },
-  { id:"marketing",     label:"Marketing" },
-  { id:"product",       label:"Product & Engineering" },
-  { id:"operations",    label:"Operations" },
-  { id:"finance",       label:"Finance" },
-  { id:"people",        label:"People / HR" },
-  { id:"legal",         label:"Legal & Compliance" },
-  { id:"risk",          label:"Risk & Trust" },
-  { id:"data-platform", label:"Data Platform" }
+  { id:"enterprise",    code:"ENT", label:"Entire organisation",   desc:"Cross-functional, enterprise-wide context graph",      enterprise:true },
+  { id:"revenue",       code:"REV", label:"Sales & Revenue",       desc:"Pipeline, accounts, opportunities, forecasting" },
+  { id:"customer",      code:"CS",  label:"Customer Success",      desc:"Health, retention, renewals, escalations" },
+  { id:"marketing",     code:"MKT", label:"Marketing",             desc:"Campaigns, attribution, audiences, content" },
+  { id:"product",       code:"PE",  label:"Product & Engineering", desc:"Telemetry, releases, experiments, incidents" },
+  { id:"operations",    code:"OPS", label:"Operations",            desc:"Workflows, capacity, throughput, SLAs" },
+  { id:"finance",       code:"FIN", label:"Finance",               desc:"GL, journal, invoicing, payments, controls" },
+  { id:"people",        code:"HR",  label:"People / HR",           desc:"Employees, roles, teams, comp, tenure" },
+  { id:"legal",         code:"LGL", label:"Legal & Compliance",    desc:"Contracts, obligations, policies, audits" },
+  { id:"risk",          code:"RSK", label:"Risk & Trust",          desc:"Fraud, KYC, controls, holds, signals" },
+  { id:"data-platform", code:"DP",  label:"Data Platform",         desc:"Models, lineage, contracts, observability" }
 ];
+
+// Per-entity metadata: short description + a few representative properties.
+// Used by Step 2 / Step 3 preview cards to make blueprints feel concrete.
+var ENTITY_META = {
+  "Account":         { desc:"A buying organisation or company.",               props:["account_id","name","industry","arr","tier"] },
+  "Contact":         { desc:"A person at an account.",                         props:["contact_id","email","role","account_id"] },
+  "Opportunity":     { desc:"A potential deal in the pipeline.",               props:["opportunity_id","stage","amount","close_date","owner"] },
+  "Subscription":    { desc:"An active product subscription.",                 props:["subscription_id","plan","mrr","status","renews_on"] },
+  "Invoice":         { desc:"A billing document issued to a customer.",        props:["invoice_id","amount","status","issued_on","due_on"] },
+  "Usage Event":     { desc:"A product usage signal from an account.",         props:["event_id","feature","timestamp","account_id"] },
+  "Ticket":          { desc:"A support or customer-service case.",             props:["ticket_id","subject","priority","status","opened_at"] },
+  "Customer":        { desc:"A person or org you serve.",                      props:["customer_id","name","status","ltv","segment"] },
+  "Interaction":     { desc:"Any touchpoint with a customer.",                 props:["interaction_id","channel","sentiment","timestamp"] },
+  "Health Score":    { desc:"Composite indicator of account health.",          props:["score","trend","computed_at","drivers"] },
+  "Renewal":         { desc:"An upcoming or completed contract renewal.",      props:["renewal_id","arr","stage","decision_by"] },
+  "Transaction":     { desc:"A money-movement event.",                         props:["txn_id","amount","currency","direction","posted_at"] },
+  "Risk Signal":     { desc:"A flagged anomaly or risk indicator.",            props:["signal_id","type","severity","detected_at"] },
+  "Hold":            { desc:"A regulatory or fraud hold on an account.",       props:["hold_id","reason","placed_on","cleared_on"] },
+  "Compliance Case": { desc:"An open regulatory or compliance investigation.", props:["case_id","regulator","status","opened_on"] },
+  "Patient":         { desc:"An individual receiving care.",                   props:["patient_id","dob","mrn","primary_provider"] },
+  "Provider":        { desc:"A clinician, practice or facility.",              props:["provider_id","npi","specialty","facility"] },
+  "Encounter":       { desc:"A clinical visit or interaction.",                props:["encounter_id","type","date","provider_id"] },
+  "Diagnosis":       { desc:"A coded clinical condition.",                     props:["diagnosis_id","icd10","date","severity"] },
+  "Claim":           { desc:"A healthcare insurance claim.",                   props:["claim_id","amount","status","filed_on"] },
+  "Outcome":         { desc:"A measured clinical or operational result.",      props:["outcome_id","measure","value","date"] },
+  "Order":           { desc:"A customer purchase transaction.",                props:["order_id","total","status","placed_at","channel"] },
+  "Product":         { desc:"A sellable SKU or service.",                      props:["sku","name","category","price","status"] },
+  "Shipment":        { desc:"A fulfilment shipment.",                          props:["shipment_id","carrier","tracking","status","shipped_at"] },
+  "Return":          { desc:"A returned order or item.",                       props:["return_id","reason","amount","status"] },
+  "Inventory":       { desc:"On-hand stock at a location.",                    props:["sku","location","on_hand","reserved"] },
+  "Supplier":        { desc:"A vendor of materials or services.",              props:["supplier_id","name","tier","status"] },
+  "Purchase Order":  { desc:"A procurement contract.",                         props:["po_id","amount","supplier_id","status"] },
+  "Item":            { desc:"A material or part SKU.",                         props:["item_id","name","uom","cost"] },
+  "BOM":             { desc:"A bill of materials for an assembly.",            props:["bom_id","parent_item","components","revision"] },
+  "Plant":           { desc:"A manufacturing facility.",                       props:["plant_id","name","region","capacity"] },
+  "GL Account":      { desc:"A general-ledger account.",                       props:["gl_code","name","type","currency"] },
+  "Journal Entry":   { desc:"A double-entry ledger posting.",                  props:["je_id","date","debit","credit","memo"] },
+  "Payment":         { desc:"A payment instrument settlement.",                props:["payment_id","amount","method","received_at"] },
+  "Control":         { desc:"A compliance or audit control.",                  props:["control_id","name","framework","owner"] },
+  "Policy":          { desc:"A governance or risk policy.",                    props:["policy_id","name","version","effective"] },
+  "Employee":        { desc:"A person on the payroll.",                        props:["employee_id","name","email","title","manager_id"] },
+  "Role":            { desc:"A defined job role.",                             props:["role_id","title","level","department"] },
+  "Team":            { desc:"An organisational unit.",                         props:["team_id","name","function","leader_id"] },
+  "Manager Chain":   { desc:"Cached reporting hierarchy.",                     props:["employee_id","chain","depth"] },
+  "Compensation":    { desc:"Pay and equity data.",                            props:["base","bonus","equity","effective"] },
+  "Store":           { desc:"A physical retail location.",                     props:["store_id","name","format","region"] },
+  "Loyalty Account": { desc:"A customer loyalty membership.",                  props:["loyalty_id","tier","points","since"] },
+  "Promotion":       { desc:"A marketing offer or campaign.",                  props:["promo_id","name","discount","valid_until"] },
+  "Contract":        { desc:"A binding commercial agreement.",                 props:["contract_id","arr","start","end","status"] },
+  "Asset":           { desc:"A managed company asset.",                        props:["asset_id","type","assignee","status"] },
+  "Location":        { desc:"A physical or logical place.",                    props:["location_id","name","region","type"] },
+  "Device":          { desc:"An issued endpoint or laptop.",                   props:["device_id","model","serial","assignee"] },
+  "Access Grant":    { desc:"A system or resource permission.",                props:["grant_id","resource","level","granted_on"] },
+  "Tenure":          { desc:"Cached service-length facts.",                    props:["employee_id","years","start_date"] }
+};
+function entityMeta(name){ return ENTITY_META[name] || { desc:"Custom entity — you can describe it once the graph is live.", props:[] }; }
 
 // Curated starting points — each suggests entities and edges for an industry+function combo
 var GRAPH_STARTING_POINTS = [
+  // ── Enterprise-wide / cross-functional ─────────────────────────────────
+  { id:"enterprise-core", industry:["any","saas","fintech","retail","manufacturing","professional","media","public","logistics","healthcare"], fn:["enterprise","data-platform"],
+    name:"Enterprise context core",
+    desc:"The cross-functional spine every team queries: Customer · Employee · Product · Account · Finance · Asset. The shared substrate that ties the org together.",
+    entities:["Customer","Account","Employee","Team","Product","Invoice","Contract","Asset","Location"],
+    edges:[["Customer","HAS","Account"],["Account","HOLDS","Contract"],["Contract","BILLED_AS","Invoice"],["Employee","MEMBER_OF","Team"],["Employee","OWNS","Account"],["Product","SOLD_AT","Location"],["Account","USES","Product"],["Asset","ASSIGNED_TO","Employee"]],
+    accent:"var(--ink)" },
+  { id:"retail-enterprise", industry:["retail"], fn:["enterprise"],
+    name:"Retail enterprise graph",
+    desc:"Stores, staff, customers, orders, products, inventory, loyalty and promotions — the operating model of a retail org connected end-to-end.",
+    entities:["Store","Employee","Customer","Order","Product","Inventory","Loyalty Account","Promotion","Shipment"],
+    edges:[["Customer","SHOPS_AT","Store"],["Employee","WORKS_AT","Store"],["Customer","PLACED","Order"],["Order","CONTAINS","Product"],["Product","STOCKED_IN","Inventory"],["Inventory","HELD_AT","Store"],["Customer","ENROLLED_IN","Loyalty Account"],["Order","APPLIES","Promotion"],["Order","SHIPPED_AS","Shipment"]],
+    accent:"var(--gold)" },
+  { id:"employee-360", industry:["any","saas","fintech","retail","manufacturing","professional","media","public","logistics","healthcare"], fn:["enterprise","people"],
+    name:"Employee 360 graph",
+    desc:"The full workforce view — employees, roles, teams, manager chains, compensation, issued devices, system access and tenure facts.",
+    entities:["Employee","Role","Team","Manager Chain","Compensation","Device","Access Grant","Tenure"],
+    edges:[["Employee","HOLDS","Role"],["Employee","MEMBER_OF","Team"],["Employee","REPORTS_TO","Manager Chain"],["Employee","PAID_VIA","Compensation"],["Employee","USES","Device"],["Employee","GRANTED","Access Grant"],["Employee","HAS","Tenure"]],
+    accent:"var(--blue)" },
+
+  // ── Function-focused ───────────────────────────────────────────────────
   { id:"saas-revenue",   industry:["saas"],          fn:["revenue","customer"],    name:"Customer revenue spine",      desc:"Account-led B2B: pipeline → subscription → expansion. Wires the sales motion to product telemetry.",
     entities:["Account","Contact","Opportunity","Subscription","Invoice","Usage Event","Ticket"],
     edges:[["Account","HAS_CONTACT","Contact"],["Account","HAS_OPPORTUNITY","Opportunity"],["Account","SUBSCRIBES_TO","Subscription"],["Subscription","BILLED_AS","Invoice"],["Account","EMITS","Usage Event"],["Account","OPENED","Ticket"]],
@@ -10796,6 +10875,10 @@ function NewGraphFlow({ onClose, onCreate }) {
   var [func, setFunc]         = useState(null);
   var [startId, setStartId]   = useState(null);
   var [included, setIncluded] = useState({}); // entity name → boolean
+  var [customEntities, setCustomEntities] = useState([]); // [{ name, desc, props:[] }]
+  var [addingEntity, setAddingEntity]     = useState(false);
+  var [newEntityName, setNewEntityName]   = useState("");
+  var [newEntityDesc, setNewEntityDesc]   = useState("");
   var [graphName, setGraphName]       = useState("");
   var [graphDesc, setGraphDesc]       = useState("");
   var [environment, setEnvironment]   = useState("production");
@@ -10803,32 +10886,37 @@ function NewGraphFlow({ onClose, onCreate }) {
   var [permsRead,  setPermsRead]      = useState([{ kind:"group", id:"everyone",       label:"Everyone in org" }]);
   var [permsWrite, setPermsWrite]     = useState([{ kind:"group", id:"data-platform",  label:"data-platform team" }]);
   var [permsAdmin, setPermsAdmin]     = useState([{ kind:"user",  id:"morgan.lee",     label:"Morgan Lee (you)" }]);
-  var [activate, setActivate]         = useState(true);
   var [skipContext, setSkipContext]   = useState(false);
+  var [expandedSp, setExpandedSp]     = useState(null); // starting point id with expanded details
 
   var stepNames = ["Context", "Starting point", "Customise", "Identity & access", "Review"];
 
-  // Filter suggestions by current industry + function
-  var suggestions = GRAPH_STARTING_POINTS.filter(function(sp){
-    if (!industry && !func) return true;
-    var indOk  = !industry || sp.industry.indexOf(industry) >= 0;
-    var funcOk = !func     || sp.fn.indexOf(func)           >= 0;
-    return indOk || funcOk;
-  });
+  // Filter + rank suggestions by current industry + function. Both axes match → higher relevance.
+  var suggestions = GRAPH_STARTING_POINTS.map(function(sp){
+    var indMatch  = industry ? sp.industry.indexOf(industry) >= 0 : false;
+    var funcMatch = func     ? sp.fn.indexOf(func)           >= 0 : false;
+    var indOk     = !industry || indMatch || sp.industry.indexOf("any") >= 0;
+    var funcOk    = !func     || funcMatch;
+    var include   = (!industry && !func) || indOk || funcOk;
+    var score     = (indMatch ? 2 : 0) + (funcMatch ? 2 : 0) + (sp.industry.indexOf("any") >= 0 ? 0.5 : 0);
+    return include ? Object.assign({}, sp, { _score: score, _exactInd: indMatch, _exactFn: funcMatch }) : null;
+  }).filter(Boolean).sort(function(a, b){ return b._score - a._score; });
 
   var picked = startId === "__blank" ? null : GRAPH_STARTING_POINTS.find(function(s){ return s.id === startId; });
-  var entitiesToInclude = picked ? picked.entities.filter(function(e){ return included[e] !== false; }) : [];
+  var includedFromBlueprint = picked ? picked.entities.filter(function(e){ return included[e] !== false; }) : [];
+  var entitiesToInclude     = includedFromBlueprint.concat(customEntities.map(function(c){ return c.name; }));
 
   function canContinue() {
-    if (step === 1) return skipContext || (industry || func);
+    if (step === 1) return skipContext || !!industry || !!func;
     if (step === 2) return !!startId;
-    if (step === 3) return startId === "__blank" || entitiesToInclude.length > 0;
+    if (step === 3) return entitiesToInclude.length > 0 || startId === "__blank";
     if (step === 4) return graphName.trim().length >= 2;
     return true;
   }
 
   function pickStart(id) {
     setStartId(id);
+    setCustomEntities([]);
     var sp = GRAPH_STARTING_POINTS.find(function(s){ return s.id === id; });
     if (sp) {
       var inc = {};
@@ -10838,7 +10926,16 @@ function NewGraphFlow({ onClose, onCreate }) {
       if (!graphDesc) setGraphDesc(sp.desc);
     } else if (id === "__blank") {
       setIncluded({});
+      if (!graphName) setGraphName("");
+      if (!graphDesc) setGraphDesc("");
     }
+  }
+
+  function commitNewEntity() {
+    var nm = newEntityName.trim();
+    if (!nm) return;
+    setCustomEntities(function(arr){ return arr.concat([{ name: nm, desc: newEntityDesc.trim() || "Custom entity added during setup.", props:[] }]); });
+    setNewEntityName(""); setNewEntityDesc(""); setAddingEntity(false);
   }
 
   var inp = { border:"1px solid var(--line)", borderRadius:7, padding:"8px 11px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", outline:"none", boxSizing:"border-box", width:"100%", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" };
@@ -10894,6 +10991,73 @@ function NewGraphFlow({ onClose, onCreate }) {
     { kind:"user",  id:"ramin.k",         label:"Ramin K" },
     { kind:"user",  id:"jordan.s",        label:"Jordan S" }
   ];
+
+  function RichDropdown({ value, onChange, options, placeholder, kind }) {
+    var [open, setOpen] = useState(false);
+    var sel = options.find(function(o){ return o.id === value; });
+    function countFor(o){
+      return GRAPH_STARTING_POINTS.filter(function(sp){
+        if (kind === "industry") return sp.industry.indexOf(o.id) >= 0 || o.id === "any";
+        return sp.fn.indexOf(o.id) >= 0;
+      }).length;
+    }
+    function tileBg(o){ return o.accent || (o.enterprise ? "var(--ink)" : "var(--ink-3)"); }
+    return (
+      <div style={{ position:"relative" }}>
+        <button onClick={function(){ setOpen(function(o){ return !o; }); }}
+          style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid " + (sel ? "var(--ink-2)" : "var(--line)"), borderRadius:9, background: sel ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow: sel ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+          {sel ? (
+            <>
+              <span style={{ width:34, height:34, borderRadius:7, background:tileBg(sel), color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, letterSpacing:"0.5px", flexShrink:0 }}>{sel.code}</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{sel.label}</div>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{sel.desc}</div>
+              </div>
+              {sel.enterprise && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:4, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700, letterSpacing:"0.5px" }}>ENTERPRISE</span>}
+              <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>▾</span>
+            </>
+          ) : (
+            <>
+              <span style={{ width:34, height:34, borderRadius:7, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>+</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:14, color:"var(--ink-3)" }}>{placeholder}</div>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>Click to choose</div>
+              </div>
+              <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>▾</span>
+            </>
+          )}
+        </button>
+        {open && (
+          <>
+            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setOpen(false); }} />
+            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:380, overflowY:"auto" }}>
+              {options.map(function(o, i){
+                var matchCount = countFor(o);
+                var isSel = value === o.id;
+                return (
+                  <button key={o.id} onClick={function(){ onChange(o.id); setOpen(false); }}
+                    style={{ display:"flex", alignItems:"flex-start", gap:12, width:"100%", padding:"10px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < options.length-1 ? 2 : 0 }}
+                    onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                    onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+                    <span style={{ width:32, height:32, borderRadius:6, background:tileBg(o), color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10.5, fontWeight:700, letterSpacing:"0.5px", flexShrink:0, marginTop:1 }}>{o.code}</span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+                        <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{o.label}</span>
+                        {o.enterprise && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700, letterSpacing:"0.5px" }}>ENTERPRISE</span>}
+                      </div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3, lineHeight:1.45 }}>{o.desc}</div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", marginTop:4, letterSpacing:"0.4px" }}>{matchCount + " starting point" + (matchCount === 1 ? "" : "s") + " available"}</div>
+                    </div>
+                    {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
 
   function PermRow({ k, label, list, setList, tone, desc }) {
     var [open, setOpen] = useState(false);
@@ -10974,11 +11138,13 @@ function NewGraphFlow({ onClose, onCreate }) {
               var n = i + 1;
               var isOn = step === n;
               var isDone = step > n;
-              var sub = n === 1 ? (industry || func ? (GRAPH_INDUSTRIES.find(function(x){ return x.id === industry; }) || {}).label || (GRAPH_FUNCTIONS.find(function(x){ return x.id === func; }) || {}).label : skipContext ? "Skipped" : "Industry & function")
+              var indLabel  = (GRAPH_INDUSTRIES.find(function(x){ return x.id === industry; }) || {}).label;
+              var funcLabel = (GRAPH_FUNCTIONS.find(function(x){ return x.id === func; }) || {}).label;
+              var sub = n === 1 ? (industry || func ? [indLabel, funcLabel].filter(Boolean).join(" · ") : skipContext ? "Skipped" : "Industry & function")
                       : n === 2 ? (startId === "__blank" ? "Blank canvas" : picked ? picked.name : "Pick a starting point")
-                      : n === 3 ? (startId === "__blank" ? "—" : entitiesToInclude.length + " of " + (picked ? picked.entities.length : 0) + " entities")
+                      : n === 3 ? (entitiesToInclude.length === 0 ? "Add entities" : entitiesToInclude.length + " entities" + (customEntities.length ? " (" + customEntities.length + " custom)" : ""))
                       : n === 4 ? (graphName || "Name + access")
-                      : (activate ? "Activate" : "Draft");
+                      : "Activate";
               return (
                 <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
                   style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}>
@@ -11008,33 +11174,32 @@ function NewGraphFlow({ onClose, onCreate }) {
 
             {/* STEP 1 */}
             {step === 1 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:22, maxWidth:860 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:760 }}>
                 <div>
-                  <label style={lbl}>WHICH INDUSTRY OR SECTOR?</label>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-                    {GRAPH_INDUSTRIES.map(function(o){
-                      var isOn = industry === o.id;
-                      return (
-                        <button key={o.id} onClick={function(){ setIndustry(isOn ? null : o.id); setSkipContext(false); }}
-                          style={{ textAlign:"left", padding:"12px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:8, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 8%, transparent)" : "none" }}>
-                          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{o.label}</div>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4 }}>{o.desc}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <label style={lbl}>INDUSTRY OR SECTOR</label>
+                  <RichDropdown
+                    value={industry}
+                    onChange={function(v){ setIndustry(v); setSkipContext(false); }}
+                    options={GRAPH_INDUSTRIES}
+                    placeholder="Pick an industry"
+                    kind="industry"
+                  />
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:8, lineHeight:1.5 }}>The sector you're modelling for. Use "Any / cross-industry" for horizontal use cases.</div>
                 </div>
+
                 <div>
-                  <label style={lbl}>WHICH TEAM OR FUNCTION WILL USE IT MOST?</label>
-                  <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-                    {GRAPH_FUNCTIONS.map(function(o){
-                      var isOn = func === o.id;
-                      return <button key={o.id} onClick={function(){ setFunc(isOn ? null : o.id); setSkipContext(false); }}
-                        style={{ padding:"7px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"inherit", fontSize:12.5, cursor:"pointer" }}>{o.label}</button>;
-                    })}
-                  </div>
+                  <label style={lbl}>TEAM OR FUNCTION USING IT</label>
+                  <RichDropdown
+                    value={func}
+                    onChange={function(v){ setFunc(v); setSkipContext(false); }}
+                    options={GRAPH_FUNCTIONS}
+                    placeholder="Pick a function"
+                    kind="function"
+                  />
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:8, lineHeight:1.5 }}>Who'll own and query this graph. Choose <b>Entire organisation</b> to spin up an enterprise-wide context graph that crosses team boundaries.</div>
                 </div>
-                <div style={{ paddingTop:12, borderTop:"1px dashed var(--line-2)" }}>
+
+                <div style={{ paddingTop:14, borderTop:"1px dashed var(--line-2)" }}>
                   <button onClick={function(){ setSkipContext(true); setIndustry(null); setFunc(null); }}
                     style={{ background: skipContext ? "var(--bg-canvas)" : "transparent", border:"1px solid " + (skipContext ? "var(--ink)" : "var(--line)"), borderRadius:7, padding:"9px 14px", cursor:"pointer", fontFamily:"inherit", fontSize:13, color:"var(--ink-2)", display:"flex", alignItems:"center", gap:8 }}>
                     {skipContext && <span style={{ color:"var(--green)" }}>✓</span>}
@@ -11046,59 +11211,222 @@ function NewGraphFlow({ onClose, onCreate }) {
 
             {/* STEP 2 */}
             {step === 2 && (
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, maxWidth:1000 }}>
-                {/* Blank option always available */}
-                {[{ id:"__blank", name:"Blank canvas", desc:"Start with no entities or edges. Add everything yourself.", entities:[], accent:"var(--ink-3)" }]
-                  .concat(suggestions).map(function(sp){
-                    var isOn = startId === sp.id;
-                    return (
-                      <button key={sp.id} onClick={function(){ pickStart(sp.id); }}
-                        style={{ textAlign:"left", padding:"16px 18px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:10, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 8%, transparent)" : "none", display:"flex", flexDirection:"column", gap:12 }}>
-                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                          <div>
-                            <div style={{ fontSize:14.5, fontWeight:600, color:"var(--ink)" }}>{sp.name}</div>
-                            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, letterSpacing:"0.3px" }}>{sp.id === "__blank" ? "BLANK" : sp.entities.length + " entities · " + sp.edges.length + " edges"}</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:10, maxWidth:920 }}>
+                {/* Blank canvas — compact row */}
+                {(function(){
+                  var isOn = startId === "__blank";
+                  return (
+                    <div onClick={function(){ pickStart("__blank"); }}
+                      style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 16px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:10, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none" }}>
+                      <span style={{ width:42, height:42, borderRadius:8, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:18, fontWeight:300, flexShrink:0 }}>∅</span>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>Blank canvas</div>
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3 }}>Start with no entities. Add everything yourself in the catalog.</div>
+                      </div>
+                      {isOn && <span style={{ color:"var(--green)", fontWeight:700, fontSize:14 }}>✓</span>}
+                    </div>
+                  );
+                })()}
+
+                {suggestions.length === 0 && (
+                  <div style={{ padding:"24px 20px", border:"1px dashed var(--line)", borderRadius:10, background:"var(--panel-2)", color:"var(--ink-3)", fontSize:12.5, lineHeight:1.55 }}>
+                    No curated starting points for this combination yet — pick "Blank canvas" above and build from scratch.
+                  </div>
+                )}
+
+                {suggestions.map(function(sp){
+                  var isOn = startId === sp.id;
+                  var isExpanded = expandedSp === sp.id;
+                  var matchTag = sp._exactInd && sp._exactFn ? "PERFECT MATCH" : sp._exactInd ? "INDUSTRY MATCH" : sp._exactFn ? "FUNCTION MATCH" : "GENERIC";
+                  var matchColor = sp._exactInd && sp._exactFn ? "var(--green)" : (sp._exactInd || sp._exactFn) ? "var(--blue)" : "var(--ink-4)";
+                  return (
+                    <div key={sp.id}
+                      style={{ border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:10, background: isOn ? "var(--bg-canvas)" : "var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", overflow:"hidden" }}>
+                      <div onClick={function(){ pickStart(sp.id); }}
+                        style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"14px 16px", cursor:"pointer" }}>
+                        <span style={{ width:42, height:42, borderRadius:8, background:sp.accent, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, letterSpacing:"0.5px", flexShrink:0 }}>{sp.name.split(" ").map(function(w){ return w[0]; }).join("").slice(0,3).toUpperCase()}</span>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                            <span style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{sp.name}</span>
+                            <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px", borderRadius:3, background:"transparent", color:matchColor, border:"1px solid " + matchColor, fontWeight:700, letterSpacing:"0.5px" }}>{matchTag}</span>
                           </div>
-                          {isOn && <span style={{ color:"var(--green)", fontFamily:"JetBrains Mono", fontWeight:700 }}>✓</span>}
+                          <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5, marginTop:5, maxWidth:620 }}>{sp.desc}</div>
+
+                          {/* Entity chip strip — always shown so you can SEE what's covered */}
+                          <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:10 }}>
+                            {sp.entities.map(function(e){
+                              return <span key={e} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"3px 8px", borderRadius:4, background:"var(--chip)", border:"1px solid var(--line-2)", color:"var(--ink-2)" }}>{e}</span>;
+                            })}
+                          </div>
+
+                          <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:10, fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.3px" }}>
+                            <span>{sp.entities.length} entities</span>
+                            <span>·</span>
+                            <span>{sp.edges.length} edges</span>
+                            <span>·</span>
+                            <button onClick={function(e){ e.stopPropagation(); setExpandedSp(isExpanded ? null : sp.id); }}
+                              style={{ background:"none", border:"none", color:"var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:10, cursor:"pointer", textDecoration:"underline", padding:0 }}>
+                              {isExpanded ? "Hide relationships ▴" : "Show relationships ▾"}
+                            </button>
+                          </div>
                         </div>
-                        <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5 }}>{sp.desc}</div>
-                        {sp.id !== "__blank" && (
-                          <div style={{ border:"1px dashed var(--line-2)", borderRadius:7, background:"var(--panel-2)", padding:"8px 8px 4px" }}>
-                            <StartingPointPreview sp={sp} />
+                        {isOn && <span style={{ color:"var(--green)", fontWeight:700, fontSize:14 }}>✓</span>}
+                      </div>
+
+                      {isExpanded && (
+                        <div style={{ borderTop:"1px solid var(--line-2)", background:"var(--panel-2)", padding:"14px 18px 16px" }}>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:8 }}>Relationships in this blueprint</div>
+                          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                            {sp.edges.map(function(ed, i){
+                              return (
+                                <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:6, fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)" }}>
+                                  <span style={{ fontWeight:600, color:"var(--ink)" }}>{ed[0]}</span>
+                                  <span style={{ color:"var(--ink-4)" }}>—</span>
+                                  <span style={{ fontSize:9.5, padding:"1px 5px", borderRadius:3, background:sp.accent, color:"#fff", fontWeight:700, letterSpacing:"0.4px" }}>{ed[1]}</span>
+                                  <span style={{ color:"var(--ink-4)" }}>→</span>
+                                  <span style={{ fontWeight:600, color:"var(--ink)" }}>{ed[2]}</span>
+                                </div>
+                              );
+                            })}
                           </div>
-                        )}
-                      </button>
-                    );
-                  })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:8, lineHeight:1.5, padding:"10px 14px", background:"var(--panel-2)", border:"1px dashed var(--line-2)", borderRadius:7 }}>
+                  Need more entities than the blueprint provides? You'll be able to add custom ones in the next step.
+                </div>
               </div>
             )}
 
             {/* STEP 3 */}
             {step === 3 && (
-              startId === "__blank" ? (
-                <div style={{ padding:"40px 18px", textAlign:"center", color:"var(--ink-3)", fontSize:13, border:"1px dashed var(--line)", borderRadius:8, maxWidth:600 }}>
-                  You picked a blank canvas — nothing to customise. Continue to name your graph.
-                </div>
-              ) : picked ? (
-                <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden", maxWidth:680 }}>
-                  <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
-                    <span style={{ fontSize:13.5, fontWeight:600 }}>Entities from "{picked.name}"</span>
-                    <span className="card-head-sub">{entitiesToInclude.length + " of " + picked.entities.length + " selected"}</span>
-                  </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:16, maxWidth:920 }}>
+                {/* Summary strip */}
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", background:"var(--panel-2)", border:"1px solid var(--line-2)", borderRadius:8 }}>
                   <div>
-                    {picked.entities.map(function(e, i, arr){
-                      var on = included[e] !== false;
-                      return (
-                        <label key={e} style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 18px", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", cursor:"pointer", background: on ? "transparent" : "var(--bg-canvas)" }}>
-                          <input type="checkbox" checked={on} onChange={function(){ setIncluded(function(o){ var n = Object.assign({}, o); n[e] = !on; return n; }); }} style={{ accentColor:"var(--ink)", width:16, height:16 }} />
-                          <span style={{ fontSize:13.5, color: on ? "var(--ink)" : "var(--ink-4)", fontWeight: on ? 500 : 400 }}>{e}</span>
-                          <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{picked.edges.filter(function(ed){ return ed[0] === e || ed[2] === e; }).length + " edges"}</span>
-                        </label>
-                      );
-                    })}
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase" }}>Working from</div>
+                    <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)", marginTop:3 }}>{picked ? picked.name : "Blank canvas"}</div>
+                  </div>
+                  <div style={{ display:"flex", gap:24, fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>
+                    <div><span style={{ color:"var(--ink-3)" }}>FROM BLUEPRINT</span> &nbsp;<b>{includedFromBlueprint.length}</b>{picked ? " / " + picked.entities.length : ""}</div>
+                    <div><span style={{ color:"var(--ink-3)" }}>CUSTOM ADDED</span> &nbsp;<b>{customEntities.length}</b></div>
+                    <div><span style={{ color:"var(--ink-3)" }}>TOTAL</span> &nbsp;<b style={{ color:"var(--ink)" }}>{entitiesToInclude.length}</b></div>
                   </div>
                 </div>
-              ) : null
+
+                {/* Blueprint entities */}
+                {picked && (
+                  <div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:8 }}>Entities from "{picked.name}"</div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                      {picked.entities.map(function(e){
+                        var on = included[e] !== false;
+                        var m = entityMeta(e);
+                        var connEdges = picked.edges.filter(function(ed){ return ed[0] === e || ed[2] === e; });
+                        return (
+                          <div key={e}
+                            style={{ border:"1px solid " + (on ? "var(--line)" : "var(--line-2)"), borderRadius:9, background: on ? "var(--panel)" : "var(--panel-2)", padding:"12px 14px", opacity: on ? 1 : 0.55 }}>
+                            <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8 }}>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                                  <span style={{ width:24, height:24, borderRadius:5, background:picked.accent, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0 }}>{e.split(" ").map(function(w){ return w[0]; }).join("").slice(0,2).toUpperCase()}</span>
+                                  <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{e}</span>
+                                </div>
+                                <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.5, marginTop:6 }}>{m.desc}</div>
+                              </div>
+                              <label style={{ display:"flex", alignItems:"center", gap:5, cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.3px" }}>
+                                <input type="checkbox" checked={on} onChange={function(){ setIncluded(function(o){ var n = Object.assign({}, o); n[e] = !on; return n; }); }} style={{ accentColor:"var(--ink)", width:14, height:14 }} />
+                                <span>{on ? "INCLUDED" : "EXCLUDED"}</span>
+                              </label>
+                            </div>
+
+                            {m.props.length > 0 && (
+                              <div style={{ marginTop:9, paddingTop:9, borderTop:"1px dashed var(--line-2)" }}>
+                                <div style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-3)", letterSpacing:"0.6px", marginBottom:5 }}>EXAMPLE PROPERTIES</div>
+                                <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+                                  {m.props.map(function(p){
+                                    return <span key={p} style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-2)" }}>{p}</span>;
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {connEdges.length > 0 && (
+                              <div style={{ marginTop:9, paddingTop:9, borderTop:"1px dashed var(--line-2)" }}>
+                                <div style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-3)", letterSpacing:"0.6px", marginBottom:5 }}>{"CONNECTED VIA " + connEdges.length + " EDGE" + (connEdges.length === 1 ? "" : "S")}</div>
+                                <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                                  {connEdges.map(function(ed, i){
+                                    var other = ed[0] === e ? ed[2] : ed[0];
+                                    var dir   = ed[0] === e ? "→" : "←";
+                                    return (
+                                      <div key={i} style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-2)" }}>
+                                        <span style={{ color:"var(--ink-4)" }}>{dir}</span> <b>{ed[1]}</b> <span style={{ color:"var(--ink-3)" }}>{other}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Custom entities */}
+                {customEntities.length > 0 && (
+                  <div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:8 }}>Custom entities you've added</div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                      {customEntities.map(function(c, i){
+                        return (
+                          <div key={i} style={{ border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", padding:"12px 14px" }}>
+                            <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8 }}>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                                  <span style={{ width:24, height:24, borderRadius:5, background:"var(--ink-2)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0 }}>{c.name.split(" ").map(function(w){ return w[0]; }).join("").slice(0,2).toUpperCase()}</span>
+                                  <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{c.name}</span>
+                                  <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700, letterSpacing:"0.5px" }}>CUSTOM</span>
+                                </div>
+                                <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.5, marginTop:6 }}>{c.desc}</div>
+                              </div>
+                              <button onClick={function(){ setCustomEntities(function(arr){ return arr.filter(function(_, idx){ return idx !== i; }); }); }}
+                                style={{ background:"none", border:"none", color:"var(--ink-3)", cursor:"pointer", fontSize:14, padding:"0 4px" }}>×</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Add custom entity */}
+                <div style={{ border: addingEntity ? "1px solid var(--ink)" : "1px dashed var(--line)", borderRadius:9, background: addingEntity ? "var(--panel)" : "transparent", padding: addingEntity ? "14px 16px" : "0" }}>
+                  {!addingEntity ? (
+                    <button onClick={function(){ setAddingEntity(true); }}
+                      style={{ width:"100%", padding:"14px 16px", background:"transparent", border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"inherit", fontSize:13, color:"var(--ink-2)", fontWeight:500 }}>
+                      <span style={{ width:20, height:20, borderRadius:5, background:"var(--ink)", color:"var(--bg-canvas)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, lineHeight:1, fontWeight:300 }}>+</span>
+                      Add a custom entity to this graph
+                    </button>
+                  ) : (
+                    <div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:10 }}>Add custom entity</div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 2fr", gap:10 }}>
+                        <input value={newEntityName} onChange={function(e){ setNewEntityName(e.target.value); }} placeholder="Entity name (e.g. Booking)" style={inp} autoFocus />
+                        <input value={newEntityDesc} onChange={function(e){ setNewEntityDesc(e.target.value); }} placeholder="Short description — what it represents" style={inp} />
+                      </div>
+                      <div style={{ display:"flex", gap:8, marginTop:10, justifyContent:"flex-end" }}>
+                        <button onClick={function(){ setAddingEntity(false); setNewEntityName(""); setNewEntityDesc(""); }} className="btn-ghost">Cancel</button>
+                        <button onClick={commitNewEntity} className="btn-dark" disabled={!newEntityName.trim()} style={{ opacity: newEntityName.trim() ? 1 : 0.45 }}>Add entity</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
 
             {/* STEP 4 */}
@@ -11200,16 +11528,6 @@ function NewGraphFlow({ onClose, onCreate }) {
                     })}
                   </div>
                 </div>
-
-                <div>
-                  <label style={lbl}>ON SAVE</label>
-                  <div style={{ display:"flex", gap:6 }}>
-                    {[{ id:true, l:"Activate immediately" },{ id:false, l:"Save as draft" }].map(function(o){
-                      var isOn = activate === o.id;
-                      return <button key={String(o.id)} onClick={function(){ setActivate(o.id); }} style={{ padding:"9px 16px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--panel)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontSize:13, fontFamily:"inherit", cursor:"pointer", fontWeight: isOn ? 500 : 400 }}>{o.l}</button>;
-                    })}
-                  </div>
-                </div>
               </div>
             )}
 
@@ -11266,7 +11584,7 @@ function NewGraphFlow({ onClose, onCreate }) {
             <button className="btn-ghost" onClick={onClose}>Cancel</button>
             {step < 5
               ? <button className="btn-dark" disabled={!canContinue()} onClick={function(){ setStep(function(s){ return s + 1; }); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Continue →</button>
-              : <button className="btn-dark" disabled={!canContinue()} onClick={function(){ if (onCreate) onCreate({ name: graphName }); onClose(); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>{activate ? "Create graph ↵" : "Save as draft ↵"}</button>
+              : <button className="btn-dark" disabled={!canContinue()} onClick={function(){ if (onCreate) onCreate({ name: graphName }); onClose(); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Create graph ↵</button>
             }
           </div>
         </div>
