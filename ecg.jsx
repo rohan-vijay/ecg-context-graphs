@@ -2500,7 +2500,7 @@ function PropertiesPane({ node, properties }) {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState({ col: "name", dir: "asc" });
   const [expanded, setExpanded] = useState(null);
-  const AddPropertyFlow = window.AddPropertyFlow;
+  const AddPropertyFlow = AddPropertyFlowModal;
 
   const FILTERS = [
     { id: "all",      label: "All",       count: properties.length },
@@ -2675,7 +2675,7 @@ function PropertiesPane({ node, properties }) {
 function EdgesPane({ node, outgoing, incoming }) {
   const [flowOpen, setFlowOpen] = useState(false);
   const [dirFilter, setDirFilter] = useState("all");
-  const AddEdgeFlow = window.AddEdgeFlow;
+  const AddEdgeFlow = AddEdgeFlowModal;
   const allRows = [...outgoing.map(e => ({ ...e, dir: "out" })), ...incoming.map(e => ({ ...e, dir: "in" }))];
   const rows = dirFilter === "all" ? allRows : allRows.filter(e => e.dir === dirFilter);
   const tabs = [
@@ -2723,6 +2723,537 @@ function EdgesPane({ node, outgoing, incoming }) {
         })}
       </div>
       {flowOpen && AddEdgeFlow && <AddEdgeFlow fromNode={node} onClose={() => setFlowOpen(false)} />}
+    </div>
+  );
+}
+
+// ─── ADD PROPERTY FLOW ───────────────────────────────────────────────────────
+
+function AddPropertyFlowModal({ node, onClose }) {
+  const [step, setStep]           = useState(1);
+  const [pName, setPName]         = useState("");
+  const [pType, setPType]         = useState("string");
+  const [pDesc, setPDesc]         = useState("");
+  const [pRequired, setPRequired] = useState(false);
+  const [pIndexed, setPIndexed]   = useState(false);
+  const [pPII, setPPII]           = useState(false);
+  const [pComputed, setPComputed] = useState(false);
+  const [pDefault, setPDefault]   = useState("");
+  const [pFormula, setPFormula]   = useState("");
+  const [pSource, setPSource]     = useState("manual");
+
+  const TYPES = ["string","decimal","float","bool","timestamp","date","enum(20)","uuid","struct","array"];
+  const SOURCES = ["Salesforce CRM","HubSpot Marketing","NetSuite ERP","Manual / Admin","Computed","Okta Identity"];
+
+  const inp = { border:"1px solid var(--line)", borderRadius:8, padding:"8px 10px", fontSize:12.5, fontFamily:"inherit", color:"var(--ink)", background:"var(--bg-canvas)", outline:"none", boxSizing:"border-box" };
+  const sel = { border:"1px solid var(--line)", borderRadius:8, padding:"8px 10px", fontSize:12.5, fontFamily:"inherit", color:"var(--ink)", background:"var(--bg-canvas)", outline:"none", cursor:"pointer" };
+  const lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:7 };
+  const fg  = { display:"flex", flexDirection:"column", gap:6 };
+
+  const STEPS = [
+    { n:1, label:"Basics",      sub: pName || "Name & type" },
+    { n:2, label:"Constraints", sub: "Flags & source" },
+    { n:3, label:"Review",      sub: "Confirm & save" },
+  ];
+
+  const canNext = (function(){
+    if (step === 1) return pName.trim().length > 0 && !!pType;
+    return true;
+  }());
+
+  const stepTitles = ["Define property", "Constraints & flags", "Review & save"];
+  const stepDescs  = [
+    "Give the property a name and choose its data type. The name must be unique within " + node.label + ".",
+    "Set validation constraints, access flags, and the canonical source for this property's values.",
+    "Review the property definition before adding it to the " + node.label + " schema.",
+  ];
+
+  return (
+    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.48)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
+      onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ width:"72vw", maxWidth:860, height:"80vh", background:"var(--bg-canvas)", borderRadius:14, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 28px 72px rgba(0,0,0,0.36)" }}>
+
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", padding:"20px 28px 16px", borderBottom:"1px solid var(--line)", flexShrink:0 }}>
+          <div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:7 }}>{node.label + " · add property"}</div>
+            <h2 style={{ fontSize:17, fontWeight:600, color:"var(--ink)", margin:"0 0 5px" }}>{stepTitles[step-1]}</h2>
+            <p style={{ fontSize:12.5, color:"var(--ink-3)", margin:0, lineHeight:1.55, maxWidth:480 }}>{stepDescs[step-1]}</p>
+          </div>
+          <button onClick={onClose} style={{ width:30, height:30, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginLeft:20 }}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex:1, display:"flex", minHeight:0 }}>
+
+          {/* Sidebar */}
+          <div style={{ width:192, flexShrink:0, borderRight:"1px solid var(--line)", padding:"24px 14px", display:"flex", flexDirection:"column", gap:2 }}>
+            {STEPS.map(function(s){
+              const done = step > s.n, active = step === s.n;
+              return (
+                <button key={s.n} onClick={function(){ if (done) setStep(s.n); }}
+                  style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px", borderRadius:7, border:"none", background:active?"var(--panel-2)":"transparent", cursor:done?"pointer":"default", textAlign:"left", width:"100%" }}>
+                  <span style={{ width:22, height:22, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0, background:done?"var(--green)":active?"var(--ink)":"var(--line)", color:done||active?"#fff":"var(--ink-3)", marginTop:1 }}>
+                    {done ? "✓" : s.n}
+                  </span>
+                  <div>
+                    <div style={{ fontSize:12.5, fontWeight:active?600:400, color:active?"var(--ink)":done?"var(--ink-2)":"var(--ink-3)" }}>{s.label}</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:2 }}>{s.sub}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Content */}
+          <div style={{ flex:1, overflowY:"auto", padding:"32px 36px" }}>
+
+            {/* Step 1 — Basics */}
+            {step === 1 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:520 }}>
+                <div style={fg}>
+                  <div style={lbl}>Property name</div>
+                  <input value={pName} onChange={function(e){ setPName(e.target.value); }}
+                    placeholder="e.g. arr_usd, churn_probability, domain"
+                    style={{ ...inp, width:"100%" }} />
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>snake_case recommended. Must be unique within this node type.</div>
+                </div>
+                <div style={fg}>
+                  <div style={lbl}>Data type</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {[
+                      { type:"string",    label:"String",    desc:"UTF-8 text of arbitrary length." },
+                      { type:"decimal",   label:"Decimal",   desc:"Exact numeric — use for monetary values (e.g. ARR, spend)." },
+                      { type:"float",     label:"Float",     desc:"Floating-point numeric — use for scores and ratios." },
+                      { type:"bool",      label:"Boolean",   desc:"True / false flag." },
+                      { type:"timestamp", label:"Timestamp", desc:"Date and time with timezone (ISO 8601)." },
+                      { type:"date",      label:"Date",      desc:"Calendar date without time." },
+                      { type:"uuid",      label:"UUID",      desc:"Universally unique identifier — use for foreign keys." },
+                      { type:"enum(20)",  label:"Enum",      desc:"Controlled vocabulary with up to 20 values." },
+                      { type:"struct",    label:"Struct",    desc:"Nested JSON object for composite values." },
+                    ].map(function(t){
+                      const active = pType === t.type;
+                      return (
+                        <div key={t.type} onClick={function(){ setPType(t.type); }}
+                          style={{ display:"flex", alignItems:"center", gap:14, padding:"11px 14px", border:"2px solid "+(active?"var(--blue)":"var(--line)"), borderRadius:8, cursor:"pointer", background:active?"rgba(99,143,255,0.06)":"transparent" }}>
+                          <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, fontWeight:700, color:active?"var(--blue)":"var(--ink-3)", minWidth:68 }}>{t.type}</code>
+                          <div>
+                            <span style={{ fontSize:13, fontWeight:active?500:400, color:"var(--ink)" }}>{t.label}</span>
+                            <span style={{ fontSize:12, color:"var(--ink-3)", marginLeft:8 }}>{t.desc}</span>
+                          </div>
+                          {active && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--blue)", marginLeft:"auto" }}>SELECTED</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div style={fg}>
+                  <div style={lbl}>Description <span style={{ textTransform:"none", letterSpacing:0, fontSize:10, color:"var(--ink-4)" }}>(optional)</span></div>
+                  <textarea value={pDesc} onChange={function(e){ setPDesc(e.target.value); }}
+                    placeholder="What this property represents and how it should be used..."
+                    rows={3} style={{ ...inp, width:"100%", resize:"vertical", lineHeight:1.55, fontFamily:"inherit", fontSize:12.5 }} />
+                </div>
+              </div>
+            )}
+
+            {/* Step 2 — Constraints */}
+            {step === 2 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:28, maxWidth:520 }}>
+                <div style={fg}>
+                  <div style={lbl}>Source system</div>
+                  <select value={pSource} onChange={function(e){ setPSource(e.target.value); }} style={{ ...sel, width:"100%" }}>
+                    {SOURCES.map(function(s){ return <option key={s} value={s}>{s}</option>; })}
+                  </select>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>Which upstream system is the canonical source of truth for this property.</div>
+                </div>
+
+                {pType !== "bool" && pType !== "struct" && (
+                  <div style={fg}>
+                    <div style={lbl}>Default value <span style={{ textTransform:"none", letterSpacing:0, fontSize:10, color:"var(--ink-4)" }}>(optional)</span></div>
+                    <input value={pDefault} onChange={function(e){ setPDefault(e.target.value); }}
+                      placeholder={pType === "decimal" || pType === "float" ? "e.g. 0" : pType === "timestamp" ? "e.g. NOW()" : "e.g. unknown"}
+                      style={{ ...inp, width:"100%" }} />
+                  </div>
+                )}
+
+                {pComputed && (
+                  <div style={fg}>
+                    <div style={lbl}>Formula / agent expression</div>
+                    <textarea value={pFormula} onChange={function(e){ setPFormula(e.target.value); }}
+                      placeholder="e.g. risk_score := agent:cust_health.score"
+                      rows={2} style={{ ...inp, width:"100%", resize:"vertical", fontFamily:"JetBrains Mono", fontSize:12, lineHeight:1.55 }} />
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>Use := for assignment. Reference agents with agent:name.property.</div>
+                  </div>
+                )}
+
+                <div style={fg}>
+                  <div style={lbl}>Flags</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                    {[
+                      { key:"required", val:pRequired, set:setPRequired, label:"Required",           desc:"Every node must have a non-null value for this property." },
+                      { key:"indexed",  val:pIndexed,  set:setPIndexed,  label:"Indexed",            desc:"Create a B-tree index on this property to speed up lookups and filters." },
+                      { key:"pii",      val:pPII,      set:setPPII,      label:"PII",                desc:"Mark as personally identifiable information. Access gates and audit logs will apply." },
+                      { key:"computed", val:pComputed, set:setPComputed, label:"Computed property",  desc:"Value is derived from a formula or agent — not written by source systems directly." },
+                    ].map(function(f){
+                      return (
+                        <div key={f.key} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 16px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel-2)" }}>
+                          <div>
+                            <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)", marginBottom:3 }}>{f.label}</div>
+                            <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.5 }}>{f.desc}</div>
+                          </div>
+                          <div onClick={function(){ f.set(!f.val); }}
+                            style={{ width:40, height:22, borderRadius:11, background:f.val?"var(--ink)":"var(--line-2)", cursor:"pointer", position:"relative", flexShrink:0, marginLeft:16, transition:"background 150ms" }}>
+                            <div style={{ position:"absolute", top:3, left:f.val?20:3, width:16, height:16, borderRadius:"50%", background:"#fff", transition:"left 150ms" }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3 — Review */}
+            {step === 3 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:520 }}>
+                <div style={{ border:"1px solid var(--line)", borderRadius:12, overflow:"hidden" }}>
+                  <div style={{ padding:"18px 22px", borderBottom:"1px solid var(--line-2)" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10 }}>
+                      <code style={{ fontFamily:"JetBrains Mono", fontSize:15, fontWeight:700, color:"var(--ink)" }}>{pName || "(unnamed)"}</code>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"3px 10px", borderRadius:5, background:"rgba(99,143,255,0.12)", color:"var(--blue)", fontWeight:600 }}>{pType}</span>
+                      {pPII      && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 7px", borderRadius:4, background:"var(--coral-fill)", color:"var(--coral)", fontWeight:700 }}>PII</span>}
+                      {pRequired && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-3)", fontWeight:700 }}>REQ</span>}
+                      {pIndexed  && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-3)", fontWeight:700 }}>IDX</span>}
+                      {pComputed && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 7px", borderRadius:4, background:"rgba(72,199,142,0.12)", color:"var(--green)", fontWeight:700 }}>FX</span>}
+                    </div>
+                    {pDesc && <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.6 }}>{pDesc}</div>}
+                  </div>
+                  <div style={{ display:"flex", gap:1, background:"var(--line-2)" }}>
+                    {[
+                      ["Node", node.label],
+                      ["Source", pSource],
+                      ["Default", pDefault || "—"],
+                      ["Status", "Will be added"],
+                    ].map(function(kv,i){
+                      return (
+                        <div key={i} style={{ flex:1, padding:"12px 16px", background:"var(--panel-2)" }}>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:3 }}>{kv[0]}</div>
+                          <div style={{ fontSize:12.5, color:kv[0]==="Status"?"var(--green)":"var(--ink)", fontWeight:kv[0]==="Status"?500:400 }}>{kv[1]}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                {pComputed && pFormula && (
+                  <div style={{ border:"1px solid var(--line-2)", borderRadius:10, overflow:"hidden" }}>
+                    <div style={{ padding:"9px 14px", background:"var(--panel-2)", borderBottom:"1px dashed var(--line-2)" }}>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>Formula</span>
+                    </div>
+                    <div style={{ padding:"12px 14px" }}>
+                      <code style={{ fontFamily:"JetBrains Mono", fontSize:13, color:"var(--ink)" }}>{pFormula}</code>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ flexShrink:0, padding:"14px 28px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"flex-end", gap:8, background:"var(--panel-2)" }}>
+          <button className="btn-ghost" onClick={onClose}>Cancel</button>
+          {step > 1 && <button className="btn-ghost" onClick={function(){ setStep(function(s){ return s-1; }); }}>Back</button>}
+          {step < 3
+            ? <button className="btn-dark" disabled={!canNext} onClick={function(){ setStep(function(s){ return s+1; }); }} style={{ opacity:canNext?1:0.45 }}>Continue</button>
+            : <button className="btn-dark" onClick={onClose}>Add property</button>
+          }
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+// ─── ADD EDGE FLOW ────────────────────────────────────────────────────────────
+
+function AddEdgeFlowModal({ fromNode, onClose }) {
+  const [step, setStep]         = useState(1);
+  const [eLabel, setELabel]     = useState("");
+  const [eDir, setEDir]         = useState("outgoing");
+  const [eTarget, setETarget]   = useState(NODES.filter(function(n){ return n.id !== fromNode.id && n.type !== "source"; })[0]?.id || "");
+  const [eCard, setECard]       = useState("1:N");
+  const [eKind, setEKind]       = useState("DIRECT");
+  const [eDesc, setEDesc]       = useState("");
+  const [eIndexed, setEIndexed] = useState(true);
+  const [eOwned, setEOwned]     = useState(false);
+
+  const targetNodes = NODES.filter(function(n){ return n.id !== fromNode.id && n.type !== "source"; });
+  const targetNode  = NODES.find(function(n){ return n.id === eTarget; });
+
+  const inp = { border:"1px solid var(--line)", borderRadius:8, padding:"8px 10px", fontSize:12.5, fontFamily:"inherit", color:"var(--ink)", background:"var(--bg-canvas)", outline:"none", boxSizing:"border-box" };
+  const sel = { border:"1px solid var(--line)", borderRadius:8, padding:"8px 10px", fontSize:12.5, fontFamily:"inherit", color:"var(--ink)", background:"var(--bg-canvas)", outline:"none", cursor:"pointer" };
+  const lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:7 };
+  const fg  = { display:"flex", flexDirection:"column", gap:6 };
+
+  const STEPS = [
+    { n:1, label:"Edge definition", sub: eLabel ? (":" + eLabel) : "Label & direction" },
+    { n:2, label:"Target & schema",  sub: targetNode ? targetNode.label : "Choose target node" },
+    { n:3, label:"Configuration",   sub: eKind + " · " + eCard },
+    { n:4, label:"Review",          sub: "Confirm & save" },
+  ];
+
+  const canNext = (function(){
+    if (step === 1) return eLabel.trim().length > 0;
+    if (step === 2) return !!eTarget;
+    return true;
+  }());
+
+  const stepTitles = ["Edge definition", "Target & schema", "Configuration", "Review & save"];
+  const stepDescs  = [
+    "Define the edge label and traversal direction from " + fromNode.label + ". Edge labels use SCREAMING_SNAKE_CASE by convention.",
+    "Select which node type this edge connects to and what cardinality the relationship has.",
+    "Set the edge kind, whether it is indexed for fast traversal, and any ownership semantics.",
+    "Review the full edge definition before adding it to the graph schema.",
+  ];
+
+  const kindMeta = {
+    DIRECT:    { color:"var(--blue)",           desc:"A physical relationship that exists in the source data." },
+    INFERRED:  { color:"var(--purple,#9b6fdf)",  desc:"Materialized by the graph engine from co-occurrence patterns." },
+    COMPUTED:  { color:"var(--green)",           desc:"Derived by a rule or agent — not present in any source system." },
+    HIERARCHY: { color:"var(--gold)",            desc:"A parent-child containment relationship (e.g. :BELONGS_TO, :PART_OF)." },
+  };
+
+  return (
+    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.48)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
+      onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ width:"80vw", maxWidth:1000, height:"84vh", background:"var(--bg-canvas)", borderRadius:14, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 28px 72px rgba(0,0,0,0.36)" }}>
+
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", padding:"20px 28px 16px", borderBottom:"1px solid var(--line)", flexShrink:0 }}>
+          <div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:7 }}>{fromNode.label + " · add edge type"}</div>
+            <h2 style={{ fontSize:17, fontWeight:600, color:"var(--ink)", margin:"0 0 5px" }}>{stepTitles[step-1]}</h2>
+            <p style={{ fontSize:12.5, color:"var(--ink-3)", margin:0, lineHeight:1.55, maxWidth:500 }}>{stepDescs[step-1]}</p>
+          </div>
+          <button onClick={onClose} style={{ width:30, height:30, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginLeft:20 }}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex:1, display:"flex", minHeight:0 }}>
+
+          {/* Sidebar */}
+          <div style={{ width:200, flexShrink:0, borderRight:"1px solid var(--line)", padding:"24px 14px", display:"flex", flexDirection:"column", gap:2 }}>
+            {STEPS.map(function(s){
+              const done = step > s.n, active = step === s.n;
+              return (
+                <button key={s.n} onClick={function(){ if (done) setStep(s.n); }}
+                  style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px", borderRadius:7, border:"none", background:active?"var(--panel-2)":"transparent", cursor:done?"pointer":"default", textAlign:"left", width:"100%" }}>
+                  <span style={{ width:22, height:22, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0, background:done?"var(--green)":active?"var(--ink)":"var(--line)", color:done||active?"#fff":"var(--ink-3)", marginTop:1 }}>
+                    {done ? "✓" : s.n}
+                  </span>
+                  <div>
+                    <div style={{ fontSize:12.5, fontWeight:active?600:400, color:active?"var(--ink)":done?"var(--ink-2)":"var(--ink-3)" }}>{s.label}</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:2 }}>{s.sub}</div>
+                  </div>
+                </button>
+              );
+            })}
+
+            {/* Live preview badge */}
+            {eLabel && (
+              <div style={{ marginTop:"auto", paddingTop:20 }}>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:8 }}>Preview</div>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)", lineHeight:1.8 }}>
+                  <span style={{ color:"var(--ink-3)" }}>{fromNode.label}</span>
+                  <div style={{ fontSize:9, color:"var(--blue)", fontWeight:700, marginLeft:4 }}>{":" + eLabel}</div>
+                  <span style={{ color:"var(--ink-3)", marginLeft:4 }}>{targetNode ? targetNode.label : "?"}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Content */}
+          <div style={{ flex:1, overflowY:"auto", padding:"32px 36px" }}>
+
+            {/* Step 1 — Edge definition */}
+            {step === 1 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:540 }}>
+                <div style={fg}>
+                  <div style={lbl}>Edge label</div>
+                  <input value={eLabel} onChange={function(e){ setELabel(e.target.value.toUpperCase().replace(/\s+/g,"_")); }}
+                    placeholder="e.g. HAS_SUBSCRIPTION, GOVERNED_BY, PREVIOUSLY_AT"
+                    style={{ ...inp, width:"100%", fontFamily:"JetBrains Mono", fontSize:13 }} />
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>SCREAMING_SNAKE_CASE. Auto-formatted as you type. Prefixed with : in queries.</div>
+                </div>
+                <div style={fg}>
+                  <div style={lbl}>Traversal direction</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {[
+                      { id:"outgoing", label:"Outgoing",    desc: fromNode.label + " -> target node. The relationship originates from this node type." },
+                      { id:"incoming", label:"Incoming",    desc: "target node -> " + fromNode.label + ". This node type is the destination of the relationship." },
+                      { id:"both",     label:"Bidirectional", desc:"Edge can be traversed in both directions. Use sparingly — most relationships are directional." },
+                    ].map(function(d){
+                      return (
+                        <div key={d.id} onClick={function(){ setEDir(d.id); }}
+                          style={{ display:"flex", alignItems:"center", gap:14, padding:"13px 16px", border:"2px solid "+(eDir===d.id?"var(--ink)":"var(--line)"), borderRadius:8, cursor:"pointer", background:eDir===d.id?"var(--panel-2)":"transparent" }}>
+                          <div style={{ width:14, height:14, borderRadius:"50%", border:"2px solid "+(eDir===d.id?"var(--ink)":"var(--line-2)"), background:eDir===d.id?"var(--ink)":"transparent", flexShrink:0 }} />
+                          <div>
+                            <div style={{ fontSize:13, fontWeight:eDir===d.id?600:400, color:"var(--ink)" }}>{d.label}</div>
+                            <div style={{ fontSize:11.5, color:"var(--ink-3)", marginTop:2, lineHeight:1.5 }}>{d.desc}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div style={fg}>
+                  <div style={lbl}>Description <span style={{ textTransform:"none", letterSpacing:0, fontSize:10, color:"var(--ink-4)" }}>(optional)</span></div>
+                  <textarea value={eDesc} onChange={function(e){ setEDesc(e.target.value); }}
+                    placeholder="What this edge represents and when it should exist..."
+                    rows={2} style={{ ...inp, width:"100%", resize:"vertical", lineHeight:1.55, fontFamily:"inherit", fontSize:12.5 }} />
+                </div>
+              </div>
+            )}
+
+            {/* Step 2 — Target & cardinality */}
+            {step === 2 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:540 }}>
+                <div style={fg}>
+                  <div style={lbl}>Target node type</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {targetNodes.map(function(n){
+                      const c = colorForNode(n);
+                      return (
+                        <div key={n.id} onClick={function(){ setETarget(n.id); }}
+                          style={{ display:"flex", alignItems:"center", gap:14, padding:"12px 16px", border:"2px solid "+(eTarget===n.id?"var(--ink)":"var(--line)"), borderRadius:8, cursor:"pointer", background:eTarget===n.id?"var(--panel-2)":"transparent" }}>
+                          <svg width="18" height="18" viewBox="-18 -18 36 36">
+                            {n.type === "agent" ? (
+                              <polygon points="0,-14 12.1,7 -12.1,7" fill={c.fill} stroke={c.stroke} strokeWidth="1.5"/>
+                            ) : n.type === "source" ? (
+                              <rect x="-13" y="-13" width="26" height="26" rx="3" fill={c.fill} stroke={c.stroke} strokeWidth="1.5"/>
+                            ) : (
+                              <circle r="13" fill={c.fill} stroke={c.stroke} strokeWidth="1.5"/>
+                            )}
+                          </svg>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:13, fontWeight:eTarget===n.id?600:400, color:"var(--ink)" }}>{n.label}</div>
+                            <div style={{ fontSize:11.5, color:"var(--ink-3)", marginTop:2 }}>{n.type} · {n.desc ? n.desc.slice(0,60) + (n.desc.length > 60 ? "..." : "") : ""}</div>
+                          </div>
+                          {eTarget===n.id && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-3)" }}>SELECTED</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div style={fg}>
+                  <div style={lbl}>Cardinality</div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    {["1:1","1:N","N:1","N:M"].map(function(c){
+                      const descs = { "1:1":"One-to-one", "1:N":"One-to-many", "N:1":"Many-to-one", "N:M":"Many-to-many" };
+                      return (
+                        <div key={c} onClick={function(){ setECard(c); }}
+                          style={{ flex:1, padding:"12px 10px", border:"2px solid "+(eCard===c?"var(--ink)":"var(--line)"), borderRadius:8, cursor:"pointer", textAlign:"center", background:eCard===c?"var(--panel-2)":"transparent" }}>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:700, color:eCard===c?"var(--ink)":"var(--ink-3)" }}>{c}</div>
+                          <div style={{ fontSize:11, color:"var(--ink-3)", marginTop:4 }}>{descs[c]}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3 — Configuration */}
+            {step === 3 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:540 }}>
+                <div style={fg}>
+                  <div style={lbl}>Edge kind</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {Object.keys(kindMeta).map(function(k){
+                      const m = kindMeta[k];
+                      return (
+                        <div key={k} onClick={function(){ setEKind(k); }}
+                          style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 16px", border:"2px solid "+(eKind===k?m.color:"var(--line)"), borderRadius:8, cursor:"pointer", background:eKind===k?m.color+"08":"transparent" }}>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, padding:"2px 9px", borderRadius:4, background:m.color+"18", color:m.color, flexShrink:0, minWidth:72, textAlign:"center" }}>{k}</span>
+                          <div style={{ fontSize:12.5, color:"var(--ink-2)", lineHeight:1.5 }}>{m.desc}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  {[
+                    { key:"indexed", val:eIndexed, set:setEIndexed, label:"Index for traversal", desc:"Build a traversal index on this edge type. Recommended for high-volume edges used in frequent queries." },
+                    { key:"owned",   val:eOwned,   set:setEOwned,   label:"Ownership edge",       desc:"Source node owns the lifecycle of the target node. Deleting the source cascades to the target." },
+                  ].map(function(f){
+                    return (
+                      <div key={f.key} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 16px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel-2)" }}>
+                        <div>
+                          <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)", marginBottom:3 }}>{f.label}</div>
+                          <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.5 }}>{f.desc}</div>
+                        </div>
+                        <div onClick={function(){ f.set(!f.val); }}
+                          style={{ width:40, height:22, borderRadius:11, background:f.val?"var(--ink)":"var(--line-2)", cursor:"pointer", position:"relative", flexShrink:0, marginLeft:16, transition:"background 150ms" }}>
+                          <div style={{ position:"absolute", top:3, left:f.val?20:3, width:16, height:16, borderRadius:"50%", background:"#fff", transition:"left 150ms" }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Step 4 — Review */}
+            {step === 4 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:540 }}>
+                <div style={{ border:"1px solid var(--line)", borderRadius:12, overflow:"hidden" }}>
+                  <div style={{ padding:"18px 22px", borderBottom:"1px solid var(--line-2)" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
+                      <code style={{ fontFamily:"JetBrains Mono", fontSize:15, fontWeight:700, color:"var(--blue)" }}>{":" + (eLabel || "UNNAMED")}</code>
+                      <span className={"edge-kind edge-kind-" + eKind.toLowerCase()}>{eKind}</span>
+                    </div>
+                    <div style={{ fontSize:13, color:"var(--ink-2)", display:"flex", alignItems:"center", gap:8 }}>
+                      <strong>{fromNode.label}</strong>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{eDir === "incoming" ? "<-" : "->"}</span>
+                      <strong>{targetNode ? targetNode.label : "?"}</strong>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginLeft:4 }}>{eCard}</span>
+                    </div>
+                    {eDesc && <div style={{ fontSize:12.5, color:"var(--ink-3)", marginTop:8, lineHeight:1.55 }}>{eDesc}</div>}
+                  </div>
+                  <div style={{ display:"flex", gap:1, background:"var(--line-2)" }}>
+                    {[
+                      ["Direction", { outgoing:"Outgoing", incoming:"Incoming", both:"Bidirectional" }[eDir]],
+                      ["Cardinality", eCard],
+                      ["Indexed", eIndexed ? "Yes" : "No"],
+                      ["Status", "Will be added"],
+                    ].map(function(kv,i){
+                      return (
+                        <div key={i} style={{ flex:1, padding:"12px 16px", background:"var(--panel-2)" }}>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:3 }}>{kv[0]}</div>
+                          <div style={{ fontSize:12.5, color:kv[0]==="Status"?"var(--green)":"var(--ink)", fontWeight:kv[0]==="Status"?500:400 }}>{kv[1]}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ flexShrink:0, padding:"14px 28px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"flex-end", gap:8, background:"var(--panel-2)" }}>
+          <button className="btn-ghost" onClick={onClose}>Cancel</button>
+          {step > 1 && <button className="btn-ghost" onClick={function(){ setStep(function(s){ return s-1; }); }}>Back</button>}
+          {step < 4
+            ? <button className="btn-dark" disabled={!canNext} onClick={function(){ setStep(function(s){ return s+1; }); }} style={{ opacity:canNext?1:0.45 }}>Continue</button>
+            : <button className="btn-dark" onClick={onClose}>Add edge type</button>
+          }
+        </div>
+
+      </div>
     </div>
   );
 }
