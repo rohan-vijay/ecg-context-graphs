@@ -10819,13 +10819,16 @@ function AddNodeFlow({ onClose }) {
 
 var CONTEXT_GRAPHS = [
   { id:"ecg",        cat:"GLOBAL",      color:"var(--blue)",   name:"Enterprise Context Graph",     desc:"The unified context layer connecting every entity, system, and decision across the organization.", nodes:28431, edges:183202, sources:12, health:96, synced:"2 min ago", owner:"data-platform" },
+  // Colours intentionally distributed so no two cards in the same 3-up row share a hue.
+  // Sort defaults to nodes-desc, which groups them: row 1 = support/customer/sales,
+  // row 2 = finance/product/security, row 3 = workforce/risk.
+  { id:"support",    cat:"SUPPORT",     color:"var(--coral)",  name:"Support Graph",                desc:"Tickets, incidents, escalations and resolution paths across every support channel.",               nodes:11402, edges:33840,  sources:4, health:91, synced:"3 min ago", owner:"customer-ops" },
   { id:"customer",   cat:"CUSTOMER",    color:"var(--gold)",   name:"Customer 360 Graph",           desc:"Identity-resolved customer entities unifying CRM, support, billing and product.",                  nodes:9482,  edges:41200,  sources:6, health:93, synced:"4 min ago", owner:"customer-ops" },
-  { id:"sales",      cat:"REVENUE",     color:"var(--gold)",   name:"Sales Graph",                  desc:"Pipeline, opportunities, accounts and the early signals — across CRM, billing and product — that the agents reason on to close revenue.", nodes:6204,  edges:21380,  sources:5, health:92, synced:"5 min ago", owner:"revenue-ops" },
-  { id:"support",    cat:"SUPPORT",     color:"var(--gold)",   name:"Support Graph",                desc:"Tickets, incidents, escalations and resolution paths across every support channel.",               nodes:11402, edges:33840,  sources:4, health:91, synced:"3 min ago", owner:"customer-ops" },
+  { id:"sales",      cat:"REVENUE",     color:"var(--blue)",   name:"Sales Graph",                  desc:"Pipeline, opportunities, accounts and the early signals — across CRM, billing and product — that the agents reason on to close revenue.", nodes:6204,  edges:21380,  sources:5, health:92, synced:"5 min ago", owner:"revenue-ops" },
   { id:"finance",    cat:"FINANCE",     color:"var(--green)",  name:"Finance Graph",                desc:"Ledger entities, controls, policies and audit lineage spanning systems of record.",                nodes:4218,  edges:14502,  sources:7, health:98, synced:"12 min ago", owner:"finance-ops" },
   { id:"product",    cat:"PRODUCT",     color:"var(--purple)", name:"Product Specialist Graph",     desc:"PS delivery entities — work orders, projects, milestones, and the TOC systems powering PS execution.", nodes:3127, edges:8742, sources:5, health:89, synced:"1 min ago", owner:"product-eng" },
-  { id:"security",   cat:"SECURITY",    color:"var(--coral)",  name:"Security Posture Graph",       desc:"Identities, devices, secrets and access trails wired into compliance frameworks.",                 nodes:2104,  edges:6820,   sources:8, health:95, synced:"8 min ago", owner:"security" },
-  { id:"workforce",  cat:"PEOPLE",      color:"var(--blue)",   name:"Workforce Graph",              desc:"Employees, roles, teams and tenure — the organizational substrate every other graph leans on.",   nodes:1840,  edges:4920,   sources:3, health:99, synced:"22 min ago", owner:"people-ops" },
+  { id:"security",   cat:"SECURITY",    color:"var(--ink-2)",  name:"Security Posture Graph",       desc:"Identities, devices, secrets and access trails wired into compliance frameworks.",                 nodes:2104,  edges:6820,   sources:8, health:95, synced:"8 min ago", owner:"security" },
+  { id:"workforce",  cat:"PEOPLE",      color:"var(--gold)",   name:"Workforce Graph",              desc:"Employees, roles, teams and tenure — the organizational substrate every other graph leans on.",   nodes:1840,  edges:4920,   sources:3, health:99, synced:"22 min ago", owner:"people-ops" },
   { id:"risk",       cat:"RISK",        color:"var(--coral)",  name:"Compliance & Risk Graph",      desc:"Policies, controls, risks and audit evidence linked back to the records they govern.",            nodes:912,   edges:3104,   sources:6, health:94, synced:"6 min ago", owner:"legal-ops" }
 ];
 
@@ -12442,7 +12445,7 @@ function GraphLandingView({ onOpenGraph }) {
 
       {/* GRID — hero (ECG full-row) + 3-column grid for the rest. Container centred under 1400px. */}
       {view === "grid" ? (
-        <div style={{ padding:"24px clamp(20px, 4vw, 64px) 40px", maxWidth:1400, margin:"0 auto", width:"100%", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:20 }}>
+        <div style={{ padding:"24px clamp(20px, 4vw, 64px) 40px", width:"100%", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:20 }}>
           {(function(){
             var hero = filtered.find(function(g){ return g.id === "ecg"; });
             var rest = filtered.filter(function(g){ return g.id !== "ecg"; });
@@ -12550,7 +12553,7 @@ function GraphLandingView({ onOpenGraph }) {
         </div>
       ) : (
         // LIST VIEW
-        <div style={{ padding:"20px clamp(20px, 4vw, 64px) 40px", maxWidth:1400, margin:"0 auto", width:"100%", boxSizing:"border-box" }}>
+        <div style={{ padding:"20px clamp(20px, 4vw, 64px) 40px", width:"100%", boxSizing:"border-box" }}>
           <div style={{ border:"1px solid var(--line)", borderRadius:14, background:"var(--panel)", overflow:"hidden", boxShadow:"0 1px 0 var(--line-2)" }}>
             {/* HEADER */}
             <div style={{ display:"grid", gridTemplateColumns:"minmax(0, 1fr) 110px 110px 110px 110px 130px 150px", gap:16, padding:"12px 22px", background:"var(--panel-2)", borderBottom:"1px solid var(--line)", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.8px", textTransform:"uppercase", alignItems:"center" }}>
