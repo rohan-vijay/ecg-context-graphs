@@ -10023,9 +10023,9 @@ function PermRow({ k, label, list, setList, tone, desc }) {
   );
 }
 
-// Type → colour + short glyph. Used by the Review & edit fields table so
-// each row reads at a glance.
-var TYPE_META = {
+// Property type → colour + short glyph. Used by the Review & edit fields
+// table so each row reads at a glance.
+var PROP_TYPE_META = {
   "uuid":      { color:"var(--purple)", glyph:"ID"  },
   "string":    { color:"var(--blue)",   glyph:"T"   },
   "string[]":  { color:"var(--blue)",   glyph:"[T]" },
@@ -10038,7 +10038,7 @@ var TYPE_META = {
   "enum":      { color:"var(--purple)", glyph:"E"   },
   "struct":    { color:"var(--ink-3)",  glyph:"{}"  }
 };
-var TYPE_OPTIONS = ["uuid", "string", "string[]", "decimal", "float", "bool", "timestamp", "date", "datetime", "enum", "struct"];
+var PROP_TYPE_OPTIONS = ["uuid", "string", "string[]", "decimal", "float", "bool", "timestamp", "date", "datetime", "enum", "struct"];
 
 function AddNodeFlow({ onClose }) {
   var [step, setStep] = useState(1);
@@ -10066,7 +10066,7 @@ function AddNodeFlow({ onClose }) {
   // is kept locally so each pill manages its own popover.
   function TypePicker({ value, onChange }) {
     var [open, setOpen] = useState(false);
-    var meta = TYPE_META[value] || TYPE_META.string;
+    var meta = PROP_TYPE_META[value] || PROP_TYPE_META.string;
     return (
       <div style={{ position:"relative" }}>
         <button onClick={function(){ setOpen(function(o){ return !o; }); }}
@@ -10079,8 +10079,8 @@ function AddNodeFlow({ onClose }) {
           <>
             <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setOpen(false); }} />
             <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:8, boxShadow:"0 10px 28px rgba(0,0,0,0.14)", padding:4, minWidth:150, maxHeight:280, overflowY:"auto" }}>
-              {TYPE_OPTIONS.map(function(t){
-                var m = TYPE_META[t] || TYPE_META.string;
+              {PROP_TYPE_OPTIONS.map(function(t){
+                var m = PROP_TYPE_META[t] || PROP_TYPE_META.string;
                 var isSel = value === t;
                 return (
                   <button key={t} onClick={function(){ onChange(t); setOpen(false); }}
