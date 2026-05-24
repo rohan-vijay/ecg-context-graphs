@@ -158,6 +158,168 @@ const STATE_COLORS = {
   incident: { stroke: "var(--coral)",  fill: "var(--coral-fill)",  soft: "var(--coral-soft)"  },
 };
 
+// ─── Brand-styled SVG glyphs for source systems ───────────────────────────────
+// Tasteful stylised marks (not literal trademarked assets) — Snowflake's
+// snowflake, Salesforce's cloud, HubSpot's sprocket, etc. Used in the Sources
+// catalog and the connector picker so the rows feel less monotone.
+function BrandLogo({ system, size }) {
+  size = size || 18;
+  if (!system) return null;
+  var s = String(system).toLowerCase();
+  var common = { width: size, height: size, viewBox: "0 0 24 24", style: { flexShrink: 0, display: "block" } };
+
+  if (s.indexOf("snowflake") >= 0) {
+    return (
+      <svg {...common}>
+        <g stroke="#29B5E8" strokeWidth="2" strokeLinecap="round" fill="#29B5E8">
+          <line x1="12" y1="3" x2="12" y2="21" />
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="5.6" y1="5.6" x2="18.4" y2="18.4" />
+          <line x1="18.4" y1="5.6" x2="5.6" y2="18.4" />
+          <circle cx="12" cy="12" r="1.6" />
+        </g>
+      </svg>
+    );
+  }
+  if (s.indexOf("salesforce") >= 0) {
+    return (
+      <svg {...common}>
+        <g fill="#00A1E0">
+          <ellipse cx="8.5" cy="13" rx="4.5" ry="3.6" />
+          <ellipse cx="13" cy="10.5" rx="5.5" ry="4.4" />
+          <ellipse cx="17" cy="14" rx="4" ry="3.2" />
+          <ellipse cx="12" cy="15.5" rx="7.5" ry="3.2" />
+        </g>
+      </svg>
+    );
+  }
+  if (s.indexOf("hubspot") >= 0) {
+    return (
+      <svg {...common}>
+        <g stroke="#FF7A59" fill="#FF7A59">
+          <circle cx="10.5" cy="14" r="4.2" fill="none" strokeWidth="2.2" />
+          <circle cx="18.2" cy="6" r="2.2" />
+          <line x1="13.4" y1="11.6" x2="16.4" y2="7.8" strokeWidth="2.2" />
+          <circle cx="10.5" cy="14" r="1.4" />
+        </g>
+      </svg>
+    );
+  }
+  if (s.indexOf("netsuite") >= 0) {
+    return (
+      <svg {...common}>
+        <rect x="2" y="3" width="20" height="18" rx="3.5" fill="#125740" />
+        <text x="12" y="16.6" textAnchor="middle" fontSize="13" fontWeight="900" fill="#fff" fontFamily="Arial, sans-serif">N</text>
+      </svg>
+    );
+  }
+  if (s.indexOf("okta") >= 0) {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="12" r="8.5" fill="none" stroke="#007DC1" strokeWidth="5" />
+      </svg>
+    );
+  }
+  if (s.indexOf("databricks") >= 0) {
+    return (
+      <svg {...common}>
+        <g fill="#FF3621">
+          <path d="M3 7.5 L12 4 L21 7.5 L12 11 Z" />
+          <path d="M3 11.5 L12 15 L21 11.5 L12 8" opacity="0.55" />
+          <path d="M3 15.5 L12 19 L21 15.5 L12 12" opacity="0.3" />
+        </g>
+      </svg>
+    );
+  }
+  if (s.indexOf("stripe") >= 0) {
+    return (
+      <svg {...common}>
+        <rect x="2" y="3" width="20" height="18" rx="4" fill="#635BFF" />
+        <text x="12" y="17" textAnchor="middle" fontSize="14" fontWeight="900" fill="#fff" fontFamily="Arial, sans-serif" fontStyle="italic">S</text>
+      </svg>
+    );
+  }
+  if (s.indexOf("postgres") >= 0) {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="12" r="9" fill="#336791" />
+        <text x="12" y="17" textAnchor="middle" fontSize="13" fontWeight="900" fill="#fff" fontFamily="Arial, sans-serif">P</text>
+      </svg>
+    );
+  }
+  if (s.indexOf("jira") >= 0 || s.indexOf("confluence") >= 0) {
+    return (
+      <svg {...common}>
+        <path d="M12 3 L21 12 L17 16 L12 11 L7 16 L3 12 Z" fill="#0052CC" />
+      </svg>
+    );
+  }
+  if (s.indexOf("zendesk") >= 0) {
+    return (
+      <svg {...common}>
+        <path d="M3 5 L21 5 L3 21 Z" fill="#03363D" />
+        <path d="M21 9 a8 8 0 0 1 -16 0" stroke="#03363D" strokeWidth="2.5" fill="none" />
+      </svg>
+    );
+  }
+  if (s.indexOf("sharepoint") >= 0 || s.indexOf("outlook") >= 0) {
+    return (
+      <svg {...common}>
+        <circle cx="9" cy="12" r="6.5" fill="#1F6DAD" />
+        <text x="9" y="16.3" textAnchor="middle" fontSize="10" fontWeight="900" fill="#fff" fontFamily="Arial, sans-serif">S</text>
+      </svg>
+    );
+  }
+  if (s.indexOf("google drive") >= 0 || s.indexOf("gdrive") >= 0) {
+    return (
+      <svg {...common}>
+        <g>
+          <path d="M8 4 L16 4 L21 13 L17 20 L7 20 L3 13 Z" fill="#FBBC04" />
+          <path d="M3 13 L7 20 L12 12 Z" fill="#34A853" />
+          <path d="M21 13 L17 20 L12 12 Z" fill="#1A73E8" />
+        </g>
+      </svg>
+    );
+  }
+  if (s.indexOf("slack") >= 0) {
+    return (
+      <svg {...common}>
+        <g>
+          <rect x="4" y="10" width="6" height="3" rx="1.5" fill="#E01E5A" />
+          <rect x="11" y="3" width="3" height="6" rx="1.5" fill="#36C5F0" />
+          <rect x="14" y="11" width="6" height="3" rx="1.5" fill="#2EB67D" />
+          <rect x="10" y="14" width="3" height="6" rx="1.5" fill="#ECB22E" />
+        </g>
+      </svg>
+    );
+  }
+  if (s.indexOf("s3") >= 0 || s.indexOf("amazon") >= 0) {
+    return (
+      <svg {...common}>
+        <path d="M5 6 L19 6 L21 10 L21 18 L3 18 L3 10 Z" fill="#FF9900" />
+        <path d="M3 10 L21 10" stroke="#232F3E" strokeWidth="1.4" />
+      </svg>
+    );
+  }
+  if (s.indexOf("notion") >= 0) {
+    return (
+      <svg {...common}>
+        <rect x="3" y="3" width="18" height="18" rx="3" fill="#fff" stroke="#000" strokeWidth="1.5" />
+        <text x="12" y="17" textAnchor="middle" fontSize="13" fontWeight="900" fill="#000" fontFamily="Georgia, serif">N</text>
+      </svg>
+    );
+  }
+
+  // Fallback: monogram chip
+  var letter = (String(system).charAt(0) || "?").toUpperCase();
+  return (
+    <svg {...common}>
+      <rect x="2" y="2" width="20" height="20" rx="4" fill="var(--ink-3)" />
+      <text x="12" y="16.5" textAnchor="middle" fontSize="12" fontWeight="700" fill="#fff" fontFamily="JetBrains Mono, monospace">{letter}</text>
+    </svg>
+  );
+}
+
 function colorForNode(n) {
   if (n.type === "agent")  return { stroke: "var(--purple)", fill: "var(--purple-fill)", soft: "var(--purple-soft)" };
   if (n.type === "source") return { stroke: "var(--green)",  fill: "var(--green-fill)",  soft: "var(--green-soft)"  };
@@ -1701,8 +1863,16 @@ function GlobalSourcesView() {
         <div className="nv-body">
           {filtered.map(s => (
             <div key={s.uid} className="nv-row gsrc-nv-row">
-              <div className="nv-cell"><span className="snap-n">{s.name}</span></div>
-              <div className="nv-cell"><span className="src-sys-tag">{s.system}</span></div>
+              <div className="nv-cell" style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <BrandLogo system={s.system || s.name} size={18} />
+                <span className="snap-n">{s.name}</span>
+              </div>
+              <div className="nv-cell">
+                <span className="src-sys-tag" style={{ display:"inline-flex", alignItems:"center", gap:6 }}>
+                  <BrandLogo system={s.system} size={14} />
+                  {s.system}
+                </span>
+              </div>
               <div className="nv-cell"><span className="gnode-tag-sm">{s.nodeLabel}</span></div>
               <div className="nv-cell"><span className="snap-tag">{s.type}</span></div>
               <div className="nv-cell src-freq">{s.freq}</div>
@@ -4130,6 +4300,18 @@ function LinkSourceFlow({ node, onClose }) {
 
   function ConnLogo(props) {
     var c = props.c; var size = props.size || 30;
+    // If we have a brand-styled SVG for this connector, use it on a soft tinted square.
+    // Otherwise fall back to the monogram letter chip.
+    var brandKeys = ["snowflake","salesforce","hubspot","netsuite","okta","databricks","stripe","postgres","jira","confluence","zendesk","sharepoint","outlook","gdrive","slack","s3","notion"];
+    var isBranded = brandKeys.some(function(k){ return c.id === k || c.id.indexOf(k) >= 0; });
+    if (isBranded) {
+      var inner = Math.round(size * 0.72);
+      return (
+        <span style={{ width:size, height:size, borderRadius:7, background: c.color + "14", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, border:"1px solid " + c.color + "26" }}>
+          <BrandLogo system={c.id} size={inner} />
+        </span>
+      );
+    }
     return (
       <span style={{ width:size, height:size, borderRadius:7, background: c.color + "22", color: c.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize: size * 0.5, fontWeight:700, fontFamily:"JetBrains Mono", flexShrink:0 }}>{c.letter}</span>
     );
