@@ -10723,7 +10723,561 @@ function GraphMiniViz({ seed, color, size }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW GRAPH FLOW — context-aware graph creation (industry → starting point → …)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var GRAPH_INDUSTRIES = [
+  { id:"saas",          label:"SaaS / B2B Software",    desc:"Subscriptions, accounts, product usage" },
+  { id:"fintech",       label:"Financial Services",     desc:"Customers, accounts, transactions, risk" },
+  { id:"healthcare",    label:"Healthcare / Life Sci",  desc:"Patients, providers, claims, encounters" },
+  { id:"retail",        label:"Retail / eCommerce",     desc:"Customers, orders, products, fulfilment" },
+  { id:"manufacturing", label:"Manufacturing",          desc:"Supply chain, inventory, BOMs, suppliers" },
+  { id:"logistics",     label:"Logistics & Supply",     desc:"Shipments, routes, warehouses, carriers" },
+  { id:"media",         label:"Media & Entertainment",  desc:"Content, audiences, subscriptions, rights" },
+  { id:"professional",  label:"Professional Services",  desc:"Clients, engagements, billable hours" },
+  { id:"public",        label:"Public Sector / Edu",    desc:"Citizens, programs, grants, casework" }
+];
+
+var GRAPH_FUNCTIONS = [
+  { id:"revenue",       label:"Sales & Revenue" },
+  { id:"customer",      label:"Customer Success" },
+  { id:"marketing",     label:"Marketing" },
+  { id:"product",       label:"Product & Engineering" },
+  { id:"operations",    label:"Operations" },
+  { id:"finance",       label:"Finance" },
+  { id:"people",        label:"People / HR" },
+  { id:"legal",         label:"Legal & Compliance" },
+  { id:"risk",          label:"Risk & Trust" },
+  { id:"data-platform", label:"Data Platform" }
+];
+
+// Curated starting points — each suggests entities and edges for an industry+function combo
+var GRAPH_STARTING_POINTS = [
+  { id:"saas-revenue",   industry:["saas"],          fn:["revenue","customer"],    name:"Customer revenue spine",      desc:"Account-led B2B: pipeline → subscription → expansion. Wires the sales motion to product telemetry.",
+    entities:["Account","Contact","Opportunity","Subscription","Invoice","Usage Event","Ticket"],
+    edges:[["Account","HAS_CONTACT","Contact"],["Account","HAS_OPPORTUNITY","Opportunity"],["Account","SUBSCRIBES_TO","Subscription"],["Subscription","BILLED_AS","Invoice"],["Account","EMITS","Usage Event"],["Account","OPENED","Ticket"]],
+    accent:"var(--blue)" },
+  { id:"saas-success",   industry:["saas"],          fn:["customer","operations"], name:"Customer health & retention", desc:"Bring health scores, tickets, NPS and usage trends into one canonical Customer entity.",
+    entities:["Account","Customer","Ticket","Interaction","Health Score","Renewal"],
+    edges:[["Account","HAS_CUSTOMER","Customer"],["Customer","OPENED","Ticket"],["Customer","HAD","Interaction"],["Customer","SCORED_AS","Health Score"],["Account","RENEWS_AS","Renewal"]],
+    accent:"var(--green)" },
+  { id:"fintech-risk",   industry:["fintech"],       fn:["risk","operations"],     name:"Customer & risk core",        desc:"Customer → Account → Transaction with KYC, fraud signals and regulatory holds.",
+    entities:["Customer","Account","Transaction","Risk Signal","Hold","Compliance Case"],
+    edges:[["Customer","HOLDS","Account"],["Account","RECORDS","Transaction"],["Transaction","RAISES","Risk Signal"],["Account","SUBJECT_TO","Hold"],["Risk Signal","ESCALATES_TO","Compliance Case"]],
+    accent:"var(--coral)" },
+  { id:"healthcare-ops", industry:["healthcare"],    fn:["operations","customer"], name:"Patient journey graph",       desc:"Patient encounters joined with providers, claims, diagnoses and outcomes.",
+    entities:["Patient","Provider","Encounter","Diagnosis","Claim","Outcome"],
+    edges:[["Patient","SAW","Provider"],["Patient","HAD","Encounter"],["Encounter","RESULTED_IN","Diagnosis"],["Encounter","BILLED_VIA","Claim"],["Diagnosis","TRACKED_AS","Outcome"]],
+    accent:"var(--purple)" },
+  { id:"retail-commerce",industry:["retail"],        fn:["revenue","operations"],  name:"Order & fulfilment graph",    desc:"Customer → Order → Product → Shipment → Return, with inventory and pricing linked in.",
+    entities:["Customer","Order","Product","Shipment","Return","Inventory"],
+    edges:[["Customer","PLACED","Order"],["Order","CONTAINS","Product"],["Order","SHIPPED_AS","Shipment"],["Order","RETURNED_AS","Return"],["Product","STOCKED_IN","Inventory"]],
+    accent:"var(--gold)" },
+  { id:"manufacturing",  industry:["manufacturing"], fn:["operations"],            name:"Supply & production graph",   desc:"Suppliers, purchase orders, bills of material and inventory across plants.",
+    entities:["Supplier","Purchase Order","Item","BOM","Plant","Inventory"],
+    edges:[["Supplier","FULFILS","Purchase Order"],["Purchase Order","CONTAINS","Item"],["Item","COMPONENT_OF","BOM"],["BOM","ASSEMBLED_AT","Plant"],["Plant","HOLDS","Inventory"]],
+    accent:"var(--green)" },
+  { id:"finance-ledger", industry:["saas","fintech","retail","professional"], fn:["finance"], name:"Finance & ledger graph",
+    desc:"GL accounts, journal entries, invoices and the policies & controls auditing them.",
+    entities:["GL Account","Journal Entry","Invoice","Payment","Control","Policy"],
+    edges:[["Journal Entry","POSTS_TO","GL Account"],["Invoice","SETTLED_BY","Payment"],["GL Account","GOVERNED_BY","Control"],["Control","ENFORCES","Policy"]],
+    accent:"var(--green)" },
+  { id:"people-graph",   industry:["saas","fintech","healthcare","retail","manufacturing","logistics","media","professional","public"], fn:["people"], name:"People & workforce graph",
+    desc:"Employees, roles, teams, managers and tenure — the org substrate every other graph leans on.",
+    entities:["Employee","Role","Team","Manager Chain","Compensation"],
+    edges:[["Employee","HOLDS","Role"],["Employee","MEMBER_OF","Team"],["Employee","REPORTS_TO","Manager Chain"],["Employee","PAID_VIA","Compensation"]],
+    accent:"var(--blue)" }
+];
+
+function NewGraphFlow({ onClose, onCreate }) {
+  var [step, setStep]        = useState(1);
+  var [industry, setIndustry] = useState(null);
+  var [func, setFunc]         = useState(null);
+  var [startId, setStartId]   = useState(null);
+  var [included, setIncluded] = useState({}); // entity name → boolean
+  var [graphName, setGraphName]       = useState("");
+  var [graphDesc, setGraphDesc]       = useState("");
+  var [environment, setEnvironment]   = useState("production");
+  var [owner, setOwner]               = useState("morgan.lee");
+  var [permsRead,  setPermsRead]      = useState([{ kind:"group", id:"everyone",       label:"Everyone in org" }]);
+  var [permsWrite, setPermsWrite]     = useState([{ kind:"group", id:"data-platform",  label:"data-platform team" }]);
+  var [permsAdmin, setPermsAdmin]     = useState([{ kind:"user",  id:"morgan.lee",     label:"Morgan Lee (you)" }]);
+  var [activate, setActivate]         = useState(true);
+  var [skipContext, setSkipContext]   = useState(false);
+
+  var stepNames = ["Context", "Starting point", "Customise", "Identity & access", "Review"];
+
+  // Filter suggestions by current industry + function
+  var suggestions = GRAPH_STARTING_POINTS.filter(function(sp){
+    if (!industry && !func) return true;
+    var indOk  = !industry || sp.industry.indexOf(industry) >= 0;
+    var funcOk = !func     || sp.fn.indexOf(func)           >= 0;
+    return indOk || funcOk;
+  });
+
+  var picked = startId === "__blank" ? null : GRAPH_STARTING_POINTS.find(function(s){ return s.id === startId; });
+  var entitiesToInclude = picked ? picked.entities.filter(function(e){ return included[e] !== false; }) : [];
+
+  function canContinue() {
+    if (step === 1) return skipContext || (industry || func);
+    if (step === 2) return !!startId;
+    if (step === 3) return startId === "__blank" || entitiesToInclude.length > 0;
+    if (step === 4) return graphName.trim().length >= 2;
+    return true;
+  }
+
+  function pickStart(id) {
+    setStartId(id);
+    var sp = GRAPH_STARTING_POINTS.find(function(s){ return s.id === id; });
+    if (sp) {
+      var inc = {};
+      sp.entities.forEach(function(e){ inc[e] = true; });
+      setIncluded(inc);
+      if (!graphName) setGraphName(sp.name);
+      if (!graphDesc) setGraphDesc(sp.desc);
+    } else if (id === "__blank") {
+      setIncluded({});
+    }
+  }
+
+  var inp = { border:"1px solid var(--line)", borderRadius:7, padding:"8px 11px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", outline:"none", boxSizing:"border-box", width:"100%", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" };
+  var lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:6 };
+
+  // Mini SVG preview of the picked starting point's entities + edges
+  function StartingPointPreview({ sp }) {
+    if (!sp) {
+      return (
+        <div style={{ padding:"40px 12px", textAlign:"center", color:"var(--ink-3)", fontSize:11.5, fontStyle:"italic" }}>Blank canvas — nothing pre-defined</div>
+      );
+    }
+    var W = 280, H = 180;
+    var cx = W/2, cy = H/2;
+    var n = sp.entities.length;
+    var positioned = sp.entities.map(function(name, i){
+      var a = (i / n) * Math.PI * 2 - Math.PI / 2;
+      var r = Math.min(W, H) * 0.34;
+      return { name: name, x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r };
+    });
+    var byName = {}; positioned.forEach(function(p){ byName[p.name] = p; });
+    return (
+      <svg width="100%" height={H} viewBox={"0 0 " + W + " " + H} preserveAspectRatio="xMidYMid meet">
+        <g stroke={sp.accent} strokeOpacity="0.45" strokeWidth="0.8">
+          {sp.edges.map(function(e, i){
+            var a = byName[e[0]], b = byName[e[2]];
+            if (!a || !b) return null;
+            return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />;
+          })}
+        </g>
+        <g>
+          {positioned.map(function(p, i){
+            return (
+              <g key={i}>
+                <circle cx={p.x} cy={p.y} r="14" fill={sp.accent} fillOpacity="0.18" stroke={sp.accent} strokeWidth="1.2" />
+                <text x={p.x} y={p.y + 26} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"8.5px", fill:"var(--ink-2)" }}>{p.name.length > 14 ? p.name.slice(0, 12) + "…" : p.name}</text>
+              </g>
+            );
+          })}
+        </g>
+      </svg>
+    );
+  }
+
+  var DIRECTORY = [
+    { kind:"group", id:"everyone",        label:"Everyone in org" },
+    { kind:"group", id:"data-platform",   label:"data-platform team" },
+    { kind:"group", id:"customer-ops",    label:"customer-ops team" },
+    { kind:"group", id:"finance-ops",     label:"finance-ops team" },
+    { kind:"group", id:"engineering",     label:"engineering team" },
+    { kind:"group", id:"security",        label:"security team" },
+    { kind:"user",  id:"morgan.lee",      label:"Morgan Lee" },
+    { kind:"user",  id:"ramin.k",         label:"Ramin K" },
+    { kind:"user",  id:"jordan.s",        label:"Jordan S" }
+  ];
+
+  function PermRow({ k, label, list, setList, tone, desc }) {
+    var [open, setOpen] = useState(false);
+    function toggle(entry){
+      setList(function(arr){
+        var exists = arr.find(function(x){ return x.kind === entry.kind && x.id === entry.id; });
+        if (exists) return arr.filter(function(x){ return !(x.kind === entry.kind && x.id === entry.id); });
+        return arr.concat([entry]);
+      });
+    }
+    return (
+      <div style={{ padding:"12px 16px", borderBottom:"1px solid var(--line-2)" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:7 }}>
+          <div>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 7px", borderRadius:4, background:tone.bg, color:tone.fg, fontWeight:700, letterSpacing:"0.5px" }}>{k.toUpperCase()}</span>
+              <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{label}</span>
+            </div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3 }}>{desc}</div>
+          </div>
+          <div style={{ position:"relative" }}>
+            <button onClick={function(){ setOpen(function(o){ return !o; }); }} className="btn-ghost" style={{ fontSize:11.5 }}>+ Add</button>
+            {open && (
+              <>
+                <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setOpen(false); }} />
+                <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 8px 28px rgba(0,0,0,0.14)", padding:5, minWidth:240, maxHeight:280, overflowY:"auto" }}>
+                  {DIRECTORY.map(function(d){
+                    var selected = list.find(function(x){ return x.kind === d.kind && x.id === d.id; });
+                    return (
+                      <button key={d.kind + "_" + d.id} onClick={function(){ toggle(d); }}
+                        style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"6px 8px", borderRadius:5, border:"none", background: selected ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", fontSize:12, color:"var(--ink)", textAlign:"left" }}>
+                        <span style={{ width:16, height:16, borderRadius: d.kind === "user" ? "50%" : 3, background: d.kind === "user" ? "var(--ink-2)" : "var(--ink-3)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:8, fontWeight:700, flexShrink:0 }}>{d.kind === "user" ? d.label.split(" ").map(function(s){ return s[0]; }).join("").slice(0,2) : "G"}</span>
+                        <span style={{ flex:1 }}>{d.label}</span>
+                        {selected && <span style={{ color:"var(--green)", fontWeight:700 }}>✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+        <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+          {list.length === 0 && <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", fontStyle:"italic" }}>nobody</span>}
+          {list.map(function(e, i){
+            return (
+              <span key={i} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 5px 3px 7px", borderRadius:5, background:"var(--chip)", border:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)" }}>
+                <span style={{ width:12, height:12, borderRadius: e.kind === "user" ? "50%" : 3, background: e.kind === "user" ? "var(--ink-2)" : "var(--ink-3)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:7.5, fontWeight:700 }}>{e.kind === "user" ? e.label.split(" ").map(function(s){ return s[0]; }).join("").slice(0,2) : "G"}</span>
+                {e.label}
+                <button onClick={function(){ setList(function(arr){ return arr.filter(function(x){ return !(x.kind === e.kind && x.id === e.id); }); }); }} style={{ background:"none", border:"none", color:"var(--ink-3)", cursor:"pointer", padding:0, fontSize:12, lineHeight:1 }}>×</button>
+              </span>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
+      onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ width:"96vw", maxWidth:1480, height:"96vh", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
+
+        {/* HEADER */}
+        <div style={{ flexShrink:0, height:56, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 22px", background:"var(--panel)" }}>
+          <div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>WORKSPACE · NEW GRAPH</div>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:18, color:"var(--ink)", marginTop:3 }}>{graphName || "Untitled graph"}</div>
+          </div>
+          <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)" }}>✕</button>
+        </div>
+
+        <div style={{ flex:1, display:"grid", gridTemplateColumns:"240px minmax(0, 1fr) 320px", minHeight:0 }}>
+
+          {/* SIDEBAR */}
+          <div style={{ background:"var(--panel-2)", borderRight:"1px solid var(--line)", padding:"20px 14px", display:"flex", flexDirection:"column", gap:4, overflowY:"auto" }}>
+            {stepNames.map(function(nm, i){
+              var n = i + 1;
+              var isOn = step === n;
+              var isDone = step > n;
+              var sub = n === 1 ? (industry || func ? (GRAPH_INDUSTRIES.find(function(x){ return x.id === industry; }) || {}).label || (GRAPH_FUNCTIONS.find(function(x){ return x.id === func; }) || {}).label : skipContext ? "Skipped" : "Industry & function")
+                      : n === 2 ? (startId === "__blank" ? "Blank canvas" : picked ? picked.name : "Pick a starting point")
+                      : n === 3 ? (startId === "__blank" ? "—" : entitiesToInclude.length + " of " + (picked ? picked.entities.length : 0) + " entities")
+                      : n === 4 ? (graphName || "Name + access")
+                      : (activate ? "Activate" : "Draft");
+              return (
+                <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
+                  style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}>
+                  <span style={{ width:22, height:22, borderRadius:"50%", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0 }}>{isDone ? "✓" : n}</span>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400, lineHeight:1.2 }}>{nm}</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{sub}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* CENTER */}
+          <div style={{ padding:"24px 32px 28px", overflowY:"auto" }}>
+            <div style={{ marginBottom:20 }}>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / 5"}</div>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:28, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>{stepNames[step-1]}</div>
+              <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:680 }}>
+                {step === 1 && "Tell us a bit about what you're modelling. We'll use this to suggest a smart starting point — or you can skip and start from scratch."}
+                {step === 2 && "Pick a starting point. Each one wires up a sensible default set of entities and edges you can edit. Or start with a blank canvas."}
+                {step === 3 && "Trim the suggested entities to just what you need. You can rename them later from the catalog."}
+                {step === 4 && "Name the graph, pick the environment, and decide who can read, write, and administer it."}
+                {step === 5 && "Last look. Activating drops the graph into the workspace landing page."}
+              </div>
+            </div>
+
+            {/* STEP 1 */}
+            {step === 1 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:22, maxWidth:860 }}>
+                <div>
+                  <label style={lbl}>WHICH INDUSTRY OR SECTOR?</label>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                    {GRAPH_INDUSTRIES.map(function(o){
+                      var isOn = industry === o.id;
+                      return (
+                        <button key={o.id} onClick={function(){ setIndustry(isOn ? null : o.id); setSkipContext(false); }}
+                          style={{ textAlign:"left", padding:"12px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:8, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 8%, transparent)" : "none" }}>
+                          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{o.label}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4 }}>{o.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <label style={lbl}>WHICH TEAM OR FUNCTION WILL USE IT MOST?</label>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                    {GRAPH_FUNCTIONS.map(function(o){
+                      var isOn = func === o.id;
+                      return <button key={o.id} onClick={function(){ setFunc(isOn ? null : o.id); setSkipContext(false); }}
+                        style={{ padding:"7px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"inherit", fontSize:12.5, cursor:"pointer" }}>{o.label}</button>;
+                    })}
+                  </div>
+                </div>
+                <div style={{ paddingTop:12, borderTop:"1px dashed var(--line-2)" }}>
+                  <button onClick={function(){ setSkipContext(true); setIndustry(null); setFunc(null); }}
+                    style={{ background: skipContext ? "var(--bg-canvas)" : "transparent", border:"1px solid " + (skipContext ? "var(--ink)" : "var(--line)"), borderRadius:7, padding:"9px 14px", cursor:"pointer", fontFamily:"inherit", fontSize:13, color:"var(--ink-2)", display:"flex", alignItems:"center", gap:8 }}>
+                    {skipContext && <span style={{ color:"var(--green)" }}>✓</span>}
+                    I already know what I'm building — skip the suggestions
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 2 */}
+            {step === 2 && (
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, maxWidth:1000 }}>
+                {/* Blank option always available */}
+                {[{ id:"__blank", name:"Blank canvas", desc:"Start with no entities or edges. Add everything yourself.", entities:[], accent:"var(--ink-3)" }]
+                  .concat(suggestions).map(function(sp){
+                    var isOn = startId === sp.id;
+                    return (
+                      <button key={sp.id} onClick={function(){ pickStart(sp.id); }}
+                        style={{ textAlign:"left", padding:"16px 18px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:10, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 8%, transparent)" : "none", display:"flex", flexDirection:"column", gap:12 }}>
+                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                          <div>
+                            <div style={{ fontSize:14.5, fontWeight:600, color:"var(--ink)" }}>{sp.name}</div>
+                            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, letterSpacing:"0.3px" }}>{sp.id === "__blank" ? "BLANK" : sp.entities.length + " entities · " + sp.edges.length + " edges"}</div>
+                          </div>
+                          {isOn && <span style={{ color:"var(--green)", fontFamily:"JetBrains Mono", fontWeight:700 }}>✓</span>}
+                        </div>
+                        <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5 }}>{sp.desc}</div>
+                        {sp.id !== "__blank" && (
+                          <div style={{ border:"1px dashed var(--line-2)", borderRadius:7, background:"var(--panel-2)", padding:"8px 8px 4px" }}>
+                            <StartingPointPreview sp={sp} />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+              </div>
+            )}
+
+            {/* STEP 3 */}
+            {step === 3 && (
+              startId === "__blank" ? (
+                <div style={{ padding:"40px 18px", textAlign:"center", color:"var(--ink-3)", fontSize:13, border:"1px dashed var(--line)", borderRadius:8, maxWidth:600 }}>
+                  You picked a blank canvas — nothing to customise. Continue to name your graph.
+                </div>
+              ) : picked ? (
+                <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden", maxWidth:680 }}>
+                  <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
+                    <span style={{ fontSize:13.5, fontWeight:600 }}>Entities from "{picked.name}"</span>
+                    <span className="card-head-sub">{entitiesToInclude.length + " of " + picked.entities.length + " selected"}</span>
+                  </div>
+                  <div>
+                    {picked.entities.map(function(e, i, arr){
+                      var on = included[e] !== false;
+                      return (
+                        <label key={e} style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 18px", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", cursor:"pointer", background: on ? "transparent" : "var(--bg-canvas)" }}>
+                          <input type="checkbox" checked={on} onChange={function(){ setIncluded(function(o){ var n = Object.assign({}, o); n[e] = !on; return n; }); }} style={{ accentColor:"var(--ink)", width:16, height:16 }} />
+                          <span style={{ fontSize:13.5, color: on ? "var(--ink)" : "var(--ink-4)", fontWeight: on ? 500 : 400 }}>{e}</span>
+                          <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{picked.edges.filter(function(ed){ return ed[0] === e || ed[2] === e; }).length + " edges"}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null
+            )}
+
+            {/* STEP 4 */}
+            {step === 4 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:22, maxWidth:780 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:14 }}>
+                  <div>
+                    <label style={lbl}>GRAPH NAME</label>
+                    <input value={graphName} onChange={function(e){ setGraphName(e.target.value); }} placeholder="e.g. Customer 360 Graph" style={Object.assign({}, inp, { fontSize:15 })} />
+                  </div>
+                  <div>
+                    <label style={lbl}>ENVIRONMENT</label>
+                    <select value={environment} onChange={function(e){ setEnvironment(e.target.value); }} style={inp}>
+                      <option value="production">Production</option>
+                      <option value="staging">Staging</option>
+                      <option value="development">Development</option>
+                      <option value="sandbox">Sandbox</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label style={lbl}>DESCRIPTION</label>
+                  <textarea value={graphDesc} onChange={function(e){ setGraphDesc(e.target.value); }} rows={2} placeholder="A one-line summary that will appear on the graph card" style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.55 })} />
+                </div>
+                <div>
+                  <label style={lbl}>OWNER</label>
+                  <select value={owner} onChange={function(e){ setOwner(e.target.value); }} style={Object.assign({}, inp, { maxWidth:360 })}>
+                    <option value="morgan.lee">Morgan Lee (you · data-platform)</option>
+                    <option value="ramin.k">Ramin K · data-platform</option>
+                    <option value="jordan.s">Jordan S · customer-ops</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={lbl}>WHO CAN ACCESS THIS GRAPH?</label>
+                  <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
+                    <PermRow k="read"  label="Read"  list={permsRead}  setList={setPermsRead}  tone={{ bg:"var(--blue-fill)",  fg:"var(--blue)"  }} desc="Can browse this graph and run queries against it." />
+                    <PermRow k="write" label="Write" list={permsWrite} setList={setPermsWrite} tone={{ bg:"var(--green-fill)", fg:"var(--green)" }} desc="Can add/edit records and modify schemas." />
+                    <PermRow k="admin" label="Admin" list={permsAdmin} setList={setPermsAdmin} tone={{ bg:"var(--coral-fill)", fg:"var(--coral)" }} desc="Can manage rules, sources, and access policies." />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 5 — comprehensive */}
+            {step === 5 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:22, maxWidth:880 }}>
+                <div>
+                  <div style={{ fontFamily:"Instrument Serif", fontSize:30, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>Spin up "{graphName || "your graph"}"?</div>
+                  <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:600 }}>Once activated it appears in the Context Graphs landing. You can rename, reshape, or delete it any time.</div>
+                </div>
+
+                <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
+                  <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
+                    <span style={{ fontSize:14, fontWeight:600 }}>Summary</span>
+                    <span className="card-head-sub">{(picked ? picked.entities.length : 0) + " entities · " + (picked ? picked.edges.length : 0) + " edges"}</span>
+                  </div>
+                  <div>
+                    {[
+                      { k:"NAME",         v: graphName || <span style={{ color:"var(--coral)" }}>not set</span> },
+                      { k:"DESCRIPTION",  v: graphDesc || <span style={{ color:"var(--ink-4)" }}>—</span> },
+                      { k:"ENVIRONMENT",  v: environment },
+                      { k:"CONTEXT",      v: industry || func ? ((GRAPH_INDUSTRIES.find(function(x){ return x.id === industry; }) || {}).label || "—") + (func ? " · " + (GRAPH_FUNCTIONS.find(function(x){ return x.id === func; }) || {}).label : "") : "Built from scratch" },
+                      { k:"STARTING POINT", v: picked ? picked.name : "Blank canvas" },
+                      { k:"ENTITIES",     v: entitiesToInclude.length ? entitiesToInclude.map(function(e){ return <span key={e} style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)", marginRight:4 }}>{e}</span>; }) : <span style={{ color:"var(--ink-4)" }}>none</span> },
+                      { k:"OWNER",        v: owner }
+                    ].map(function(row, i, arr){
+                      return (
+                        <div key={i} style={{ display:"grid", gridTemplateColumns:"170px 1fr", gap:14, padding:"10px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"baseline" }}>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>{row.k}</span>
+                          <span style={{ fontSize:13, color:"var(--ink)", textAlign:"right" }}>{row.v}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
+                  <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
+                    <span style={{ fontSize:14, fontWeight:600 }}>Access</span>
+                    <span className="card-head-sub">{"read " + permsRead.length + " · write " + permsWrite.length + " · admin " + permsAdmin.length}</span>
+                  </div>
+                  <div>
+                    {[{ k:"READ", list:permsRead, tone:{ bg:"var(--blue-fill)", fg:"var(--blue)" } },{ k:"WRITE", list:permsWrite, tone:{ bg:"var(--green-fill)", fg:"var(--green)" } },{ k:"ADMIN", list:permsAdmin, tone:{ bg:"var(--coral-fill)", fg:"var(--coral)" } }].map(function(row, i, arr){
+                      return (
+                        <div key={i} style={{ display:"grid", gridTemplateColumns:"100px 1fr", gap:14, padding:"12px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"center" }}>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:row.tone.bg, color:row.tone.fg, fontWeight:700, letterSpacing:"0.5px", justifySelf:"start" }}>{row.k}</span>
+                          <div style={{ display:"flex", flexWrap:"wrap", gap:5, justifyContent:"flex-end" }}>
+                            {row.list.length === 0 ? <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)", fontStyle:"italic" }}>nobody</span> : row.list.map(function(e, j){
+                              return (
+                                <span key={j} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 7px", borderRadius:5, background:"var(--chip)", border:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>
+                                  <span style={{ width:12, height:12, borderRadius: e.kind === "user" ? "50%" : 3, background: e.kind === "user" ? "var(--ink-2)" : "var(--ink-3)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:7.5, fontWeight:700, flexShrink:0 }}>{e.kind === "user" ? e.label.split(" ").map(function(s){ return s[0]; }).join("").slice(0,2) : "G"}</span>
+                                  {e.label}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label style={lbl}>ON SAVE</label>
+                  <div style={{ display:"flex", gap:6 }}>
+                    {[{ id:true, l:"Activate immediately" },{ id:false, l:"Save as draft" }].map(function(o){
+                      var isOn = activate === o.id;
+                      return <button key={String(o.id)} onClick={function(){ setActivate(o.id); }} style={{ padding:"9px 16px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--panel)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontSize:13, fontFamily:"inherit", cursor:"pointer", fontWeight: isOn ? 500 : 400 }}>{o.l}</button>;
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </div>
+
+          {/* RIGHT PREVIEW */}
+          <div style={{ background:"var(--panel-2)", borderLeft:"1px solid var(--line)", padding:"20px 18px", overflowY:"auto", display:"flex", flexDirection:"column", gap:18 }}>
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>GRAPH PREVIEW</div>
+              <div style={{ padding:"14px 12px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:8 }}>
+                {picked ? <StartingPointPreview sp={picked} /> : <div style={{ padding:"30px 12px", textAlign:"center", color:"var(--ink-4)", fontSize:11.5 }}>{startId === "__blank" ? "Blank canvas" : "Pick a starting point"}</div>}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>WILL CREATE</div>
+              <div style={{ padding:"12px 14px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:8 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+                  <div>
+                    <div style={{ fontFamily:"Instrument Serif", fontSize:24, color:"var(--ink)", lineHeight:1 }}>{entitiesToInclude.length}</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", marginTop:3, letterSpacing:"0.4px", textTransform:"uppercase" }}>entities</div>
+                  </div>
+                  <div>
+                    <div style={{ fontFamily:"Instrument Serif", fontSize:24, color:"var(--ink)", lineHeight:1 }}>{picked ? picked.edges.filter(function(e){ return entitiesToInclude.indexOf(e[0]) >= 0 && entitiesToInclude.indexOf(e[2]) >= 0; }).length : 0}</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", marginTop:3, letterSpacing:"0.4px", textTransform:"uppercase" }}>edges</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>VALIDATION</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:6, fontFamily:"JetBrains Mono", fontSize:11 }}>
+                {[
+                  { ok: !!industry || !!func || skipContext, l:"Context noted" },
+                  { ok: !!startId,                            l:"Starting point picked" },
+                  { ok: graphName.trim().length >= 2,         l:"Graph named" },
+                  { ok: permsAdmin.length > 0,                l:"Admin assigned" }
+                ].map(function(v, i){
+                  return <div key={i} style={{ display:"flex", alignItems:"center", gap:8, color: v.ok ? "var(--green)" : "var(--ink-4)" }}>
+                    <span style={{ width:7, height:7, borderRadius:"50%", background: v.ok ? "var(--green)" : "var(--line)" }} />
+                    <span style={{ color:"var(--ink-2)" }}>{v.l}</span>
+                    {v.ok && <span style={{ marginLeft:"auto", fontWeight:700, color:"var(--green)" }}>✓</span>}
+                  </div>;
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* FOOTER */}
+        <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
+          <button className="btn-ghost" onClick={function(){ if (step > 1) setStep(function(s){ return s - 1; }); }} disabled={step === 1} style={{ opacity: step === 1 ? 0.4 : 1 }}>← Back</button>
+          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of 5 · " + stepNames[step-1]}</span>
+          <div style={{ display:"flex", gap:8 }}>
+            <button className="btn-ghost" onClick={onClose}>Cancel</button>
+            {step < 5
+              ? <button className="btn-dark" disabled={!canContinue()} onClick={function(){ setStep(function(s){ return s + 1; }); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Continue →</button>
+              : <button className="btn-dark" disabled={!canContinue()} onClick={function(){ if (onCreate) onCreate({ name: graphName }); onClose(); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>{activate ? "Create graph ↵" : "Save as draft ↵"}</button>
+            }
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 function GraphLandingView({ onOpenGraph }) {
+  var [newGraphOpen, setNewGraphOpen] = useState(false);
   var [view, setView]     = useState("grid"); // grid | list
   var [search, setSearch] = useState("");
   var [sort, setSort]     = useState("active");
@@ -10808,7 +11362,7 @@ function GraphLandingView({ onOpenGraph }) {
               </>
             )}
           </div>
-          <button className="btn-dark" style={{ padding:"7px 14px" }}>+ New graph</button>
+          <button className="btn-dark" style={{ padding:"7px 14px" }} onClick={function(){ setNewGraphOpen(true); }}>+ New graph</button>
         </div>
       </div>
 
@@ -10906,6 +11460,8 @@ function GraphLandingView({ onOpenGraph }) {
           </div>
         </div>
       )}
+
+      {newGraphOpen && <NewGraphFlow onClose={function(){ setNewGraphOpen(false); }} onCreate={function(g){ setNewGraphOpen(false); if (g && g.id) onOpenGraph(g.id); }} />}
     </div>
   );
 }
