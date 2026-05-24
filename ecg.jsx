@@ -10088,7 +10088,11 @@ function AddNodeFlow({ onClose }) {
   // Step 6
   var [activate, setActivate] = useState(true);
 
-  var catDef = NODE_CATEGORIES_CONFIG.find(function(c){ return c.id === category; });
+  // Live lookup of the selected category. When nothing is picked yet (initial
+  // state) we hand back a neutral placeholder so unguarded reads of catDef.fill
+  // / .color / .label downstream don't blow up.
+  var catDef = NODE_CATEGORIES_CONFIG.find(function(c){ return c.id === category; })
+            || { id:null, label:"—", code:"", color:"var(--ink-3)", fill:"var(--chip)", desc:"" };
   var nameOk = name.trim().length >= 2 && /^[A-Z]/.test(name.trim());
 
   function canContinue() {
@@ -10205,7 +10209,7 @@ function AddNodeFlow({ onClose }) {
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
               <NodePreview size={22} />
               <span style={{ fontFamily:"Instrument Serif", fontSize:20, color:"var(--ink)" }}>{name || "Untitled node"}</span>
-              {catDef && <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 7px", borderRadius:4, background:catDef.fill, color:catDef.color, fontWeight:700, letterSpacing:"0.5px", textTransform:"uppercase" }}>{catDef.label}</span>}
+              {category && <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 7px", borderRadius:4, background:catDef.fill, color:catDef.color, fontWeight:700, letterSpacing:"0.5px", textTransform:"uppercase" }}>{catDef.label}</span>}
             </div>
           </div>
           <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)" }}>✕</button>
