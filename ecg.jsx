@@ -9853,6 +9853,18 @@ function _identityInitials(label){ return (label || "").split(/\s+/).map(functio
 function PermRow({ k, label, list, setList, tone, desc }) {
   var [open, setOpen] = useState(false);
   var [query, setQuery] = useState("");
+  var [pos, setPos] = useState({ top:0, right:0, maxH:460 });
+  var triggerRef = useRef(null);
+
+  function openPicker(){
+    if (triggerRef.current){
+      var r = triggerRef.current.getBoundingClientRect();
+      var available = window.innerHeight - r.bottom - 24;
+      setPos({ top: r.bottom + 6, right: window.innerWidth - r.right, maxH: Math.max(280, Math.min(460, available)) });
+    }
+    setOpen(true);
+    setQuery("");
+  }
 
   function isSel(entry){
     return !!list.find(function(x){ return x.kind === entry.kind && x.id === entry.id; });
@@ -9888,13 +9900,13 @@ function PermRow({ k, label, list, setList, tone, desc }) {
           <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3 }}>{desc}</div>
         </div>
         <div style={{ position:"relative" }}>
-          <button onClick={function(){ setOpen(function(o){ return !o; }); setQuery(""); }} className="btn-ghost" style={{ fontSize:11.5, display:"inline-flex", alignItems:"center", gap:5 }}>
+          <button ref={triggerRef} onClick={function(){ if (open) setOpen(false); else openPicker(); }} className="btn-ghost" style={{ fontSize:11.5, display:"inline-flex", alignItems:"center", gap:5 }}>
             <span style={{ fontSize:13, lineHeight:1, color:"var(--ink-2)" }}>+</span> Add people or teams
           </button>
           {open && (
             <>
-              <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setOpen(false); }} />
-              <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", width:360, maxHeight:460, display:"flex", flexDirection:"column", overflow:"hidden" }}>
+              <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:299 }} onClick={function(){ setOpen(false); }} />
+              <div style={{ position:"fixed", top:pos.top, right:pos.right, zIndex:300, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.22)", width:360, maxHeight:pos.maxH, display:"flex", flexDirection:"column", overflow:"hidden" }}>
                 {/* SEARCH */}
                 <div style={{ padding:"10px 12px", borderBottom:"1px solid var(--line-2)", background:"var(--panel-2)" }}>
                   <div style={{ position:"relative" }}>
@@ -12447,16 +12459,13 @@ function GraphLandingView({ onOpenGraph }) {
                   var seed = g.id.charCodeAt(0) * 977 + g.id.length * 31;
                   return (
                     <div key={g.id} onClick={function(){ onOpenGraph(g.id); }}
-                      style={{ background:"var(--panel)", border:"1px solid var(--ink-3)", borderRadius:16, overflow:"hidden", cursor:"pointer", transition:"transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease", display:"grid", gridTemplateColumns:"1.35fr 1fr", minHeight:280, boxShadow:"0 1px 0 var(--line-2), 0 4px 16px rgba(40,40,20,0.05)" }}
-                      onMouseEnter={function(e){ e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 12px 32px rgba(40,40,20,0.10)"; e.currentTarget.style.borderColor = "var(--ink)"; }}
-                      onMouseLeave={function(e){ e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 1px 0 var(--line-2), 0 4px 16px rgba(40,40,20,0.05)"; e.currentTarget.style.borderColor = "var(--ink-3)"; }}>
+                      style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:16, overflow:"hidden", cursor:"pointer", transition:"transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease", display:"grid", gridTemplateColumns:"1.35fr 1fr", minHeight:280, boxShadow:"0 1px 0 var(--line-2), 0 4px 16px rgba(40,40,20,0.04)" }}
+                      onMouseEnter={function(e){ e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 12px 32px rgba(40,40,20,0.08)"; e.currentTarget.style.borderColor = "var(--ink-3)"; }}
+                      onMouseLeave={function(e){ e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 1px 0 var(--line-2), 0 4px 16px rgba(40,40,20,0.04)"; e.currentTarget.style.borderColor = "var(--line)"; }}>
                       {/* Hero viz on the LEFT */}
                       <div style={{ position:"relative", overflow:"hidden", borderRight:"1px solid var(--line-2)" }}>
                         <GraphMiniViz seed={seed} color={g.color} />
-                        <span style={{ position:"absolute", top:14, left:16, zIndex:2, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"1.1px", color:"var(--ink)", padding:"4px 9px", background:"var(--bg-canvas)", border:"1px solid var(--ink-3)", borderRadius:4, fontWeight:700 }}>
-                          <span style={{ width:5, height:5, background:"var(--ink)" }} />
-                          PRIMARY · ENTERPRISE-WIDE
-                        </span>
+                        <span style={{ position:"absolute", top:12, left:14, zIndex:2, fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"1.1px", color:"var(--ink-3)", padding:"3px 8px", background:"var(--panel)", border:"1px solid var(--line-2)", borderRadius:4 }}>{"PRIMARY · ENTERPRISE-WIDE"}</span>
                         <span style={{ position:"absolute", top:14, right:16, zIndex:2, fontFamily:"JetBrains Mono", fontSize:11, color: hColor, display:"flex", alignItems:"center", gap:5, fontWeight:600, padding:"4px 9px", background:"var(--panel)", border:"1px solid var(--line-2)", borderRadius:4 }}>
                           <span style={{ width:6, height:6, borderRadius:"50%", background: hColor }} />{g.health + "%"}
                         </span>
@@ -12488,7 +12497,7 @@ function GraphLandingView({ onOpenGraph }) {
                               Synced {g.synced}
                             </span>
                             <span style={{ display:"inline-flex", alignItems:"center", gap:6, color:"var(--ink-2)", fontWeight:500 }}>
-                              Open workspace
+                              View graph
                               <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6 H9 M6 3 L9 6 L6 9" /></svg>
                             </span>
                           </div>
@@ -12497,6 +12506,13 @@ function GraphLandingView({ onOpenGraph }) {
                     </div>
                   );
                 })()}
+
+                {rest.length > 0 && (
+                  <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginTop:6, marginBottom:-4, paddingTop:4 }}>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"1px", color:"var(--ink-3)", textTransform:"uppercase" }}>Other graphs</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", letterSpacing:"0.4px" }}>{rest.length + " in this workspace"}</span>
+                  </div>
+                )}
 
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(3, minmax(0, 1fr))", gap:20 }}>
                   {rest.map(function(g, idx){
