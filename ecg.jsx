@@ -6973,15 +6973,51 @@ function generateRelatedRecords(record, node) {
   }).filter(function(x){ return x !== null; });
 }
 
-function RecordDetailView({ record, node, onBack }) {
+function buildRecordFromId(targetId, targetNode) {
+  // Try to find existing record in deterministic generated set
+  var existing = generateRecords(targetNode).find(function(r){ return r.id === targetId; });
+  if (existing) return existing;
+
+  // Otherwise synthesise one with the given ID so the detail view is stable on navigation
+  var seed = targetId.length * 13 + targetId.charCodeAt(targetId.length - 1) * 7;
+  var rec = {
+    id: targetId,
+    nodeType: targetNode.label,
+    nodeId: targetNode.id,
+    status: ["active","active","active","review","flagged"][Math.abs(seed) % 5],
+    _updatedAgo: ["2m ago","14m ago","1h ago","4h ago","1d ago","3d ago"][Math.abs(seed) % 6],
+    _createdAgo: ["12d ago","34d ago","2mo ago","6mo ago","1y ago","2y ago"][Math.abs(seed) % 6],
+    _source: ["Salesforce CRM","NetSuite ERP","HubSpot Marketing","Manual / Admin"][Math.abs(seed) % 4],
+    _completeness: 78 + (Math.abs(seed) % 22),
+    _confidence: 82 + (Math.abs(seed) % 17)
+  };
+  generateProps(targetNode).forEach(function(p, i) {
+    rec[p.name] = generateValueForProp(p, seed + i * 11);
+  });
+  return rec;
+}
+
+function RecordDetailView({ record, node, onBack, onNavigate }) {
   var [tab, setTab] = React.useState("Overview");
   var [expandedProp, setExpandedProp] = React.useState(null);
   var [twoHop, setTwoHop] = React.useState(true);
+  var [hoverNode, setHoverNode] = React.useState(null);
   var props = generateProps(node);
   var c = colorForNode(node);
   var tabs = ["Overview", "Graph", "Provenance", "Activity"];
   var related = generateRelatedRecords(record, node);
   var totalRelated = related.reduce(function(s, r){ return s + r.count; }, 0);
+
+  function navigateTo(recordId, nodeId) {
+    if (!onNavigate) return;
+    var targetNode = NODES.find(function(n){ return n.id === nodeId; });
+    if (!targetNode) return;
+    var targetRecord = buildRecordFromId(recordId, targetNode);
+    setTab("Overview");
+    setHoverNode(null);
+    setExpandedProp(null);
+    onNavigate(targetRecord, targetNode);
+  }
 
   // Build 2-hop neighbors: for each 1-hop related node, walk one more edge
   function buildSecondHop(parentRec, parentNodeObj, parentSeed) {
@@ -7354,30 +7390,38 @@ function RecordDetailView({ record, node, onBack }) {
                       {hops.map(function(h, i) {
                         var nodeObj = NODES.find(function(n){ return n.id === h.rr.nodeId; });
                         var col = colorForNode(nodeObj);
+                        var isHover = hoverNode === h.rr.id;
                         return (
-                          <g key={"h-n"+i} opacity="0.92">
-                            <circle cx={h.x} cy={h.y} r="13" fill={col.fill} stroke={col.stroke} strokeWidth="1.2" />
-                            <text x={h.x} y={h.y - 19} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"7.5px", fontWeight:600, fill:"var(--ink-2)" }}>{h.rr.id}</text>
-                            <text x={h.x} y={h.y + 23} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"7.5px", fill:"var(--ink-4)" }}>{String(h.rr.keyValue).slice(0, 18)}</text>
+                          <g key={"h-n"+i} opacity={isHover ? 1 : 0.92} style={{ cursor:"pointer" }}
+                            onClick={function(){ navigateTo(h.rr.id, h.rr.nodeId); }}
+                            onMouseEnter={function(){ setHoverNode(h.rr.id); }}
+                            onMouseLeave={function(){ setHoverNode(null); }}>
+                            <circle cx={h.x} cy={h.y} r={isHover ? 15 : 13} fill={col.fill} stroke={isHover ? "var(--ink)" : col.stroke} strokeWidth={isHover ? 2 : 1.2} />
+                            <text x={h.x} y={h.y - 19} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"7.5px", fontWeight:600, fill: isHover ? "var(--ink)" : "var(--ink-2)", pointerEvents:"none" }}>{h.rr.id}</text>
+                            <text x={h.x} y={h.y + 23} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"7.5px", fill:"var(--ink-4)", pointerEvents:"none" }}>{String(h.rr.keyValue).slice(0, 18)}</text>
                           </g>
                         );
                       })}
 
-                      {/* Center node */}
+                      {/* Center node (not clickable — already here) */}
                       <g>
                         <circle cx={cx} cy={cy} r="28" fill={c.fill} stroke={c.stroke} strokeWidth="2.5" />
                         <text x={cx} y={cy - 38} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"10.5px", fontWeight:600, fill:"var(--ink)" }}>{record.id}</text>
                         <text x={cx} y={cy + 48} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9.5px", fill:"var(--ink-3)" }}>{record[Object.keys(record).find(function(k){ return k === "name" || k === "company_name" || k === "title"; })] || node.label}</text>
                       </g>
 
-                      {/* 1-hop nodes (drawn last so they sit on top) */}
+                      {/* 1-hop nodes — clickable, drawn last so they sit on top */}
                       {flat.map(function(f, i) {
                         var otherCol = colorForNode(NODES.find(function(n){ return n.id === f.rr.nodeId; }));
+                        var isHover = hoverNode === f.rr.id;
                         return (
-                          <g key={"n"+i}>
-                            <circle cx={f.x} cy={f.y} r="18" fill={otherCol.fill} stroke={otherCol.stroke} strokeWidth="1.6" />
-                            <text x={f.x} y={f.y - 24} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9px", fontWeight:600, fill:"var(--ink)" }}>{f.rr.id}</text>
-                            <text x={f.x} y={f.y + 30} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"8.5px", fill:"var(--ink-3)" }}>{f.rr.keyName + ": " + String(f.rr.keyValue).slice(0, 20)}</text>
+                          <g key={"n"+i} style={{ cursor:"pointer" }}
+                            onClick={function(){ navigateTo(f.rr.id, f.rr.nodeId); }}
+                            onMouseEnter={function(){ setHoverNode(f.rr.id); }}
+                            onMouseLeave={function(){ setHoverNode(null); }}>
+                            <circle cx={f.x} cy={f.y} r={isHover ? 21 : 18} fill={otherCol.fill} stroke={isHover ? "var(--ink)" : otherCol.stroke} strokeWidth={isHover ? 2.4 : 1.6} />
+                            <text x={f.x} y={f.y - 24} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9px", fontWeight:600, fill:"var(--ink)", pointerEvents:"none" }}>{f.rr.id}</text>
+                            <text x={f.x} y={f.y + 30} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"8.5px", fill:"var(--ink-3)", pointerEvents:"none" }}>{f.rr.keyName + ": " + String(f.rr.keyValue).slice(0, 20)}</text>
                           </g>
                         );
                       })}
@@ -7402,7 +7446,11 @@ function RecordDetailView({ record, node, onBack }) {
                       <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
                         {r.related.map(function(rr, j) {
                           return (
-                            <div key={j} style={{ display:"flex", alignItems:"center", gap:8, padding:"4px 0", fontSize:11.5 }}>
+                            <div key={j}
+                              onClick={function(){ navigateTo(rr.id, rr.nodeId); }}
+                              style={{ display:"flex", alignItems:"center", gap:8, padding:"4px 6px", fontSize:11.5, cursor:"pointer", borderRadius:5, transition:"background 80ms" }}
+                              onMouseEnter={function(e){ e.currentTarget.style.background = "var(--bg-canvas)"; }}
+                              onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
                               <NodeGlyph n={r.otherNode} size={12} />
                               <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--blue)", flexShrink:0 }}>{rr.id}</code>
                               <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>{rr.keyValue}</span>
@@ -7501,7 +7549,12 @@ function RecordsView() {
     : records;
 
   if (selectedRecord && selectedNode) {
-    return <RecordDetailView record={selectedRecord} node={selectedNode} onBack={function(){ setSelectedRecord(null); setSelectedNode(null); }} />;
+    return <RecordDetailView
+      record={selectedRecord}
+      node={selectedNode}
+      onBack={function(){ setSelectedRecord(null); setSelectedNode(null); }}
+      onNavigate={function(rec, n){ setSelectedRecord(rec); setSelectedNode(n); if (n.id !== nodeFilter) setNodeFilter(n.id); }}
+    />;
   }
 
   // Build dynamic columns from the selected node type's properties
