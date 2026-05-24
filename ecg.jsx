@@ -2254,45 +2254,34 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
           <div className="kpi">
             <div className="kpi-lbl">Instances</div>
             <div className="kpi-v">{node.instancesN ? node.instancesN.toLocaleString() : "—"}</div>
-            <div className="kpi-tail">
-              <Sparkline data={sparklineData(node)} width={88} height={20} color={c.stroke} />
-              <span className="kpi-delta">+{(2 + (node.id.length % 5)).toFixed(1)}% / 30d</span>
-            </div>
           </div>
           <div className="kpi">
             <div className="kpi-lbl">Properties</div>
             <div className="kpi-v">{node.props}</div>
-            <div className="kpi-tail">{properties.filter(p=>p.required).length} required · {properties.filter(p=>p.computed).length} computed</div>
           </div>
           <div className="kpi">
             <div className="kpi-lbl">Edge types</div>
             <div className="kpi-v">{outgoing.length + incoming.length}</div>
-            <div className="kpi-tail">{outgoing.length} out · {incoming.length} in</div>
           </div>
           <div className="kpi">
             <div className="kpi-lbl">Direct sources</div>
             <div className="kpi-v">{sources.length}</div>
-            <div className="kpi-tail">{sources.filter(s=>s.status==="healthy").length} healthy · {sources.filter(s=>s.status!=="healthy").length} degraded</div>
           </div>
           <div className="kpi">
             <div className="kpi-lbl">Active rules</div>
             <div className="kpi-v">{rules.quality.length + rules.match.length + rules.survivorship.length}</div>
-            <div className="kpi-tail">{rules.quality.length} quality · {rules.match.length} match · {rules.survivorship.length} surv</div>
           </div>
           <div className="kpi">
             <div className="kpi-lbl">PII fields</div>
             <div className="kpi-v" style={{ color: properties.filter(p=>p.pii).length > 0 ? "var(--coral)" : "var(--ink)" }}>{properties.filter(p=>p.pii).length}</div>
-            <div className="kpi-tail">role-gated · audit logged</div>
           </div>
           <div className="kpi">
             <div className="kpi-lbl">Last ingest</div>
             <div className="kpi-v" style={{ fontSize: 22 }}>{node.fresh}</div>
-            <div className="kpi-tail">p95 within SLO</div>
           </div>
           <div className="kpi">
             <div className="kpi-lbl">Drift / 24h</div>
             <div className="kpi-v" style={{ color: issues.filter(i=>i.sev==="warn").length ? "var(--gold)" : "var(--ink)" }}>{issues.filter(i=>i.sev==="warn").length}</div>
-            <div className="kpi-tail">{issues.filter(i=>i.sev==="warn").length ? "open" : "all clear"}</div>
           </div>
         </div>
 
