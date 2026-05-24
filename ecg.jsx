@@ -286,7 +286,7 @@ function NodeShape({ node, selected, highlighted, dimmed, hover }) {
 
 // ---------- HEADER ----------------------------------------------------------
 
-const TABS = ["Graph", "Nodes", "Edges", "Sources", "Records"];
+const TABS = ["Graph", "Nodes", "Edges", "Sources", "Records", "Stewardship"];
 
 function Header({ tab, onTab, onAddNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -7739,6 +7739,630 @@ function RecordsView() {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// STEWARDSHIP — org-level inbox of all data quality tasks needing human action
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var STEWARDS = [
+  { id:"morgan.lee", initials:"ML", color:"var(--blue)",   team:"data-platform" },
+  { id:"ramin.k",    initials:"RK", color:"var(--purple)", team:"data-platform" },
+  { id:"jordan.s",   initials:"JS", color:"var(--green)",  team:"customer-ops"  },
+  { id:"alex.r",     initials:"AR", color:"var(--gold)",   team:"customer-ops"  },
+  { id:"casey.m",    initials:"CM", color:"var(--coral)",  team:"finance-ops"   },
+  { id:"taylor.j",   initials:"TJ", color:"var(--ink-2)",  team:"finance-ops"   }
+];
+
+function kindMeta(k) {
+  if (k === "VAL") return { color:"var(--blue)",   fill:"var(--blue-fill)",   icon:"✓", long:"Validation" };
+  if (k === "DQ")  return { color:"var(--green)",  fill:"var(--green-fill)",  icon:"◷", long:"Data quality" };
+  if (k === "MAT") return { color:"var(--purple)", fill:"var(--purple-fill)", icon:"≈", long:"Matching" };
+  if (k === "SUR") return { color:"var(--coral)",  fill:"var(--coral-fill)",  icon:"★", long:"Survivorship" };
+  if (k === "ACC") return { color:"var(--ink-2)",  fill:"var(--chip)",        icon:"⊕", long:"Access" };
+  return { color:"var(--ink-3)", fill:"var(--chip)", icon:"?", long:"Other" };
+}
+
+function sevMeta(s) {
+  if (s === "critical") return { color:"var(--coral)", fill:"var(--coral-fill)", label:"CRITICAL" };
+  if (s === "high")     return { color:"var(--gold)",  fill:"var(--gold-fill)",  label:"HIGH" };
+  if (s === "medium")   return { color:"var(--blue)",  fill:"var(--blue-fill)",  label:"MEDIUM" };
+  if (s === "low")      return { color:"var(--ink-3)", fill:"var(--chip)",       label:"LOW" };
+  return { color:"var(--ink-3)", fill:"var(--chip)", label:"INFO" };
+}
+
+function statusMeta(s) {
+  if (s === "new")         return { color:"var(--coral)", label:"New",         dot:true };
+  if (s === "in_progress") return { color:"var(--gold)",  label:"In progress", dot:true };
+  if (s === "waiting")     return { color:"var(--ink-3)", label:"Waiting",     dot:true };
+  if (s === "resolved")    return { color:"var(--green)", label:"Resolved",    dot:true };
+  if (s === "dismissed")   return { color:"var(--ink-4)", label:"Dismissed",   dot:true };
+  return { color:"var(--ink-3)", label:s, dot:true };
+}
+
+function generateStewardshipTasks() {
+  var tasks = [];
+  var idSeed = 10000;
+  var entityNodes = NODES.filter(function(n){ return n.type !== "source"; });
+
+  entityNodes.forEach(function(node, ni) {
+    var rules = generateRules(node);
+    var nseed = node.id.charCodeAt(0) * 31 + ni * 7;
+
+    // ─── Quality violations → VAL / DQ / ACC tasks ───
+    (rules.quality || []).forEach(function(r, ri) {
+      if ((r.violations || 0) <= 0) return;
+      var seed = nseed + ri * 17;
+      var kind = r.kind === "VALIDATE" ? "VAL"
+               : r.kind === "ACCESS"   ? "ACC"
+               : r.kind === "SLO"      ? "DQ"
+               : r.kind === "COMPUTE"  ? "DQ"
+               : r.kind === "INFER"    ? "DQ" : "VAL";
+      var sev = r.violations > 50 ? "critical" : r.violations > 15 ? "high" : r.violations > 3 ? "medium" : "low";
+      var status = sev === "critical" || (Math.abs(seed) % 4 === 0) ? "new" : (Math.abs(seed) % 4 === 1) ? "in_progress" : (Math.abs(seed) % 4 === 2) ? "waiting" : "resolved";
+      var slaHours = sev === "critical" ? 4 : sev === "high" ? 24 : sev === "medium" ? 72 : 168;
+      var slaRemaining = (slaHours - (Math.abs(seed) % slaHours)) + "h";
+      var isOverdue = Math.abs(seed) % 7 === 0;
+      tasks.push({
+        id: "TASK-" + (idSeed++),
+        kind: kind,
+        ruleKind: r.kind,
+        severity: sev,
+        title: r.violations + " " + node.label + " record" + (r.violations !== 1 ? "s" : "") + " failing: " + (r.title || r.id),
+        summary: "Validation rule \"" + (r.title || r.id) + "\" caught " + r.violations + " record" + (r.violations !== 1 ? "s" : "") + " that violate the constraint " + (r.expr || r.label || "") + ". These records were quarantined and need a steward decision: fix the source data, override with a manual value, or update the rule.",
+        nodeId: node.id, nodeLabel: node.label,
+        ruleId: r.id, ruleTitle: r.title || r.id, ruleExpr: r.expr || r.label || "—",
+        affectedCount: r.violations,
+        status: status,
+        assignee: STEWARDS[Math.abs(seed) % STEWARDS.length].id,
+        createdAgo: ["10m ago","42m ago","1h ago","3h ago","6h ago","1d ago","2d ago","3d ago"][Math.abs(seed) % 8],
+        slaRemaining: isOverdue ? ("-" + ((Math.abs(seed) % 12) + 1) + "h") : slaRemaining,
+        overdue: isOverdue
+      });
+    });
+
+    // ─── Match candidates → MAT tasks ───
+    (rules.match || []).forEach(function(r, ri) {
+      if ((r.candidates || 0) <= 0) return;
+      var seed = nseed + ri * 23 + 100;
+      var sev = r.candidates > 5 ? "high" : r.candidates > 2 ? "medium" : "low";
+      var status = (Math.abs(seed) % 3 === 0) ? "new" : (Math.abs(seed) % 3 === 1) ? "in_progress" : "waiting";
+      tasks.push({
+        id: "TASK-" + (idSeed++),
+        kind: "MAT", ruleKind: "MATCH",
+        severity: sev,
+        title: r.candidates + " " + node.label + " match candidate" + (r.candidates !== 1 ? "s" : "") + " awaiting review: " + r.title,
+        summary: "The matching rule \"" + r.title + "\" identified " + r.candidates + " pair" + (r.candidates !== 1 ? "s" : "") + " of records in the review band (score between " + r.threshold_review + " and " + r.threshold_auto + "). A steward must decide whether to merge into a canonical record, link with :IS_SAME_AS, or reject as not-a-match.",
+        nodeId: node.id, nodeLabel: node.label,
+        ruleId: r.id, ruleTitle: r.title,
+        ruleExpr: r.signals.map(function(s){ return s.strategy + "(" + s.field + ")×" + s.weight; }).join(" + "),
+        affectedCount: r.candidates,
+        status: status,
+        assignee: STEWARDS[Math.abs(seed) % STEWARDS.length].id,
+        createdAgo: ["20m ago","2h ago","5h ago","1d ago","2d ago"][Math.abs(seed) % 5],
+        slaRemaining: ((Math.abs(seed) % 48) + 2) + "h",
+        overdue: false
+      });
+    });
+
+    // ─── Survivorship conflicts → SUR tasks ───
+    (rules.survivorship || []).forEach(function(r, ri) {
+      if ((r.conflicts || 0) <= 0) return;
+      var seed = nseed + ri * 29 + 200;
+      var sev = r.conflicts > 2 ? "high" : "medium";
+      var status = (Math.abs(seed) % 3 === 0) ? "new" : (Math.abs(seed) % 3 === 1) ? "in_progress" : "waiting";
+      tasks.push({
+        id: "TASK-" + (idSeed++),
+        kind: "SUR", ruleKind: "SURV",
+        severity: sev,
+        title: r.conflicts + " unresolved conflict" + (r.conflicts !== 1 ? "s" : "") + " on " + node.label + "." + r.property,
+        summary: "Multiple sources are asserting different values for " + node.label + "." + r.property + " on " + r.conflicts + " record" + (r.conflicts !== 1 ? "s" : "") + ". Strategy \"" + (r.strategy || "—") + "\" could not auto-resolve. A steward must pick the winning value or override with a manual entry.",
+        nodeId: node.id, nodeLabel: node.label,
+        ruleId: r.id, ruleTitle: r.title,
+        ruleExpr: r.property + " ← " + (r.strategy || "—") + (r.sources && r.sources.length ? " (" + r.sources.join(" > ") + ")" : ""),
+        affectedCount: r.conflicts,
+        status: status,
+        assignee: STEWARDS[Math.abs(seed) % STEWARDS.length].id,
+        createdAgo: ["1h ago","4h ago","12h ago","1d ago","3d ago"][Math.abs(seed) % 5],
+        slaRemaining: ((Math.abs(seed) % 72) + 4) + "h",
+        overdue: Math.abs(seed) % 9 === 0
+      });
+    });
+  });
+
+  // Inject a few extra synthetic "hot" tasks so the inbox feels lively even with low rule violation counts
+  var extraTitles = [
+    { kind:"DQ",  sev:"critical", title:"Freshness SLO breached: ingest_lag p95 = 42m (target 30m)",                summary:"The Salesforce CRM pipeline has been running 12 minutes behind its 30-minute freshness target for the last 47 minutes. Likely cause is the upstream dbt model failure at 08:42 UTC." },
+    { kind:"VAL", sev:"high",     title:"Schema drift detected on Account.industry — 4 unseen enum values",         summary:"4 records arrived from HubSpot Marketing with industry values not in the configured enum (\"AdTech\", \"Climate-Tech\", \"Web3\", \"BioPharma\"). Either widen the enum or route to quarantine." },
+    { kind:"ACC", sev:"critical", title:"PII access denied: tax_id read attempt from non-priv role",                summary:"Service account svc-bi-reporter (role: bi_read) attempted to read tax_id on 320 Account records over the past hour. All requests were denied per access policy. Review whether the role should be granted or the requests should be flagged as anomalous." },
+    { kind:"MAT", sev:"high",     title:"3 potential duplicates with score 0.97 — same domain, slightly different names", summary:"Three Account pairs were matched at score 0.97 (above auto-merge threshold of 0.92) but the company names differ by more than a typo. Recommended: review each pair manually before merging." },
+    { kind:"SUR", sev:"high",     title:"Manual override needed: arr_usd on Account ACC-91428 (3 sources disagree)", summary:"NetSuite reports $1.2M ARR, Salesforce reports $890K, and HubSpot reports $1.4M. Source priority chose NetSuite ($1.2M) but ARR variance across sources exceeds the 15% threshold — steward review required." }
+  ];
+  extraTitles.forEach(function(e, i) {
+    var node = entityNodes[(i * 3) % entityNodes.length];
+    var seed = i * 137 + 500;
+    var status = ["new","new","in_progress","waiting"][i % 4];
+    tasks.push({
+      id: "TASK-" + (idSeed++),
+      kind: e.kind, ruleKind: e.kind === "VAL" ? "VALIDATE" : e.kind === "DQ" ? "SLO" : e.kind,
+      severity: e.sev,
+      title: e.title,
+      summary: e.summary,
+      nodeId: node.id, nodeLabel: node.label,
+      ruleId: "synthesised", ruleTitle: e.title, ruleExpr: "—",
+      affectedCount: 1 + (seed % 320),
+      status: status,
+      assignee: STEWARDS[i % STEWARDS.length].id,
+      createdAgo: ["5m ago","18m ago","1h ago","4h ago","8h ago"][i % 5],
+      slaRemaining: ["2h","8h","16h","22h","1d"][i % 5],
+      overdue: i === 0
+    });
+  });
+
+  return tasks;
+}
+
+function StewardshipView() {
+  var [tasks] = useState(function(){ return generateStewardshipTasks(); });
+  var [selectedId, setSelectedId] = useState(null);
+  var [statusFilter, setStatusFilter] = useState("open");
+  var [kindFilter, setKindFilter] = useState("all");
+  var [assigneeFilter, setAssigneeFilter] = useState("all");
+  var [sevFilter, setSevFilter] = useState("all");
+  var [search, setSearch] = useState("");
+  var [assigneeDropOpen, setAssigneeDropOpen] = useState(false);
+
+  // ME — pretend morgan.lee is the logged-in user
+  var ME = "morgan.lee";
+
+  var selectedTask = tasks.find(function(t){ return t.id === selectedId; });
+  if (selectedTask) {
+    return <StewardshipTaskDetail task={selectedTask} onBack={function(){ setSelectedId(null); }} />;
+  }
+
+  function matchesStatus(t) {
+    if (statusFilter === "all") return true;
+    if (statusFilter === "open") return t.status === "new" || t.status === "in_progress" || t.status === "waiting";
+    if (statusFilter === "mine") return t.assignee === ME && (t.status === "new" || t.status === "in_progress");
+    if (statusFilter === "overdue") return t.overdue;
+    return t.status === statusFilter;
+  }
+
+  var visible = tasks.filter(function(t) {
+    if (!matchesStatus(t)) return false;
+    if (kindFilter !== "all" && t.kind !== kindFilter) return false;
+    if (assigneeFilter !== "all" && t.assignee !== assigneeFilter) return false;
+    if (sevFilter !== "all" && t.severity !== sevFilter) return false;
+    if (search) {
+      var hay = (t.id + " " + t.title + " " + t.nodeLabel + " " + t.assignee).toLowerCase();
+      if (hay.indexOf(search.toLowerCase()) < 0) return false;
+    }
+    return true;
+  });
+
+  // KPIs
+  var openCount = tasks.filter(function(t){ return t.status === "new" || t.status === "in_progress" || t.status === "waiting"; }).length;
+  var criticalCount = tasks.filter(function(t){ return t.severity === "critical" && t.status !== "resolved" && t.status !== "dismissed"; }).length;
+  var overdueCount = tasks.filter(function(t){ return t.overdue && t.status !== "resolved" && t.status !== "dismissed"; }).length;
+  var myCount = tasks.filter(function(t){ return t.assignee === ME && (t.status === "new" || t.status === "in_progress"); }).length;
+  var newToday = tasks.filter(function(t){ return /m ago|h ago/.test(t.createdAgo) && t.status === "new"; }).length;
+  var resolvedWeek = 47; // synthetic but realistic
+
+  var STATUS_FILTERS = [
+    { id:"open", label:"Open",     count: openCount },
+    { id:"mine", label:"My queue", count: myCount },
+    { id:"overdue", label:"Overdue", count: overdueCount },
+    { id:"new", label:"New",       count: tasks.filter(function(t){ return t.status === "new"; }).length },
+    { id:"in_progress", label:"In progress", count: tasks.filter(function(t){ return t.status === "in_progress"; }).length },
+    { id:"waiting", label:"Waiting", count: tasks.filter(function(t){ return t.status === "waiting"; }).length },
+    { id:"resolved", label:"Resolved", count: tasks.filter(function(t){ return t.status === "resolved"; }).length },
+    { id:"all",  label:"All",      count: tasks.length }
+  ];
+
+  var KIND_FILTERS = [
+    { id:"all", label:"All kinds",    count: tasks.length },
+    { id:"VAL", label:"Validation",   count: tasks.filter(function(t){ return t.kind === "VAL"; }).length },
+    { id:"DQ",  label:"Data quality", count: tasks.filter(function(t){ return t.kind === "DQ"; }).length },
+    { id:"MAT", label:"Matching",     count: tasks.filter(function(t){ return t.kind === "MAT"; }).length },
+    { id:"SUR", label:"Survivorship", count: tasks.filter(function(t){ return t.kind === "SUR"; }).length },
+    { id:"ACC", label:"Access",       count: tasks.filter(function(t){ return t.kind === "ACC"; }).length }
+  ];
+
+  function AssigneeChip({ id, size }) {
+    if (id === ME) {
+      var me = STEWARDS.find(function(s){ return s.id === ME; });
+      return <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}>
+        <span style={{ width:size||20, height:size||20, borderRadius:"50%", background:me ? me.color : "var(--ink-3)", color:"#fff", fontFamily:"JetBrains Mono", fontSize:(size||20)*0.45, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{me ? me.initials : "?"}</span>
+        <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>me</span>
+      </span>;
+    }
+    var s = STEWARDS.find(function(x){ return x.id === id; });
+    if (!s) return <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{id}</span>;
+    return <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}>
+      <span style={{ width:size||20, height:size||20, borderRadius:"50%", background:s.color, color:"#fff", fontFamily:"JetBrains Mono", fontSize:(size||20)*0.45, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{s.initials}</span>
+      <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{s.id}</span>
+    </span>;
+  }
+
+  return (
+    <div className="nodes-view">
+      {/* HEADER */}
+      <div className="nv-head">
+        <div className="nv-head-left">
+          <div className="nv-eyebrow">STEWARDSHIP</div>
+          <div className="nv-title">Open tasks</div>
+        </div>
+        <div className="nv-head-right">
+          <button className="btn-ghost">Export</button>
+          <button className="btn-dark">+ Create task</button>
+        </div>
+      </div>
+
+      {/* KPI STRIP */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:1, background:"var(--line-2)", margin:"0 40px 18px", borderRadius:10, overflow:"hidden", border:"1px solid var(--line-2)" }}>
+        {[
+          { lbl:"Open",            v: openCount,      color:"var(--ink)" },
+          { lbl:"Critical",        v: criticalCount,  color: criticalCount > 0 ? "var(--coral)" : "var(--ink)" },
+          { lbl:"Overdue",         v: overdueCount,   color: overdueCount > 0 ? "var(--coral)" : "var(--ink)" },
+          { lbl:"My queue",        v: myCount,        color:"var(--blue)" },
+          { lbl:"New today",       v: newToday,       color:"var(--ink)" },
+          { lbl:"Resolved · 7d",   v: resolvedWeek,   color:"var(--green)" }
+        ].map(function(k, i){
+          return <div key={i} style={{ background:"var(--panel-2)", padding:"12px 14px" }}>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>{k.lbl}</div>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:26, lineHeight:1, color:k.color, marginTop:5 }}>{typeof k.v === "number" ? k.v.toLocaleString() : k.v}</div>
+          </div>;
+        })}
+      </div>
+
+      {/* TOOLBAR */}
+      <div style={{ padding:"0 40px 14px", display:"flex", flexDirection:"column", gap:10 }}>
+        {/* Status row */}
+        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+          {STATUS_FILTERS.map(function(f){
+            var isOn = statusFilter === f.id;
+            return <button key={f.id} onClick={function(){ setStatusFilter(f.id); }}
+              className={"chip" + (isOn ? " on" : "")}
+              style={isOn ? { background:"var(--ink)", color:"var(--bg-canvas)", borderColor:"var(--ink)" } : {}}>
+              {f.label} <span className="chip-n" style={isOn ? { color:"var(--ink-4)" } : {}}>{f.count}</span>
+            </button>;
+          })}
+        </div>
+        {/* Kind row + filters */}
+        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+          <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+            {KIND_FILTERS.map(function(f){
+              var isOn = kindFilter === f.id;
+              var m = f.id !== "all" ? kindMeta(f.id) : null;
+              return <button key={f.id} onClick={function(){ setKindFilter(f.id); }}
+                className={"chip" + (isOn ? " on" : "")}
+                style={isOn && m ? { background: m.fill, color: m.color, borderColor: m.color } : {}}>
+                {m && <span style={{ marginRight:4, fontWeight:700 }}>{m.icon}</span>}
+                {f.label} <span className="chip-n">{f.count}</span>
+              </button>;
+            })}
+          </div>
+          <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
+            <select value={sevFilter} onChange={function(e){ setSevFilter(e.target.value); }} style={{ border:"1px solid var(--line)", borderRadius:7, padding:"6px 10px", fontFamily:"inherit", fontSize:12, background:"var(--panel)", color:"var(--ink)", cursor:"pointer" }}>
+              <option value="all">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+            </select>
+            <div style={{ position:"relative" }}>
+              <button onClick={function(){ setAssigneeDropOpen(function(o){ return !o; }); }}
+                style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", border:"1px solid var(--line)", borderRadius:7, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", fontSize:12, color:"var(--ink)" }}>
+                {assigneeFilter === "all" ? "All assignees" : <AssigneeChip id={assigneeFilter} size={16} />}
+                <span style={{ color:"var(--ink-3)", marginLeft:2 }}>▾</span>
+              </button>
+              {assigneeDropOpen && (
+                <>
+                  <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setAssigneeDropOpen(false); }} />
+                  <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 8px 28px rgba(0,0,0,0.14)", padding:6, minWidth:220 }}>
+                    <button onClick={function(){ setAssigneeFilter("all"); setAssigneeDropOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 8px", borderRadius:5, border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, color:"var(--ink)", textAlign:"left" }}>All assignees <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{tasks.length}</span></button>
+                    <div style={{ height:1, background:"var(--line-2)", margin:"4px 0" }} />
+                    {STEWARDS.map(function(s){
+                      var n = tasks.filter(function(t){ return t.assignee === s.id; }).length;
+                      return <button key={s.id} onClick={function(){ setAssigneeFilter(s.id); setAssigneeDropOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 8px", borderRadius:5, border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, color:"var(--ink)", textAlign:"left" }}>
+                        <span style={{ width:18, height:18, borderRadius:"50%", background:s.color, color:"#fff", fontFamily:"JetBrains Mono", fontSize:9, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center" }}>{s.initials}</span>
+                        <span>{s.id}</span>
+                        <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{n}</span>
+                      </button>;
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+            <div style={{ position:"relative" }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"var(--ink-3)", pointerEvents:"none" }}>
+                <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+              </svg>
+              <input value={search} onChange={function(e){ setSearch(e.target.value); }} placeholder="Search tasks…" style={{ padding:"6px 10px 6px 30px", border:"1px solid var(--line)", borderRadius:7, fontFamily:"inherit", fontSize:12, background:"var(--panel)", color:"var(--ink)", outline:"none", width:200 }} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* TABLE */}
+      <div className="nv-table">
+        <div style={{ display:"grid", gridTemplateColumns:"90px 70px 80px 1fr 110px 130px 90px 100px", gap:12, padding:"10px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line)", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", alignItems:"center" }}>
+          <div>Task ID</div><div>Kind</div><div>Severity</div><div>Title</div><div>Node</div><div>Assignee</div><div style={{ textAlign:"right" }}>SLA</div><div>Status</div>
+        </div>
+        {visible.length === 0 && (
+          <div style={{ padding:"50px 18px", textAlign:"center", color:"var(--ink-3)", fontSize:13 }}>
+            No tasks match the current filters.
+          </div>
+        )}
+        {visible.map(function(t, i) {
+          var km = kindMeta(t.kind);
+          var sm = sevMeta(t.severity);
+          var stm = statusMeta(t.status);
+          return (
+            <div key={t.id}
+              onClick={function(){ setSelectedId(t.id); }}
+              style={{ display:"grid", gridTemplateColumns:"90px 70px 80px 1fr 110px 130px 90px 100px", gap:12, padding:"13px 18px", borderBottom: i < visible.length-1 ? "1px solid var(--line-2)" : "none", cursor:"pointer", alignItems:"center", transition:"background 80ms" }}
+              onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
+              onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
+              <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--blue)" }}>{t.id}</code>
+              <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+                <span style={{ width:18, height:18, borderRadius:4, background:km.fill, color:km.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0 }}>{km.icon}</span>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, color:km.color, letterSpacing:"0.5px" }}>{t.kind}</span>
+              </div>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:3, background:sm.fill, color:sm.color, fontWeight:700, letterSpacing:"0.4px", display:"inline-block", textAlign:"center" }}>{sm.label}</span>
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontSize:12.5, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.title}</div>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:2 }}>{t.createdAgo}</div>
+              </div>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{t.nodeLabel}</span>
+              <AssigneeChip id={t.assignee} size={18} />
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color: t.overdue ? "var(--coral)" : "var(--ink-3)", textAlign:"right", fontWeight: t.overdue ? 600 : 400 }}>{t.slaRemaining}</span>
+              <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontFamily:"JetBrains Mono", fontSize:11, color:stm.color, fontWeight:500 }}>
+                <span style={{ width:7, height:7, borderRadius:"50%", background:stm.color }} />
+                {stm.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function StewardshipTaskDetail({ task, onBack }) {
+  var [commentInput, setCommentInput] = useState("");
+  var [comments, setComments] = useState([
+    { who:"morgan.lee", when:"2h ago", text:"Pulled the raw rows from quarantine — looks like a HubSpot import issue, not a real data problem. Suggesting we widen the enum." },
+    { who:"ramin.k",    when:"45m ago", text:"+1, I'll loop in the HubSpot integration team to confirm before we change the schema." }
+  ]);
+  var km = kindMeta(task.kind);
+  var sm = sevMeta(task.severity);
+  var stm = statusMeta(task.status);
+  var node = NODES.find(function(n){ return n.id === task.nodeId; });
+  var assigneeDef = STEWARDS.find(function(s){ return s.id === task.assignee; });
+
+  // Synthetic affected records list
+  var affectedSample = Array.from({ length: Math.min(8, task.affectedCount) }, function(_, i) {
+    var seed = task.id.length * 7 + i * 17;
+    return {
+      id: task.nodeId + "-" + (100000 + Math.abs(seed * 1597) % 899999),
+      issue: task.kind === "VAL" ? "value is " + (i % 2 ? "negative" : "null") + " (-" + (i*1500) + ")"
+            : task.kind === "DQ"  ? "lag = " + (35 + i*3) + "m (target 30m)"
+            : task.kind === "MAT" ? "potential dup of " + task.nodeId + "-" + (200000 + i * 1234)
+            : task.kind === "SUR" ? "NetSuite=$" + (1000+i*120) + "k · Salesforce=$" + (800+i*100) + "k"
+            : "denied access at " + new Date(Date.now()-i*3600000).toISOString().slice(11,16),
+      source: ["Salesforce CRM","NetSuite ERP","HubSpot Marketing","Manual / Admin"][i % 4]
+    };
+  });
+
+  // Suggested actions per kind
+  var SUGGESTIONS = {
+    VAL: [
+      { lbl:"Fix at source",         desc:"Open the upstream system and correct the bad values" },
+      { lbl:"Quarantine & continue", desc:"Hold the bad rows; let valid rows flow through" },
+      { lbl:"Update the rule",       desc:"Widen the constraint if the data is actually valid" },
+      { lbl:"Bulk override",         desc:"Apply a default value to all affected records" }
+    ],
+    DQ: [
+      { lbl:"Investigate pipeline",  desc:"Check the source ingestion job for delays or failures" },
+      { lbl:"Raise the SLO",         desc:"Adjust the target if the new latency is acceptable" },
+      { lbl:"Escalate to oncall",    desc:"Page the data platform team" }
+    ],
+    MAT: [
+      { lbl:"Merge into canonical",  desc:"Combine the records into a single golden record" },
+      { lbl:"Link with :IS_SAME_AS", desc:"Keep both records, add an identity edge" },
+      { lbl:"Reject — not a match",  desc:"Mark as distinct and exclude from future matches" }
+    ],
+    SUR: [
+      { lbl:"Accept winner",         desc:"Confirm the strategy's chosen value" },
+      { lbl:"Manual override",       desc:"Set the value yourself; bypass the strategy" },
+      { lbl:"Update source priority", desc:"Re-rank sources for this property" }
+    ],
+    ACC: [
+      { lbl:"Grant role",            desc:"Approve the role assignment for the requester" },
+      { lbl:"Deny & log",            desc:"Confirm denial; surface to security review" },
+      { lbl:"Escalate to security",  desc:"Refer to security@ for investigation" }
+    ]
+  };
+  var suggestions = SUGGESTIONS[task.kind] || [];
+
+  function postComment() {
+    if (!commentInput.trim()) return;
+    setComments(function(arr){ return arr.concat([{ who: "me", when: "just now", text: commentInput.trim() }]); });
+    setCommentInput("");
+  }
+
+  return (
+    <div className="detail-view" style={{ display:"flex", flexDirection:"column", height:"100%" }}>
+      <div className="detail-head" style={{ flexShrink:0 }}>
+        <div className="detail-crumb">
+          <button className="crumb-back" onClick={onBack}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+            Stewardship
+          </button>
+          <span className="crumb-sep">/</span>
+          <span className="crumb-cur" style={{ fontFamily:"JetBrains Mono", fontSize:10 }}>{task.id}</span>
+        </div>
+        <div className="detail-title-row">
+          <div className="detail-title-left">
+            <span style={{ width:38, height:38, borderRadius:9, background:km.fill, color:km.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, fontWeight:700, flexShrink:0 }}>{km.icon}</span>
+            <div style={{ minWidth:0 }}>
+              <div className="detail-title-name" style={{ fontSize:20, fontFamily:"Geist, system-ui", lineHeight:1.3 }}>{task.title}</div>
+              <div style={{ display:"flex", gap:10, alignItems:"center", marginTop:5, flexWrap:"wrap" }}>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 8px", borderRadius:4, background:km.fill, color:km.color, fontWeight:700, letterSpacing:"0.5px" }}>{km.long.toUpperCase()}</span>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 8px", borderRadius:4, background:sm.fill, color:sm.color, fontWeight:700, letterSpacing:"0.5px" }}>{sm.label}</span>
+                <span style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"JetBrains Mono", fontSize:10.5, color:stm.color, fontWeight:500 }}>
+                  <span style={{ width:7, height:7, borderRadius:"50%", background:stm.color }} />{stm.label}
+                </span>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>{"Opened " + task.createdAgo}</span>
+                {task.overdue && <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--coral)", fontWeight:600 }}>{"SLA " + task.slaRemaining + " overdue"}</span>}
+              </div>
+            </div>
+          </div>
+          <div className="detail-title-right">
+            <button className="btn-ghost">Reassign</button>
+            <button className="btn-ghost" style={{ color:"var(--ink-3)" }}>Dismiss</button>
+            <button className="btn-dark">Resolve task</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="detail-body">
+        <div style={{ display:"grid", gridTemplateColumns:"minmax(0, 1.7fr) minmax(280px, 1fr)", gap:18 }}>
+          {/* LEFT */}
+          <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+            <div className="card">
+              <div className="card-head">What happened</div>
+              <div className="card-body" style={{ fontSize:13, color:"var(--ink-2)", lineHeight:1.6 }}>{task.summary}</div>
+            </div>
+
+            <div className="card">
+              <div className="card-head card-head-row">
+                <span>Triggering rule <span className="card-head-sub">{task.ruleId}</span></span>
+                <button className="btn-ghost" style={{ fontSize:11.5 }}>Open rule →</button>
+              </div>
+              <div className="card-body">
+                <div style={{ marginBottom:10, fontSize:13, color:"var(--ink)" }}>{task.ruleTitle}</div>
+                <pre style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:km.color, margin:0, padding:"10px 12px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:6, whiteSpace:"pre-wrap" }}>{task.ruleExpr}</pre>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-head card-head-row">
+                <span>Affected records <span className="card-head-sub">{task.affectedCount.toLocaleString()} on {task.nodeLabel} · sampled below</span></span>
+                <button className="btn-ghost" style={{ fontSize:11.5 }}>View all →</button>
+              </div>
+              <div>
+                <div style={{ display:"grid", gridTemplateColumns:"1.2fr 2fr 1fr", gap:14, padding:"8px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
+                  <div>Record ID</div><div>Issue / detail</div><div>Source</div>
+                </div>
+                {affectedSample.map(function(r, i) {
+                  return <div key={i} style={{ display:"grid", gridTemplateColumns:"1.2fr 2fr 1fr", gap:14, padding:"10px 18px", borderBottom: i < affectedSample.length-1 ? "1px solid var(--line-2)" : "none", alignItems:"center" }}>
+                    <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--blue)" }}>{r.id}</code>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{r.issue}</span>
+                    <span style={{ fontSize:11.5, color:"var(--ink-3)" }}>{r.source}</span>
+                  </div>;
+                })}
+                {task.affectedCount > affectedSample.length && (
+                  <div style={{ padding:"10px 18px", textAlign:"center", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", background:"var(--panel-2)" }}>{"… and " + (task.affectedCount - affectedSample.length).toLocaleString() + " more"}</div>
+                )}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-head">Discussion <span className="card-head-sub">{comments.length} comments</span></div>
+              <div>
+                {comments.map(function(c, i) {
+                  var who = STEWARDS.find(function(s){ return s.id === c.who; });
+                  return <div key={i} style={{ display:"flex", gap:10, padding:"12px 18px", borderBottom: i < comments.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                    <span style={{ width:28, height:28, borderRadius:"50%", background: who ? who.color : "var(--ink-3)", color:"#fff", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{who ? who.initials : c.who.slice(0,2).toUpperCase()}</span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:3 }}>
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink)", fontWeight:600 }}>{c.who}</span>
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{c.when}</span>
+                      </div>
+                      <div style={{ fontSize:12.5, color:"var(--ink-2)", lineHeight:1.55 }}>{c.text}</div>
+                    </div>
+                  </div>;
+                })}
+                <div style={{ padding:"12px 18px", display:"flex", gap:8 }}>
+                  <input value={commentInput} onChange={function(e){ setCommentInput(e.target.value); }}
+                    onKeyDown={function(e){ if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); postComment(); } }}
+                    placeholder="Add a comment… (⌘↵ to post)"
+                    style={{ flex:1, padding:"8px 12px", border:"1px solid var(--line)", borderRadius:7, fontFamily:"inherit", fontSize:13, background:"var(--bg-canvas)", color:"var(--ink)", outline:"none" }} />
+                  <button className="btn-dark" onClick={postComment} disabled={!commentInput.trim()} style={{ opacity: commentInput.trim() ? 1 : 0.4 }}>Post</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT */}
+          <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+            <div className="card">
+              <div className="card-head">Assignment</div>
+              <div className="card-body" style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                <div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:6 }}>ASSIGNEE</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <span style={{ width:34, height:34, borderRadius:"50%", background: assigneeDef ? assigneeDef.color : "var(--ink-3)", color:"#fff", fontFamily:"JetBrains Mono", fontSize:13, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center" }}>{assigneeDef ? assigneeDef.initials : "?"}</span>
+                    <div>
+                      <div style={{ fontSize:13.5, color:"var(--ink)" }}>{task.assignee}</div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{assigneeDef ? assigneeDef.team : ""}</div>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"100px 1fr", gap:"7px 12px", fontSize:12, paddingTop:10, borderTop:"1px solid var(--line-2)" }}>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>STATUS</span>
+                  <span style={{ color:stm.color, fontFamily:"JetBrains Mono", fontWeight:600 }}>{stm.label}</span>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>SEVERITY</span>
+                  <span style={{ color:sm.color, fontFamily:"JetBrains Mono", fontWeight:700 }}>{sm.label}</span>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>OPENED</span>
+                  <span style={{ color:"var(--ink-2)" }}>{task.createdAgo}</span>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>SLA REMAINING</span>
+                  <span style={{ color: task.overdue ? "var(--coral)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontWeight:600 }}>{task.slaRemaining}{task.overdue && " (overdue)"}</span>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>SCOPE</span>
+                  <span style={{ color:"var(--ink-2)" }}>{task.nodeLabel + " · " + task.affectedCount.toLocaleString() + " record" + (task.affectedCount !== 1 ? "s" : "")}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-head">Suggested actions</div>
+              <div style={{ display:"flex", flexDirection:"column" }}>
+                {suggestions.map(function(s, i) {
+                  return <button key={i} style={{ display:"flex", flexDirection:"column", gap:3, padding:"12px 16px", borderBottom: i < suggestions.length-1 ? "1px solid var(--line-2)" : "none", border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", transition:"background 80ms" }}
+                    onMouseEnter={function(e){ e.currentTarget.style.background = "var(--bg-canvas)"; }}
+                    onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                      <span style={{ fontSize:13, color:"var(--ink)", fontWeight:500 }}>{s.lbl}</span>
+                      <span style={{ color:"var(--ink-3)" }}>→</span>
+                    </div>
+                    <span style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.4 }}>{s.desc}</span>
+                  </button>;
+                })}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-head">Activity</div>
+              <div>
+                {[
+                  { t:"just now", who:"system", what:"SLA timer ticking", color:"var(--ink-4)" },
+                  { t:"2h ago",   who:"morgan.lee", what:"added a comment", color:"var(--blue)" },
+                  { t:"5h ago",   who:"system", what:"assigned to " + task.assignee, color:"var(--ink-4)" },
+                  { t:task.createdAgo, who:"runtime", what:"detected by " + (task.ruleTitle || task.ruleId), color:km.color }
+                ].map(function(a, i) {
+                  return <div key={i} style={{ display:"grid", gridTemplateColumns:"68px 10px 1fr", gap:8, padding:"10px 16px", borderBottom: i < 3 ? "1px solid var(--line-2)" : "none", alignItems:"center" }}>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{a.t}</span>
+                    <span style={{ width:6, height:6, borderRadius:"50%", background:a.color, justifySelf:"center" }} />
+                    <div style={{ fontSize:11.5, color:"var(--ink-2)" }}>
+                      <span style={{ fontFamily:"JetBrains Mono", color:"var(--ink)", fontWeight:600 }}>{a.who}</span>{" " + a.what}
+                    </div>
+                  </div>;
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NodesView({ onSelect, onSwitchToCanvas }) {
   const [catFilter, setCatFilter] = useState("all");
   const [sortBy, setSortBy] = useState("instances");
@@ -7898,6 +8522,8 @@ function App() {
         <GlobalSourcesView />
       ) : tab === "Records" ? (
         <RecordsView />
+      ) : tab === "Stewardship" ? (
+        <StewardshipView />
       ) : tab !== "Graph" ? (
         <div className="placeholder-view">
           <div className="ph-eyebrow">SCHEMA · {tab.toUpperCase()}</div>
