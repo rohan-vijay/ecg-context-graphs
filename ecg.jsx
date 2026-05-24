@@ -450,7 +450,7 @@ function NodeShape({ node, selected, highlighted, dimmed, hover }) {
 
 const TABS = ["Graph", "Nodes", "Edges", "Sources", "Records", "Stewardship"];
 
-function Header({ tab, onTab, onAddNode }) {
+function Header({ tab, onTab, onAddNode, onBackToLanding, graphName }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const MENU_ITEMS = [
@@ -467,11 +467,11 @@ function Header({ tab, onTab, onAddNode }) {
   return (
     <header className="hdr">
       <div className="hdr-left">
-        <button className="hdr-back" title="Back">
+        <button className="hdr-back" title="Back to graphs" onClick={onBackToLanding}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
         <div className="hdr-title">
-          <div className="hdr-title-row">{IS_PS_GRAPH ? "Product Specialist Graph" : "Enterprise Context Graph"}</div>
+          <div className="hdr-title-row">{graphName || (IS_PS_GRAPH ? "Product Specialist Graph" : "Enterprise Context Graph")}</div>
           <div className="hdr-sub">
             <span className="dot-live" />
             <span className="sub-strong">LIVE</span>
@@ -10658,7 +10658,261 @@ function AddNodeFlow({ onClose }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONTEXT GRAPHS LANDING — workspace-style picker of every graph in the org
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var CONTEXT_GRAPHS = [
+  { id:"ecg",        cat:"GLOBAL",      color:"var(--blue)",   name:"Enterprise Context Graph",     desc:"The unified context layer connecting every entity, system, and decision across the organization.", nodes:28431, edges:183202, agents:41, health:96, synced:"2 min ago", owner:"data-platform" },
+  { id:"customer",   cat:"CUSTOMER",    color:"var(--gold)",   name:"Customer 360 Graph",           desc:"Identity-resolved customer entities unifying CRM, support, billing and product.",                  nodes:9482,  edges:41200,  agents:7,  health:93, synced:"4 min ago", owner:"customer-ops" },
+  { id:"sales",      cat:"REVENUE",     color:"var(--gold)",   name:"Sales Graph",                  desc:"Pipeline, opportunities, accounts and the early signals — across CRM, billing and product — that the agents reason on to close revenue.", nodes:6204,  edges:21380,  agents:9,  health:92, synced:"5 min ago", owner:"revenue-ops" },
+  { id:"support",    cat:"SUPPORT",     color:"var(--gold)",   name:"Support Graph",                desc:"Tickets, incidents, escalations and resolution paths across every support channel.",               nodes:11402, edges:33840,  agents:6,  health:91, synced:"3 min ago", owner:"customer-ops" },
+  { id:"finance",    cat:"FINANCE",     color:"var(--green)",  name:"Finance Graph",                desc:"Ledger entities, controls, policies and audit lineage spanning systems of record.",                nodes:4218,  edges:14502,  agents:5,  health:98, synced:"12 min ago", owner:"finance-ops" },
+  { id:"product",    cat:"PRODUCT",     color:"var(--purple)", name:"Product Specialist Graph",     desc:"PS delivery entities — work orders, projects, milestones, and the TOC systems powering PS execution.", nodes:3127, edges:8742, agents:8, health:89, synced:"1 min ago", owner:"product-eng" },
+  { id:"security",   cat:"SECURITY",    color:"var(--coral)",  name:"Security Posture Graph",       desc:"Identities, devices, secrets and access trails wired into compliance frameworks.",                 nodes:2104,  edges:6820,   agents:3,  health:95, synced:"8 min ago", owner:"security" },
+  { id:"workforce",  cat:"PEOPLE",      color:"var(--blue)",   name:"Workforce Graph",              desc:"Employees, roles, teams and tenure — the organizational substrate every other graph leans on.",   nodes:1840,  edges:4920,   agents:2,  health:99, synced:"22 min ago", owner:"people-ops" },
+  { id:"risk",       cat:"RISK",        color:"var(--coral)",  name:"Compliance & Risk Graph",      desc:"Policies, controls, risks and audit evidence linked back to the records they govern.",            nodes:912,   edges:3104,   agents:4,  health:94, synced:"6 min ago", owner:"legal-ops" },
+  { id:"partner",    cat:"PARTNER",     color:"var(--purple)", name:"Partner Ecosystem Graph",      desc:"Channel partners, integrations, co-sells and the joint accounts they touch.",                     nodes:647,   edges:2678,   agents:1,  health:88, synced:"34 min ago", owner:"partnerships" }
+];
+
+// Deterministic mini-graph generator for the card thumbnails
+function generateMiniGraph(seed, count) {
+  count = count || 11;
+  var s = (seed || 1) | 0;
+  function nxt(){ s = (s * 1664525 + 1013904223) | 0; return Math.abs(s); }
+  var nodes = [];
+  for (var i = 0; i < count; i++) {
+    nodes.push({ x: 8 + (nxt() % 84), y: 12 + (nxt() % 76), r: 4 + (nxt() % 9) });
+  }
+  var edges = [];
+  for (var j = 0; j < count; j++) {
+    var n = 1 + (nxt() % 2);
+    for (var k = 0; k < n; k++) {
+      var t = nxt() % count;
+      if (t !== j) edges.push([j, t]);
+    }
+  }
+  return { nodes: nodes, edges: edges };
+}
+
+function GraphMiniViz({ seed, color, size }) {
+  var w = size || 100, h = (size || 100) * 0.62;
+  var g = generateMiniGraph(seed);
+  var gradId = "gradMini_" + seed;
+  return (
+    <svg width="100%" height="100%" viewBox={"0 0 100 62"} preserveAspectRatio="xMidYMid meet" style={{ display:"block" }}>
+      <defs>
+        <radialGradient id={gradId} cx="50%" cy="50%" r="60%">
+          <stop offset="0%" stopColor={color} stopOpacity="0.12" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <rect x="0" y="0" width="100" height="62" fill={"url(#" + gradId + ")"} />
+      <g stroke={color} strokeOpacity="0.35" strokeWidth="0.4">
+        {g.edges.slice(0, 18).map(function(e, i){
+          var a = g.nodes[e[0]], b = g.nodes[e[1]];
+          return <line key={i} x1={a.x*0.95} y1={a.y*0.7} x2={b.x*0.95} y2={b.y*0.7} />;
+        })}
+      </g>
+      <g fill={color}>
+        {g.nodes.map(function(n, i){
+          return <circle key={i} cx={n.x*0.95} cy={n.y*0.7} r={n.r*0.42} opacity={0.65 + (i%3)*0.12} />;
+        })}
+      </g>
+    </svg>
+  );
+}
+
+function GraphLandingView({ onOpenGraph }) {
+  var [view, setView]     = useState("grid"); // grid | list
+  var [search, setSearch] = useState("");
+  var [sort, setSort]     = useState("active");
+  var [sortOpen, setSortOpen] = useState(false);
+
+  var SORT_OPTIONS = [
+    { id:"active",    label:"Most active" },
+    { id:"nodes",     label:"Most nodes" },
+    { id:"recent",    label:"Recently synced" },
+    { id:"alpha",     label:"Alphabetical" }
+  ];
+
+  var filtered = CONTEXT_GRAPHS.filter(function(g){
+    if (!search) return true;
+    var q = search.toLowerCase();
+    return (g.name + " " + g.desc + " " + g.cat).toLowerCase().indexOf(q) >= 0;
+  });
+
+  filtered = filtered.slice().sort(function(a, b){
+    if (sort === "nodes")  return b.nodes - a.nodes;
+    if (sort === "recent") return parseInt(a.synced) - parseInt(b.synced);
+    if (sort === "alpha")  return a.name.localeCompare(b.name);
+    return b.agents - a.agents; // active
+  });
+
+  var totals = CONTEXT_GRAPHS.reduce(function(acc, g){
+    acc.nodes += g.nodes; acc.edges += g.edges; acc.agents += g.agents; acc.health += g.health;
+    return acc;
+  }, { nodes:0, edges:0, agents:0, health:0 });
+  var avgHealth = Math.round(totals.health / CONTEXT_GRAPHS.length);
+
+  function healthColor(h){ return h >= 95 ? "var(--green)" : h >= 90 ? "var(--blue)" : h >= 80 ? "var(--gold)" : "var(--coral)"; }
+
+  return (
+    <div style={{ flex:1, overflowY:"auto", background:"var(--bg-canvas)", display:"flex", flexDirection:"column" }}>
+      {/* HEADER BAR — like a workspace picker */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:14, padding:"22px 32px 14px", background:"var(--bg)", borderBottom:"1px solid var(--line-2)" }}>
+        <div style={{ display:"flex", alignItems:"baseline", gap:14 }}>
+          <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, letterSpacing:"1.6px", color:"var(--ink-3)", padding:"3px 8px", border:"1px solid var(--line)", borderRadius:5, background:"var(--panel-2)" }}>ECG</span>
+          <span style={{ fontFamily:"Instrument Serif", fontSize:30, color:"var(--ink)", lineHeight:1, letterSpacing:"-0.3px" }}>Context Graphs</span>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ position:"relative" }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"var(--ink-3)", pointerEvents:"none" }}>
+              <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+            <input value={search} onChange={function(e){ setSearch(e.target.value); }} placeholder="Search graphs…" style={{ padding:"7px 12px 7px 32px", border:"1px solid var(--line)", borderRadius:8, fontFamily:"inherit", fontSize:12.5, background:"var(--panel)", color:"var(--ink)", outline:"none", width:260 }} />
+          </div>
+          {/* View toggle */}
+          <div style={{ display:"flex", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel)", padding:2 }}>
+            <button onClick={function(){ setView("grid"); }} title="Grid view" style={{ width:30, height:26, border:"none", borderRadius:6, background: view === "grid" ? "var(--bg-canvas)" : "transparent", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color: view === "grid" ? "var(--ink)" : "var(--ink-3)" }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.6"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.6"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.6"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.6"/></svg>
+            </button>
+            <button onClick={function(){ setView("list"); }} title="List view" style={{ width:30, height:26, border:"none", borderRadius:6, background: view === "list" ? "var(--bg-canvas)" : "transparent", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color: view === "list" ? "var(--ink)" : "var(--ink-3)" }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><line x1="4" y1="6" x2="20" y2="6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><line x1="4" y1="18" x2="20" y2="18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+            </button>
+          </div>
+          <button className="btn-ghost" style={{ display:"flex", alignItems:"center", gap:6 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M3 5h18M6 12h12M10 19h4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+            Filter
+          </button>
+          {/* Sort dropdown */}
+          <div style={{ position:"relative" }}>
+            <button onClick={function(){ setSortOpen(function(o){ return !o; }); }} className="btn-ghost" style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ color:"var(--ink-3)" }}>Sort:</span>
+              <span>{(SORT_OPTIONS.find(function(o){ return o.id === sort; }) || {}).label}</span>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" style={{ transform: sortOpen ? "rotate(180deg)" : "none" }}><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
+            {sortOpen && (
+              <>
+                <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setSortOpen(false); }} />
+                <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 8px 28px rgba(0,0,0,0.14)", padding:6, minWidth:180 }}>
+                  {SORT_OPTIONS.map(function(o){
+                    var isOn = sort === o.id;
+                    return <button key={o.id} onClick={function(){ setSort(o.id); setSortOpen(false); }}
+                      style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 10px", borderRadius:5, border:"none", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, color:"var(--ink)", textAlign:"left" }}>
+                      <span style={{ flex:1 }}>{o.label}</span>
+                      {isOn && <span style={{ color:"var(--green)", fontWeight:700 }}>✓</span>}
+                    </button>;
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+          <button className="btn-dark" style={{ padding:"7px 14px" }}>+ New graph</button>
+        </div>
+      </div>
+
+      {/* STATS STRIP */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 32px 14px", borderBottom:"1px solid var(--line-2)" }}>
+        <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", letterSpacing:"0.3px" }}>{filtered.length + " of " + CONTEXT_GRAPHS.length + " context graphs"}</span>
+        <div style={{ display:"flex", alignItems:"baseline", gap:32 }}>
+          {[
+            { lbl:"TOTAL NODES",   v: totals.nodes.toLocaleString(),  color:"var(--ink)" },
+            { lbl:"TOTAL EDGES",   v: totals.edges.toLocaleString(),  color:"var(--ink)" },
+            { lbl:"ACTIVE AGENTS", v: totals.agents.toLocaleString(), color:"var(--ink)" },
+            { lbl:"AVG HEALTH",    v: avgHealth + "%",                color: healthColor(avgHealth) }
+          ].map(function(k, i){
+            return <div key={i} style={{ display:"flex", flexDirection:"column", gap:3, paddingLeft: i > 0 ? 28 : 0, borderLeft: i > 0 ? "1px solid var(--line-2)" : "none" }}>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>{k.lbl}</span>
+              <span style={{ fontFamily:"Instrument Serif", fontSize:22, lineHeight:1, color:k.color }}>{k.v}</span>
+            </div>;
+          })}
+        </div>
+      </div>
+
+      {/* GRID */}
+      {view === "grid" ? (
+        <div style={{ padding:"24px 32px 40px", display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(360px, 1fr))", gap:20 }}>
+          {filtered.map(function(g, idx){
+            var hColor = healthColor(g.health);
+            return (
+              <div key={g.id}
+                onClick={function(){ onOpenGraph(g.id); }}
+                style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:14, overflow:"hidden", cursor:"pointer", transition:"transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease" }}
+                onMouseEnter={function(e){ e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 10px 28px rgba(40,40,20,0.08)"; e.currentTarget.style.borderColor = "var(--ink-3)"; }}
+                onMouseLeave={function(e){ e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = "var(--line)"; }}>
+                {/* Mini viz */}
+                <div style={{ position:"relative", height:200, background: g.color + "0d" }}>
+                  <span style={{ position:"absolute", top:12, left:14, zIndex:2, fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"1.1px", color:"var(--ink-3)", padding:"3px 8px", background:"var(--panel)", border:"1px solid var(--line-2)", borderRadius:4 }}>{g.cat}</span>
+                  <span style={{ position:"absolute", top:12, right:14, zIndex:2, fontFamily:"JetBrains Mono", fontSize:11, color: hColor, display:"flex", alignItems:"center", gap:5, fontWeight:600 }}>
+                    <span style={{ width:6, height:6, borderRadius:"50%", background: hColor }} />{g.health + "%"}
+                  </span>
+                  <div style={{ position:"absolute", inset:0, padding:"36px 14px 14px" }}>
+                    <GraphMiniViz seed={g.id.charCodeAt(0) * 977 + g.id.length * 31} color={g.color} />
+                  </div>
+                </div>
+                {/* Body */}
+                <div style={{ padding:"18px 22px 18px" }}>
+                  <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", lineHeight:1.15, marginBottom:8 }}>{g.name}</div>
+                  <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.55, marginBottom:14, minHeight:36, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{g.desc}</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14, paddingTop:12, borderTop:"1px dashed var(--line-2)" }}>
+                    {[{ k:"NODES", v: g.nodes.toLocaleString() },{ k:"EDGES", v: g.edges.toLocaleString() },{ k:"AGENTS", v: g.agents.toString() }].map(function(it, i){
+                      return <div key={i}>
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>{it.k}</div>
+                        <div style={{ fontFamily:"Instrument Serif", fontSize:17, color:"var(--ink)", marginTop:2, lineHeight:1 }}>{it.v}</div>
+                      </div>;
+                    })}
+                  </div>
+                  <div style={{ marginTop:12, display:"flex", alignItems:"center", gap:6, fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>
+                    <span style={{ width:6, height:6, borderRadius:"50%", background:"var(--green)" }} />
+                    <span>Synced {g.synced}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        // LIST VIEW
+        <div style={{ padding:"20px 32px 40px" }}>
+          <div className="nv-table" style={{ margin:0 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"2.2fr 110px 110px 120px 90px 80px 130px", gap:14, padding:"10px 22px", background:"var(--panel-2)", borderBottom:"1px solid var(--line)", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", alignItems:"center" }}>
+              <div>Graph</div><div style={{ textAlign:"right" }}>Nodes</div><div style={{ textAlign:"right" }}>Edges</div><div style={{ textAlign:"right" }}>Agents</div><div style={{ textAlign:"right" }}>Health</div><div>Synced</div><div>Owner</div>
+            </div>
+            {filtered.map(function(g, i){
+              var hColor = healthColor(g.health);
+              return (
+                <div key={g.id} onClick={function(){ onOpenGraph(g.id); }}
+                  style={{ display:"grid", gridTemplateColumns:"2.2fr 110px 110px 120px 90px 80px 130px", gap:14, padding:"13px 22px", borderBottom: i < filtered.length-1 ? "1px solid var(--line-2)" : "none", cursor:"pointer", alignItems:"center", transition:"background 80ms" }}
+                  onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
+                  onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
+                  <div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <span style={{ width:9, height:9, borderRadius:"50%", background:g.color }} />
+                      <span style={{ fontSize:13.5, fontWeight:500, color:"var(--ink)" }}>{g.name}</span>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-3)", padding:"1px 6px", background:"var(--chip)", borderRadius:3 }}>{g.cat}</span>
+                    </div>
+                    <div style={{ fontSize:11.5, color:"var(--ink-3)", marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{g.desc}</div>
+                  </div>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", textAlign:"right" }}>{g.nodes.toLocaleString()}</span>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", textAlign:"right" }}>{g.edges.toLocaleString()}</span>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", textAlign:"right" }}>{g.agents}</span>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color: hColor, textAlign:"right", fontWeight:600 }}>{g.health + "%"}</span>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{g.synced}</span>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{g.owner}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function App() {
+  // null = show landing; "ecg" or other graph id = inside that graph
+  const [currentGraphId, setCurrentGraphId] = useState(null);
   const [tab, setTab] = useState("Graph");
   const [detailId, setDetailId] = useState(null);
   const [addNodeOpen, setAddNodeOpen] = useState(false);
@@ -10684,9 +10938,21 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Landing screen: pre-graph workspace picker
+  if (!currentGraphId) {
+    return (
+      <div className="app">
+        <GraphLandingView onOpenGraph={function(id){ setCurrentGraphId(id); setTab("Graph"); setDetailId(null); }} />
+      </div>
+    );
+  }
+
+  var currentGraph = CONTEXT_GRAPHS.find(function(g){ return g.id === currentGraphId; });
+  var graphName = currentGraph ? currentGraph.name : (IS_PS_GRAPH ? "Product Specialist Graph" : "Enterprise Context Graph");
+
   return (
     <div className="app">
-      <Header tab={tab} onTab={(t) => { setTab(t); setDetailId(null); }} onAddNode={() => setAddNodeOpen(true)} />
+      <Header tab={tab} onTab={(t) => { setTab(t); setDetailId(null); }} onAddNode={() => setAddNodeOpen(true)} onBackToLanding={() => setCurrentGraphId(null)} graphName={graphName} />
       {detailId ? (
         <NodeDetailView
           nodeId={detailId}
