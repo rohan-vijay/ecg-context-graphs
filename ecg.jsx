@@ -10823,55 +10823,55 @@ function entityMeta(name){ return ENTITY_META[name] || { desc:"Custom entity —
 var GRAPH_STARTING_POINTS = [
   // ── Enterprise-wide / cross-functional ─────────────────────────────────
   { id:"enterprise-core", industry:["any","saas","fintech","retail","manufacturing","professional","media","public","logistics","healthcare"], fn:["enterprise","data-platform"],
-    name:"Enterprise context core",
-    desc:"The cross-functional spine every team queries: Customer · Employee · Product · Account · Finance · Asset. The shared substrate that ties the org together.",
+    name:"Enterprise Context Graph", more:14,
+    desc:"The cross-functional layer every team queries: Customer, Employee, Product, Account, Finance and Asset all in one model.",
     entities:["Customer","Account","Employee","Team","Product","Invoice","Contract","Asset","Location"],
     edges:[["Customer","HAS","Account"],["Account","HOLDS","Contract"],["Contract","BILLED_AS","Invoice"],["Employee","MEMBER_OF","Team"],["Employee","OWNS","Account"],["Product","SOLD_AT","Location"],["Account","USES","Product"],["Asset","ASSIGNED_TO","Employee"]],
     accent:"var(--ink)" },
   { id:"retail-enterprise", industry:["retail"], fn:["enterprise"],
-    name:"Retail enterprise graph",
+    name:"Retail Enterprise Graph", more:12,
     desc:"Stores, staff, customers, orders, products, inventory, loyalty and promotions — the operating model of a retail org connected end-to-end.",
     entities:["Store","Employee","Customer","Order","Product","Inventory","Loyalty Account","Promotion","Shipment"],
     edges:[["Customer","SHOPS_AT","Store"],["Employee","WORKS_AT","Store"],["Customer","PLACED","Order"],["Order","CONTAINS","Product"],["Product","STOCKED_IN","Inventory"],["Inventory","HELD_AT","Store"],["Customer","ENROLLED_IN","Loyalty Account"],["Order","APPLIES","Promotion"],["Order","SHIPPED_AS","Shipment"]],
     accent:"var(--gold)" },
   { id:"employee-360", industry:["any","saas","fintech","retail","manufacturing","professional","media","public","logistics","healthcare"], fn:["enterprise","people"],
-    name:"Employee 360 graph",
+    name:"Employee 360 Graph", more:9,
     desc:"The full workforce view — employees, roles, teams, manager chains, compensation, issued devices, system access and tenure facts.",
     entities:["Employee","Role","Team","Manager Chain","Compensation","Device","Access Grant","Tenure"],
     edges:[["Employee","HOLDS","Role"],["Employee","MEMBER_OF","Team"],["Employee","REPORTS_TO","Manager Chain"],["Employee","PAID_VIA","Compensation"],["Employee","USES","Device"],["Employee","GRANTED","Access Grant"],["Employee","HAS","Tenure"]],
     accent:"var(--blue)" },
 
   // ── Function-focused ───────────────────────────────────────────────────
-  { id:"saas-revenue",   industry:["saas"],          fn:["revenue","customer"],    name:"Customer revenue spine",      desc:"Account-led B2B: pipeline → subscription → expansion. Wires the sales motion to product telemetry.",
+  { id:"saas-revenue",   industry:["saas"],          fn:["revenue","customer"],    name:"Customer Revenue Graph", more:8, desc:"Account-led B2B: pipeline → subscription → expansion. Joins the sales motion to product telemetry.",
     entities:["Account","Contact","Opportunity","Subscription","Invoice","Usage Event","Ticket"],
     edges:[["Account","HAS_CONTACT","Contact"],["Account","HAS_OPPORTUNITY","Opportunity"],["Account","SUBSCRIBES_TO","Subscription"],["Subscription","BILLED_AS","Invoice"],["Account","EMITS","Usage Event"],["Account","OPENED","Ticket"]],
     accent:"var(--blue)" },
-  { id:"saas-success",   industry:["saas"],          fn:["customer","operations"], name:"Customer health & retention", desc:"Bring health scores, tickets, NPS and usage trends into one canonical Customer entity.",
+  { id:"saas-success",   industry:["saas"],          fn:["customer","operations"], name:"Customer Health Graph",  more:6, desc:"Brings health scores, tickets, NPS and usage trends into one canonical Customer entity.",
     entities:["Account","Customer","Ticket","Interaction","Health Score","Renewal"],
     edges:[["Account","HAS_CUSTOMER","Customer"],["Customer","OPENED","Ticket"],["Customer","HAD","Interaction"],["Customer","SCORED_AS","Health Score"],["Account","RENEWS_AS","Renewal"]],
     accent:"var(--green)" },
-  { id:"fintech-risk",   industry:["fintech"],       fn:["risk","operations"],     name:"Customer & risk core",        desc:"Customer → Account → Transaction with KYC, fraud signals and regulatory holds.",
+  { id:"fintech-risk",   industry:["fintech"],       fn:["risk","operations"],     name:"Customer Risk Graph",    more:10, desc:"Customer → Account → Transaction with KYC, fraud signals and regulatory holds.",
     entities:["Customer","Account","Transaction","Risk Signal","Hold","Compliance Case"],
     edges:[["Customer","HOLDS","Account"],["Account","RECORDS","Transaction"],["Transaction","RAISES","Risk Signal"],["Account","SUBJECT_TO","Hold"],["Risk Signal","ESCALATES_TO","Compliance Case"]],
     accent:"var(--coral)" },
-  { id:"healthcare-ops", industry:["healthcare"],    fn:["operations","customer"], name:"Patient journey graph",       desc:"Patient encounters joined with providers, claims, diagnoses and outcomes.",
+  { id:"healthcare-ops", industry:["healthcare"],    fn:["operations","customer"], name:"Patient Journey Graph",  more:11, desc:"Patient encounters joined with providers, claims, diagnoses and outcomes.",
     entities:["Patient","Provider","Encounter","Diagnosis","Claim","Outcome"],
     edges:[["Patient","SAW","Provider"],["Patient","HAD","Encounter"],["Encounter","RESULTED_IN","Diagnosis"],["Encounter","BILLED_VIA","Claim"],["Diagnosis","TRACKED_AS","Outcome"]],
     accent:"var(--purple)" },
-  { id:"retail-commerce",industry:["retail"],        fn:["revenue","operations"],  name:"Order & fulfilment graph",    desc:"Customer → Order → Product → Shipment → Return, with inventory and pricing linked in.",
+  { id:"retail-commerce",industry:["retail"],        fn:["revenue","operations"],  name:"Order Fulfilment Graph", more:7, desc:"Customer → Order → Product → Shipment → Return, with inventory and pricing linked in.",
     entities:["Customer","Order","Product","Shipment","Return","Inventory"],
     edges:[["Customer","PLACED","Order"],["Order","CONTAINS","Product"],["Order","SHIPPED_AS","Shipment"],["Order","RETURNED_AS","Return"],["Product","STOCKED_IN","Inventory"]],
     accent:"var(--gold)" },
-  { id:"manufacturing",  industry:["manufacturing"], fn:["operations"],            name:"Supply & production graph",   desc:"Suppliers, purchase orders, bills of material and inventory across plants.",
+  { id:"manufacturing",  industry:["manufacturing"], fn:["operations"],            name:"Supply Production Graph", more:9, desc:"Suppliers, purchase orders, bills of material and inventory across plants.",
     entities:["Supplier","Purchase Order","Item","BOM","Plant","Inventory"],
     edges:[["Supplier","FULFILS","Purchase Order"],["Purchase Order","CONTAINS","Item"],["Item","COMPONENT_OF","BOM"],["BOM","ASSEMBLED_AT","Plant"],["Plant","HOLDS","Inventory"]],
     accent:"var(--green)" },
-  { id:"finance-ledger", industry:["saas","fintech","retail","professional"], fn:["finance"], name:"Finance & ledger graph",
+  { id:"finance-ledger", industry:["saas","fintech","retail","professional"], fn:["finance"], name:"Finance Ledger Graph", more:8,
     desc:"GL accounts, journal entries, invoices and the policies & controls auditing them.",
     entities:["GL Account","Journal Entry","Invoice","Payment","Control","Policy"],
     edges:[["Journal Entry","POSTS_TO","GL Account"],["Invoice","SETTLED_BY","Payment"],["GL Account","GOVERNED_BY","Control"],["Control","ENFORCES","Policy"]],
     accent:"var(--green)" },
-  { id:"people-graph",   industry:["saas","fintech","healthcare","retail","manufacturing","logistics","media","professional","public"], fn:["people"], name:"People & workforce graph",
+  { id:"people-graph",   industry:["saas","fintech","healthcare","retail","manufacturing","logistics","media","professional","public"], fn:["people"], name:"People Workforce Graph", more:6,
     desc:"Employees, roles, teams, managers and tenure — the org substrate every other graph leans on.",
     entities:["Employee","Role","Team","Manager Chain","Compensation"],
     edges:[["Employee","HOLDS","Role"],["Employee","MEMBER_OF","Team"],["Employee","REPORTS_TO","Manager Chain"],["Employee","PAID_VIA","Compensation"]],
@@ -10946,7 +10946,6 @@ function NewGraphFlow({ onClose, onCreate }) {
   var [permsRead,  setPermsRead]      = useState([{ kind:"group", id:"everyone",       label:"Everyone in org" }]);
   var [permsWrite, setPermsWrite]     = useState([{ kind:"group", id:"data-platform",  label:"data-platform team" }]);
   var [permsAdmin, setPermsAdmin]     = useState([{ kind:"user",  id:"morgan.lee",     label:"Morgan Lee (you)" }]);
-  var [expandedSp, setExpandedSp]     = useState(null); // starting point id with expanded details
 
   var stepNames = ["Context", "Starting point", "Customise", "Identity & access", "Review"];
 
@@ -11179,8 +11178,7 @@ function NewGraphFlow({ onClose, onCreate }) {
         {/* HEADER */}
         <div style={{ flexShrink:0, height:56, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 22px", background:"var(--panel)" }}>
           <div>
-            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>WORKSPACE · NEW GRAPH</div>
-            <div style={{ fontFamily:"Instrument Serif", fontSize:18, color:"var(--ink)", marginTop:3 }}>{graphName || "Untitled graph"}</div>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:20, color:"var(--ink)" }}>{graphName || "Untitled graph"}</div>
           </div>
           <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)" }}>✕</button>
         </div>
@@ -11284,61 +11282,34 @@ function NewGraphFlow({ onClose, onCreate }) {
 
                 {suggestions.map(function(sp){
                   var isOn = startId === sp.id;
-                  var isExpanded = expandedSp === sp.id;
                   var matchTag = sp._exactInd && sp._exactFn ? "PERFECT MATCH" : sp._exactInd ? "INDUSTRY MATCH" : sp._exactFn ? "FUNCTION MATCH" : "GENERIC";
                   var matchColor = sp._exactInd && sp._exactFn ? "var(--green)" : (sp._exactInd || sp._exactFn) ? "var(--blue)" : "var(--ink-4)";
+                  var moreCount = sp.more || Math.max(3, Math.round(sp.entities.length * 0.8));
                   return (
-                    <div key={sp.id}
-                      style={{ border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:10, background: isOn ? "var(--bg-canvas)" : "var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", overflow:"hidden" }}>
-                      <div onClick={function(){ pickStart(sp.id); }}
-                        style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"14px 16px", cursor:"pointer" }}>
-                        <span style={{ width:42, height:42, borderRadius:8, background:sp.accent, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, letterSpacing:"0.5px", flexShrink:0 }}>{sp.name.split(" ").map(function(w){ return w[0]; }).join("").slice(0,3).toUpperCase()}</span>
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-                            <span style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{sp.name}</span>
-                            <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px", borderRadius:3, background:"transparent", color:matchColor, border:"1px solid " + matchColor, fontWeight:700, letterSpacing:"0.5px" }}>{matchTag}</span>
-                          </div>
-                          <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5, marginTop:5, maxWidth:620 }}>{sp.desc}</div>
-
-                          {/* Entity chip strip — always shown so you can SEE what's covered */}
-                          <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:10 }}>
-                            {sp.entities.map(function(e){
-                              return <span key={e} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"3px 8px", borderRadius:4, background:"var(--chip)", border:"1px solid var(--line-2)", color:"var(--ink-2)" }}>{e}</span>;
-                            })}
-                          </div>
-
-                          <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:10, fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.3px" }}>
-                            <span>{sp.entities.length} entities</span>
-                            <span>·</span>
-                            <span>{sp.edges.length} edges</span>
-                            <span>·</span>
-                            <button onClick={function(e){ e.stopPropagation(); setExpandedSp(isExpanded ? null : sp.id); }}
-                              style={{ background:"none", border:"none", color:"var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:10, cursor:"pointer", textDecoration:"underline", padding:0 }}>
-                              {isExpanded ? "Hide relationships ▴" : "Show relationships ▾"}
-                            </button>
-                          </div>
+                    <div key={sp.id} onClick={function(){ pickStart(sp.id); }}
+                      style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"14px 16px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:10, background: isOn ? "var(--bg-canvas)" : "var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", cursor:"pointer" }}>
+                      <span style={{ width:42, height:42, borderRadius:8, background:sp.accent, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, letterSpacing:"0.5px", flexShrink:0 }}>{sp.name.split(" ").map(function(w){ return w[0]; }).join("").slice(0,3).toUpperCase()}</span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                          <span style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{sp.name}</span>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px", borderRadius:3, background:"transparent", color:matchColor, border:"1px solid " + matchColor, fontWeight:700, letterSpacing:"0.5px" }}>{matchTag}</span>
                         </div>
-                        {isOn && <span style={{ color:"var(--green)", fontWeight:700, fontSize:14 }}>✓</span>}
+                        <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5, marginTop:5, maxWidth:620 }}>{sp.desc}</div>
+
+                        <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:10, alignItems:"center" }}>
+                          {sp.entities.map(function(e){
+                            return <span key={e} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"3px 8px", borderRadius:4, background:"var(--chip)", border:"1px solid var(--line-2)", color:"var(--ink-2)" }}>{e}</span>;
+                          })}
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"3px 8px", borderRadius:4, background:"transparent", border:"1px dashed var(--line)", color:"var(--ink-3)", fontWeight:600 }}>+{moreCount}</span>
+                        </div>
+
+                        <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:10, fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.3px" }}>
+                          <span>{(sp.entities.length + moreCount) + " entities"}</span>
+                          <span>·</span>
+                          <span>{(sp.edges.length + Math.round(moreCount * 1.2)) + " edges"}</span>
+                        </div>
                       </div>
-
-                      {isExpanded && (
-                        <div style={{ borderTop:"1px solid var(--line-2)", background:"var(--panel-2)", padding:"14px 18px 16px" }}>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:8 }}>Relationships in this blueprint</div>
-                          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                            {sp.edges.map(function(ed, i){
-                              return (
-                                <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:6, fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)" }}>
-                                  <span style={{ fontWeight:600, color:"var(--ink)" }}>{ed[0]}</span>
-                                  <span style={{ color:"var(--ink-4)" }}>—</span>
-                                  <span style={{ fontSize:9.5, padding:"1px 5px", borderRadius:3, background:sp.accent, color:"#fff", fontWeight:700, letterSpacing:"0.4px" }}>{ed[1]}</span>
-                                  <span style={{ color:"var(--ink-4)" }}>→</span>
-                                  <span style={{ fontWeight:600, color:"var(--ink)" }}>{ed[2]}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
+                      {isOn && <span style={{ color:"var(--green)", fontWeight:700, fontSize:14 }}>✓</span>}
                     </div>
                   );
                 })}
@@ -11384,9 +11355,14 @@ function NewGraphFlow({ onClose, onCreate }) {
                               </div>
                             </div>
                             <div style={{ display:"flex", flexWrap:"wrap", gap:4, alignItems:"center" }}>
-                              {m.props.length > 0 ? m.props.map(function(p){
-                                return <span key={p} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{p}</span>;
-                              }) : <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", fontStyle:"italic" }}>add properties after create</span>}
+                              {m.props.length > 0 ? (
+                                <>
+                                  {m.props.map(function(p){
+                                    return <span key={p} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{p}</span>;
+                                  })}
+                                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 7px", borderRadius:4, background:"transparent", border:"1px dashed var(--line)", color:"var(--ink-3)", fontWeight:600 }}>+{4 + (e.length % 7)}</span>
+                                </>
+                              ) : <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", fontStyle:"italic" }}>add properties after create</span>}
                             </div>
                             <label style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.3px" }}>
                               <input type="checkbox" checked={on} onChange={function(){ setIncluded(function(o){ var n = Object.assign({}, o); n[e] = !on; return n; }); }} style={{ accentColor:"var(--ink)", width:14, height:14 }} />
