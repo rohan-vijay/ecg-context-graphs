@@ -4384,8 +4384,8 @@ function LinkSourceFlow({ node, onClose }) {
                       : (activate ? "Activate" : "Draft");
               return (
                 <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
-                  style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}>
-                  <span style={{ width:22, height:22, borderRadius:"50%", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0 }}>{isDone ? "✓" : n}</span>
+                  style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", alignItems:"center" }}>
+                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize: isDone ? 13 : 12, fontWeight:700, flexShrink:0, lineHeight:1 }}>{isDone ? "✓" : n}</span>
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400, lineHeight:1.2 }}>{name}</div>
                     <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{sub}</div>
@@ -5603,8 +5603,8 @@ function NewRuleFlow({ node, onClose }) {
               var n = i + 1; var isOn = step === n; var isDone = step > n;
               return (
                 <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
-                  style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}>
-                  <span style={{ width:22, height:22, borderRadius:"50%", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0 }}>{isDone ? "✓" : n}</span>
+                  style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", alignItems:"center" }}>
+                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize: isDone ? 13 : 12, fontWeight:700, flexShrink:0, lineHeight:1 }}>{isDone ? "✓" : n}</span>
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400, lineHeight:1.2 }}>{name}</div>
                     <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, lineHeight:1.3 }}>
@@ -10005,8 +10005,8 @@ function AddNodeFlow({ onClose }) {
                       : (activate ? "Activate" : "Draft");
               return (
                 <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
-                  style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}>
-                  <span style={{ width:22, height:22, borderRadius:"50%", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0 }}>{isDone ? "✓" : n}</span>
+                  style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", alignItems:"center" }}>
+                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize: isDone ? 13 : 12, fontWeight:700, flexShrink:0, lineHeight:1 }}>{isDone ? "✓" : n}</span>
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400, lineHeight:1.2 }}>{nm}</div>
                     <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{sub}</div>
@@ -11049,15 +11049,16 @@ function NewGraphFlow({ onClose, onCreate }) {
   var [permsWrite, setPermsWrite]     = useState([{ kind:"group", id:"data-platform",  label:"data-platform team" }]);
   var [permsAdmin, setPermsAdmin]     = useState([{ kind:"user",  id:"morgan.lee",     label:"Morgan Lee (you)" }]);
 
-  var stepNames = ["Focus", "Starting point", "Entities", "Identity & access", "Review"];
+  var stepNames = ["Industry or Department", "Starting point", "Entities", "Identity & access", "Review"];
 
-  // Filter + rank suggestions by current industry + function. Both axes match → higher relevance.
+  // Filter + rank suggestions by current industry + function. AND when both selected.
   var suggestions = GRAPH_STARTING_POINTS.map(function(sp){
     var indMatch  = industry ? sp.industry.indexOf(industry) >= 0 : false;
     var funcMatch = func     ? sp.fn.indexOf(func)           >= 0 : false;
     var indOk     = !industry || indMatch || sp.industry.indexOf("any") >= 0;
     var funcOk    = !func     || funcMatch;
-    var include   = (!industry && !func) || indOk || funcOk;
+    // Both axes must satisfy. When neither is set, show everything.
+    var include   = (!industry && !func) || (indOk && funcOk);
     var score     = (indMatch ? 2 : 0) + (funcMatch ? 2 : 0) + (sp.industry.indexOf("any") >= 0 ? 0.5 : 0);
     return include ? Object.assign({}, sp, { _score: score, _exactInd: indMatch, _exactFn: funcMatch }) : null;
   }).filter(Boolean).sort(function(a, b){ return b._score - a._score; });
@@ -11295,15 +11296,15 @@ function NewGraphFlow({ onClose, onCreate }) {
               var isDone = step > n;
               var indLabel  = (GRAPH_INDUSTRIES.find(function(x){ return x.id === industry; }) || {}).label;
               var funcLabel = (GRAPH_FUNCTIONS.find(function(x){ return x.id === func; }) || {}).label;
-              var sub = n === 1 ? (industry || func ? [indLabel, funcLabel].filter(Boolean).join(" · ") : "Industry & function")
+              var sub = n === 1 ? (industry || func ? [indLabel, funcLabel].filter(Boolean).join(" · ") : "Pick industry & dept")
                       : n === 2 ? (startId === "__blank" ? "Blank canvas" : picked ? picked.name : "Pick a starting point")
                       : n === 3 ? (entitiesToInclude.length === 0 ? "Add entities" : entitiesToInclude.length + " entities" + (customEntities.length ? " (" + customEntities.length + " custom)" : ""))
                       : n === 4 ? (graphName || "Name + access")
                       : "Activate";
               return (
                 <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
-                  style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}>
-                  <span style={{ width:22, height:22, borderRadius:"50%", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0 }}>{isDone ? "✓" : n}</span>
+                  style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", alignItems:"center" }}>
+                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize: isDone ? 13 : 12, fontWeight:700, flexShrink:0, lineHeight:1 }}>{isDone ? "✓" : n}</span>
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400, lineHeight:1.2 }}>{nm}</div>
                     <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{sub}</div>
@@ -11386,7 +11387,6 @@ function NewGraphFlow({ onClose, onCreate }) {
                   var isOn = startId === sp.id;
                   var matchTag = sp._exactInd && sp._exactFn ? "PERFECT MATCH" : sp._exactInd ? "INDUSTRY MATCH" : sp._exactFn ? "FUNCTION MATCH" : "GENERIC";
                   var matchColor = sp._exactInd && sp._exactFn ? "var(--green)" : (sp._exactInd || sp._exactFn) ? "var(--blue)" : "var(--ink-4)";
-                  var moreCount = sp.more || Math.max(3, Math.round(sp.entities.length * 0.8));
                   return (
                     <div key={sp.id} onClick={function(){ pickStart(sp.id); }}
                       style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"14px 16px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:10, background: isOn ? "var(--bg-canvas)" : "var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", cursor:"pointer" }}>
@@ -11402,13 +11402,12 @@ function NewGraphFlow({ onClose, onCreate }) {
                           {sp.entities.map(function(e){
                             return <span key={e} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"3px 8px", borderRadius:4, background:"var(--chip)", border:"1px solid var(--line-2)", color:"var(--ink-2)" }}>{e}</span>;
                           })}
-                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"3px 8px", borderRadius:4, background:"transparent", border:"1px dashed var(--line)", color:"var(--ink-3)", fontWeight:600 }}>+{moreCount}</span>
                         </div>
 
                         <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:10, fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.3px" }}>
-                          <span>{(sp.entities.length + moreCount) + " entities"}</span>
+                          <span>{sp.entities.length + " entities"}</span>
                           <span>·</span>
-                          <span>{(sp.edges.length + Math.round(moreCount * 1.2)) + " edges"}</span>
+                          <span>{sp.edges.length + " edges"}</span>
                         </div>
                       </div>
                       {isOn && <span style={{ color:"var(--green)", fontWeight:700, fontSize:14 }}>✓</span>}
@@ -11457,14 +11456,9 @@ function NewGraphFlow({ onClose, onCreate }) {
                               </div>
                             </div>
                             <div style={{ display:"flex", flexWrap:"wrap", gap:4, alignItems:"center" }}>
-                              {m.props.length > 0 ? (
-                                <>
-                                  {m.props.map(function(p){
-                                    return <span key={p} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{p}</span>;
-                                  })}
-                                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 7px", borderRadius:4, background:"transparent", border:"1px dashed var(--line)", color:"var(--ink-3)", fontWeight:600 }}>+{4 + (e.length % 7)}</span>
-                                </>
-                              ) : <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", fontStyle:"italic" }}>add properties after create</span>}
+                              {m.props.length > 0 ? m.props.map(function(p){
+                                return <span key={p} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{p}</span>;
+                              }) : <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", fontStyle:"italic" }}>add properties after create</span>}
                             </div>
                             <label style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.3px" }}>
                               <input type="checkbox" checked={on} onChange={function(){ setIncluded(function(o){ var n = Object.assign({}, o); n[e] = !on; return n; }); }} style={{ accentColor:"var(--ink)", width:14, height:14 }} />
@@ -11574,10 +11568,6 @@ function NewGraphFlow({ onClose, onCreate }) {
             {/* STEP 5 — comprehensive */}
             {step === 5 && (
               <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
-                <div>
-                  <div style={{ fontFamily:"Instrument Serif", fontSize:30, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>Spin up "{graphName || "your graph"}"?</div>
-                  <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:600 }}>Once activated it appears in the Context Graphs landing. You can rename, reshape, or delete it any time.</div>
-                </div>
 
                 <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
                   <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
