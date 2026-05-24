@@ -1684,8 +1684,6 @@ function EditSchemaView({ node, properties: initProps, onClose }) {
   const [tags, setTags]       = useState(["pii","core-entity","slo:30m","agent-input"]);
   const [tagInput, setTagInput] = useState("");
   const [stewards, setStewards] = useState("morgan.lee, ramin.k");
-  const [runbook, setRunbook]   = useState("go/account-runbook");
-  const [slackChan, setSlackChan] = useState("#schema-account");
   const [props, setProps]     = useState(initProps.map((p, i) => ({ ...p, _id: i })));
   const [published, setPublished] = useState(false);
   const [saved, setSaved]     = useState(false);
@@ -2035,14 +2033,6 @@ function EditSchemaView({ node, properties: initProps, onClose }) {
                 </div>
                 <div style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 4 }}>Press Enter or comma to add</div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                <label><span style={lblStyle}>Runbook</span>
-                  <input value={runbook} onChange={e => setRunbook(e.target.value)} style={fldStyle} />
-                </label>
-                <label><span style={lblStyle}>Slack channel</span>
-                  <input value={slackChan} onChange={e => setSlackChan(e.target.value)} style={fldStyle} />
-                </label>
-              </div>
             </div>
           )}
 
@@ -2206,15 +2196,6 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
                 <span className="nv-cat-tag" style={{ color: CAT_META[node.cat].color, marginLeft: 12 }}>{CAT_META[node.cat].label}</span>
               </div>
               <div className="detail-title-desc">{node.desc}</div>
-              <div className="detail-meta-row">
-                <span>Owner <b>{node.cat === "source" ? "data-platform" : node.type === "agent" ? "applied-ml" : "data-platform"}</b></span>
-                <span className="detail-meta-sep">·</span>
-                <span>Domain <b>{node.cat === "core" ? "customer" : node.cat === "support" ? "service" : node.cat === "derived" ? "analytics" : "ingest"}</b></span>
-                <span className="detail-meta-sep">·</span>
-                <span>Last edited <b>2h ago by morgan.lee</b></span>
-                <span className="detail-meta-sep">·</span>
-                <span>Schema rank <b>#3 of 18</b></span>
-              </div>
             </div>
           </div>
           <div className="detail-title-right">
@@ -2319,8 +2300,6 @@ function OverviewPane({ node, properties, sources, rules, consumers, activity, i
               <div><span className="meta-k">Stewards</span><span className="meta-v">morgan.lee, ramin.k, +2</span></div>
               <div><span className="meta-k">Domain</span><span className="meta-v">{node.cat === "core" ? "customer" : node.cat === "support" ? "service" : node.cat === "derived" ? "analytics" : "ingest"}</span></div>
               <div><span className="meta-k">Tags</span><div className="meta-tags">{["pii","core-entity","slo:30m","agent-input"].map(t=> <span key={t} className="meta-tag">{t}</span>)}</div></div>
-              <div><span className="meta-k">Runbook</span><span className="meta-v meta-link">go/account-runbook ↗</span></div>
-              <div><span className="meta-k">Slack</span><span className="meta-v meta-link">#schema-account ↗</span></div>
             </div>
           </div>
         </section>
@@ -4142,21 +4121,14 @@ function NewRuleModal({ node, onClose }) {
 
 function RulesPane({ rules, node, onViolationClick, onMatchClick, onSurvClick }) {
   const [cat, setCat]         = useState("quality");
-  const [qFilter, setQFilter] = useState("all");
   const [showNewRule, setShowNewRule] = useState(false);
 
   const qRules = rules.quality || [];
   const mRules = rules.match || [];
   const sRules = rules.survivorship || [];
 
-  const QKINDS = ["all","VALIDATE","COMPUTE","SLO","ACCESS","INFER"];
-  const qFiltered = qFilter === "all" ? qRules : qRules.filter(r => r.kind === qFilter);
-  const qCounts = QKINDS.reduce((acc, k) => { acc[k] = k === "all" ? qRules.length : qRules.filter(r => r.kind === k).length; return acc; }, {});
-
   const totalViolations   = qRules.reduce((sum, r) => sum + (r.violations || 0), 0);
-  const avgCompliance     = qRules.length ? Math.round(qRules.reduce((sum, r) => sum + (r.compliance ?? 100), 0) / qRules.length) : 100;
   const pendingCandidates = mRules.reduce((sum, r) => sum + (r.candidates || 0), 0);
-  const autoResolved      = mRules.reduce((sum, r) => sum + (r.auto_resolved || 0), 0);
   const openConflicts     = sRules.reduce((sum, r) => sum + (r.conflicts || 0), 0);
 
   const sevStyle = s => s === "ERROR"
@@ -4173,23 +4145,6 @@ function RulesPane({ rules, node, onViolationClick, onMatchClick, onSurvClick })
     { id:"match",        label:"Match",        count:mRules.length,      accent: pendingCandidates > 0 ? "var(--gold)" : undefined },
     { id:"survivorship", label:"Survivorship", count:sRules.length,      accent: openConflicts > 0 ? "var(--coral)" : undefined },
   ];
-
-  const qStats = [
-    ["Total violations", totalViolations, totalViolations > 0 ? "var(--coral)" : "var(--green)"],
-    ["Avg compliance",   avgCompliance + "%", "var(--ink)"],
-    ["Active rules",     qRules.filter(r => r.on).length, "var(--ink)"],
-  ];
-  const mStats = [
-    ["Pending candidates", pendingCandidates, pendingCandidates > 0 ? "var(--gold)" : "var(--green)"],
-    ["Auto-resolved / 30d", autoResolved, "var(--ink)"],
-    ["Active rules",        mRules.filter(r => r.on).length, "var(--ink)"],
-  ];
-  const sStats = [
-    ["Open conflicts",     openConflicts,                     openConflicts > 0 ? "var(--coral)" : "var(--green)"],
-    ["Properties covered", sRules.filter(r => r.on).length,  "var(--ink)"],
-    ["Active rules",       sRules.filter(r => r.on).length,  "var(--ink)"],
-  ];
-  const activeStats = cat === "quality" ? qStats : cat === "match" ? mStats : sStats;
 
   return (
     <>
@@ -4213,32 +4168,15 @@ function RulesPane({ rules, node, onViolationClick, onMatchClick, onSurvClick })
           </div>
         </div>
 
-        {/* ── Stats bar ── */}
-        <div style={{ display:"flex", gap:1, background:"var(--line-2)", borderBottom:"1px solid var(--line-2)" }}>
-          {activeStats.map(([label, val, color]) => (
-            <div key={label} style={{ flex:1, padding:"12px 18px", background:"var(--panel-2)" }}>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:4 }}>{label}</div>
-              <div style={{ fontFamily:"Instrument Serif", fontSize:24, color }}>{val}</div>
-            </div>
-          ))}
-        </div>
-
         {/* ── Quality tab ── */}
         {cat === "quality" && (
           <>
-            <div style={{ padding:"10px 18px", borderBottom:"1px solid var(--line-2)", display:"flex", gap:4, flexWrap:"wrap" }}>
-              {QKINDS.map(k => (qCounts[k] > 0 || k === "all") ? (
-                <button key={k} className={"chip" + (qFilter === k ? " on" : "")} onClick={() => setQFilter(k)}>
-                  {k} <span className="chip-n">{qCounts[k]}</span>
-                </button>
-              ) : null)}
-            </div>
             <div>
-              {qFiltered.map((r, i) => {
+              {qRules.map((r, i) => {
                 const { bg, color } = sevStyle(r.severity || "INFO");
                 const hasViol = (r.violations || 0) > 0;
                 return (
-                  <div key={i} style={{ display:"flex", alignItems:"center", gap:16, padding:"15px 18px", borderBottom: i < qFiltered.length - 1 ? "1px solid var(--line-2)" : "none" }}>
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:16, padding:"15px 18px", borderBottom: i < qRules.length - 1 ? "1px solid var(--line-2)" : "none" }}>
                     <span className={"rule-kind rule-kind-" + r.kind.toLowerCase()} style={{ flexShrink:0, minWidth:68, textAlign:"center" }}>{r.kind}</span>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:13.5, fontWeight:500, color:"var(--ink)", marginBottom:4 }}>{r.title || r.label}</div>
