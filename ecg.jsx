@@ -1542,7 +1542,7 @@ function GlobalEdgesView() {
       <div className="nv-head">
         <div className="nv-head-left">
 
-          <div className="nv-title">Edge catalog</div>
+          <div className="nv-title">Edges</div>
         </div>
         <div className="nv-head-right">
           <button className="btn-ghost">Bulk export</button>
@@ -1602,16 +1602,24 @@ function GlobalSourcesView() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState({ col: "name", dir: "asc" });
 
-  // Aggregate all sources across all nodes
+  // Aggregate all sources across all nodes — only real source systems
+  // (drop "Manual / Admin UI", "Computed by agent", "Self (system of record)" etc.)
   const allSources = useMemo(() => {
     const list = [];
     NODES.forEach(node => {
       const srcs = generateSources(node);
       srcs.forEach((s, i) => {
-        const sys = s.name.toLowerCase().includes("salesforce") ? "Salesforce" :
-                    s.name.toLowerCase().includes("netsuite")   ? "NetSuite"   :
-                    s.name.toLowerCase().includes("snowflake")  ? "Snowflake"  :
-                    s.name.toLowerCase().includes("hubspot")    ? "HubSpot"    : "Other";
+        var nameLower = (s.name || "").toLowerCase();
+        // Filter out non-system sources
+        if (nameLower.indexOf("manual") >= 0) return;
+        if (nameLower.indexOf("admin ui") >= 0) return;
+        if (nameLower.indexOf("computed by") >= 0) return;
+        if (nameLower.indexOf("self (system") >= 0) return;
+        const sys = nameLower.indexOf("salesforce") >= 0 ? "Salesforce" :
+                    nameLower.indexOf("netsuite")   >= 0 ? "NetSuite"   :
+                    nameLower.indexOf("snowflake")  >= 0 ? "Snowflake"  :
+                    nameLower.indexOf("hubspot")    >= 0 ? "HubSpot"    :
+                    nameLower.indexOf("okta")       >= 0 ? "Okta"       : "Other";
         list.push({
           ...s,
           uid: node.id + ":" + i,
@@ -1630,7 +1638,7 @@ function GlobalSourcesView() {
   const totalRows = allSources.reduce((sum, s) => sum + s.rowsN, 0);
   const totalErrors = allSources.reduce((sum, s) => sum + (s.errors || 0), 0);
 
-  const SYSTEMS = ["Salesforce", "NetSuite", "Snowflake", "HubSpot", "Other"];
+  const SYSTEMS = ["Salesforce", "NetSuite", "Snowflake", "HubSpot", "Okta", "Other"];
   const sysCounts = SYSTEMS.reduce((acc, sys) => {
     acc[sys] = allSources.filter(s => s.system === sys).length;
     return acc;
@@ -1659,7 +1667,7 @@ function GlobalSourcesView() {
       <div className="nv-head">
         <div className="nv-head-left">
 
-          <div className="nv-title">Source catalog</div>
+          <div className="nv-title">Sources</div>
         </div>
         <div className="nv-head-right">
           <button className="btn-ghost">Bulk export</button>
@@ -8398,7 +8406,7 @@ function RecordsView() {
       <div className="nv-head">
         <div className="nv-head-left">
 
-          <div className="nv-title">Instance data</div>
+          <div className="nv-title">Records</div>
         </div>
         <div className="nv-head-right">
           <button className="btn-ghost">Export CSV</button>
@@ -9157,35 +9165,6 @@ function StewardshipTaskDetail({ task, onBack }) {
       </div>
 
       <div className="detail-body">
-        {/* PROMINENT ACTION BAR — the next-best-actions the steward should pick from */}
-        <div style={{ marginBottom:18, padding:"18px 20px", border:"1px solid " + km.color, background: km.fill, borderRadius:12, boxShadow:"0 1px 0 var(--line-2), 0 6px 18px rgba(0,0,0,0.04)" }}>
-          <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:12 }}>
-            <div style={{ display:"flex", alignItems:"baseline", gap:10 }}>
-              <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, letterSpacing:"0.8px", color:km.color, fontWeight:700, textTransform:"uppercase" }}>TAKE ACTION</span>
-              <span style={{ fontSize:13.5, color:"var(--ink)", fontWeight:600 }}>What do you want to do with this {km.long.toLowerCase()} task?</span>
-            </div>
-            <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{suggestions.length + " options"}</span>
-          </div>
-          <div style={{ display:"grid", gridTemplateColumns: "repeat(" + Math.min(suggestions.length, 4) + ", 1fr)", gap:10 }}>
-            {suggestions.map(function(s, i) {
-              var isPrimary = i === 0;
-              return (
-                <button key={i}
-                  style={{ display:"flex", flexDirection:"column", gap:6, padding:"14px 16px", borderRadius:10, border: isPrimary ? "1px solid " + km.color : "1px solid var(--line)", background: isPrimary ? km.color : "var(--bg-canvas)", color: isPrimary ? "#fff" : "var(--ink)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", transition:"transform 80ms, box-shadow 80ms" }}
-                  onMouseEnter={function(e){ e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,0,0,0.08)"; }}
-                  onMouseLeave={function(e){ e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
-                    <span style={{ fontSize:14, fontWeight:600, color: isPrimary ? "#fff" : "var(--ink)" }}>{s.lbl}</span>
-                    <span style={{ width:24, height:24, borderRadius:"50%", background: isPrimary ? "rgba(255,255,255,0.18)" : "var(--chip)", color: isPrimary ? "#fff" : km.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:700, flexShrink:0 }}>→</span>
-                  </div>
-                  <span style={{ fontSize:11.5, color: isPrimary ? "rgba(255,255,255,0.85)" : "var(--ink-3)", lineHeight:1.45 }}>{s.desc}</span>
-                  {isPrimary && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"rgba(255,255,255,0.8)", fontWeight:700, marginTop:2 }}>RECOMMENDED</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         <div style={{ display:"grid", gridTemplateColumns:"minmax(0, 1.7fr) minmax(280px, 1fr)", gap:18 }}>
           {/* LEFT */}
           <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
@@ -9321,6 +9300,34 @@ function StewardshipTaskDetail({ task, onBack }) {
 
           {/* RIGHT */}
           <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+            {/* Take Action — compact card above Assignment */}
+            <div className="card" style={{ border:"1px solid " + km.color, background: km.fill, overflow:"hidden" }}>
+              <div className="card-head" style={{ borderBottom:"1px solid " + km.color + "40", background:"transparent" }}>
+                <span style={{ color:km.color, fontWeight:700, letterSpacing:"0.4px", fontFamily:"JetBrains Mono", fontSize:11, textTransform:"uppercase" }}>Take action</span>
+                <span className="card-head-sub" style={{ color:"var(--ink-2)" }}>{suggestions.length + " options"}</span>
+              </div>
+              <div style={{ display:"flex", flexDirection:"column" }}>
+                {suggestions.map(function(s, i, arr) {
+                  var isPrimary = i === 0;
+                  return (
+                    <button key={i}
+                      style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"12px 14px", border:"none", borderBottom: i < arr.length-1 ? "1px solid " + km.color + "26" : "none", background: isPrimary ? km.color : "transparent", color: isPrimary ? "#fff" : "var(--ink)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", transition:"background 80ms" }}
+                      onMouseEnter={function(e){ if (!isPrimary) e.currentTarget.style.background = "var(--bg-canvas)"; }}
+                      onMouseLeave={function(e){ if (!isPrimary) e.currentTarget.style.background = "transparent"; }}>
+                      <span style={{ width:22, height:22, borderRadius:"50%", background: isPrimary ? "rgba(255,255,255,0.22)" : km.fill, color: isPrimary ? "#fff" : km.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, flexShrink:0, marginTop:1 }}>→</span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                          <span style={{ fontSize:13, fontWeight:600, color: isPrimary ? "#fff" : "var(--ink)" }}>{s.lbl}</span>
+                          {isPrimary && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, letterSpacing:"0.5px", color:"rgba(255,255,255,0.85)", fontWeight:700, padding:"1px 5px", borderRadius:3, background:"rgba(255,255,255,0.18)" }}>RECOMMENDED</span>}
+                        </div>
+                        <div style={{ fontSize:11, color: isPrimary ? "rgba(255,255,255,0.85)" : "var(--ink-3)", lineHeight:1.45, marginTop:3 }}>{s.desc}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="card">
               <div className="card-head">Assignment</div>
               <div className="card-body" style={{ display:"flex", flexDirection:"column", gap:12 }}>
@@ -10283,38 +10290,113 @@ function AddNodeFlow({ onClose }) {
               );
             })()}
 
-            {/* ── STEP 6: Review ── */}
+            {/* ── STEP 6: Review — comprehensive, dashed summary rows like enterprise tools ── */}
             {step === 6 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:820 }}>
-                <div style={{ border:"1px solid var(--line)", borderRadius:10, padding:20, background:"var(--panel)" }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14 }}>
-                    <NodePreview size={40} />
-                    <div>
-                      <div style={{ fontSize:17, fontWeight:600, color:"var(--ink)" }}>{name || "Untitled"}</div>
-                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:catDef.color, marginTop:3, letterSpacing:"0.4px", textTransform:"uppercase" }}>{catDef.label + " · " + properties.length + " fields"}</div>
-                    </div>
-                  </div>
-                  {description && <div style={{ fontSize:12.5, color:"var(--ink-3)", marginBottom:14, lineHeight:1.55 }}>{description}</div>}
-                  <div style={{ display:"grid", gridTemplateColumns:"160px 1fr", gap:"8px 14px", fontSize:12 }}>
-                    <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>SCHEMA</span>
-                    <span style={{ color:"var(--ink)" }}>{properties.length + " fields · PK: " + (pkField || "—") + (naturalKeys.length ? " · NK: " + naturalKeys.join(", ") : "")}</span>
-                    <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>DEDUP</span>
-                    <span style={{ color:"var(--ink)" }}>{dedupStrategy}</span>
-                    <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>EDGES</span>
-                    <span style={{ color:"var(--ink)" }}>{relations.length === 0 ? "none declared" : relations.length + " expected"}</span>
-                    <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>GOVERNANCE</span>
-                    <span style={{ color:"var(--ink)" }}>{"owner " + owner + " · retention " + retentionPolicy + " · " + (complianceTags.length ? complianceTags.join(", ") : "no tags")}</span>
-                    <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>ACCESS</span>
-                    <span style={{ color:"var(--ink)" }}>{"read " + permsRead.length + " · write " + permsWrite.length + " · admin " + permsAdmin.length}</span>
+              <div style={{ display:"flex", flexDirection:"column", gap:22, maxWidth:880 }}>
+                {/* Headline — bigger, more confident */}
+                <div>
+                  <div style={{ fontFamily:"Instrument Serif", fontSize:30, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>Last look before this node type lands in the schema</div>
+                  <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:600 }}>
+                    Once published it appears in the Node catalog with a full audit trail. You can roll back from History within the 30-day change window.
                   </div>
                 </div>
 
+                {/* SUMMARY CARD — dashed-row table */}
+                <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
+                  <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
+                    <span style={{ fontSize:14, fontWeight:600 }}>Summary</span>
+                    <span className="card-head-sub">{(catDef.label || "—") + " · " + properties.length + " fields"}</span>
+                  </div>
+                  <div style={{ padding:"4px 0" }}>
+                    {[
+                      { k:"LABEL",       v: <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, padding:"3px 8px", background:"var(--chip)", borderRadius:5, color:"var(--ink)" }}>{":" + (name || "Untitled")}</span> },
+                      { k:"KIND",        v: shape === "agent" ? "Agent" : shape === "source" ? "Source" : "Entity" },
+                      { k:"CATEGORY",    v: catDef.label.toLowerCase() },
+                      { k:"DESCRIPTION", v: description || <span style={{ color:"var(--ink-4)" }}>—</span> },
+                      { k:"PRIMARY KEY", v: pkField ? <span><code style={{ fontFamily:"JetBrains Mono", color:"var(--ink)" }}>{pkField}</code> <span style={{ color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:10.5 }}>: {(properties.find(function(p){ return p.name === pkField; }) || {}).type || "uuid"}</span></span> : <span style={{ color:"var(--coral)" }}>not set</span> },
+                      { k:"NATURAL KEYS", v: naturalKeys.length ? naturalKeys.map(function(n){ return <code key={n} style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"2px 7px", background:"var(--chip)", borderRadius:4, color:"var(--ink-2)", marginRight:5 }}>{n}</code>; }) : <span style={{ color:"var(--ink-4)" }}>none</span> },
+                      { k:"PROPERTIES",  v: properties.length + " total · " + properties.filter(function(p){ return p.required; }).length + " required · " + properties.filter(function(p){ return p.indexed; }).length + " indexed · " + properties.filter(function(p){ return p.pii; }).length + " PII" },
+                      { k:"DEDUP",       v: dedupStrategy.replace(/_/g," ") },
+                      { k:"RELATIONSHIPS", v: relations.length === 0 ? <span style={{ color:"var(--ink-4)" }}>none declared</span> : relations.length + " edge" + (relations.length !== 1 ? "s" : "") + " · " + relations.map(function(r){ return ":" + r.label; }).slice(0, 3).join(", ") + (relations.length > 3 ? "…" : "") },
+                      { k:"OWNER",       v: owner },
+                      { k:"FRESHNESS SLO", v: "—" },
+                      { k:"RETENTION",   v: retentionPolicy === "forever" ? "Keep forever" : retentionPolicy },
+                      { k:"COMPLIANCE",  v: complianceTags.length ? complianceTags.map(function(t){ return <span key={t} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"2px 6px", background:"var(--chip)", borderRadius:4, color:"var(--ink-2)", marginRight:4 }}>{t}</span>; }) : <span style={{ color:"var(--ink-4)" }}>—</span> }
+                    ].map(function(row, i, arr){
+                      return (
+                        <div key={i} style={{ display:"grid", gridTemplateColumns:"160px 1fr", gap:16, padding:"10px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"baseline" }}>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>{row.k}</span>
+                          <span style={{ fontSize:13, color:"var(--ink)", textAlign:"right" }}>{row.v}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* ACCESS CARD — show full RBAC visually */}
+                <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
+                  <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
+                    <span style={{ fontSize:14, fontWeight:600 }}>Access</span>
+                    <span className="card-head-sub">{"read " + permsRead.length + " · write " + permsWrite.length + " · admin " + permsAdmin.length}</span>
+                  </div>
+                  <div>
+                    {[
+                      { k:"READ",  list: permsRead,  tone:{ bg:"var(--blue-fill)",  fg:"var(--blue)"  } },
+                      { k:"WRITE", list: permsWrite, tone:{ bg:"var(--green-fill)", fg:"var(--green)" } },
+                      { k:"ADMIN", list: permsAdmin, tone:{ bg:"var(--coral-fill)", fg:"var(--coral)" } }
+                    ].map(function(row, i, arr){
+                      return (
+                        <div key={i} style={{ display:"grid", gridTemplateColumns:"100px 1fr", gap:16, padding:"12px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"center" }}>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:row.tone.bg, color:row.tone.fg, fontWeight:700, letterSpacing:"0.5px", justifySelf:"start" }}>{row.k}</span>
+                          <div style={{ display:"flex", flexWrap:"wrap", gap:5, justifyContent:"flex-end" }}>
+                            {row.list.length === 0 ? <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)", fontStyle:"italic" }}>nobody</span> : row.list.map(function(e, j){
+                              return (
+                                <span key={j} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 7px", borderRadius:5, background:"var(--chip)", border:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>
+                                  <span style={{ width:12, height:12, borderRadius: e.kind === "user" ? "50%" : 3, background: e.kind === "user" ? "var(--ink-2)" : "var(--ink-3)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:7.5, fontWeight:700, flexShrink:0 }}>{e.kind === "user" ? e.label.split(" ").map(function(s){ return s[0]; }).join("").slice(0,2) : "G"}</span>
+                                  {e.label}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* INITIAL PROPERTIES CARD — full list */}
+                {properties.length > 0 && (
+                  <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
+                    <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
+                      <span style={{ fontSize:14, fontWeight:600 }}>Initial properties</span>
+                      <span className="card-head-sub">{properties.length + " total"}</span>
+                    </div>
+                    <div>
+                      {properties.map(function(p, i, arr) {
+                        return (
+                          <div key={p.name} style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:12, padding:"9px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"center" }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+                              {p.name === pkField && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 5px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700 }}>PK</span>}
+                              {p.required && p.name !== pkField && <span className="snap-tag" style={{ fontSize:9, padding:"1px 5px" }}>REQ</span>}
+                              {p.indexed && <span className="snap-tag snap-idx" style={{ fontSize:9, padding:"1px 5px" }}>IDX</span>}
+                              {p.pii && <span className="snap-tag snap-pii" style={{ fontSize:9, padding:"1px 5px" }}>PII</span>}
+                              <code style={{ fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink)" }}>{p.name}</code>
+                            </div>
+                            <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{p.type}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* ON SAVE selector */}
                 <div>
                   <label style={lbl}>ON SAVE</label>
                   <div style={{ display:"flex", gap:6 }}>
                     {[{ id:true, l:"Activate immediately" },{ id:false, l:"Save as draft" }].map(function(o){
                       var isOn = activate === o.id;
-                      return <button key={String(o.id)} onClick={function(){ setActivate(o.id); }} style={{ padding:"8px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontSize:12.5, fontFamily:"inherit", cursor:"pointer" }}>{o.l}</button>;
+                      return <button key={String(o.id)} onClick={function(){ setActivate(o.id); }} style={{ padding:"9px 16px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--panel)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontSize:13, fontFamily:"inherit", cursor:"pointer", fontWeight: isOn ? 500 : 400 }}>{o.l}</button>;
                     })}
                   </div>
                 </div>
