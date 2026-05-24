@@ -12465,13 +12465,28 @@ function GraphLandingEmpty({ onCreate, onBack }) {
           WORKSPACE · 0 GRAPHS
         </div>
 
-        <h1 style={{ fontFamily:"Instrument Serif", fontSize:"clamp(48px, 7vw, 92px)", lineHeight:1.02, color:"var(--ink)", margin:0, letterSpacing:"-1.5px", textAlign:"center", maxWidth:980 }}>
-          Build your first<br/>context graph
+        <h1 style={{ fontFamily:"Geist, system-ui, sans-serif", fontWeight:600, fontSize:"clamp(40px, 5.4vw, 64px)", lineHeight:1.08, color:"var(--ink)", margin:0, letterSpacing:"-0.022em", textAlign:"center", maxWidth:980 }}>
+          Build your context graph
         </h1>
 
-        <p style={{ fontFamily:"Geist, system-ui", fontSize:"clamp(14px, 1.3vw, 17px)", color:"var(--ink-2)", lineHeight:1.6, margin:"22px 0 0", maxWidth:620, textAlign:"center" }}>
-          Connect your systems, model the entities that matter, and start querying the relationships across the organisation. Every other graph in this workspace will draw from it.
+        <p style={{ fontFamily:"Geist, system-ui, sans-serif", fontSize:"clamp(14px, 1.25vw, 17px)", color:"var(--ink-2)", lineHeight:1.6, margin:"20px 0 0", maxWidth:680, textAlign:"center" }}>
+          One unified layer where every entity — customers, products, employees, contracts, invoices — connects across every system. Agents, analysts and AI reason on the same source of truth, from CRM and ERP to billing, support and beyond.
         </p>
+
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:36, marginTop:24, flexWrap:"wrap", maxWidth:760 }}>
+          {[
+            { v:"30+",      l:"systems · one model" },
+            { v:"Real-time", l:"impact + lineage" },
+            { v:"AI-ready", l:"context for agents" }
+          ].map(function(s, i){
+            return (
+              <div key={i} style={{ display:"flex", alignItems:"baseline", gap:8 }}>
+                <span style={{ fontFamily:"Geist, system-ui, sans-serif", fontWeight:600, fontSize:15, color:"var(--ink)", letterSpacing:"-0.01em" }}>{s.v}</span>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", letterSpacing:"0.3px" }}>{s.l}</span>
+              </div>
+            );
+          })}
+        </div>
 
         <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:36 }}>
           <button onClick={onCreate} className="btn-dark" style={{ padding:"12px 22px", fontSize:14, display:"inline-flex", alignItems:"center", gap:8 }}>
