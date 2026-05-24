@@ -4329,1087 +4329,1038 @@ function SourcesPane({ sources, node, onLinkSource }) {
   );
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW RULE FLOW — comprehensive modal builder
+// 6 categories × 5 steps × 3-column layout
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var RULE_CATEGORIES = [
+  {
+    id: "validate",
+    label: "Validate",
+    code: "VAL",
+    color: "var(--blue)",
+    fill: "var(--blue-fill)",
+    icon: "✓",
+    title: "Field validation",
+    desc: "Constrain what values are accepted at write time. Block, quarantine, or flag bad data.",
+    example: "arr_usd ≥ 0 · email matches /^.+@.+\\..+$/ · tier IN (SMB, MM, ENT)"
+  },
+  {
+    id: "match",
+    label: "Match",
+    code: "MTC",
+    color: "var(--purple)",
+    fill: "var(--purple-fill)",
+    icon: "≈",
+    title: "Identity resolution",
+    desc: "Recognise when two records refer to the same real-world entity across source systems.",
+    example: "domain exact + name fuzzy → auto-merge ≥ 0.92 · review band 0.75–0.92"
+  },
+  {
+    id: "survive",
+    label: "Survive",
+    code: "SUR",
+    color: "var(--coral)",
+    fill: "var(--coral-fill)",
+    icon: "★",
+    title: "Survivorship",
+    desc: "Decide which source's value wins for a property when multiple sources disagree.",
+    example: "arr_usd: NetSuite > Salesforce > HubSpot · domain: most-complete value wins"
+  },
+  {
+    id: "compute",
+    label: "Compute",
+    code: "CMP",
+    color: "var(--green)",
+    fill: "var(--green-fill)",
+    icon: "ƒ",
+    title: "Derived value",
+    desc: "Materialise a property or edge from other properties, agent output, or graph patterns.",
+    example: "tier := bucket(arr_usd, {SMB,MM,ENT}) · risk_score := agent:cust_health"
+  },
+  {
+    id: "slo",
+    label: "SLO",
+    code: "SLO",
+    color: "var(--gold)",
+    fill: "var(--gold-fill)",
+    icon: "◷",
+    title: "Service-level objective",
+    desc: "Monitor data-quality dimensions over time and alert when a target is breached.",
+    example: "p95(ingest_lag) < 30m over 24h · fill_rate(domain) > 95% over 7d"
+  },
+  {
+    id: "access",
+    label: "Access",
+    code: "ACC",
+    color: "var(--ink-2)",
+    fill: "var(--chip)",
+    icon: "⊕",
+    title: "Access & masking",
+    desc: "Gate PII fields behind required roles. Define masking strategy for non-privileged readers.",
+    example: "fields(pii=true) → require role:acct_admin · tax_id → hash for non-priv"
+  }
+];
+
 function NewRuleFlow({ node, onClose }) {
-  const props = generateProps(node);
-  const firstField = props[0]?.name || "";
+  var props = generateProps(node);
+  var firstField = (props[0] && props[0].name) || "";
 
-  // ── Global ──
-  const [step, setStep]       = useState(1);
-  const [category, setCategory] = useState(null);
+  var [step, setStep] = useState(1);
+  var [cat, setCat] = useState(null);
 
-  // ── Quality state ──
-  const [qKind, setQKind]     = useState("VALIDATE");
-  const [qTitle, setQTitle]   = useState("");
-  const [qSev, setQSev]       = useState("ERROR");
-  const [qManual, setQManual] = useState(false);
-  const [qRawExpr, setQRawExpr] = useState("");
-  const [vField, setVField]   = useState(firstField);
-  const [vOp, setVOp]         = useState("is not null");
-  const [vVal, setVVal]       = useState("");
-  const [vVal2, setVVal2]     = useState("");
-  const [sloDim, setSloDim]   = useState("freshness");
-  const [sloField, setSloField] = useState(firstField);
-  const [sloN, setSloN]       = useState("30");
-  const [sloU, setSloU]       = useState("m");
-  const [accScope, setAccScope] = useState("pii");
-  const [accField, setAccField] = useState(props.find(function(p){ return p.pii; })?.name || firstField);
-  const [accRole, setAccRole]  = useState("");
-  const [qSchedule, setQSchedule] = useState("ingest");
-  const [qActionOnViol, setQActionOnViol] = useState("log");
+  // VALIDATE state
+  var [vField, setVField] = useState(firstField);
+  var [vOp, setVOp] = useState("is_not_null");
+  var [vVal, setVVal] = useState("");
+  var [vVal2, setVVal2] = useState("");
 
-  // ── Match state ──
-  const [mTitle, setMTitle]   = useState("");
-  const [mSignals, setMSignals] = useState([{ field: firstField, strategy: "exact", weight: 1.0 }]);
-  const [mThreshAuto, setMThreshAuto]     = useState("0.92");
-  const [mThreshReview, setMThreshReview] = useState("0.75");
-  const [mOnMatch, setMOnMatch] = useState("review_queue");
-  const [mNotify, setMNotify]  = useState(true);
+  // MATCH state
+  var [mSignals, setMSignals] = useState([{ field: firstField, strategy: "exact", weight: 1.0 }]);
+  var [mAuto, setMAuto] = useState("0.92");
+  var [mReview, setMReview] = useState("0.75");
+  var [mAction, setMAction] = useState("queue");
 
-  // ── Survivorship state ──
-  const [sTitle, setSTitle]   = useState("");
-  const [sProp, setSProp]     = useState(firstField);
-  const [sStrategy, setSStrategy] = useState("source_priority");
-  const [sSources, setSSources] = useState(["Salesforce CRM", "HubSpot Marketing", "NetSuite ERP"]);
-  const [sMinConf, setSMinConf] = useState("0.80");
-  const [sOnConflict, setSOnConflict] = useState("defer");
-  const [sNotifySteward, setSNotifySteward] = useState(true);
+  // SURVIVE state
+  var [sProperty, setSProperty] = useState(firstField);
+  var [sStrategy, setSStrategy] = useState("source_priority");
+  var [sSources, setSSources] = useState(["NetSuite ERP", "Salesforce CRM", "HubSpot Marketing"]);
+  var [sMinConf, setSMinConf] = useState("0.80");
 
-  // ── Helpers ──
-  function opsFor(name) {
-    const t = (props.find(function(p){ return p.name === name; }) || {}).type || "string";
-    if (t === "bool")                      return ["is true", "is false", "is not null"];
-    if (t === "decimal" || t === "float")  return ["is not null", "=", "≠", ">", "≥", "<", "≤", "between"];
-    if (t.startsWith("enum"))              return ["is not null", "is one of", "is not one of"];
-    if (t === "timestamp" || t === "date") return ["is not null", "is after", "is before", "is recent within"];
-    if (t === "struct")                    return ["is not null"];
-    return ["is not null", "equals", "not equals", "contains", "matches regex", "starts with", "ends with"];
+  // COMPUTE state
+  var [cMode, setCMode] = useState("property");
+  var [cOutName, setCOutName] = useState("");
+  var [cOutType, setCOutType] = useState("string");
+  var [cExpr, setCExpr] = useState("");
+  var [cRecompute, setCRecompute] = useState("on_change");
+  var [cEdgeLabel, setCEdgeLabel] = useState("");
+  var [cEdgeTarget, setCEdgeTarget] = useState("");
+
+  // SLO state
+  var [sloDim, setSloDim] = useState("freshness");
+  var [sloField, setSloField] = useState(firstField);
+  var [sloTarget, setSloTarget] = useState("30");
+  var [sloUnit, setSloUnit] = useState("m");
+  var [sloWindow, setSloWindow] = useState("24h");
+  var [sloAlertChan, setSloAlertChan] = useState("#data-alerts");
+
+  // ACCESS state
+  var [accScope, setAccScope] = useState("pii");
+  var [accSpecific, setAccSpecific] = useState((props.find(function(p){ return p.pii; }) || {}).name || firstField);
+  var [accRoles, setAccRoles] = useState(["acct_admin"]);
+  var [accRolesInput, setAccRolesInput] = useState("");
+  var [accMasking, setAccMasking] = useState("redact");
+
+  // Common
+  var [title, setTitle] = useState("");
+  var [description, setDescription] = useState("");
+  var [scopeMode, setScopeMode] = useState("all");
+  var [scopeFilter, setScopeFilter] = useState("");
+  var [trigger, setTrigger] = useState("on_write");
+  var [schedule, setSchedule] = useState("hourly");
+  var [severity, setSeverity] = useState("ERROR");
+  var [onViolation, setOnViolation] = useState(["log"]);
+  var [notifyChan, setNotifyChan] = useState("");
+  var [activate, setActivate] = useState(true);
+
+  var catDef = RULE_CATEGORIES.find(function(c){ return c.id === cat; });
+
+  function opsForField(name) {
+    var p = props.find(function(p){ return p.name === name; }) || {};
+    var t = p.type || "string";
+    if (t === "bool") return [{ id:"is_true", label:"is true" },{ id:"is_false", label:"is false" },{ id:"is_not_null", label:"is not null" }];
+    if (t === "decimal" || t === "float") return [{ id:"is_not_null", label:"is not null" },{ id:"eq", label:"=" },{ id:"ne", label:"≠" },{ id:"gt", label:">" },{ id:"gte", label:"≥" },{ id:"lt", label:"<" },{ id:"lte", label:"≤" },{ id:"between", label:"between" }];
+    if (t.indexOf("enum") === 0) return [{ id:"is_not_null", label:"is not null" },{ id:"in", label:"is one of" },{ id:"not_in", label:"is not one of" }];
+    if (t === "timestamp" || t === "date") return [{ id:"is_not_null", label:"is not null" },{ id:"after", label:"is after" },{ id:"before", label:"is before" },{ id:"recent", label:"is within last" }];
+    return [{ id:"is_not_null", label:"is not null" },{ id:"eq", label:"equals" },{ id:"ne", label:"not equals" },{ id:"contains", label:"contains" },{ id:"regex", label:"matches regex" },{ id:"starts", label:"starts with" },{ id:"ends", label:"ends with" }];
   }
 
-  function buildQExpr() {
-    if (qManual) return qRawExpr;
-    if (qKind === "VALIDATE") {
-      const f = vField, v = vVal || "?";
-      if (vOp === "is not null")      return f + " IS NOT NULL";
-      if (vOp === "is true")          return f + " = TRUE";
-      if (vOp === "is false")         return f + " = FALSE";
-      if (vOp === "=")                return f + " = " + v;
-      if (vOp === "≠")                return f + " != " + v;
-      if (vOp === ">")                return f + " > " + v;
-      if (vOp === "≥")                return f + " >= " + v;
-      if (vOp === "<")                return f + " < " + v;
-      if (vOp === "≤")                return f + " <= " + v;
-      if (vOp === "between")          return f + " BETWEEN " + v + " AND " + (vVal2 || "?");
-      if (vOp === "is one of")        return f + " IN (" + v + ")";
-      if (vOp === "is not one of")    return f + " NOT IN (" + v + ")";
-      if (vOp === "equals")           return f + " = '" + v + "'";
-      if (vOp === "not equals")       return f + " != '" + v + "'";
-      if (vOp === "contains")         return f + " ILIKE '%" + v + "%'";
-      if (vOp === "matches regex")    return f + " ~ /" + v + "/";
-      if (vOp === "starts with")      return f + " ILIKE '" + v + "%'";
-      if (vOp === "ends with")        return f + " ILIKE '%" + v + "'";
-      if (vOp === "is after")         return f + " > '" + v + "'";
-      if (vOp === "is before")        return f + " < '" + v + "'";
-      if (vOp === "is recent within") return f + " >= NOW() - INTERVAL '" + v + "'";
+  function buildExpression() {
+    if (cat === "validate") {
+      var v = vVal || "?";
+      var quoted = isNaN(parseFloat(v)) ? "'" + v + "'" : v;
+      var map = {
+        is_not_null: vField + " IS NOT NULL", is_true: vField + " = TRUE", is_false: vField + " = FALSE",
+        eq: vField + " = " + quoted, ne: vField + " != " + quoted,
+        gt: vField + " > " + v, gte: vField + " >= " + v, lt: vField + " < " + v, lte: vField + " <= " + v,
+        between: vField + " BETWEEN " + v + " AND " + (vVal2 || "?"),
+        in: vField + " IN (" + v + ")", not_in: vField + " NOT IN (" + v + ")",
+        contains: vField + " ILIKE '%" + v + "%'", regex: vField + " ~ /" + v + "/",
+        starts: vField + " ILIKE '" + v + "%'", ends: vField + " ILIKE '%" + v + "'",
+        after: vField + " > '" + v + "'", before: vField + " < '" + v + "'",
+        recent: vField + " >= NOW() - INTERVAL '" + v + "'"
+      };
+      return map[vOp] || (vField + " " + vOp + " ?");
     }
-    if (qKind === "SLO") {
-      if (sloDim === "freshness")    return "p95(ingest_lag) < " + sloN + sloU;
-      if (sloDim === "completeness") return "fill_rate(" + sloField + ") > " + sloN + "%";
-      if (sloDim === "uniqueness")   return "count_distinct(" + sloField + ") / count(*) > " + (sloN / 100);
+    if (cat === "match") {
+      var parts = mSignals.map(function(s){ return s.strategy + "(" + s.field + ")×" + s.weight; });
+      return "score = " + parts.join(" + ") + "\n  auto_merge ≥ " + mAuto + "\n  review " + mReview + "–" + mAuto;
     }
-    if (qKind === "ACCESS") {
-      const scope = accScope === "pii" ? "fields(pii=true)" : accScope === "all" ? "fields(*)" : accField;
-      return scope + " -> require role:" + (accRole || "?");
+    if (cat === "survive") {
+      return sProperty + " ← " + sStrategy + (sStrategy === "source_priority" ? "(" + sSources.join(" > ") + ")" : "") + (sMinConf ? "\n  min_confidence = " + sMinConf : "");
     }
-    return qRawExpr;
+    if (cat === "compute") {
+      if (cMode === "property") return (cOutName || "?") + " : " + cOutType + " := " + (cExpr || "?") + "\n  recompute " + cRecompute;
+      return ":" + (cEdgeLabel || "?") + " → " + (cEdgeTarget || "?") + " WHEN " + (cExpr || "?");
+    }
+    if (cat === "slo") {
+      var dim = sloDim === "freshness" ? "p95(ingest_lag) < " + sloTarget + sloUnit
+        : sloDim === "completeness" ? "fill_rate(" + sloField + ") > " + sloTarget + "%"
+        : sloDim === "validity" ? "pass_rate(" + sloField + ") > " + sloTarget + "%"
+        : sloDim === "uniqueness" ? "distinct_ratio(" + sloField + ") > " + sloTarget + "%"
+        : "drift_score(" + sloField + ") < " + sloTarget;
+      return dim + " over " + sloWindow + " → alert " + sloAlertChan;
+    }
+    if (cat === "access") {
+      var scope = accScope === "pii" ? "fields(pii=true)" : accScope === "all" ? "fields(*)" : accSpecific;
+      return scope + " → require role:(" + accRoles.join(" OR ") + ")\n  on deny: " + accMasking;
+    }
+    return "—";
   }
 
-  const qExpr = buildQExpr();
-  const qOps  = opsFor(vField);
-
-  const sevStyle = function(s) {
-    return s === "ERROR" ? { bg:"var(--coral-fill)", c:"var(--coral)" }
-         : s === "WARN"  ? { bg:"var(--gold-fill)",  c:"var(--gold)"  }
-         :                 { bg:"var(--chip)",        c:"var(--ink-3)" };
-  };
-  const strLabel = function(s) {
-    return ({ source_priority:"Source priority", completeness:"Most complete", recency:"Most recent", recency_weighted:"Recency weighted", source_trust:"Trust tier", confidence:"Confidence" }[s] || s);
-  };
-  const strColor = function(s) {
-    return ({ source_priority:"var(--blue)", completeness:"var(--purple)", recency:"var(--green)", recency_weighted:"var(--green)", source_trust:"var(--coral)", confidence:"var(--gold)" }[s] || "var(--ink-3)");
-  };
-
-  const KIND_LABEL = { VALIDATE:"Field validation", COMPUTE:"Computed property", SLO:"Service-level objective", ACCESS:"Access control", INFER:"Relationship inference" };
-
-  const mWeightSum = mSignals.reduce(function(s,x){ return s+(x.weight||0); }, 0);
-  const mWeightOk  = Math.abs(mWeightSum - 1) < 0.01;
-
-  // ── Dynamic step definitions ──
-  const STEPS = (function() {
-    if (category === "quality") return [
-      { n:1, label:"Category",   sub: "Data quality" },
-      { n:2, label:"Rule kind",  sub: qKind ? KIND_LABEL[qKind] : "What to enforce" },
-      { n:3, label:"Expression", sub: qTitle || "Define condition" },
-      { n:4, label:"Behavior",   sub: "Severity & triggers" },
-      { n:5, label:"Review",     sub: "Confirm & save" },
-    ];
-    if (category === "match") return [
-      { n:1, label:"Category",   sub: "Match rule" },
-      { n:2, label:"Signals",    sub: mSignals.length + (mSignals.length === 1 ? " signal" : " signals") },
-      { n:3, label:"Thresholds", sub: mTitle || "Score bands" },
-      { n:4, label:"Actions",    sub: "On match found" },
-      { n:5, label:"Review",     sub: "Confirm & save" },
-    ];
-    if (category === "survivorship") return [
-      { n:1, label:"Category",  sub: "Survivorship" },
-      { n:2, label:"Property",  sub: sProp || "Target property" },
-      { n:3, label:"Strategy",  sub: sTitle || strLabel(sStrategy) },
-      { n:4, label:"Conflicts", sub: "When no clear winner" },
-      { n:5, label:"Review",    sub: "Confirm & save" },
-    ];
-    return [
-      { n:1, label:"Category",  sub: "Choose rule type" },
-      { n:2, label:"Configure", sub: "—" },
-      { n:3, label:"Configure", sub: "—" },
-      { n:4, label:"Behavior",  sub: "—" },
-      { n:5, label:"Review",    sub: "—" },
-    ];
-  }());
-
-  const stepTitle = STEPS[step - 1] ? STEPS[step - 1].label : "New rule";
-  const stepDescs = {
-    quality: ["Choose what kind of governance rule to create for " + node.label + ".", "Select the enforcement mechanism. Each kind produces different runtime artifacts.", "Build the condition that constitutes a violation. Evaluated against every " + node.label + " instance.", "Set the severity level, run schedule, and what action to take when a violation is detected.", "Review the complete rule definition before it goes live."],
-    match:   ["Choose what kind of governance rule to create for " + node.label + ".", "Define which property signals are compared to determine if two " + node.label + " nodes are the same entity.", "Set the confidence score thresholds that control automatic merging vs. human review.", "Configure what happens when a match is found — auto-merge, soft-link, or queue for steward review.", "Review the complete rule definition before it goes live."],
-    survivorship: ["Choose what kind of governance rule to create for " + node.label + ".", "Select the property this rule governs when multiple sources assert different values.", "Define the arbitration strategy and any source ordering or confidence configuration.", "Specify fallback behavior when the strategy cannot determine a clear winner.", "Review the complete rule definition before it goes live."],
-  };
-  const stepDesc = (stepDescs[category] || stepDescs["quality"])[step - 1] || "";
-
-  // ── canNext gate ──
-  const canNext = (function() {
-    if (step === 1) return !!category;
+  function canContinue() {
+    if (step === 1) return !!cat;
     if (step === 2) {
-      if (category === "quality")      return !!qKind;
-      if (category === "match")        return mSignals.length > 0 && mWeightOk;
-      if (category === "survivorship") return !!sProp;
-    }
-    if (step === 3) {
-      if (category === "quality")      return !!qTitle;
-      if (category === "match")        return !!mTitle && parseFloat(mThreshAuto) > 0 && parseFloat(mThreshReview) > 0;
-      if (category === "survivorship") return !!sTitle && !!sStrategy;
+      if (cat === "validate") return !!vField && !!vOp && (vOp === "is_not_null" || vOp === "is_true" || vOp === "is_false" || !!vVal);
+      if (cat === "match")    return mSignals.length > 0 && mSignals.every(function(s){ return s.field && s.weight > 0; });
+      if (cat === "survive")  return !!sProperty && !!sStrategy;
+      if (cat === "compute")  return cMode === "property" ? (!!cOutName && !!cExpr) : (!!cEdgeLabel && !!cEdgeTarget);
+      if (cat === "slo")      return !!sloTarget;
+      if (cat === "access")   return accRoles.length > 0;
     }
     return true;
-  }());
+  }
 
-  const sel = { border:"1px solid var(--line)", borderRadius:8, padding:"8px 10px", fontSize:12.5, fontFamily:"inherit", color:"var(--ink)", background:"var(--bg-canvas)", outline:"none", cursor:"pointer" };
-  const inp = { border:"1px solid var(--line)", borderRadius:8, padding:"8px 10px", fontSize:12.5, fontFamily:"inherit", color:"var(--ink)", background:"var(--bg-canvas)", outline:"none", boxSizing:"border-box" };
-  const lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:7 };
-  const fieldGap = { display:"flex", flexDirection:"column", gap:6 };
+  var inp = { border:"1px solid var(--line)", borderRadius:7, padding:"7px 10px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--bg-canvas)", outline:"none", boxSizing:"border-box", width:"100%" };
+  var lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:6 };
+
+  var stepNames = ["Category", "Configure", "Scope & trigger", "Behaviour", "Review"];
+  var STEP_HINTS = {
+    1: "What kind of rule are you creating? Each category addresses a distinct concern in the enterprise graph.",
+    2: catDef ? "Configure the " + catDef.label.toLowerCase() + " logic. " + (
+        cat === "validate" ? "Pick a field, an operator, and the value to enforce."
+      : cat === "match"    ? "Add signal fields, pick a comparison strategy per field, and assign weights that sum to 1.0."
+      : cat === "survive"  ? "Pick the property to govern and the arbitration strategy when sources disagree."
+      : cat === "compute"  ? "Define the output, the expression, and when to recompute."
+      : cat === "slo"      ? "Pick a data-quality dimension, the target, and the monitoring window."
+      :                      "Pick the access scope, required roles, and the masking strategy on denial."
+    ) : "",
+    3: "Where does this rule apply and when does it run?",
+    4: "Title, severity, and what happens when the rule fires.",
+    5: "Review the full definition. Activate now or save as a draft pending approval."
+  };
+
+  function updateSignal(idx, key, val) {
+    setMSignals(function(prev){
+      return prev.map(function(s, i){
+        if (i !== idx) return s;
+        var n = {}; Object.keys(s).forEach(function(k){ n[k] = s[k]; });
+        n[key] = val;
+        return n;
+      });
+    });
+  }
+  function addSignal() { setMSignals(function(prev){ return prev.concat([{ field: firstField, strategy: "exact", weight: 0 }]); }); }
+  function removeSignal(idx) { setMSignals(function(prev){ return prev.filter(function(_, i){ return i !== idx; }); }); }
+  var weightSum = mSignals.reduce(function(s, x){ return s + (parseFloat(x.weight) || 0); }, 0);
 
   return (
-    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.48)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
+    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
       onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width:"88vw", maxWidth:1120, height:"87vh", background:"var(--bg-canvas)", borderRadius:14, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 28px 72px rgba(0,0,0,0.36)" }}>
+      <div style={{ width:"94vw", maxWidth:1360, height:"94vh", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
 
-      {/* ── Modal header ── */}
-      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", padding:"20px 28px 16px", borderBottom:"1px solid var(--line)", flexShrink:0 }}>
-        <div style={{ minWidth:0 }}>
-          <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:7 }}>{node.label + " · new rule"}</div>
-          <h2 style={{ fontSize:17, fontWeight:600, color:"var(--ink)", margin:"0 0 5px", lineHeight:1.3 }}>{stepTitle}</h2>
-          <p style={{ fontSize:12.5, color:"var(--ink-3)", margin:0, lineHeight:1.55, maxWidth:560 }}>{stepDesc}</p>
-        </div>
-        <button onClick={onClose}
-          style={{ width:30, height:30, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginLeft:20 }}>
-          ✕
-        </button>
-      </div>
-
-      {/* ── Body ── */}
-      <div style={{ flex:1, display:"flex", minHeight:0 }}>
-
-        {/* Left sidebar */}
-        <div style={{ width:216, flexShrink:0, borderRight:"1px solid var(--line)", padding:"24px 14px", display:"flex", flexDirection:"column", gap:2 }}>
-          {STEPS.map(function(s) {
-            const done = step > s.n, active = step === s.n;
-            return (
-              <button key={s.n}
-                onClick={function(){ if (done) setStep(s.n); }}
-                style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px 10px", borderRadius:7, border:"none", background: active?"var(--panel-2)":"transparent", cursor: done?"pointer":"default", textAlign:"left", width:"100%" }}>
-                <span style={{ width:22, height:22, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0, background: done?"var(--green)":active?"var(--ink)":"var(--line)", color: done||active?"#fff":"var(--ink-3)", marginTop:1 }}>
-                  {done ? "✓" : s.n}
-                </span>
-                <div>
-                  <div style={{ fontSize:12.5, fontWeight: active?600:400, color: active?"var(--ink)":done?"var(--ink-2)":"var(--ink-3)" }}>{s.label}</div>
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:2 }}>{s.sub}</div>
-                </div>
-              </button>
-            );
-          })}
-
-          {/* Category badge */}
-          {category && (
-            <div style={{ marginTop:"auto", paddingTop:20 }}>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:6 }}>Rule type</div>
-              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, padding:"3px 8px", borderRadius:4,
-                background: category==="quality"?"rgba(255,99,99,0.12)":category==="match"?"rgba(99,143,255,0.12)":"rgba(155,111,223,0.12)",
-                color: category==="quality"?"var(--coral)":category==="match"?"var(--blue)":"var(--purple,#9b6fdf)" }}>
-                {category === "quality" ? "DATA QUALITY" : category === "match" ? "MATCH" : "SURVIVORSHIP"}
-              </span>
+        <div style={{ flexShrink:0, height:54, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 22px", background:"var(--panel)" }}>
+          <div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>{node.label + " · NEW RULE"}</div>
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:2 }}>
+              <span style={{ fontFamily:"Instrument Serif", fontSize:18, color:"var(--ink)" }}>{catDef ? catDef.title : "Choose a category"}</span>
+              {catDef && <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:catDef.fill, color:catDef.color, fontWeight:700, letterSpacing:"0.5px" }}>{catDef.code}</span>}
             </div>
-          )}
+          </div>
+          <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
         </div>
 
-        {/* ── Main content ── */}
-        <div style={{ flex:1, overflowY:"auto", padding:"32px 40px", maxWidth:740 }}>
+        <div style={{ flex:1, display:"grid", gridTemplateColumns:"240px minmax(0, 1fr) 320px", minHeight:0 }}>
 
-          {/* ══════════════════════════════════════
-              STEP 1 — Category picker
-          ══════════════════════════════════════ */}
-          {step === 1 && (
-            <div style={{ display:"flex", flexDirection:"column", gap:16, maxWidth:640 }}>
-              {[
-                { id:"quality",      label:"Data Quality",  color:"var(--coral)",            icon:"◈",
-                  desc:"Validate field values, set SLOs, compute derived properties, and gate access to sensitive fields. Rules run on every ingest and produce per-record violation logs.",
-                  examples:["arr_usd >= 0  (field validation)","p95(ingest_lag) < 30m  (freshness SLO)","fields(pii=true) -> require role:pii_viewer  (access gate)","risk_score := agent:cust_health.score  (computed property)"] },
-                { id:"match",        label:"Match",          color:"var(--blue)",             icon:"⊕",
-                  desc:"Define which property signals — and at what confidence thresholds — cause two nodes to be considered the same real-world entity. Controls auto-merge vs. human review queues.",
-                  examples:["domain + company_name (weighted fuzzy)","tax_id exact match -> auto-merge at 1.0","Shared subscription topology -> topology signal","Configure review queue and IS_SAME_AS edges"] },
-                { id:"survivorship", label:"Survivorship",   color:"var(--purple,#9b6fdf)",   icon:"⊞",
-                  desc:"When multiple sources assert conflicting values for the same property, this rule determines which value becomes canonical. Conflicts surface to stewards for manual override.",
-                  examples:["ARR: NetSuite ERP wins over Salesforce","Company name: most recently updated source","Domain: highest fill-rate across sibling fields","billing_address: source trust tier ordering"] },
-              ].map(function(c) {
-                const sel_ = category === c.id;
-                return (
-                  <div key={c.id} onClick={function(){ setCategory(c.id); }}
-                    style={{ padding:"20px 22px", border:"2px solid "+(sel_?c.color:"var(--line)"), borderRadius:12, cursor:"pointer", background: sel_?c.color+"0a":"transparent", transition:"all 120ms" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:5, background: c.color+"18", color: c.color }}>{c.label.toUpperCase()}</span>
-                      {sel_ && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:c.color, marginLeft:"auto" }}>SELECTED ✓</span>}
+          {/* SIDEBAR */}
+          <div style={{ background:"var(--panel-2)", borderRight:"1px solid var(--line)", padding:"20px 14px", display:"flex", flexDirection:"column", gap:4, overflowY:"auto" }}>
+            {stepNames.map(function(name, i) {
+              var n = i + 1; var isOn = step === n; var isDone = step > n;
+              return (
+                <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
+                  style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}>
+                  <span style={{ width:22, height:22, borderRadius:"50%", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0 }}>{isDone ? "✓" : n}</span>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400, lineHeight:1.2 }}>{name}</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, lineHeight:1.3 }}>
+                      {n === 1 && (catDef ? catDef.label : "Pick rule type")}
+                      {n === 2 && (catDef ? "Logic" : "—")}
+                      {n === 3 && (scopeMode === "all" ? "All " + node.label : "Filtered")}
+                      {n === 4 && (cat === "validate" || cat === "slo" || cat === "access" ? severity : (cat === "match" ? mAction : "—"))}
+                      {n === 5 && (activate ? "Activate" : "Draft")}
                     </div>
-                    <p style={{ fontSize:13, color:"var(--ink-2)", lineHeight:1.6, margin:"0 0 14px" }}>{c.desc}</p>
-                    <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                      {c.examples.map(function(ex,i){
+                  </div>
+                </button>
+              );
+            })}
+            <div style={{ marginTop:"auto", padding:"12px 8px", borderTop:"1px dashed var(--line-2)" }}>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", letterSpacing:"0.4px", textTransform:"uppercase", marginBottom:6 }}>SHORTCUTS</div>
+              <div style={{ display:"grid", gridTemplateColumns:"auto 1fr", gap:"5px 10px", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", alignItems:"center" }}>
+                <span style={{ padding:"1px 5px", borderRadius:3, background:"var(--bg-canvas)", border:"1px solid var(--line)" }}>⌘↵</span><span>Activate</span>
+                <span style={{ padding:"1px 5px", borderRadius:3, background:"var(--bg-canvas)", border:"1px solid var(--line)" }}>⌘S</span><span>Save draft</span>
+                <span style={{ padding:"1px 5px", borderRadius:3, background:"var(--bg-canvas)", border:"1px solid var(--line)" }}>esc</span><span>Cancel</span>
+              </div>
+            </div>
+          </div>
+
+          {/* FORM */}
+          <div style={{ padding:"24px 32px 28px", overflowY:"auto" }}>
+            <div style={{ marginBottom:20 }}>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / 5"}</div>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>{stepNames[step-1]}</div>
+              <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:640 }}>{STEP_HINTS[step]}</div>
+            </div>
+
+            {step === 1 && (
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, maxWidth:760 }}>
+                {RULE_CATEGORIES.map(function(c) {
+                  var isOn = cat === c.id;
+                  return (
+                    <button key={c.id} onClick={function(){ setCat(c.id); }}
+                      style={{ textAlign:"left", padding:"16px 18px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--bg-canvas)" : "var(--panel)", borderRadius:10, cursor:"pointer", fontFamily:"inherit", transition:"border-color 80ms", display:"flex", flexDirection:"column", gap:10, boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 8%, transparent)" : "none" }}>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                          <span style={{ width:30, height:30, borderRadius:7, background:c.fill, color:c.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700 }}>{c.icon}</span>
+                          <div>
+                            <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{c.title}</div>
+                            <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:c.color, letterSpacing:"0.6px", fontWeight:700, marginTop:2 }}>{c.code}</div>
+                          </div>
+                        </div>
+                        {isOn && <span style={{ color:"var(--green)", fontFamily:"JetBrains Mono", fontWeight:700 }}>✓</span>}
+                      </div>
+                      <div style={{ fontSize:12, color:"var(--ink-3)", lineHeight:1.5 }}>{c.desc}</div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", lineHeight:1.5, padding:"7px 9px", borderRadius:5, background:"var(--panel-2)", border:"1px dashed var(--line-2)" }}>{c.example}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {step === 2 && cat === "validate" && (
+              <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:620 }}>
+                <div>
+                  <label style={lbl}>FIELD</label>
+                  <select value={vField} onChange={function(e){ setVField(e.target.value); setVVal(""); setVOp("is_not_null"); }} style={inp}>
+                    {props.map(function(p){ return <option key={p.name} value={p.name}>{p.name + "  ·  " + p.type}</option>; })}
+                  </select>
+                </div>
+                <div>
+                  <label style={lbl}>OPERATOR</label>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                    {opsForField(vField).map(function(op){
+                      var isOn = vOp === op.id;
+                      return <button key={op.id} onClick={function(){ setVOp(op.id); }} style={{ padding:"6px 11px", borderRadius:6, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11, cursor:"pointer" }}>{op.label}</button>;
+                    })}
+                  </div>
+                </div>
+                {vOp !== "is_not_null" && vOp !== "is_true" && vOp !== "is_false" && (
+                  <div>
+                    <label style={lbl}>{vOp === "in" || vOp === "not_in" ? "VALUES (comma-separated)" : vOp === "between" ? "RANGE" : "VALUE"}</label>
+                    {vOp === "between" ? (
+                      <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                        <input value={vVal} onChange={function(e){ setVVal(e.target.value); }} placeholder="min" style={inp} />
+                        <span style={{ fontFamily:"JetBrains Mono", color:"var(--ink-3)" }}>to</span>
+                        <input value={vVal2} onChange={function(e){ setVVal2(e.target.value); }} placeholder="max" style={inp} />
+                      </div>
+                    ) : (
+                      <input value={vVal} onChange={function(e){ setVVal(e.target.value); }} placeholder={vOp === "regex" ? "regex pattern" : vOp === "recent" ? "e.g. 30 days" : "value"} style={inp} />
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {step === 2 && cat === "match" && (
+              <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:760 }}>
+                <div>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                    <label style={lbl}>SIGNALS</label>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color: Math.abs(weightSum - 1) < 0.01 ? "var(--green)" : "var(--gold)" }}>{"Σ weights = " + weightSum.toFixed(2) + (Math.abs(weightSum - 1) < 0.01 ? " ✓" : " (should = 1.0)")}</span>
+                  </div>
+                  <div style={{ border:"1px solid var(--line)", borderRadius:8, overflow:"hidden" }}>
+                    <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1.2fr 90px 32px", gap:0, background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", padding:"7px 10px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
+                      <div>Field</div><div>Strategy</div><div style={{ textAlign:"right" }}>Weight</div><div />
+                    </div>
+                    {mSignals.map(function(sig, i) {
+                      return (
+                        <div key={i} style={{ display:"grid", gridTemplateColumns:"1.4fr 1.2fr 90px 32px", gap:6, padding:"7px 10px", alignItems:"center", borderBottom: i < mSignals.length - 1 ? "1px solid var(--line-2)" : "none" }}>
+                          <select value={sig.field} onChange={function(e){ updateSignal(i, "field", e.target.value); }} style={Object.assign({}, inp, { padding:"5px 8px", fontSize:12 })}>
+                            {props.map(function(p){ return <option key={p.name} value={p.name}>{p.name}</option>; })}
+                          </select>
+                          <select value={sig.strategy} onChange={function(e){ updateSignal(i, "strategy", e.target.value); }} style={Object.assign({}, inp, { padding:"5px 8px", fontSize:12 })}>
+                            <option value="exact">exact</option><option value="fuzzy_name">fuzzy_name</option><option value="fuzzy_token">fuzzy_token</option><option value="normalized_domain">normalized_domain</option><option value="normalized_phone">normalized_phone</option><option value="embedding">embedding</option><option value="common_neighbor">common_neighbor</option>
+                          </select>
+                          <input type="number" min="0" max="1" step="0.05" value={sig.weight} onChange={function(e){ updateSignal(i, "weight", parseFloat(e.target.value) || 0); }} style={Object.assign({}, inp, { padding:"5px 8px", fontSize:12, textAlign:"right" })} />
+                          <button onClick={function(){ removeSignal(i); }} disabled={mSignals.length === 1} style={{ width:26, height:26, borderRadius:5, border:"1px solid var(--line)", background: mSignals.length === 1 ? "transparent" : "var(--bg-canvas)", color:"var(--ink-3)", cursor: mSignals.length === 1 ? "not-allowed" : "pointer", opacity: mSignals.length === 1 ? 0.4 : 1 }}>×</button>
+                        </div>
+                      );
+                    })}
+                    <button onClick={addSignal} style={{ width:"100%", padding:"8px 10px", border:"none", borderTop:"1px dashed var(--line-2)", background:"var(--panel-2)", fontFamily:"inherit", fontSize:12, color:"var(--ink-2)", cursor:"pointer", textAlign:"left" }}>+ add signal</button>
+                  </div>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+                  <div>
+                    <label style={lbl}>AUTO-MERGE ≥</label>
+                    <input type="number" min="0" max="1" step="0.01" value={mAuto} onChange={function(e){ setMAuto(e.target.value); }} style={inp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>REVIEW BAND ≥</label>
+                    <input type="number" min="0" max="1" step="0.01" value={mReview} onChange={function(e){ setMReview(e.target.value); }} style={inp} />
+                  </div>
+                </div>
+                <div>
+                  <label style={lbl}>ON AUTO-MATCH</label>
+                  <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                    {[{ id:"merge", l:"Auto-merge into canonical" },{ id:"link", l:"Link with :IS_SAME_AS" },{ id:"queue", l:"Always queue for review" }].map(function(o){
+                      var isOn = mAction === o.id;
+                      return <button key={o.id} onClick={function(){ setMAction(o.id); }} style={{ padding:"8px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--bg-canvas)" : "var(--panel)", fontSize:12, color:"var(--ink)", cursor:"pointer", fontFamily:"inherit" }}>{o.l}</button>;
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {step === 2 && cat === "survive" && (
+              <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:640 }}>
+                <div>
+                  <label style={lbl}>PROPERTY THIS RULE GOVERNS</label>
+                  <select value={sProperty} onChange={function(e){ setSProperty(e.target.value); }} style={inp}>
+                    {props.map(function(p){ return <option key={p.name} value={p.name}>{p.name + "  ·  " + p.type}</option>; })}
+                  </select>
+                </div>
+                <div>
+                  <label style={lbl}>STRATEGY</label>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                    {[{ id:"source_priority", l:"Source priority", d:"Pick from a ranked list" },{ id:"recency", l:"Most recent", d:"Newest updated_at wins" },{ id:"completeness", l:"Most complete", d:"Longest non-null value wins" },{ id:"source_trust", l:"Trust tier", d:"By source trust level" },{ id:"confidence_weighted", l:"Confidence weighted", d:"Blend by per-value confidence" },{ id:"manual_override", l:"Manual override", d:"Steward edit always wins" }].map(function(o){
+                      var isOn = sStrategy === o.id;
+                      return (
+                        <button key={o.id} onClick={function(){ setSStrategy(o.id); }} style={{ textAlign:"left", padding:"10px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit" }}>
+                          <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)" }}>{o.l}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3 }}>{o.d}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {sStrategy === "source_priority" && (
+                  <div>
+                    <label style={lbl}>SOURCE RANKING (highest first)</label>
+                    <div style={{ border:"1px solid var(--line)", borderRadius:8, overflow:"hidden" }}>
+                      {sSources.map(function(src, i){
                         return (
-                          <div key={i} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", display:"flex", alignItems:"center", gap:6 }}>
-                            <span style={{ color:c.color }}>›</span>{ex}
+                          <div key={i} style={{ display:"flex", alignItems:"center", padding:"8px 12px", borderBottom: i < sSources.length-1 ? "1px solid var(--line-2)" : "none", background: i === 0 ? "var(--panel-2)" : "var(--panel)" }}>
+                            <span style={{ width:22, height:22, borderRadius:"50%", background: i === 0 ? "var(--ink)" : "var(--chip)", color: i === 0 ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, marginRight:10 }}>{i + 1}</span>
+                            <span style={{ fontSize:13, color:"var(--ink)", flex:1 }}>{src}</span>
+                            <button onClick={function(){ if (i > 0) setSSources(function(arr){ var n = arr.slice(); var t = n[i]; n[i] = n[i-1]; n[i-1] = t; return n; }); }} disabled={i === 0} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--ink-3)", padding:"2px 6px", opacity: i === 0 ? 0.3 : 1 }}>▲</button>
+                            <button onClick={function(){ if (i < sSources.length-1) setSSources(function(arr){ var n = arr.slice(); var t = n[i]; n[i] = n[i+1]; n[i+1] = t; return n; }); }} disabled={i === sSources.length-1} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--ink-3)", padding:"2px 6px", opacity: i === sSources.length-1 ? 0.3 : 1 }}>▼</button>
                           </div>
                         );
                       })}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════
-              STEP 2 — Quality: Rule kind
-          ══════════════════════════════════════ */}
-          {step === 2 && category === "quality" && (
-            <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:620 }}>
-              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                {[
-                  { id:"VALIDATE", color:"var(--coral)",           desc:"Assert a field value meets a condition — non-null, numeric range, enum membership, regex format, or date recency.",  eg:"arr_usd >= 0  ·  domain ~ /^[a-z0-9-.]+$/  ·  status IS NOT NULL" },
-                  { id:"SLO",      color:"var(--blue)",            desc:"Enforce freshness, completeness, or uniqueness service-level objectives. Violations appear in the SLO dashboard.",    eg:"p95(ingest_lag) < 30m  ·  fill_rate(domain) > 95%  ·  uniqueness > 0.99" },
-                  { id:"ACCESS",   color:"var(--gold)",            desc:"Gate access to fields based on role. Enforced on every read via the graph API — independent of source system ACLs.",   eg:"fields(pii=true) -> require role:pii_viewer" },
-                  { id:"COMPUTE",  color:"var(--green)",           desc:"Derive a new property value from a formula or the output of an agent. Written once, applied to every existing and future node.", eg:"risk_score := agent:cust_health.score  ·  tier := arr_usd -> {SMB,MM,ENT}" },
-                  { id:"INFER",    color:"var(--purple,#9b6fdf)",  desc:"Detect and materialise new graph edges from co-occurring property patterns across nodes. Runs after every ingest batch.",  eg:"Person :PREVIOUSLY_AT Account  ·  Employee :COVERS Territory" },
-                ].map(function(k) {
-                  const active = qKind === k.id;
-                  return (
-                    <div key={k.id} onClick={function(){ setQKind(k.id); setQManual(false); }}
-                      style={{ display:"flex", gap:16, padding:"16px 18px", border:"2px solid "+(active?k.color:"var(--line)"), borderRadius:10, cursor:"pointer", background: active?k.color+"08":"transparent", transition:"all 110ms" }}>
-                      <span className={"rule-kind rule-kind-" + k.id.toLowerCase()} style={{ flexShrink:0, minWidth:68, textAlign:"center", alignSelf:"flex-start", marginTop:2 }}>{k.id}</span>
-                      <div>
-                        <div style={{ fontSize:13, color:"var(--ink-2)", lineHeight:1.55, marginBottom:6 }}>{k.desc}</div>
-                        <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>{k.eg}</code>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div>
-                <div style={{ ...lbl, marginBottom:8 }}>Quick-fill shortcuts</div>
-                <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                  {[
-                    { label:"Required field",  fn:function(){ setQKind("VALIDATE"); setVOp("is not null"); setQSev("ERROR"); setQManual(false); } },
-                    { label:"Non-negative",    fn:function(){ setQKind("VALIDATE"); const f=props.find(function(p){ return p.type==="decimal"||p.type==="float"; })?.name||vField; setVField(f); setVOp(">="); setVVal("0"); setQSev("ERROR"); setQManual(false); } },
-                    { label:"Format regex",    fn:function(){ setQKind("VALIDATE"); setVOp("matches regex"); setVVal(""); setQSev("WARN"); setQManual(false); } },
-                    { label:"Freshness SLO",   fn:function(){ setQKind("SLO"); setSloDim("freshness"); setSloN("30"); setSloU("m"); setQSev("WARN"); setQManual(false); } },
-                    { label:"PII access gate", fn:function(){ setQKind("ACCESS"); setAccScope("pii"); setQSev("ERROR"); setQManual(false); } },
-                  ].map(function(s){
-                    return (
-                      <button key={s.label} onClick={s.fn}
-                        style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"5px 12px", borderRadius:6, border:"1px solid var(--line)", background:"var(--panel-2)", color:"var(--ink-2)", cursor:"pointer" }}>
-                        {s.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════
-              STEP 3 — Quality: Expression
-          ══════════════════════════════════════ */}
-          {step === 3 && category === "quality" && (
-            <div style={{ display:"flex", flexDirection:"column", gap:22, maxWidth:620 }}>
-              <div style={fieldGap}>
-                <div style={lbl}>Rule title</div>
-                <input value={qTitle} onChange={function(e){ setQTitle(e.target.value); }}
-                  placeholder="e.g. ARR must be non-negative"
-                  style={{ ...inp, width:"100%" }} />
-                <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>Used as the display name in dashboards, violation logs, and alerts.</div>
-              </div>
-
-              {qKind === "VALIDATE" && !qManual && (
-                <div style={fieldGap}>
-                  <div style={lbl}>Condition</div>
-                  <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                    <select value={vField} onChange={function(e){ setVField(e.target.value); const ops=opsFor(e.target.value); if (!ops.includes(vOp)) setVOp(ops[0]); }} style={sel}>
-                      {props.map(function(p){ return <option key={p.name} value={p.name}>{p.name + " · " + p.type}</option>; })}
-                    </select>
-                    <select value={vOp} onChange={function(e){ setVOp(e.target.value); }} style={sel}>
-                      {qOps.map(function(op){ return <option key={op} value={op}>{op}</option>; })}
-                    </select>
-                    {!["is not null","is true","is false"].includes(vOp) && (
-                      <input value={vVal} onChange={function(e){ setVVal(e.target.value); }}
-                        placeholder={vOp==="is one of"?"val1, val2":vOp==="matches regex"?"^[a-z]+$":"value"}
-                        style={{ ...inp, width:148 }} />
-                    )}
-                    {vOp === "between" && (
-                      <>
-                        <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>and</span>
-                        <input value={vVal2} onChange={function(e){ setVVal2(e.target.value); }} placeholder="value" style={{ ...inp, width:100 }} />
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {qKind === "SLO" && !qManual && (
-                <div style={fieldGap}>
-                  <div style={lbl}>SLO target</div>
-                  <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                    <select value={sloDim} onChange={function(e){ setSloDim(e.target.value); }} style={sel}>
-                      <option value="freshness">Freshness — p95 ingest lag</option>
-                      <option value="completeness">Completeness — fill rate</option>
-                      <option value="uniqueness">Uniqueness ratio</option>
-                    </select>
-                    {sloDim !== "freshness" && (
-                      <select value={sloField} onChange={function(e){ setSloField(e.target.value); }} style={sel}>
-                        {props.map(function(p){ return <option key={p.name} value={p.name}>{p.name}</option>; })}
-                      </select>
-                    )}
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-3)" }}>{sloDim === "freshness" ? "< " : "> "}</span>
-                    <input value={sloN} onChange={function(e){ setSloN(e.target.value); }} placeholder="30" style={{ ...inp, width:64 }} />
-                    <select value={sloU} onChange={function(e){ setSloU(e.target.value); }} style={sel}>
-                      {sloDim === "freshness"
-                        ? [<option key="m" value="m">min</option>, <option key="h" value="h">hr</option>, <option key="d" value="d">day</option>]
-                        : [<option key="pct" value="%">%</option>]
-                      }
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              {qKind === "ACCESS" && !qManual && (
-                <div style={fieldGap}>
-                  <div style={lbl}>Access scope</div>
-                  <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                    <select value={accScope} onChange={function(e){ setAccScope(e.target.value); }} style={sel}>
-                      <option value="pii">All PII fields</option>
-                      <option value="all">All fields</option>
-                      <option value="specific">Specific field</option>
-                    </select>
-                    {accScope === "specific" && (
-                      <select value={accField} onChange={function(e){ setAccField(e.target.value); }} style={sel}>
-                        {props.map(function(p){ return <option key={p.name} value={p.name}>{p.name}</option>; })}
-                      </select>
-                    )}
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>require role:</span>
-                    <input value={accRole} onChange={function(e){ setAccRole(e.target.value); }} placeholder="e.g. pii_viewer" style={{ ...inp, width:148 }} />
-                  </div>
-                </div>
-              )}
-
-              {(qKind === "COMPUTE" || qKind === "INFER") && (
-                <div style={fieldGap}>
-                  <div style={lbl}>{qKind === "COMPUTE" ? "Formula" : "Relationship pattern"}</div>
-                  <textarea value={qRawExpr} onChange={function(e){ setQRawExpr(e.target.value); }}
-                    placeholder={qKind === "COMPUTE" ? "risk_score := agent:cust_health.score" : "Person :PREVIOUSLY_AT Account"}
-                    rows={3}
-                    style={{ ...inp, width:"100%", fontFamily:"JetBrains Mono", fontSize:12, resize:"vertical", lineHeight:1.6 }} />
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>
-                    {qKind === "COMPUTE" ? "Use := for assignment. Reference agents with agent:name.property." : "Use Cypher-style pattern. Evaluated against every ingest batch."}
-                  </div>
-                </div>
-              )}
-
-              {(qKind === "VALIDATE" || qKind === "SLO" || qKind === "ACCESS") && (
-                <div style={{ border:"1px solid var(--line-2)", borderRadius:10, overflow:"hidden" }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 14px", borderBottom:"1px dashed var(--line-2)", background:"var(--panel-2)" }}>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>Generated expression</span>
-                    <button onClick={function(){ setQManual(!qManual); if (!qManual) setQRawExpr(qExpr); }}
-                      style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--blue)", background:"none", border:"none", cursor:"pointer", padding:0 }}>
-                      {qManual ? "Use builder" : "Edit manually"}
-                    </button>
-                  </div>
-                  <div style={{ padding:"12px 14px" }}>
-                    {qManual
-                      ? <textarea value={qRawExpr} onChange={function(e){ setQRawExpr(e.target.value); }} rows={2}
-                          style={{ width:"100%", border:"none", background:"transparent", fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink)", outline:"none", resize:"none", boxSizing:"border-box", lineHeight:1.6 }} />
-                      : <code style={{ fontFamily:"JetBrains Mono", fontSize:13, color: qExpr.includes("?") ? "var(--ink-3)" : "var(--ink)" }}>
-                          {qExpr || "fill in the condition above"}
-                        </code>
-                    }
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════
-              STEP 4 — Quality: Behavior
-          ══════════════════════════════════════ */}
-          {step === 4 && category === "quality" && (
-            <div style={{ display:"flex", flexDirection:"column", gap:28, maxWidth:560 }}>
-              <div style={fieldGap}>
-                <div style={lbl}>Severity</div>
-                <div style={{ display:"flex", gap:10 }}>
-                  {["ERROR","WARN","INFO"].map(function(s){
-                    const { bg, c } = sevStyle(s);
-                    const descs = { ERROR:"Blocks publish, raises alert, creates ticket", WARN:"Logged and surfaced in quality dashboard", INFO:"Informational — no action triggered" };
-                    return (
-                      <div key={s} onClick={function(){ setQSev(s); }}
-                        style={{ flex:1, padding:"14px 16px", border:"2px solid "+(qSev===s?c:"var(--line)"), borderRadius:10, cursor:"pointer", background: qSev===s?bg:"transparent" }}>
-                        <div style={{ fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, color:c, marginBottom:5 }}>{s}</div>
-                        <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.5 }}>{descs[s]}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div style={fieldGap}>
-                <div style={lbl}>Run schedule</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {[
-                    { id:"ingest",  label:"On every ingest",   desc:"Evaluates synchronously after each source write. Recommended for field-level validations." },
-                    { id:"daily",   label:"Daily snapshot",    desc:"Runs once per day on the full node population. Efficient for aggregate or SLO checks." },
-                    { id:"weekly",  label:"Weekly batch",      desc:"Lower-frequency sweep. Suitable for expensive INFER or COMPUTE rules." },
-                    { id:"manual",  label:"Manual trigger",    desc:"Only runs when explicitly triggered via API or the steward dashboard." },
-                  ].map(function(s){
-                    return (
-                      <div key={s.id} onClick={function(){ setQSchedule(s.id); }}
-                        style={{ display:"flex", alignItems:"center", gap:14, padding:"12px 16px", border:"2px solid "+(qSchedule===s.id?"var(--ink)":"var(--line)"), borderRadius:8, cursor:"pointer", background: qSchedule===s.id?"var(--panel-2)":"transparent" }}>
-                        <div style={{ width:14, height:14, borderRadius:"50%", border:"2px solid "+(qSchedule===s.id?"var(--ink)":"var(--line-2)"), background: qSchedule===s.id?"var(--ink)":"transparent", flexShrink:0 }} />
-                        <div>
-                          <div style={{ fontSize:13, fontWeight: qSchedule===s.id?600:400, color:"var(--ink)" }}>{s.label}</div>
-                          <div style={{ fontSize:11.5, color:"var(--ink-3)", marginTop:2 }}>{s.desc}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div style={fieldGap}>
-                <div style={lbl}>Action on violation</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {[
-                    { id:"log",    label:"Log only",             desc:"Record violation. No notification or blocking. Use for informational tracking." },
-                    { id:"notify", label:"Alert data steward",   desc:"Send notification to the node's assigned steward via configured channel." },
-                    { id:"ticket", label:"Create remediation ticket", desc:"Automatically file a tracked issue with violation details and affected record count." },
-                    { id:"block",  label:"Block write operation", desc:"Prevent the violating record from being written to the graph until resolved." },
-                  ].map(function(a){
-                    return (
-                      <div key={a.id} onClick={function(){ setQActionOnViol(a.id); }}
-                        style={{ display:"flex", alignItems:"center", gap:14, padding:"12px 16px", border:"2px solid "+(qActionOnViol===a.id?"var(--ink)":"var(--line)"), borderRadius:8, cursor:"pointer", background: qActionOnViol===a.id?"var(--panel-2)":"transparent" }}>
-                        <div style={{ width:14, height:14, borderRadius:"50%", border:"2px solid "+(qActionOnViol===a.id?"var(--ink)":"var(--line-2)"), background: qActionOnViol===a.id?"var(--ink)":"transparent", flexShrink:0 }} />
-                        <div>
-                          <div style={{ fontSize:13, fontWeight: qActionOnViol===a.id?600:400, color:"var(--ink)" }}>{a.label}</div>
-                          <div style={{ fontSize:11.5, color:"var(--ink-3)", marginTop:2 }}>{a.desc}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════
-              STEP 2 — Match: Signals
-          ══════════════════════════════════════ */}
-          {step === 2 && category === "match" && (
-            <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:640 }}>
-              <div style={{ padding:"14px 16px", background:"var(--panel-2)", borderRadius:8, border:"1px solid var(--line-2)" }}>
-                <div style={{ fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, color:"var(--blue)", marginBottom:5 }}>HOW SIGNALS WORK</div>
-                <div style={{ fontSize:12.5, color:"var(--ink-2)", lineHeight:1.6 }}>Each signal is a property comparison strategy with a weight (0–1). The weighted sum of individual signal scores produces a composite confidence score that is compared against your thresholds in the next step. Weights must sum to exactly 1.0.</div>
-              </div>
-              <div style={fieldGap}>
-                <div style={lbl}>Signals</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 80px 32px", gap:8, paddingBottom:6, borderBottom:"1px solid var(--line-2)" }}>
-                    {["Property","Strategy","Weight",""].map(function(h,i){ return <div key={i} style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", letterSpacing:"0.5px", textTransform:"uppercase" }}>{h}</div>; })}
-                  </div>
-                  {mSignals.map(function(sig, i) {
-                    return (
-                      <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 80px 32px", gap:8, alignItems:"center" }}>
-                        <select value={sig.field}
-                          onChange={function(e){ const ns=[...mSignals]; ns[i]={...ns[i],field:e.target.value}; setMSignals(ns); }}
-                          style={sel}>
-                          {props.map(function(p){ return <option key={p.name} value={p.name}>{p.name}</option>; })}
-                        </select>
-                        <select value={sig.strategy}
-                          onChange={function(e){ const ns=[...mSignals]; ns[i]={...ns[i],strategy:e.target.value}; setMSignals(ns); }}
-                          style={sel}>
-                          <option value="exact">Exact match</option>
-                          <option value="normalized_domain">Normalized domain</option>
-                          <option value="fuzzy_name">Fuzzy name (Jaro-Winkler)</option>
-                          <option value="common_neighbor">Common graph neighbor</option>
-                          <option value="phonetic">Phonetic (Soundex)</option>
-                          <option value="token_sort">Token sort ratio</option>
-                        </select>
-                        <input type="number" value={sig.weight} min="0" max="1" step="0.05"
-                          onChange={function(e){ const ns=[...mSignals]; ns[i]={...ns[i],weight:parseFloat(e.target.value)||0}; setMSignals(ns); }}
-                          style={{ ...inp, width:"100%" }} />
-                        {mSignals.length > 1
-                          ? <button onClick={function(){ setMSignals(mSignals.filter(function(_,j){ return j!==i; })); }}
-                              style={{ width:28, height:28, borderRadius:6, border:"1px solid var(--line)", background:"none", color:"var(--ink-3)", cursor:"pointer", fontSize:16, display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
-                          : <div />
-                        }
-                      </div>
-                    );
-                  })}
-                </div>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:4 }}>
-                  <button onClick={function(){ setMSignals([...mSignals, { field:firstField, strategy:"exact", weight:0 }]); }}
-                    style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--blue)", background:"none", border:"1px dashed var(--line)", borderRadius:6, padding:"6px 14px", cursor:"pointer" }}>
-                    + Add signal
-                  </button>
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:12, fontWeight:600, color: mWeightOk?"var(--green)":"var(--coral)" }}>
-                    {"Weight sum: " + mWeightSum.toFixed(2) + (mWeightOk ? " ✓" : " (must equal 1.0)")}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════
-              STEP 3 — Match: Thresholds
-          ══════════════════════════════════════ */}
-          {step === 3 && category === "match" && (
-            <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:580 }}>
-              <div style={fieldGap}>
-                <div style={lbl}>Rule title</div>
-                <input value={mTitle} onChange={function(e){ setMTitle(e.target.value); }}
-                  placeholder="e.g. Domain-based company match"
-                  style={{ ...inp, width:"100%" }} />
-              </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
-                <div style={fieldGap}>
-                  <div style={lbl}>Auto-merge threshold</div>
-                  <input value={mThreshAuto} onChange={function(e){ setMThreshAuto(e.target.value); }} placeholder="0.92" style={{ ...inp, width:"100%" }} />
-                  <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.5 }}>Pairs above this score are merged automatically — no human review required.</div>
-                </div>
-                <div style={fieldGap}>
-                  <div style={lbl}>Review threshold</div>
-                  <input value={mThreshReview} onChange={function(e){ setMThreshReview(e.target.value); }} placeholder="0.75" style={{ ...inp, width:"100%" }} />
-                  <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.5 }}>Pairs between this and the auto-merge threshold are queued for steward review.</div>
-                </div>
-              </div>
-              {(function(){
-                const auto   = Math.min(Math.max(parseFloat(mThreshAuto)||0.92, 0), 1);
-                const review = Math.min(Math.max(parseFloat(mThreshReview)||0.75, 0), 1);
-                const rPct   = Math.min(review, auto) * 100;
-                const aPct   = auto * 100;
-                return (
-                  <div style={fieldGap}>
-                    <div style={lbl}>Score band preview</div>
-                    <div style={{ position:"relative", height:44, borderRadius:8, overflow:"hidden", border:"1px solid var(--line-2)" }}>
-                      <div style={{ position:"absolute", left:0, width:rPct+"%", height:"100%", background:"var(--coral-fill)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                        <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--coral)", fontWeight:700 }}>NO MATCH</span>
-                      </div>
-                      <div style={{ position:"absolute", left:rPct+"%", width:(aPct-rPct)+"%", height:"100%", background:"var(--gold-fill)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                        <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--gold)", fontWeight:700 }}>REVIEW QUEUE</span>
-                      </div>
-                      <div style={{ position:"absolute", left:aPct+"%", right:0, height:"100%", background:"rgba(72,199,142,0.12)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                        <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--green)", fontWeight:700 }}>AUTO-MERGE</span>
-                      </div>
-                    </div>
-                    <div style={{ display:"flex", justifyContent:"space-between", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)" }}>
-                      <span>0.0</span><span>{mThreshReview}</span><span>{mThreshAuto}</span><span>1.0</span>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════
-              STEP 4 — Match: Actions
-          ══════════════════════════════════════ */}
-          {step === 4 && category === "match" && (
-            <div style={{ display:"flex", flexDirection:"column", gap:28, maxWidth:560 }}>
-              <div style={fieldGap}>
-                <div style={lbl}>When auto-merge threshold is exceeded</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {[
-                    { id:"merge",        label:"Merge nodes",              desc:"Collapse both nodes into a single canonical record. Property values are resolved via survivorship rules." },
-                    { id:"link",         label:"Link as IS_SAME_AS",       desc:"Create a soft IS_SAME_AS edge between the nodes without merging. Both records remain distinct but are linked." },
-                    { id:"review_queue", label:"Queue for steward review", desc:"Even above the auto-merge threshold, require a human to approve before any merge action is taken." },
-                  ].map(function(a){
-                    return (
-                      <div key={a.id} onClick={function(){ setMOnMatch(a.id); }}
-                        style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"14px 16px", border:"2px solid "+(mOnMatch===a.id?"var(--ink)":"var(--line)"), borderRadius:8, cursor:"pointer", background: mOnMatch===a.id?"var(--panel-2)":"transparent" }}>
-                        <div style={{ width:16, height:16, borderRadius:"50%", border:"2px solid "+(mOnMatch===a.id?"var(--ink)":"var(--line-2)"), background: mOnMatch===a.id?"var(--ink)":"transparent", flexShrink:0, marginTop:1 }} />
-                        <div>
-                          <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)", marginBottom:4 }}>{a.label}</div>
-                          <div style={{ fontSize:12, color:"var(--ink-3)", lineHeight:1.5 }}>{a.desc}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel-2)" }}>
+                )}
                 <div>
-                  <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)", marginBottom:3 }}>Notify data steward</div>
-                  <div style={{ fontSize:12, color:"var(--ink-3)" }}>Send a notification when new candidates enter the review queue.</div>
-                </div>
-                <div onClick={function(){ setMNotify(!mNotify); }}
-                  style={{ width:40, height:22, borderRadius:11, background: mNotify?"var(--ink)":"var(--line-2)", cursor:"pointer", position:"relative", flexShrink:0, transition:"background 150ms" }}>
-                  <div style={{ position:"absolute", top:3, left: mNotify?20:3, width:16, height:16, borderRadius:"50%", background:"#fff", transition:"left 150ms" }} />
+                  <label style={lbl}>MIN CONFIDENCE (0–1)</label>
+                  <input value={sMinConf} onChange={function(e){ setSMinConf(e.target.value); }} style={inp} />
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* ══════════════════════════════════════
-              STEP 2 — Survivorship: Property
-          ══════════════════════════════════════ */}
-          {step === 2 && category === "survivorship" && (
-            <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:560 }}>
-              <div style={fieldGap}>
-                <div style={lbl}>Target property</div>
-                <select value={sProp} onChange={function(e){ setSProp(e.target.value); }} style={{ ...sel, width:"100%" }}>
-                  {props.map(function(p){ return <option key={p.name} value={p.name}>{p.name + " · " + p.type}</option>; })}
-                </select>
-                <div style={{ fontSize:12, color:"var(--ink-3)", lineHeight:1.5 }}>This rule governs the canonical value of <code style={{ fontFamily:"JetBrains Mono", fontSize:11 }}>{sProp}</code> on each <strong>{node.label}</strong> node when multiple sources assert different values.</div>
-              </div>
-              <div style={{ padding:"16px 18px", background:"var(--panel-2)", border:"1px solid var(--line-2)", borderRadius:10 }}>
-                <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, color:"var(--purple,#9b6fdf)", letterSpacing:"0.5px", marginBottom:8 }}>WHAT SURVIVORSHIP DOES</div>
-                <div style={{ fontSize:12.5, color:"var(--ink-2)", lineHeight:1.65 }}>On every ingest cycle, the survivorship engine collects all source assertions for this property across all connected sources. It then applies your chosen strategy to select the canonical value. If the strategy cannot produce a clear winner, a conflict is raised for steward review.</div>
-              </div>
-              <div style={fieldGap}>
-                <div style={lbl}>Asserted by sources</div>
-                <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                  {["Salesforce CRM","HubSpot Marketing","NetSuite ERP","Manual / Admin"].map(function(src){
-                    return (
-                      <span key={src} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"4px 10px", borderRadius:5, background:"var(--chip)", color:"var(--ink-2)", border:"1px solid var(--line-2)" }}>{src}</span>
-                    );
-                  })}
+            {step === 2 && cat === "compute" && (
+              <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:680 }}>
+                <div>
+                  <label style={lbl}>OUTPUT</label>
+                  <div style={{ display:"flex", gap:6 }}>
+                    {[{ id:"property", l:"Property" },{ id:"edge", l:"Inferred edge" }].map(function(o){
+                      var isOn = cMode === o.id;
+                      return <button key={o.id} onClick={function(){ setCMode(o.id); }} style={{ padding:"7px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontSize:12.5, fontFamily:"inherit", cursor:"pointer" }}>{o.l}</button>;
+                    })}
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════
-              STEP 3 — Survivorship: Strategy
-          ══════════════════════════════════════ */}
-          {step === 3 && category === "survivorship" && (
-            <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:640 }}>
-              <div style={fieldGap}>
-                <div style={lbl}>Rule title</div>
-                <input value={sTitle} onChange={function(e){ setSTitle(e.target.value); }}
-                  placeholder={"e.g. " + sProp + ": " + strLabel(sStrategy).toLowerCase() + " wins"}
-                  style={{ ...inp, width:"100%" }} />
-              </div>
-              <div style={fieldGap}>
-                <div style={lbl}>Arbitration strategy</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {[
-                    { id:"source_priority",  label:"Source priority",   color:"var(--blue)",            desc:"Sources are evaluated in a ranked order you define. First non-null value from the highest-ranked source wins." },
-                    { id:"recency",          label:"Most recent",        color:"var(--green)",           desc:"The assertion with the latest updated_at timestamp wins, regardless of source." },
-                    { id:"recency_weighted", label:"Recency weighted",   color:"var(--green)",           desc:"Recency score multiplied by a per-source trust weight. Highest composite score wins." },
-                    { id:"completeness",     label:"Most complete",      color:"var(--purple,#9b6fdf)",  desc:"The source with the highest fill-rate across sibling properties on the same node wins." },
-                    { id:"source_trust",     label:"Trust tier",         color:"var(--coral)",           desc:"Sources are grouped into trust tiers (Gold, Silver, Bronze). Highest-tier non-null value wins." },
-                    { id:"confidence",       label:"Confidence score",   color:"var(--gold)",            desc:"Each assertion includes a machine-generated confidence score (0–1). Highest-confidence value above threshold wins." },
-                  ].map(function(s){
-                    return (
-                      <div key={s.id} onClick={function(){ setSStrategy(s.id); }}
-                        style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"14px 16px", border:"2px solid "+(sStrategy===s.id?s.color:"var(--line)"), borderRadius:8, cursor:"pointer", background: sStrategy===s.id?s.color+"08":"transparent" }}>
-                        <span style={{ fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:4, background:s.color+"18", color:s.color, flexShrink:0, minWidth:110, textAlign:"center", marginTop:1 }}>{s.label.toUpperCase()}</span>
-                        <div style={{ fontSize:12.5, color:"var(--ink-2)", lineHeight:1.55 }}>{s.desc}</div>
+                {cMode === "property" ? (
+                  <>
+                    <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:14 }}>
+                      <div>
+                        <label style={lbl}>NEW PROPERTY NAME</label>
+                        <input value={cOutName} onChange={function(e){ setCOutName(e.target.value); }} placeholder="e.g. risk_score" style={inp} />
                       </div>
-                    );
-                  })}
-                </div>
+                      <div>
+                        <label style={lbl}>TYPE</label>
+                        <select value={cOutType} onChange={function(e){ setCOutType(e.target.value); }} style={inp}>
+                          <option value="string">string</option><option value="decimal">decimal</option><option value="float">float</option><option value="bool">bool</option><option value="timestamp">timestamp</option><option value="enum">enum</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label style={lbl}>EXPRESSION OR FORMULA</label>
+                      <textarea value={cExpr} onChange={function(e){ setCExpr(e.target.value); }} rows={3} placeholder="e.g. bucket(arr_usd, [10000,100000,1000000], ['SMB','MM','ENT'])" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12, resize:"vertical", lineHeight:1.5 })} />
+                    </div>
+                    <div>
+                      <label style={lbl}>RECOMPUTE TRIGGER</label>
+                      <div style={{ display:"flex", gap:6 }}>
+                        {[{ id:"on_change", l:"On input change" },{ id:"scheduled", l:"Scheduled" },{ id:"manual", l:"Manual only" }].map(function(o){
+                          var isOn = cRecompute === o.id;
+                          return <button key={o.id} onClick={function(){ setCRecompute(o.id); }} style={{ padding:"7px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--bg-canvas)" : "var(--panel)", color:"var(--ink)", fontSize:12, fontFamily:"inherit", cursor:"pointer" }}>{o.l}</button>;
+                        })}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+                      <div>
+                        <label style={lbl}>EDGE LABEL</label>
+                        <input value={cEdgeLabel} onChange={function(e){ setCEdgeLabel(e.target.value.toUpperCase().replace(/[^A-Z_]/g, "")); }} placeholder="e.g. PREVIOUSLY_AT" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono" })} />
+                      </div>
+                      <div>
+                        <label style={lbl}>TARGET NODE TYPE</label>
+                        <select value={cEdgeTarget} onChange={function(e){ setCEdgeTarget(e.target.value); }} style={inp}>
+                          <option value="">— pick target —</option>
+                          {NODES.filter(function(n){ return n.type !== "source"; }).map(function(n){ return <option key={n.id} value={n.id}>{n.label}</option>; })}
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label style={lbl}>CYPHER PATTERN</label>
+                      <textarea value={cExpr} onChange={function(e){ setCExpr(e.target.value); }} rows={3} placeholder="e.g. MATCH (a:Account)-[:EMPLOYED]->(p:Person) WHERE …" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12, resize:"vertical", lineHeight:1.5 })} />
+                    </div>
+                  </>
+                )}
               </div>
-              {(sStrategy === "source_priority" || sStrategy === "source_trust" || sStrategy === "recency_weighted") && (
-                <div style={fieldGap}>
-                  <div style={lbl}>Source order <span style={{ fontFamily:"inherit", fontSize:11, letterSpacing:0, textTransform:"none", color:"var(--ink-3)", marginLeft:6 }}>— highest authority first</span></div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                    {sSources.map(function(src, i){
+            )}
+
+            {step === 2 && cat === "slo" && (
+              <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:640 }}>
+                <div>
+                  <label style={lbl}>DIMENSION</label>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                    {[{ id:"freshness", l:"Freshness", d:"p95 ingest lag below target" },{ id:"completeness", l:"Completeness", d:"Non-null fill rate" },{ id:"validity", l:"Validity", d:"% records passing VALIDATE rules" },{ id:"uniqueness", l:"Uniqueness", d:"Distinct value ratio" },{ id:"drift", l:"Drift", d:"Distribution shift vs baseline" }].map(function(o){
+                      var isOn = sloDim === o.id;
                       return (
-                        <div key={src} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel-2)" }}>
-                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, width:20, color:"var(--ink-4)", flexShrink:0 }}>{"#"+(i+1)}</span>
-                          <span style={{ flex:1, fontSize:13 }}>{src}</span>
-                          <div style={{ display:"flex", gap:2 }}>
-                            <button disabled={i===0}
-                              onClick={function(){ const s=[...sSources]; var t=s[i-1]; s[i-1]=s[i]; s[i]=t; setSSources(s); }}
-                              style={{ background:"none", border:"1px solid var(--line)", borderRadius:4, cursor:i===0?"default":"pointer", color:i===0?"var(--ink-4)":"var(--ink-2)", fontSize:12, padding:"2px 6px", lineHeight:1 }}>▲</button>
-                            <button disabled={i===sSources.length-1}
-                              onClick={function(){ const s=[...sSources]; var t=s[i+1]; s[i+1]=s[i]; s[i]=t; setSSources(s); }}
-                              style={{ background:"none", border:"1px solid var(--line)", borderRadius:4, cursor:i===sSources.length-1?"default":"pointer", color:i===sSources.length-1?"var(--ink-4)":"var(--ink-2)", fontSize:12, padding:"2px 6px", lineHeight:1 }}>▼</button>
-                          </div>
-                        </div>
+                        <button key={o.id} onClick={function(){ setSloDim(o.id); }} style={{ textAlign:"left", padding:"10px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit" }}>
+                          <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)" }}>{o.l}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3 }}>{o.d}</div>
+                        </button>
                       );
                     })}
                   </div>
                 </div>
-              )}
-              {sStrategy === "confidence" && (
-                <div style={fieldGap}>
-                  <div style={lbl}>Minimum confidence threshold</div>
-                  <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                    <input value={sMinConf} onChange={function(e){ setSMinConf(e.target.value); }} placeholder="0.80" style={{ ...inp, width:90 }} />
-                    <span style={{ fontSize:12.5, color:"var(--ink-3)" }}>Assertions below this threshold are treated as missing and excluded from arbitration.</span>
+                {sloDim !== "freshness" && (
+                  <div>
+                    <label style={lbl}>FIELD</label>
+                    <select value={sloField} onChange={function(e){ setSloField(e.target.value); }} style={inp}>
+                      {props.map(function(p){ return <option key={p.name} value={p.name}>{p.name}</option>; })}
+                    </select>
+                  </div>
+                )}
+                <div style={{ display:"grid", gridTemplateColumns: sloDim === "freshness" ? "2fr 1fr 1fr" : "2fr 1fr", gap:14 }}>
+                  <div>
+                    <label style={lbl}>{sloDim === "freshness" ? "TARGET (≤)" : "TARGET (≥)"}</label>
+                    <input value={sloTarget} onChange={function(e){ setSloTarget(e.target.value); }} style={inp} />
+                  </div>
+                  {sloDim === "freshness" && (
+                    <div>
+                      <label style={lbl}>UNIT</label>
+                      <select value={sloUnit} onChange={function(e){ setSloUnit(e.target.value); }} style={inp}>
+                        <option value="s">s</option><option value="m">m</option><option value="h">h</option><option value="d">d</option>
+                      </select>
+                    </div>
+                  )}
+                  <div>
+                    <label style={lbl}>WINDOW</label>
+                    <select value={sloWindow} onChange={function(e){ setSloWindow(e.target.value); }} style={inp}>
+                      <option value="1h">1h</option><option value="24h">24h</option><option value="7d">7d</option><option value="30d">30d</option>
+                    </select>
                   </div>
                 </div>
-              )}
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════
-              STEP 4 — Survivorship: Conflict handling
-          ══════════════════════════════════════ */}
-          {step === 4 && category === "survivorship" && (
-            <div style={{ display:"flex", flexDirection:"column", gap:28, maxWidth:560 }}>
-              <div style={fieldGap}>
-                <div style={lbl}>When the strategy cannot determine a winner</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {[
-                    { id:"defer",        label:"Defer to steward review",     desc:"Raise a conflict in the steward queue. The canonical value is frozen until a human resolves it." },
-                    { id:"suppress",     label:"Keep last known canonical",   desc:"Retain the previously resolved canonical value. Conflict is logged but not surfaced for review." },
-                    { id:"first_nonnull",label:"Use first non-null value",    desc:"Pick the first non-null assertion from any source, evaluated in source-priority order." },
-                    { id:"flag",         label:"Flag and leave unresolved",   desc:"Mark the property as unresolved on the node record. Downstream consumers can detect and handle this state." },
-                  ].map(function(a){
-                    return (
-                      <div key={a.id} onClick={function(){ setSOnConflict(a.id); }}
-                        style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"14px 16px", border:"2px solid "+(sOnConflict===a.id?"var(--ink)":"var(--line)"), borderRadius:8, cursor:"pointer", background: sOnConflict===a.id?"var(--panel-2)":"transparent" }}>
-                        <div style={{ width:16, height:16, borderRadius:"50%", border:"2px solid "+(sOnConflict===a.id?"var(--ink)":"var(--line-2)"), background: sOnConflict===a.id?"var(--ink)":"transparent", flexShrink:0, marginTop:1 }} />
-                        <div>
-                          <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)", marginBottom:4 }}>{a.label}</div>
-                          <div style={{ fontSize:12, color:"var(--ink-3)", lineHeight:1.5 }}>{a.desc}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel-2)" }}>
                 <div>
-                  <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)", marginBottom:3 }}>Notify data steward on conflict</div>
-                  <div style={{ fontSize:12, color:"var(--ink-3)" }}>Send a steward notification whenever a conflict is raised for this property.</div>
-                </div>
-                <div onClick={function(){ setSNotifySteward(!sNotifySteward); }}
-                  style={{ width:40, height:22, borderRadius:11, background: sNotifySteward?"var(--ink)":"var(--line-2)", cursor:"pointer", position:"relative", flexShrink:0, transition:"background 150ms" }}>
-                  <div style={{ position:"absolute", top:3, left: sNotifySteward?20:3, width:16, height:16, borderRadius:"50%", background:"#fff", transition:"left 150ms" }} />
+                  <label style={lbl}>ALERT CHANNEL ON BREACH</label>
+                  <input value={sloAlertChan} onChange={function(e){ setSloAlertChan(e.target.value); }} placeholder="#data-alerts or oncall@" style={inp} />
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* ══════════════════════════════════════
-              STEP 5 — Review (all categories)
-          ══════════════════════════════════════ */}
-          {step === 5 && category === "quality" && (
-            <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:620 }}>
-              <div style={{ border:"1px solid var(--line)", borderRadius:12, overflow:"hidden" }}>
-                <div style={{ display:"flex", alignItems:"center", gap:16, padding:"18px 22px", borderBottom:"1px solid var(--line-2)" }}>
-                  <span className={"rule-kind rule-kind-" + qKind.toLowerCase()} style={{ flexShrink:0, minWidth:68, textAlign:"center" }}>{qKind}</span>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:15, fontWeight:600, color:"var(--ink)", marginBottom:5 }}>{qTitle || "(untitled)"}</div>
-                    <code style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-3)" }}>{qExpr || "(no expression)"}</code>
+            {step === 2 && cat === "access" && (
+              <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:640 }}>
+                <div>
+                  <label style={lbl}>SCOPE</label>
+                  <div style={{ display:"flex", gap:6 }}>
+                    {[{ id:"pii", l:"All PII fields" },{ id:"specific", l:"Specific field" },{ id:"all", l:"All fields" }].map(function(o){
+                      var isOn = accScope === o.id;
+                      return <button key={o.id} onClick={function(){ setAccScope(o.id); }} style={{ padding:"7px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontSize:12, fontFamily:"inherit", cursor:"pointer" }}>{o.l}</button>;
+                    })}
                   </div>
-                  {(function(){ const { bg, c } = sevStyle(qSev); return (
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"4px 10px", borderRadius:5, background:bg, color:c, fontWeight:700, flexShrink:0 }}>{qSev}</span>
-                  ); })()}
                 </div>
-                <div style={{ display:"flex", gap:1, background:"var(--line-2)" }}>
-                  {[["Node",node.label],["Schedule",{ingest:"On ingest",daily:"Daily",weekly:"Weekly",manual:"Manual"}[qSchedule]||qSchedule],["Action",{log:"Log only",notify:"Alert steward",ticket:"Create ticket",block:"Block write"}[qActionOnViol]||qActionOnViol],["Status","Will be enabled"]].map(function(kv,i){
-                    return (
-                      <div key={i} style={{ flex:1, padding:"12px 16px", background:"var(--panel-2)" }}>
-                        <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:3 }}>{kv[0]}</div>
-                        <div style={{ fontSize:12.5, color: kv[0]==="Status"?"var(--green)":"var(--ink)", fontWeight: kv[0]==="Status"?500:400 }}>{kv[1]}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {step === 5 && category === "match" && (
-            <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:620 }}>
-              <div style={{ border:"1px solid var(--line)", borderRadius:12, overflow:"hidden" }}>
-                <div style={{ padding:"18px 22px", borderBottom:"1px solid var(--line-2)" }}>
-                  <div style={{ fontSize:15, fontWeight:600, color:"var(--ink)", marginBottom:8 }}>{mTitle || "(untitled)"}</div>
-                  <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                    {mSignals.map(function(sig,i){
+                {accScope === "specific" && (
+                  <div>
+                    <label style={lbl}>FIELD</label>
+                    <select value={accSpecific} onChange={function(e){ setAccSpecific(e.target.value); }} style={inp}>
+                      {props.map(function(p){ return <option key={p.name} value={p.name}>{p.name + (p.pii ? "  ·  PII" : "")}</option>; })}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label style={lbl}>REQUIRED ROLES (any of)</label>
+                  <div style={{ border:"1px solid var(--line)", borderRadius:8, padding:"6px 8px", display:"flex", flexWrap:"wrap", gap:5, alignItems:"center", background:"var(--bg-canvas)" }}>
+                    {accRoles.map(function(r, i) {
                       return (
-                        <span key={i} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"3px 9px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>
-                          {sig.field + " · " + sig.strategy + " · " + sig.weight}
+                        <span key={i} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 5px 3px 8px", borderRadius:5, background:"var(--chip)", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>
+                          role:{r}
+                          <button onClick={function(){ setAccRoles(function(arr){ return arr.filter(function(_, j){ return j !== i; }); }); }} style={{ border:"none", background:"none", cursor:"pointer", color:"var(--ink-3)", fontSize:13, padding:0, lineHeight:1 }}>×</button>
                         </span>
                       );
                     })}
+                    <input value={accRolesInput} onChange={function(e){ setAccRolesInput(e.target.value); }}
+                      onKeyDown={function(e){ if ((e.key === "Enter" || e.key === ",") && accRolesInput.trim()) { e.preventDefault(); setAccRoles(function(arr){ return arr.concat([accRolesInput.trim()]); }); setAccRolesInput(""); } }}
+                      placeholder="add role + Enter" style={{ border:"none", outline:"none", fontSize:12, fontFamily:"JetBrains Mono", background:"transparent", color:"var(--ink)", minWidth:120, flex:1 }} />
                   </div>
                 </div>
-                <div style={{ display:"flex", gap:1, background:"var(--line-2)" }}>
-                  {[["Node",node.label],["Auto-merge",mThreshAuto],["Review at",mThreshReview],["On match",{merge:"Merge",link:"IS_SAME_AS",review_queue:"Review queue"}[mOnMatch]||mOnMatch]].map(function(kv,i){
-                    return (
-                      <div key={i} style={{ flex:1, padding:"12px 16px", background:"var(--panel-2)" }}>
-                        <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:3 }}>{kv[0]}</div>
-                        <div style={{ fontSize:12.5, color:"var(--ink)" }}>{kv[1]}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {step === 5 && category === "survivorship" && (
-            <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:620 }}>
-              <div style={{ border:"1px solid var(--line)", borderRadius:12, overflow:"hidden" }}>
-                <div style={{ padding:"18px 22px", borderBottom:"1px solid var(--line-2)" }}>
-                  <div style={{ fontSize:15, fontWeight:600, color:"var(--ink)", marginBottom:6 }}>{sTitle || "(untitled)"}</div>
-                  <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 9px", borderRadius:4, background:strColor(sStrategy)+"18", color:strColor(sStrategy), fontWeight:700 }}>{strLabel(sStrategy).toUpperCase()}</span>
-                    <span style={{ fontSize:12.5, color:"var(--ink-3)" }}>{"property: " + sProp}</span>
+                <div>
+                  <label style={lbl}>MASKING ON DENIAL</label>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                    {[{ id:"redact", l:"Redact entirely", d:"Return null / [REDACTED]" },{ id:"hash", l:"Hash one-way", d:"Stable hash for joins, no PII" },{ id:"partial", l:"Partial mask", d:"e.g. j***@a***.com" },{ id:"deny", l:"Deny request entirely", d:"Return 403, log denial" }].map(function(o){
+                      var isOn = accMasking === o.id;
+                      return (
+                        <button key={o.id} onClick={function(){ setAccMasking(o.id); }} style={{ textAlign:"left", padding:"10px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit" }}>
+                          <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)" }}>{o.l}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3 }}>{o.d}</div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-                <div style={{ display:"flex", gap:1, background:"var(--line-2)" }}>
-                  {[["Node",node.label],["Property",sProp],["On conflict",{defer:"Defer to steward",suppress:"Keep last known",first_nonnull:"First non-null",flag:"Flag unresolved"}[sOnConflict]||sOnConflict],["Status","Will be enabled"]].map(function(kv,i){
-                    return (
-                      <div key={i} style={{ flex:1, padding:"12px 16px", background:"var(--panel-2)" }}>
-                        <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:3 }}>{kv[0]}</div>
-                        <div style={{ fontSize:12.5, color: kv[0]==="Status"?"var(--green)":"var(--ink)", fontWeight: kv[0]==="Status"?500:400 }}>{kv[1]}</div>
-                      </div>
-                    );
-                  })}
+              </div>
+            )}
+
+            {step === 3 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:680 }}>
+                <div>
+                  <label style={lbl}>APPLIES TO</label>
+                  <div style={{ display:"flex", gap:6 }}>
+                    {[{ id:"all", l:"All " + node.label + " records" },{ id:"filtered", l:"Filtered subset" }].map(function(o){
+                      var isOn = scopeMode === o.id;
+                      return <button key={o.id} onClick={function(){ setScopeMode(o.id); }} style={{ padding:"8px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontSize:12.5, fontFamily:"inherit", cursor:"pointer" }}>{o.l}</button>;
+                    })}
+                  </div>
+                </div>
+                {scopeMode === "filtered" && (
+                  <div>
+                    <label style={lbl}>FILTER (WHERE clause)</label>
+                    <input value={scopeFilter} onChange={function(e){ setScopeFilter(e.target.value); }} placeholder="e.g. tier IN ('ENT', 'Strategic')" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12 })} />
+                  </div>
+                )}
+                <div>
+                  <label style={lbl}>WHEN TO RUN</label>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                    {[{ id:"on_write", l:"On write", d:"Evaluate at insert / update time" },{ id:"on_read", l:"On read", d:"Evaluate when a query touches it" },{ id:"scheduled", l:"Scheduled", d:"Run on a cron schedule" }].map(function(o){
+                      var isOn = trigger === o.id;
+                      var disabled = (cat === "match" || cat === "slo") && o.id === "on_read";
+                      return (
+                        <button key={o.id} disabled={disabled} onClick={function(){ if (!disabled) setTrigger(o.id); }}
+                          style={{ textAlign:"left", padding:"10px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1, fontFamily:"inherit" }}>
+                          <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)" }}>{o.l}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3 }}>{o.d}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {trigger === "scheduled" && (
+                  <div>
+                    <label style={lbl}>CADENCE</label>
+                    <select value={schedule} onChange={function(e){ setSchedule(e.target.value); }} style={inp}>
+                      <option value="every_15m">Every 15 minutes</option><option value="hourly">Hourly</option><option value="every_6h">Every 6 hours</option><option value="daily">Daily</option><option value="weekly">Weekly</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {step === 4 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:680 }}>
+                <div>
+                  <label style={lbl}>RULE TITLE</label>
+                  <input value={title} onChange={function(e){ setTitle(e.target.value); }} placeholder={"e.g. " + (cat === "validate" ? "ARR is non-negative" : cat === "match" ? "Domain-based company match" : cat === "survive" ? "ARR: ERP wins" : cat === "compute" ? "Tier from ARR bands" : cat === "slo" ? "Freshness under 30m" : "PII gated on acct_admin")} style={inp} />
+                </div>
+                <div>
+                  <label style={lbl}>DESCRIPTION (OPTIONAL)</label>
+                  <textarea value={description} onChange={function(e){ setDescription(e.target.value); }} rows={2} placeholder="One-line summary visible in audit logs" style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.5 })} />
+                </div>
+                {(cat === "validate" || cat === "slo" || cat === "access") && (
+                  <div>
+                    <label style={lbl}>SEVERITY</label>
+                    <div style={{ display:"flex", gap:6 }}>
+                      {["ERROR","WARN","INFO"].map(function(s){
+                        var isOn = severity === s;
+                        var col = s === "ERROR" ? "var(--coral)" : s === "WARN" ? "var(--gold)" : "var(--ink-3)";
+                        return <button key={s} onClick={function(){ setSeverity(s); }} style={{ padding:"7px 14px", border:"1px solid " + (isOn ? col : "var(--line)"), borderRadius:7, background: isOn ? col + "1a" : "var(--bg-canvas)", color: isOn ? col : "var(--ink-2)", fontSize:12, fontFamily:"JetBrains Mono", fontWeight: isOn ? 700 : 400, letterSpacing:"0.4px", cursor:"pointer" }}>{s}</button>;
+                      })}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <label style={lbl}>{cat === "match" ? "WHEN A MATCH IS FOUND" : cat === "compute" ? "WHEN COMPUTE FAILS" : cat === "survive" ? "WHEN SOURCES CONFLICT" : "ON VIOLATION (multi-select)"}</label>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                    {[
+                      { id:"block", l:"Block the write", applies:["validate"] },
+                      { id:"quarantine", l:"Route to quarantine", applies:["validate","compute"] },
+                      { id:"log", l:"Log only", applies:["validate","compute","survive","access","slo"] },
+                      { id:"notify", l:"Send notification", applies:["validate","compute","survive","access","slo","match"] },
+                      { id:"steward", l:"Defer to data steward", applies:["survive","match","compute"] },
+                      { id:"auto_fix", l:"Auto-fix with default", applies:["validate","compute"] }
+                    ].filter(function(o){ return o.applies.indexOf(cat) >= 0; }).map(function(o){
+                      var isOn = onViolation.indexOf(o.id) >= 0;
+                      return (
+                        <button key={o.id} onClick={function(){ setOnViolation(function(arr){ return isOn ? arr.filter(function(x){ return x !== o.id; }) : arr.concat([o.id]); }); }}
+                          style={{ textAlign:"left", padding:"9px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:10 }}>
+                          <span style={{ width:16, height:16, borderRadius:4, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--ink)" : "transparent", color:"var(--bg-canvas)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, flexShrink:0 }}>{isOn ? "✓" : ""}</span>
+                          <span style={{ fontSize:13, color:"var(--ink)" }}>{o.l}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {onViolation.indexOf("notify") >= 0 && (
+                  <div>
+                    <label style={lbl}>NOTIFICATION CHANNEL</label>
+                    <input value={notifyChan} onChange={function(e){ setNotifyChan(e.target.value); }} placeholder="#schema-alerts or owner@team" style={inp} />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {step === 5 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:760 }}>
+                <div style={{ border:"1px solid var(--line)", borderRadius:10, padding:20, background:"var(--panel)" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+                    {catDef && <span style={{ width:32, height:32, borderRadius:7, background:catDef.fill, color:catDef.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700 }}>{catDef.icon}</span>}
+                    <div>
+                      <div style={{ fontSize:15, fontWeight:600, color:"var(--ink)" }}>{title || (catDef ? catDef.title : "Untitled rule")}</div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, letterSpacing:"0.4px" }}>{catDef ? catDef.code + " · " + node.label.toUpperCase() : ""}</div>
+                    </div>
+                  </div>
+                  {description && <div style={{ fontSize:12.5, color:"var(--ink-3)", marginBottom:14, lineHeight:1.55 }}>{description}</div>}
+                  <div style={{ display:"grid", gridTemplateColumns:"160px 1fr", gap:"8px 14px", fontSize:12 }}>
+                    <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>EXPRESSION</span>
+                    <pre style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)", margin:0, padding:"7px 10px", background:"var(--bg-canvas)", borderRadius:5, border:"1px solid var(--line-2)", whiteSpace:"pre-wrap" }}>{buildExpression()}</pre>
+                    <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>SCOPE</span>
+                    <span style={{ color:"var(--ink)" }}>{scopeMode === "all" ? "All " + node.label + " records" : "Filtered: " + scopeFilter}</span>
+                    <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>TRIGGER</span>
+                    <span style={{ color:"var(--ink)" }}>{trigger === "on_write" ? "On write" : trigger === "on_read" ? "On read" : "Scheduled (" + schedule + ")"}</span>
+                    {(cat === "validate" || cat === "slo" || cat === "access") && (
+                      <>
+                        <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>SEVERITY</span>
+                        <span style={{ color: severity === "ERROR" ? "var(--coral)" : severity === "WARN" ? "var(--gold)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontWeight:700, fontSize:11 }}>{severity}</span>
+                      </>
+                    )}
+                    <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>ACTIONS</span>
+                    <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>{onViolation.map(function(a){ return <span key={a} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{a}</span>; })}</div>
+                  </div>
+                </div>
+                <div style={{ border:"1px solid var(--line-2)", borderRadius:10, padding:16, background:"var(--panel-2)" }}>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:10 }}>APPROVERS</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                    {[{ who:"data-platform owner", status:"required", sev:"var(--coral)" },{ who:"security@", status: cat === "access" ? "required" : "advisory", sev: cat === "access" ? "var(--coral)" : "var(--ink-3)" },{ who:"node steward (you)", status:"auto-approved", sev:"var(--green)" }].map(function(a, i){
+                      return <div key={i} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"5px 0", borderBottom: i < 2 ? "1px dashed var(--line-2)" : "none" }}>
+                        <span style={{ color:"var(--ink-2)" }}>{a.who}</span>
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:a.sev, fontWeight:600 }}>{a.status}</span>
+                      </div>;
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <label style={lbl}>ON SAVE</label>
+                  <div style={{ display:"flex", gap:6 }}>
+                    {[{ id:true, l:"Activate immediately" },{ id:false, l:"Save as draft" }].map(function(o){
+                      var isOn = activate === o.id;
+                      return <button key={String(o.id)} onClick={function(){ setActivate(o.id); }} style={{ padding:"8px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontSize:12.5, fontFamily:"inherit", cursor:"pointer" }}>{o.l}</button>;
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
+          {/* PREVIEW */}
+          <div style={{ background:"var(--panel-2)", borderLeft:"1px solid var(--line)", padding:"20px 18px", overflowY:"auto", display:"flex", flexDirection:"column", gap:18 }}>
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>RULE DSL</div>
+              <pre style={{ fontFamily:"JetBrains Mono", fontSize:11, color: catDef ? catDef.color : "var(--ink-3)", margin:0, padding:"10px 12px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:6, whiteSpace:"pre-wrap", lineHeight:1.55 }}>{catDef ? buildExpression() : "// pick a rule category to begin"}</pre>
+            </div>
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>VALIDATION</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:6, fontFamily:"JetBrains Mono", fontSize:11 }}>
+                {[{ ok: !!cat, l: "Category chosen" },{ ok: step >= 2 ? canContinue() : true, l: "Configuration valid" },{ ok: step >= 4 ? !!title : true, l: "Title set" },{ ok: onViolation.length > 0, l: "At least one action" }].map(function(v, i){
+                  return <div key={i} style={{ display:"flex", alignItems:"center", gap:8, color: v.ok ? "var(--green)" : "var(--ink-4)" }}>
+                    <span style={{ width:7, height:7, borderRadius:"50%", background: v.ok ? "var(--green)" : "var(--line)" }} />
+                    <span style={{ color:"var(--ink-2)" }}>{v.l}</span>
+                    {v.ok && <span style={{ marginLeft:"auto", fontWeight:700, color:"var(--green)" }}>✓</span>}
+                  </div>;
+                })}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>ESTIMATED IMPACT</div>
+              <div style={{ padding:"12px 14px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:6 }}>
+                <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1 }}>{(node.instancesN || 0).toLocaleString()}</div>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4 }}>{node.label + " records evaluated"}</div>
+                {cat === "validate" && vField && <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--gold)", marginTop:8 }}>~{Math.round((node.instancesN || 0) * 0.014).toLocaleString()} likely violations</div>}
+                {cat === "match" && <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--gold)", marginTop:8 }}>~{Math.round((node.instancesN || 0) * 0.003).toLocaleString()} review candidates</div>}
+                {cat === "slo" && <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--green)", marginTop:8 }}>currently within target</div>}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* ── Modal footer ── */}
-      <div style={{ flexShrink:0, padding:"14px 28px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"flex-end", gap:8, background:"var(--panel-2)" }}>
-        <button className="btn-ghost" onClick={onClose}>Cancel</button>
-        {step > 1 && (
-          <button className="btn-ghost" onClick={function(){ setStep(function(s){ return s-1; }); }}>
-            Back
-          </button>
-        )}
-        {step < 5
-          ? <button className="btn-dark" disabled={!canNext} onClick={function(){ setStep(function(s){ return s+1; }); }} style={{ opacity: canNext?1:0.45 }}>Continue</button>
-          : <button className="btn-dark" onClick={onClose}>Save rule</button>
-        }
-      </div>
+        <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
+          <button className="btn-ghost" onClick={function(){ if (step > 1) setStep(function(s){ return s - 1; }); }} disabled={step === 1} style={{ opacity: step === 1 ? 0.4 : 1 }}>← Back</button>
+          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of 5 · " + stepNames[step-1]}</span>
+          <div style={{ display:"flex", gap:8 }}>
+            <button className="btn-ghost" onClick={onClose}>Cancel</button>
+            {step < 5
+              ? <button className="btn-dark" disabled={!canContinue()} onClick={function(){ setStep(function(s){ return s + 1; }); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Continue →</button>
+              : <button className="btn-dark" onClick={onClose}>{activate ? "Publish rule ↵" : "Save draft ↵"}</button>
+            }
+          </div>
+        </div>
 
       </div>
     </div>
   );
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RULES PANE — unified table with filter chips, inline expand, search
+// ═══════════════════════════════════════════════════════════════════════════════
+
 function RulesPane({ rules, node, onViolationClick, onMatchClick, onSurvClick, onNewRule }) {
-  const [cat, setCat]         = useState("quality");
+  const [filter, setFilter]   = useState("all");
+  const [search, setSearch]   = useState("");
+  const [expanded, setExpanded] = useState(null);
 
-  const qRules = rules.quality || [];
-  const mRules = rules.match || [];
-  const sRules = rules.survivorship || [];
+  const qRules = (rules.quality || []).map(function(r){ return Object.assign({}, r, { _bucket:"quality" }); });
+  const mRules = (rules.match || []).map(function(r){ return Object.assign({}, r, { _bucket:"match", kind:"MATCH" }); });
+  const sRules = (rules.survivorship || []).map(function(r){ return Object.assign({}, r, { _bucket:"surv", kind:"SURV" }); });
+  const allRules = qRules.concat(mRules).concat(sRules);
 
-  const totalViolations   = qRules.reduce((sum, r) => sum + (r.violations || 0), 0);
-  const pendingCandidates = mRules.reduce((sum, r) => sum + (r.candidates || 0), 0);
-  const openConflicts     = sRules.reduce((sum, r) => sum + (r.conflicts || 0), 0);
+  function meta(kind) {
+    var k = (kind || "").toUpperCase();
+    if (k === "VALIDATE") return { code:"VAL", color:"var(--blue)",   fill:"var(--blue-fill)",   icon:"✓",  long:"Validate" };
+    if (k === "COMPUTE")  return { code:"CMP", color:"var(--green)",  fill:"var(--green-fill)",  icon:"ƒ",  long:"Compute" };
+    if (k === "ACCESS")   return { code:"ACC", color:"var(--ink-2)",  fill:"var(--chip)",        icon:"⊕",  long:"Access" };
+    if (k === "SLO")      return { code:"SLO", color:"var(--gold)",   fill:"var(--gold-fill)",   icon:"◷",  long:"SLO" };
+    if (k === "INFER")    return { code:"CMP", color:"var(--green)",  fill:"var(--green-fill)",  icon:"ƒ",  long:"Compute" };
+    if (k === "MATCH")    return { code:"MTC", color:"var(--purple)", fill:"var(--purple-fill)", icon:"≈",  long:"Match" };
+    if (k === "SURV")     return { code:"SUR", color:"var(--coral)",  fill:"var(--coral-fill)",  icon:"★",  long:"Survive" };
+    return { code:"---", color:"var(--ink-3)", fill:"var(--chip)", icon:"?", long:"Rule" };
+  }
 
-  const sevStyle = s => s === "ERROR"
-    ? { bg: "var(--coral-fill)", color: "var(--coral)" }
-    : s === "WARN"
-    ? { bg: "var(--gold-fill)",  color: "var(--gold)"  }
-    : { bg: "var(--chip)",       color: "var(--ink-3)" };
+  function sevStyle(s) {
+    return s === "ERROR" ? { bg:"var(--coral-fill)", color:"var(--coral)" }
+         : s === "WARN"  ? { bg:"var(--gold-fill)",  color:"var(--gold)"  }
+         :                 { bg:"var(--chip)",       color:"var(--ink-3)" };
+  }
 
-  const strategyLabel = s => ({ source_priority:"Source priority", completeness:"Most complete", recency:"Most recent", recency_weighted:"Recency weighted", source_trust:"Trust tier", confidence:"Confidence", manual:"Manual override" }[s] || s);
-  const strategyColor = s => ({ source_priority:"var(--blue)", completeness:"var(--purple)", recency:"var(--green)", recency_weighted:"var(--green)", source_trust:"var(--coral)", confidence:"var(--gold)", manual:"var(--ink-2)" }[s] || "var(--ink-3)");
-
-  const catTabs = [
-    { id:"quality",      label:"Quality",      count:qRules.length,      accent: totalViolations > 0 ? "var(--coral)" : undefined },
-    { id:"match",        label:"Match",        count:mRules.length,      accent: pendingCandidates > 0 ? "var(--gold)" : undefined },
-    { id:"survivorship", label:"Survivorship", count:sRules.length,      accent: openConflicts > 0 ? "var(--coral)" : undefined },
+  const FILTERS = [
+    { id:"all", label:"All",      count: allRules.length },
+    { id:"VAL", label:"Validate", count: qRules.filter(function(r){ return r.kind === "VALIDATE"; }).length },
+    { id:"MTC", label:"Match",    count: mRules.length },
+    { id:"SUR", label:"Survive",  count: sRules.length },
+    { id:"CMP", label:"Compute",  count: qRules.filter(function(r){ return r.kind === "COMPUTE" || r.kind === "INFER"; }).length },
+    { id:"SLO", label:"SLO",      count: qRules.filter(function(r){ return r.kind === "SLO"; }).length },
+    { id:"ACC", label:"Access",   count: qRules.filter(function(r){ return r.kind === "ACCESS"; }).length }
   ];
 
+  var visible = allRules.filter(function(r){
+    if (filter !== "all" && meta(r.kind).code !== filter) return false;
+    if (search) {
+      var hay = ((r.title || "") + " " + (r.id || "") + " " + (r.expr || r.label || "") + " " + (r.property || "")).toLowerCase();
+      if (hay.indexOf(search.toLowerCase()) < 0) return false;
+    }
+    return true;
+  });
+
+  var attentionCount = qRules.filter(function(r){ return (r.violations||0) > 0; }).length
+                     + mRules.filter(function(r){ return (r.candidates||0) > 0; }).length
+                     + sRules.filter(function(r){ return (r.conflicts||0) > 0; }).length;
+  var activeCount = allRules.filter(function(r){ return r.on !== false; }).length;
+
+  function metricFor(r) {
+    if (r._bucket === "quality") {
+      if (r.violations !== undefined) return { v: r.violations, label: "violations", color: r.violations > 0 ? "var(--coral)" : "var(--ink-3)", click: r.violations > 0 ? function(){ onViolationClick(r); } : null };
+      return { v: r.last || "—", label: "", color: "var(--ink-3)", click: null };
+    }
+    if (r._bucket === "match") return { v: r.candidates || 0, label: "candidates", color: (r.candidates||0) > 0 ? "var(--gold)" : "var(--ink-3)", click: (r.candidates||0) > 0 ? function(){ onMatchClick(r); } : null };
+    if (r._bucket === "surv")  return { v: r.conflicts || 0, label: "conflicts",  color: (r.conflicts||0) > 0  ? "var(--coral)" : "var(--green)", click: (r.conflicts||0) > 0  ? function(){ onSurvClick(r); } : null };
+    return { v: "—", label: "", color: "var(--ink-3)", click: null };
+  }
+
   return (
-    <>
-      <div className="card">
-
-        {/* ── Category header ── */}
-        <div className="card-head card-head-row">
-          <div style={{ display:"flex", gap:4 }}>
-            {catTabs.map(ct => (
-              <button key={ct.id}
-                className={"chip" + (cat === ct.id ? " on" : "")}
-                onClick={() => setCat(ct.id)}
-                style={cat !== ct.id && ct.accent ? {} : {}}>
-                {ct.label}
-                <span className="chip-n" style={ct.accent && cat !== ct.id ? { color: ct.accent } : {}}>{ct.count}</span>
+    <div className="card">
+      <div className="card-head card-head-row" style={{ flexWrap:"wrap", gap:12 }}>
+        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+          {FILTERS.map(function(f){
+            var isOn = filter === f.id;
+            return (
+              <button key={f.id} onClick={function(){ setFilter(f.id); }} className={"chip" + (isOn ? " on" : "")}>
+                {f.label} <span className="chip-n">{f.count}</span>
               </button>
-            ))}
-          </div>
-          <div className="card-head-actions">
-            <button className="btn-dark" onClick={onNewRule}>+ New rule</button>
-          </div>
+            );
+          })}
         </div>
+        <div className="card-head-actions" style={{ alignItems:"center" }}>
+          <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginRight:6 }}>
+            {activeCount + "/" + allRules.length + " active"}
+            {attentionCount > 0 && <span style={{ color:"var(--gold)", marginLeft:8 }}>{"· " + attentionCount + " need attention"}</span>}
+          </span>
+          <div style={{ position:"relative" }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"var(--ink-3)", pointerEvents:"none" }}>
+              <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+            <input className="sample-search" value={search} onChange={function(e){ setSearch(e.target.value); }} placeholder="Search rules…" style={{ paddingLeft:30, width:200 }} />
+          </div>
+          <button className="btn-dark" onClick={onNewRule}>+ New rule</button>
+        </div>
+      </div>
 
-        {/* ── Quality tab ── */}
-        {cat === "quality" && (
-          <>
-            <div>
-              {qRules.map((r, i) => {
-                const { bg, color } = sevStyle(r.severity || "INFO");
-                const hasViol = (r.violations || 0) > 0;
-                return (
-                  <div key={i} style={{ display:"flex", alignItems:"center", gap:16, padding:"15px 18px", borderBottom: i < qRules.length - 1 ? "1px solid var(--line-2)" : "none" }}>
-                    <span className={"rule-kind rule-kind-" + r.kind.toLowerCase()} style={{ flexShrink:0, minWidth:68, textAlign:"center" }}>{r.kind}</span>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:13.5, fontWeight:500, color:"var(--ink)", marginBottom:4 }}>{r.title || r.label}</div>
-                      <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", display:"block", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.expr || r.id}</code>
+      <div style={{ display:"grid", gridTemplateColumns:"86px 1fr 240px 130px 76px 42px 14px", gap:14, padding:"10px 18px", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", alignItems:"center" }}>
+        <div>Kind</div><div>Title / expression</div><div>Status</div><div style={{ textAlign:"right" }}>Last activity</div><div style={{ textAlign:"center" }}>Sev</div><div style={{ textAlign:"center" }}>On</div><div></div>
+      </div>
+
+      {visible.length === 0 && (
+        <div style={{ padding:"40px 18px", textAlign:"center", color:"var(--ink-3)", fontSize:13 }}>
+          No rules match {search ? <b>"{search}"</b> : <b>{FILTERS.find(function(f){ return f.id === filter; }).label.toLowerCase()}</b>}.
+        </div>
+      )}
+      {visible.map(function(r, i) {
+        var m = meta(r.kind);
+        var s = sevStyle(r.severity || "INFO");
+        var metric = metricFor(r);
+        var isOpen = expanded === (r._bucket + "_" + r.id);
+        return (
+          <div key={r._bucket + "_" + r.id} style={{ borderBottom: i < visible.length-1 ? "1px solid var(--line-2)" : "none" }}>
+            <div onClick={function(){ setExpanded(isOpen ? null : (r._bucket + "_" + r.id)); }}
+              style={{ display:"grid", gridTemplateColumns:"86px 1fr 240px 130px 76px 42px 14px", gap:14, padding:"13px 18px", alignItems:"center", cursor:"pointer" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+                <span style={{ width:22, height:22, borderRadius:5, background:m.fill, color:m.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, flexShrink:0 }}>{m.icon}</span>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, color:m.color, letterSpacing:"0.5px" }}>{m.code}</span>
+              </div>
+
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontSize:13, color:"var(--ink)", fontWeight:500, marginBottom:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.title || r.label || r.id}</div>
+                <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", display:"block", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  {r.expr || (r._bucket === "match" ? "score = " + r.signals.map(function(sg){ return sg.field + "×" + sg.weight; }).join(" + ") : "")
+                          || (r._bucket === "surv"  ? r.property + " ← " + (r.strategy || "—") : "")
+                          || r.id}
+                </code>
+              </div>
+
+              <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+                {r._bucket === "quality" && r.compliance !== undefined && (
+                  <>
+                    <div className="nv-bar" style={{ flex:1, maxWidth:90 }}>
+                      <div className="nv-bar-fill" style={{ width: r.compliance + "%", background: r.compliance >= 99 ? "var(--green)" : r.compliance >= 90 ? "var(--gold)" : "var(--coral)" }} />
                     </div>
-                    <div style={{ display:"flex", alignItems:"center", gap:18, flexShrink:0 }}>
-                      <div style={{ textAlign:"right", minWidth:100, cursor: hasViol ? "pointer" : "default" }}
-                        onClick={() => hasViol && onViolationClick(r)}
-                        title={hasViol ? "Click to investigate violations" : undefined}>
-                        <div style={{ fontFamily:"JetBrains Mono", fontSize:12, fontWeight:600, color: hasViol ? "var(--coral)" : "var(--ink-3)", textDecoration: hasViol ? "underline" : "none" }}>
-                          {r.violations !== undefined ? r.violations + " violations" : r.last}
-                        </div>
-                        {r.compliance !== undefined && (
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2 }}>{r.compliance}%</div>
-                        )}
-                      </div>
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 8px", borderRadius:4, background:bg, color, fontWeight:600, letterSpacing:"0.4px", flexShrink:0 }}>{r.severity || "INFO"}</span>
-                      <label className="switch" style={{ flexShrink:0 }}>
-                        <input type="checkbox" defaultChecked={r.on} />
-                        <span className="switch-track" />
-                      </label>
-                    </div>
-                  </div>
-                );
-              })}
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)", fontWeight:600 }}>{r.compliance + "%"}</span>
+                  </>
+                )}
+                {r._bucket === "match" && (
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{"auto ≥ " + r.threshold_auto + " · review " + r.threshold_review}</span>
+                )}
+                {r._bucket === "surv" && (
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"2px 7px", borderRadius:4, fontWeight:600, background:m.fill, color:m.color }}>{r.strategy}</span>
+                )}
+              </div>
+
+              <div style={{ textAlign:"right", cursor: metric.click ? "pointer" : "default" }}
+                onClick={metric.click ? function(e){ e.stopPropagation(); metric.click(); } : undefined}>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:12, fontWeight:600, color: metric.color, textDecoration: metric.click ? "underline" : "none" }}>
+                  {typeof metric.v === "number" ? metric.v.toLocaleString() : metric.v}{metric.label && <span style={{ fontWeight:400, color:"var(--ink-3)", marginLeft:4 }}>{metric.label}</span>}
+                </div>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", marginTop:2 }}>{r.last || "—"}</div>
+              </div>
+
+              <div style={{ textAlign:"center" }}>
+                {r._bucket === "quality" && r.severity && <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 6px", borderRadius:3, background:s.bg, color:s.color, fontWeight:700, letterSpacing:"0.4px" }}>{r.severity}</span>}
+              </div>
+
+              <div style={{ display:"flex", justifyContent:"center" }} onClick={function(e){ e.stopPropagation(); }}>
+                <label className="switch"><input type="checkbox" defaultChecked={r.on !== false} /><span className="switch-track" /></label>
+              </div>
+
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)" }}>{isOpen ? "▴" : "▾"}</span>
             </div>
-          </>
-        )}
 
-        {/* ── Match tab ── */}
-        {cat === "match" && (
-          <div>
-            {mRules.map((r, i) => (
-              <div key={i} style={{ padding:"18px 18px", borderBottom: i < mRules.length - 1 ? "1px solid var(--line-2)" : "none" }}>
-                <div style={{ display:"flex", alignItems:"flex-start", gap:14 }}>
-                  <span style={{ flexShrink:0, fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, letterSpacing:"0.5px", padding:"3px 8px", borderRadius:4, background:"rgba(99,143,255,0.14)", color:"var(--blue)", marginTop:2 }}>MATCH</span>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:13.5, fontWeight:500, color:"var(--ink)", marginBottom:7 }}>{r.title}</div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginBottom:7 }}>
-                      {r.signals.map((sig, j) => (
-                        <span key={j} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 8px", borderRadius:4, background:"var(--panel-2)", border:"1px solid var(--line)", color:"var(--ink-2)" }}>
-                          {sig.field} <span style={{ color:"var(--blue)", fontWeight:700 }}>×{sig.weight}</span>
-                        </span>
-                      ))}
-                    </div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>
-                      Auto ≥{r.threshold_auto} · Review {r.threshold_review}–{r.threshold_auto}
+            {isOpen && (
+              <div style={{ padding:"14px 18px 18px 18px", background:"var(--panel-2)", borderTop:"1px dashed var(--line-2)" }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:18 }}>
+                  <div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>EXPRESSION</div>
+                    <pre style={{ fontFamily:"JetBrains Mono", fontSize:11, color: m.color, margin:0, padding:"10px 12px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:6, whiteSpace:"pre-wrap" }}>
+                      {r.expr
+                        || (r._bucket === "match" ? "score =\n  " + r.signals.map(function(sg){ return sg.strategy + "(" + sg.field + ") × " + sg.weight; }).join("\n  ") + "\nauto_merge ≥ " + r.threshold_auto + "\nreview band " + r.threshold_review + "–" + r.threshold_auto : "")
+                        || (r._bucket === "surv"  ? r.property + " ←\n  strategy: " + (r.strategy || "—") + (r.sources && r.sources.length ? "\n  ranking: " + r.sources.join(" > ") : "") : "")
+                        || "—"}
+                    </pre>
+                    <div style={{ marginTop:10, display:"grid", gridTemplateColumns:"110px 1fr", gap:"6px 12px", fontSize:11.5 }}>
+                      <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>ID</span>
+                      <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{r.id}</code>
+                      <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>NODE</span>
+                      <span style={{ color:"var(--ink-2)" }}>{node.label}</span>
+                      <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>CATEGORY</span>
+                      <span style={{ color:m.color, fontFamily:"JetBrains Mono", fontWeight:600 }}>{m.long.toUpperCase()}</span>
+                      {r._bucket === "quality" && r.evaluated !== undefined && (
+                        <>
+                          <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>EVALUATED</span>
+                          <span style={{ color:"var(--ink-2)", fontFamily:"JetBrains Mono" }}>{(r.evaluated || 0).toLocaleString() + " over 24h"}</span>
+                        </>
+                      )}
                     </div>
                   </div>
-                  <div style={{ display:"flex", alignItems:"center", gap:12, flexShrink:0, marginTop:2 }}>
-                    {r.candidates > 0 ? (
-                      <button onClick={() => onMatchClick(r)}
-                        style={{ fontFamily:"JetBrains Mono", fontSize:11, fontWeight:600, color:"var(--gold)", background:"var(--gold-fill)", border:"1px solid var(--gold)", padding:"5px 11px", borderRadius:6, cursor:"pointer" }}>
-                        {r.candidates} candidates →
-                      </button>
-                    ) : (
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>0 candidates</span>
-                    )}
-                    <div style={{ textAlign:"right", minWidth:76 }}>
-                      <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{r.auto_resolved} auto</div>
-                      <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)" }}>resolved / 30d</div>
+                  <div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>RECENT ACTIVITY</div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                      {[
+                        { t:"now",     who:"runtime",  what:"evaluating on every write", dot:"var(--green)" },
+                        { t:"2m ago",  who:"runtime",  what: r._bucket === "quality" ? ((r.violations||0) > 0 ? r.violations + " violations triggered" : "no violations") : r._bucket === "match" ? ((r.candidates||0) > 0 ? r.candidates + " new candidates queued" : "0 new candidates") : ((r.conflicts||0) > 0 ? r.conflicts + " conflicts queued" : "0 new conflicts"), dot: metric.color },
+                        { t:"4h ago",  who:"morgan.k", what:"reviewed config", dot:"var(--blue)" },
+                        { t:"2d ago",  who:"schema-bot",what:"baseline set from sample of 10,000", dot:"var(--ink-4)" }
+                      ].map(function(a, j){
+                        return <div key={j} style={{ display:"grid", gridTemplateColumns:"56px 12px 1fr auto", gap:8, fontSize:11, padding:"4px 0", borderBottom: j < 3 ? "1px dashed var(--line-2)" : "none", alignItems:"center" }}>
+                          <span style={{ fontFamily:"JetBrains Mono", color:"var(--ink-4)" }}>{a.t}</span>
+                          <span style={{ width:6, height:6, borderRadius:"50%", background:a.dot, justifySelf:"center" }} />
+                          <span style={{ color:"var(--ink-2)" }}>{a.what}</span>
+                          <span style={{ fontFamily:"JetBrains Mono", color:"var(--ink-3)" }}>{a.who}</span>
+                        </div>;
+                      })}
                     </div>
-                    <label className="switch" style={{ flexShrink:0 }}>
-                      <input type="checkbox" defaultChecked={r.on} />
-                      <span className="switch-track" />
-                    </label>
+                    <div style={{ display:"flex", gap:6, marginTop:14, justifyContent:"flex-end" }}>
+                      {metric.click && <button className="btn-ghost" onClick={metric.click} style={{ fontSize:11.5 }}>{r._bucket === "quality" ? "Investigate →" : r._bucket === "match" ? "Review candidates →" : "Resolve conflicts →"}</button>}
+                      <button className="btn-ghost" style={{ fontSize:11.5 }}>View history</button>
+                      <button className="btn-ghost" style={{ fontSize:11.5 }}>Edit rule</button>
+                      <button className="btn-ghost" style={{ fontSize:11.5, color:"var(--coral)" }}>Disable…</button>
+                    </div>
                   </div>
                 </div>
               </div>
-            ))}
+            )}
           </div>
-        )}
-
-        {/* ── Survivorship tab ── */}
-        {cat === "survivorship" && (
-          <div>
-            {sRules.map((r, i) => {
-              const sc = strategyColor(r.strategy);
-              const sl = strategyLabel(r.strategy);
-              return (
-                <div key={i} style={{ display:"flex", alignItems:"center", gap:16, padding:"16px 18px", borderBottom: i < sRules.length - 1 ? "1px solid var(--line-2)" : "none" }}>
-                  <span style={{ flexShrink:0, minWidth:68, textAlign:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, letterSpacing:"0.5px", padding:"3px 8px", borderRadius:4, background:"rgba(144,98,255,0.12)", color:"var(--purple)" }}>SURV</span>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:5 }}>
-                      <span style={{ fontSize:13.5, fontWeight:500, color:"var(--ink)" }}>{r.title}</span>
-                      <code style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{r.property}</code>
-                    </div>
-                    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, fontWeight:600, background:sc+"1a", color:sc }}>{sl}</span>
-                    </div>
-                    {r.sources && r.sources.length > 0 && (
-                      <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" }}>
-                        {r.sources.map((s, j) => (
-                          <React.Fragment key={j}>
-                            <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", background:"var(--panel-2)", border:"1px solid var(--line-2)", padding:"1px 6px", borderRadius:3 }}>{s}</span>
-                            {j < r.sources.length - 1 && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)" }}>›</span>}
-                          </React.Fragment>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ display:"flex", alignItems:"center", gap:14, flexShrink:0 }}>
-                    {r.conflicts > 0 ? (
-                      <button onClick={() => onSurvClick(r)}
-                        style={{ fontFamily:"JetBrains Mono", fontSize:11, fontWeight:600, color:"var(--coral)", background:"var(--coral-fill)", border:"1px solid var(--coral)", padding:"5px 11px", borderRadius:6, cursor:"pointer" }}>
-                        {r.conflicts} conflict{r.conflicts !== 1 ? "s" : ""} →
-                      </button>
-                    ) : (
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--green)" }}>✓ No conflicts</span>
-                    )}
-                    <div style={{ textAlign:"right", minWidth:80 }}>
-                      <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{(r.evaluated || 0).toLocaleString()}</div>
-                      <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)" }}>evaluated</div>
-                    </div>
-                    <label className="switch" style={{ flexShrink:0 }}>
-                      <input type="checkbox" defaultChecked={r.on} />
-                      <span className="switch-track" />
-                    </label>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-      </div>
-
-    </>
+        );
+      })}
+    </div>
   );
 }
 
