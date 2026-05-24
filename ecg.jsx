@@ -870,7 +870,11 @@ function Meter({ label, v, tail, tone }) {
 
 // ---------- CANVAS (graph) --------------------------------------------------
 
-function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filter, query, savedView, viewport, setViewport, sidebarOpen }) {
+function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filter, query, savedView, viewport, setViewport, sidebarOpen, showInferred, showEdgeLabels, showCounts }) {
+  // Defaults if props omitted by older callers.
+  if (showInferred === undefined)  showInferred  = true;
+  if (showEdgeLabels === undefined) showEdgeLabels = true;
+  if (showCounts === undefined)    showCounts    = true;
   const svgRef = useRef(null);
   const [drag, setDrag] = useState(null); // {kind:'node'|'pan', id?, startX, startY, origX, origY}
   const [size, setSize] = useState({ w: 1200, h: 800 });
@@ -1049,6 +1053,7 @@ function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filte
         <g transform={`translate(${cx + panX} ${cy + panY}) scale(${zoom})`}>
           {/* edges */}
           {EDGES.map((e, i) => {
+            if (!showInferred && e.kind === "inferred") return null;
             const visEdge = isVisible(e.s) && isVisible(e.t);
             const lit = edgeIsLit(e);
             const dim = highlightId && !lit;
@@ -1071,7 +1076,8 @@ function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filte
           })}
 
           {/* edge labels — only render at decent zoom or when lit */}
-          {EDGES.map((e, i) => {
+          {showEdgeLabels && EDGES.map((e, i) => {
+            if (!showInferred && e.kind === "inferred") return null;
             const visEdge = isVisible(e.s) && isVisible(e.t);
             const lit = edgeIsLit(e);
             if (!visEdge && !lit) return null;
@@ -1128,7 +1134,7 @@ function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filte
                 >
                   {TYPE_META[n.type].tag}
                 </text>
-                {n.instances !== "—" && (
+                {showCounts && n.instances !== "—" && (
                   <text
                     textAnchor="middle"
                     y={-n.size - 8}
@@ -9610,7 +9616,7 @@ function NodesView({ onSelect, onSwitchToCanvas, onAddNode }) {
       <div className="nv-head">
         <div className="nv-head-left">
 
-          <div className="nv-title">Node catalog</div>
+          <div className="nv-title">Nodes</div>
         </div>
         <div className="nv-head-right">
           <button className="btn-ghost">Bulk export</button>
@@ -9698,11 +9704,26 @@ var NODE_CATEGORIES_CONFIG = [
   { id:"derived",   code:"DRV",  label:"Derived entity",   color:"var(--purple)", fill:"var(--purple-fill)", desc:"Computed or analytical entities — Account Health, Forecast, Risk Score." }
 ];
 
+// Department groups for the template picker — order = display order.
+var NODE_TEMPLATE_DEPARTMENTS = [
+  { id:"sales",         label:"Sales & Revenue",   color:"var(--green)"  },
+  { id:"customer",      label:"Customer & CRM",    color:"var(--gold)"   },
+  { id:"support",       label:"Service & Support", color:"var(--coral)"  },
+  { id:"finance",       label:"Finance & Billing", color:"var(--green)"  },
+  { id:"people",        label:"People & HR",       color:"var(--purple)" },
+  { id:"product",       label:"Product & Catalog", color:"var(--blue)"   },
+  { id:"marketing",     label:"Marketing",         color:"var(--purple)" },
+  { id:"operations",    label:"Operations",        color:"var(--gold)"   },
+  { id:"governance",    label:"Governance & Risk", color:"var(--coral)"  },
+  { id:"healthcare",    label:"Healthcare",        color:"var(--purple)" },
+  { id:"financial-svc", label:"Financial Services",color:"var(--blue)"   }
+];
+
 // Pre-built property templates by node archetype
 var NODE_TEMPLATES = [
   {
     id:"contract",     name:"Contract",     icon:"CT", brief:"Legal agreement between parties",
-    category:"core",
+    category:"core",   department:"sales",
     properties:[
       { name:"contract_id",      type:"uuid",      required:true,  indexed:true,  pii:false, pk:true },
       { name:"title",            type:"string",    required:true,  indexed:true,  pii:false },
@@ -9717,7 +9738,7 @@ var NODE_TEMPLATES = [
   },
   {
     id:"customer",     name:"Customer",     icon:"CU", brief:"End user or buyer record",
-    category:"core",
+    category:"core",   department:"customer",
     properties:[
       { name:"customer_id",  type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
       { name:"first_name",   type:"string", required:true,  indexed:true,  pii:true },
@@ -9730,7 +9751,7 @@ var NODE_TEMPLATES = [
   },
   {
     id:"ticket",       name:"Ticket",       icon:"TK", brief:"Support request or work item",
-    category:"support",
+    category:"support",department:"support",
     properties:[
       { name:"ticket_id",  type:"uuid",      required:true,  indexed:true,  pii:false, pk:true },
       { name:"subject",    type:"string",    required:true,  indexed:false, pii:false },
@@ -9744,7 +9765,7 @@ var NODE_TEMPLATES = [
   },
   {
     id:"invoice",      name:"Invoice",      icon:"IN", brief:"Billing document",
-    category:"core",
+    category:"core",   department:"finance",
     properties:[
       { name:"invoice_id",  type:"uuid",      required:true,  indexed:true,  pii:false, pk:true },
       { name:"invoice_number", type:"string", required:true,  indexed:true,  pii:false },
@@ -9758,7 +9779,7 @@ var NODE_TEMPLATES = [
   },
   {
     id:"product",      name:"Product",      icon:"PR", brief:"Sellable item or SKU",
-    category:"core",
+    category:"core",   department:"product",
     properties:[
       { name:"product_id", type:"uuid",    required:true,  indexed:true,  pii:false, pk:true },
       { name:"sku",        type:"string",  required:true,  indexed:true,  pii:false },
@@ -9770,7 +9791,7 @@ var NODE_TEMPLATES = [
   },
   {
     id:"employee",     name:"Employee",     icon:"EM", brief:"Workforce member",
-    category:"core",
+    category:"core",   department:"people",
     properties:[
       { name:"employee_id",   type:"uuid",      required:true,  indexed:true,  pii:false, pk:true },
       { name:"first_name",    type:"string",    required:true,  indexed:true,  pii:true },
@@ -9783,7 +9804,7 @@ var NODE_TEMPLATES = [
   },
   {
     id:"opportunity",  name:"Opportunity",  icon:"OP", brief:"Sales pipeline deal",
-    category:"core",
+    category:"core",   department:"sales",
     properties:[
       { name:"opportunity_id", type:"uuid",      required:true,  indexed:true,  pii:false, pk:true },
       { name:"name",           type:"string",    required:true,  indexed:true,  pii:false },
@@ -9796,7 +9817,7 @@ var NODE_TEMPLATES = [
   },
   {
     id:"interaction",  name:"Interaction",  icon:"IX", brief:"Customer touchpoint event",
-    category:"support",
+    category:"support",department:"support",
     properties:[
       { name:"interaction_id", type:"uuid",      required:true,  indexed:true,  pii:false, pk:true },
       { name:"channel",        type:"enum",      required:true,  indexed:true,  pii:false },
@@ -9805,7 +9826,236 @@ var NODE_TEMPLATES = [
       { name:"summary",        type:"string",    required:false, indexed:false, pii:false },
       { name:"sentiment",      type:"enum",      required:false, indexed:false, pii:false }
     ]
-  }
+  },
+
+  // ── Sales & Revenue ─────────────────────────────────────────────────────
+  { id:"account", name:"Account", icon:"AC", brief:"Buying organisation or company", category:"core", department:"sales", properties:[
+    { name:"account_id",  type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"name",        type:"string", required:true,  indexed:true,  pii:false },
+    { name:"industry",    type:"enum",   required:false, indexed:true,  pii:false },
+    { name:"arr",         type:"decimal",required:false, indexed:false, pii:false },
+    { name:"tier",        type:"enum",   required:false, indexed:true,  pii:false },
+    { name:"owner_id",    type:"string", required:true,  indexed:true,  pii:false }
+  ]},
+  { id:"lead", name:"Lead", icon:"LD", brief:"Unqualified sales prospect", category:"core", department:"sales", properties:[
+    { name:"lead_id",       type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"full_name",     type:"string", required:true,  indexed:true,  pii:true },
+    { name:"company_name",  type:"string", required:false, indexed:true,  pii:false },
+    { name:"email",         type:"string", required:false, indexed:true,  pii:true },
+    { name:"source_channel",type:"enum",   required:false, indexed:true,  pii:false },
+    { name:"score",         type:"decimal",required:false, indexed:false, pii:false }
+  ]},
+  { id:"quote", name:"Quote", icon:"QT", brief:"Formal offer with pricing & terms", category:"secondary", department:"sales", properties:[
+    { name:"quote_id",        type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"quote_number",    type:"string", required:true,  indexed:true,  pii:false },
+    { name:"effective_from",  type:"date",   required:true,  indexed:false, pii:false },
+    { name:"expires_on",      type:"date",   required:true,  indexed:true,  pii:false },
+    { name:"discount_amount", type:"decimal",required:false, indexed:false, pii:false }
+  ]},
+  { id:"subscription", name:"Subscription", icon:"SB", brief:"Active recurring product license", category:"core", department:"sales", properties:[
+    { name:"subscription_id", type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"plan",            type:"enum",   required:true,  indexed:true,  pii:false },
+    { name:"mrr",             type:"decimal",required:true,  indexed:false, pii:false },
+    { name:"status",          type:"enum",   required:true,  indexed:true,  pii:false },
+    { name:"renews_on",       type:"date",   required:true,  indexed:true,  pii:false }
+  ]},
+
+  // ── Customer & CRM ──────────────────────────────────────────────────────
+  { id:"contact", name:"Contact", icon:"CN", brief:"Person at an account", category:"core", department:"customer", properties:[
+    { name:"contact_id",  type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"full_name",   type:"string", required:true,  indexed:true,  pii:true },
+    { name:"email",       type:"string", required:true,  indexed:true,  pii:true },
+    { name:"phone",       type:"string", required:false, indexed:false, pii:true },
+    { name:"job_title",   type:"string", required:false, indexed:false, pii:false },
+    { name:"account_id",  type:"string", required:true,  indexed:true,  pii:false }
+  ]},
+
+  // ── Service & Support ───────────────────────────────────────────────────
+  { id:"case", name:"Case", icon:"CS", brief:"Customer service incident", category:"support", department:"support", properties:[
+    { name:"incident_id",          type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"title",                type:"string", required:true,  indexed:true,  pii:false },
+    { name:"case_origin_code",     type:"enum",   required:true,  indexed:true,  pii:false },
+    { name:"priority_code",        type:"enum",   required:true,  indexed:true,  pii:false },
+    { name:"customer_satisfaction",type:"enum",   required:false, indexed:false, pii:false }
+  ]},
+  { id:"entitlement", name:"Entitlement", icon:"EN", brief:"Support coverage attached to a customer", category:"secondary", department:"support", properties:[
+    { name:"entitlement_id",  type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"name",            type:"string", required:true,  indexed:true,  pii:false },
+    { name:"start_date",      type:"date",   required:true,  indexed:false, pii:false },
+    { name:"end_date",        type:"date",   required:true,  indexed:true,  pii:false },
+    { name:"remaining_terms", type:"decimal",required:false, indexed:false, pii:false }
+  ]},
+  { id:"knowledge_article", name:"Knowledge Article", icon:"KA", brief:"Published help-centre article", category:"secondary", department:"support", properties:[
+    { name:"article_id",        type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"title",             type:"string", required:true,  indexed:true,  pii:false },
+    { name:"content",           type:"string", required:true,  indexed:false, pii:false },
+    { name:"key_words",         type:"string[]",required:false,indexed:true,  pii:false },
+    { name:"publish_on",        type:"date",   required:true,  indexed:true,  pii:false }
+  ]},
+  { id:"sla", name:"SLA", icon:"SL", brief:"Service-level agreement target", category:"secondary", department:"support", properties:[
+    { name:"sla_id",                 type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"name",                   type:"string", required:true,  indexed:false, pii:false },
+    { name:"first_response_minutes", type:"decimal",required:true,  indexed:false, pii:false },
+    { name:"applicable_from",        type:"date",   required:true,  indexed:false, pii:false }
+  ]},
+
+  // ── Finance & Billing ───────────────────────────────────────────────────
+  { id:"payment", name:"Payment", icon:"PY", brief:"Settled payment instrument", category:"core", department:"finance", properties:[
+    { name:"payment_id",  type:"uuid",     required:true,  indexed:true,  pii:false, pk:true },
+    { name:"amount",      type:"decimal",  required:true,  indexed:false, pii:false },
+    { name:"method",      type:"enum",     required:true,  indexed:true,  pii:false },
+    { name:"received_at", type:"timestamp",required:true,  indexed:true,  pii:false }
+  ]},
+  { id:"journal_entry", name:"Journal Entry", icon:"JE", brief:"Double-entry ledger posting", category:"secondary", department:"finance", properties:[
+    { name:"je_id",   type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"date",    type:"date",   required:true,  indexed:true,  pii:false },
+    { name:"debit",   type:"decimal",required:true,  indexed:false, pii:false },
+    { name:"credit",  type:"decimal",required:true,  indexed:false, pii:false },
+    { name:"memo",    type:"string", required:false, indexed:false, pii:false }
+  ]},
+  { id:"expense", name:"Expense", icon:"EX", brief:"Reimbursable employee expense", category:"secondary", department:"finance", properties:[
+    { name:"expense_id",    type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"employee_id",   type:"string", required:true,  indexed:true,  pii:false },
+    { name:"amount",        type:"decimal",required:true,  indexed:false, pii:false },
+    { name:"category",      type:"enum",   required:true,  indexed:true,  pii:false },
+    { name:"submitted_on",  type:"date",   required:true,  indexed:true,  pii:false }
+  ]},
+
+  // ── People & HR ─────────────────────────────────────────────────────────
+  { id:"worker", name:"Worker", icon:"WK", brief:"Employee or contractor", category:"core", department:"people", properties:[
+    { name:"personnel_number",     type:"string", required:true,  indexed:true,  pii:true,  pk:true },
+    { name:"name",                 type:"string", required:true,  indexed:true,  pii:true },
+    { name:"worker_type",          type:"enum",   required:true,  indexed:true,  pii:false },
+    { name:"primary_contact_email",type:"string", required:true,  indexed:true,  pii:true }
+  ]},
+  { id:"position", name:"Position", icon:"PS", brief:"Staffed role at a point in time", category:"core", department:"people", properties:[
+    { name:"position_id",         type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"title",               type:"string", required:true,  indexed:true,  pii:false },
+    { name:"department",          type:"enum",   required:true,  indexed:true,  pii:false },
+    { name:"full_time_equivalent",type:"decimal",required:true,  indexed:false, pii:false },
+    { name:"activation",          type:"date",   required:true,  indexed:false, pii:false }
+  ]},
+  { id:"team", name:"Team", icon:"TM", brief:"Organisational unit", category:"core", department:"people", properties:[
+    { name:"team_id",   type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"name",      type:"string", required:true,  indexed:true,  pii:false },
+    { name:"function",  type:"enum",   required:true,  indexed:true,  pii:false },
+    { name:"leader_id", type:"string", required:false, indexed:true,  pii:false }
+  ]},
+
+  // ── Product & Catalog ───────────────────────────────────────────────────
+  { id:"asset", name:"Asset", icon:"AS", brief:"Managed company asset", category:"core", department:"product", properties:[
+    { name:"asset_id",  type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"type",      type:"enum",   required:true,  indexed:true,  pii:false },
+    { name:"assignee",  type:"string", required:false, indexed:true,  pii:false },
+    { name:"status",    type:"enum",   required:true,  indexed:true,  pii:false }
+  ]},
+  { id:"inventory", name:"Inventory", icon:"IV", brief:"On-hand stock at a location", category:"secondary", department:"product", properties:[
+    { name:"sku",       type:"string", required:true,  indexed:true,  pii:false, pk:true },
+    { name:"location",  type:"string", required:true,  indexed:true,  pii:false },
+    { name:"on_hand",   type:"decimal",required:true,  indexed:false, pii:false },
+    { name:"reserved",  type:"decimal",required:false, indexed:false, pii:false }
+  ]},
+
+  // ── Marketing ───────────────────────────────────────────────────────────
+  { id:"campaign", name:"Campaign", icon:"CP", brief:"Marketing initiative", category:"core", department:"marketing", properties:[
+    { name:"campaign_id",   type:"uuid",     required:true,  indexed:true,  pii:false, pk:true },
+    { name:"name",          type:"string",   required:true,  indexed:true,  pii:false },
+    { name:"actual_start",  type:"date",     required:true,  indexed:true,  pii:false },
+    { name:"budgeted_cost", type:"decimal",  required:false, indexed:false, pii:false },
+    { name:"objective",     type:"enum",     required:false, indexed:true,  pii:false }
+  ]},
+  { id:"marketing_list", name:"Marketing List", icon:"ML", brief:"Targeted audience list", category:"secondary", department:"marketing", properties:[
+    { name:"list_id",       type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"list_name",     type:"string", required:true,  indexed:true,  pii:false },
+    { name:"member_type",   type:"enum",   required:true,  indexed:true,  pii:false },
+    { name:"member_count",  type:"decimal",required:false, indexed:false, pii:false }
+  ]},
+  { id:"segment", name:"Segment", icon:"SG", brief:"Defined audience cohort", category:"derived", department:"marketing", properties:[
+    { name:"segment_id",       type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"segment_name",     type:"string", required:true,  indexed:true,  pii:false },
+    { name:"filter_query",     type:"string", required:true,  indexed:false, pii:false },
+    { name:"activation_status",type:"enum",   required:true,  indexed:true,  pii:false }
+  ]},
+
+  // ── Operations ──────────────────────────────────────────────────────────
+  { id:"vendor", name:"Vendor", icon:"VD", brief:"Supplier of materials or services", category:"core", department:"operations", properties:[
+    { name:"vendor_id", type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"name",      type:"string", required:true,  indexed:true,  pii:false },
+    { name:"tier",      type:"enum",   required:false, indexed:true,  pii:false },
+    { name:"status",    type:"enum",   required:true,  indexed:true,  pii:false }
+  ]},
+  { id:"purchase_order", name:"Purchase Order", icon:"PO", brief:"Procurement document", category:"secondary", department:"operations", properties:[
+    { name:"po_id",      type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"amount",     type:"decimal",required:true,  indexed:false, pii:false },
+    { name:"vendor_id",  type:"string", required:true,  indexed:true,  pii:false },
+    { name:"status",     type:"enum",   required:true,  indexed:true,  pii:false }
+  ]},
+  { id:"task", name:"Task", icon:"TS", brief:"Assigned activity with owner", category:"secondary", department:"operations", properties:[
+    { name:"task_id",         type:"uuid",     required:true,  indexed:true,  pii:false, pk:true },
+    { name:"subject",         type:"string",   required:true,  indexed:false, pii:false },
+    { name:"scheduled_start", type:"timestamp",required:true,  indexed:true,  pii:false },
+    { name:"priority_code",   type:"enum",     required:true,  indexed:true,  pii:false },
+    { name:"status",          type:"enum",     required:true,  indexed:true,  pii:false }
+  ]},
+
+  // ── Governance & Risk ───────────────────────────────────────────────────
+  { id:"policy", name:"Policy", icon:"PL", brief:"Governance or risk policy", category:"derived", department:"governance", properties:[
+    { name:"policy_id",  type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"name",       type:"string", required:true,  indexed:true,  pii:false },
+    { name:"version",    type:"string", required:true,  indexed:false, pii:false },
+    { name:"effective",  type:"date",   required:true,  indexed:true,  pii:false }
+  ]},
+  { id:"risk", name:"Risk", icon:"RK", brief:"Identified open risk", category:"derived", department:"governance", properties:[
+    { name:"risk_id",    type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"severity",   type:"enum",   required:true,  indexed:true,  pii:false },
+    { name:"category",   type:"enum",   required:true,  indexed:true,  pii:false },
+    { name:"status",     type:"enum",   required:true,  indexed:true,  pii:false }
+  ]},
+  { id:"compliance_case", name:"Compliance Case", icon:"CC", brief:"Open regulatory investigation", category:"secondary", department:"governance", properties:[
+    { name:"case_id",   type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"regulator", type:"string", required:true,  indexed:true,  pii:false },
+    { name:"status",    type:"enum",   required:true,  indexed:true,  pii:false },
+    { name:"opened_on", type:"date",   required:true,  indexed:true,  pii:false }
+  ]},
+
+  // ── Healthcare (FHIR-aligned) ───────────────────────────────────────────
+  { id:"patient", name:"Patient", icon:"PT", brief:"Individual receiving care", category:"core", department:"healthcare", properties:[
+    { name:"patient_id",         type:"uuid",   required:true,  indexed:true,  pii:true,  pk:true },
+    { name:"date_of_birth",      type:"date",   required:true,  indexed:true,  pii:true },
+    { name:"gender",             type:"enum",   required:false, indexed:false, pii:true },
+    { name:"mrn",                type:"string", required:true,  indexed:true,  pii:true },
+    { name:"primary_provider_id",type:"string", required:false, indexed:true,  pii:false }
+  ]},
+  { id:"encounter", name:"Encounter", icon:"EC", brief:"Clinical visit or admission", category:"core", department:"healthcare", properties:[
+    { name:"encounter_identifier",type:"uuid",     required:true,  indexed:true,  pii:false, pk:true },
+    { name:"encounter_class",     type:"enum",     required:true,  indexed:true,  pii:false },
+    { name:"encounter_status",    type:"enum",     required:true,  indexed:true,  pii:false },
+    { name:"period_start",        type:"timestamp",required:true,  indexed:true,  pii:false },
+    { name:"period_end",          type:"timestamp",required:false, indexed:false, pii:false }
+  ]},
+
+  // ── Financial Services (Banking) ────────────────────────────────────────
+  { id:"bank_account", name:"Bank Account", icon:"BA", brief:"Customer banking account", category:"core", department:"financial-svc", properties:[
+    { name:"account_id",        type:"uuid",   required:true,  indexed:true,  pii:true,  pk:true },
+    { name:"account_number",    type:"string", required:true,  indexed:true,  pii:true },
+    { name:"available_balance", type:"decimal",required:true,  indexed:false, pii:false },
+    { name:"branch_id",         type:"string", required:true,  indexed:true,  pii:false },
+    { name:"product_type",      type:"enum",   required:true,  indexed:true,  pii:false }
+  ]},
+  { id:"transaction", name:"Transaction", icon:"TX", brief:"Money-movement event", category:"core", department:"financial-svc", properties:[
+    { name:"txn_id",    type:"uuid",     required:true,  indexed:true,  pii:false, pk:true },
+    { name:"amount",    type:"decimal",  required:true,  indexed:false, pii:false },
+    { name:"currency",  type:"enum",     required:true,  indexed:false, pii:false },
+    { name:"direction", type:"enum",     required:true,  indexed:true,  pii:false },
+    { name:"posted_at", type:"timestamp",required:true,  indexed:true,  pii:false }
+  ]},
+  { id:"kyc_case", name:"KYC Case", icon:"KC", brief:"Know-Your-Customer review", category:"secondary", department:"financial-svc", properties:[
+    { name:"kyc_id",      type:"uuid",   required:true,  indexed:true,  pii:false, pk:true },
+    { name:"customer_id", type:"string", required:true,  indexed:true,  pii:true },
+    { name:"status",      type:"enum",   required:true,  indexed:true,  pii:false },
+    { name:"risk_rating", type:"enum",   required:true,  indexed:true,  pii:false },
+    { name:"opened_on",   type:"date",   required:true,  indexed:true,  pii:false }
+  ]}
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -10061,6 +10311,7 @@ function AddNodeFlow({ onClose }) {
   var [properties, setProperties] = useState([]);
   var [selectedTemplate, setSelectedTemplate] = useState(null);
   var [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  var [templateQuery, setTemplateQuery] = useState("");
 
   // Inline type picker for the Review & edit fields table. Per-row open state
   // is kept locally so each pill manages its own popover.
@@ -10258,7 +10509,7 @@ function AddNodeFlow({ onClose }) {
   return (
     <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
       onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width:"96vw", maxWidth:1480, height:"96vh", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
+      <div style={{ width:"92vw", maxWidth:1180, height:"94vh", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
 
         {/* HEADER */}
         <div style={{ flexShrink:0, height:56, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 22px", background:"var(--panel)" }}>
@@ -10486,32 +10737,80 @@ function AddNodeFlow({ onClose }) {
                             </>
                           )}
                         </button>
-                        {templatePickerOpen && (
+                        {templatePickerOpen && (function(){
+                          var q = templateQuery.trim().toLowerCase();
+                          var filtered = q ? NODE_TEMPLATES.filter(function(t){
+                            return t.name.toLowerCase().indexOf(q) >= 0
+                              || t.brief.toLowerCase().indexOf(q) >= 0
+                              || (t.department || "").indexOf(q) >= 0
+                              || t.properties.some(function(p){ return p.name.indexOf(q) >= 0; });
+                          }) : NODE_TEMPLATES;
+                          return (
                           <>
                             <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setTemplatePickerOpen(false); }} />
-                            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:440, overflowY:"auto" }}>
-                              {NODE_TEMPLATES.map(function(t, i){
-                                var isSel = selectedTemplate === t.id;
-                                return (
-                                  <button key={t.id} onClick={function(){ applyTemplate(t.id); setTemplatePickerOpen(false); }}
-                                    style={{ display:"flex", alignItems:"flex-start", gap:12, width:"100%", padding:"10px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < NODE_TEMPLATES.length-1 ? 2 : 0 }}
-                                    onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
-                                    onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
-                                    <span style={{ width:32, height:32, borderRadius:6, background:"var(--blue-fill)", color:"var(--blue)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1, fontFamily:"JetBrains Mono", fontSize:10.5, fontWeight:700 }}>{t.icon || t.name.slice(0,2).toUpperCase()}</span>
-                                    <div style={{ flex:1, minWidth:0 }}>
-                                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                                        <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{t.name}</span>
-                                        <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", fontWeight:600, letterSpacing:"0.3px" }}>{t.properties.length + " FIELDS"}</span>
+                            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", display:"flex", flexDirection:"column", overflow:"hidden", maxHeight:520 }}>
+                              {/* SEARCH HEADER */}
+                              <div style={{ padding:"10px 12px", borderBottom:"1px solid var(--line-2)", background:"var(--panel-2)" }}>
+                                <div style={{ position:"relative" }}>
+                                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--ink-3)" strokeWidth="1.5" style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+                                    <circle cx="6.5" cy="6.5" r="4.5" />
+                                    <line x1="10" y1="10" x2="14" y2="14" />
+                                  </svg>
+                                  <input type="text" value={templateQuery} onChange={function(e){ setTemplateQuery(e.target.value); }} placeholder="Search templates, departments, or fields…" autoFocus
+                                    style={{ width:"100%", padding:"7px 11px 7px 28px", fontSize:12.5, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:6, outline:"none", boxSizing:"border-box" }} />
+                                </div>
+                              </div>
+                              {/* GROUPED RESULTS */}
+                              <div style={{ flex:1, overflowY:"auto", padding:"6px 0" }}>
+                                {NODE_TEMPLATE_DEPARTMENTS.map(function(dept){
+                                  var items = filtered.filter(function(t){ return t.department === dept.id; });
+                                  if (items.length === 0) return null;
+                                  return (
+                                    <div key={dept.id} style={{ padding:"4px 0" }}>
+                                      <div style={{ display:"flex", alignItems:"center", gap:7, padding:"6px 14px 4px", color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.7px", textTransform:"uppercase" }}>
+                                        <span style={{ width:5, height:5, borderRadius:"50%", background:dept.color }} />
+                                        <span>{dept.label}</span>
+                                        <span style={{ color:"var(--ink-4)" }}>·</span>
+                                        <span>{items.length}</span>
                                       </div>
-                                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3, lineHeight:1.45 }}>{t.brief}</div>
+                                      {items.map(function(t){
+                                        var isSel = selectedTemplate === t.id;
+                                        return (
+                                          <button key={t.id} onClick={function(){ applyTemplate(t.id); setTemplatePickerOpen(false); setTemplateQuery(""); }}
+                                            style={{ display:"flex", alignItems:"flex-start", gap:12, width:"100%", padding:"8px 14px", borderRadius:0, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
+                                            onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                                            onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+                                            <span style={{ width:30, height:30, borderRadius:6, background:dept.color + "1f", color:dept.color, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1, fontFamily:"JetBrains Mono", fontSize:10.5, fontWeight:700 }}>{t.icon || t.name.slice(0,2).toUpperCase()}</span>
+                                            <div style={{ flex:1, minWidth:0 }}>
+                                              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                                                <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{t.name}</span>
+                                                <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", fontWeight:600, letterSpacing:"0.3px" }}>{t.properties.length + " FIELDS"}</span>
+                                              </div>
+                                              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3, lineHeight:1.45 }}>{t.brief}</div>
+                                            </div>
+                                            {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
+                                          </button>
+                                        );
+                                      })}
                                     </div>
-                                    {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
-                                  </button>
-                                );
-                              })}
+                                  );
+                                })}
+                                {filtered.length === 0 && (
+                                  <div style={{ padding:"36px 14px", textAlign:"center", color:"var(--ink-3)", fontSize:12 }}>
+                                    <div>No templates match "{templateQuery}"</div>
+                                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:4 }}>Try a department name, field name, or entity name</div>
+                                  </div>
+                                )}
+                              </div>
+                              {/* FOOTER */}
+                              <div style={{ padding:"8px 12px", borderTop:"1px solid var(--line-2)", background:"var(--panel-2)", display:"flex", alignItems:"center", justifyContent:"space-between", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>
+                                <span>{filtered.length + " of " + NODE_TEMPLATES.length + " templates across " + NODE_TEMPLATE_DEPARTMENTS.length + " departments"}</span>
+                                <button onClick={function(){ setTemplatePickerOpen(false); setTemplateQuery(""); }} className="btn-ghost" style={{ fontSize:11 }}>Done</button>
+                              </div>
                             </div>
                           </>
-                        )}
+                          );
+                        })()}
                       </div>
                     </div>
                   );
@@ -13009,6 +13308,9 @@ function App() {
   const [selected, setSelected] = useState("account");
   const [hover, setHover] = useState(null);
   const [savedView, setSavedView] = useState("Full schema");
+  const [showInferred,  setShowInferred]  = useState(true);
+  const [showEdgeLabels, setShowEdgeLabels] = useState(true);
+  const [showCounts,    setShowCounts]    = useState(true);
   const [viewport, setViewport] = useState({ zoom: 0.95, panX: 0, panY: 0 });
   const [nodes, setNodes] = useState(NODES.filter(n => n.type !== "agent"));
   const canvasSize = useRef({ w: 1000, h: 700 });
@@ -13091,9 +13393,9 @@ function App() {
               <span className="ctb-val">{savedView}</span>
             </div>
             <div className="ctb-right">
-              <label className="ctb-toggle"><input type="checkbox" defaultChecked /> <span>Inferred</span></label>
-              <label className="ctb-toggle"><input type="checkbox" defaultChecked /> <span>Edge labels</span></label>
-              <label className="ctb-toggle"><input type="checkbox" defaultChecked /> <span>Counts</span></label>
+              <label className="ctb-toggle"><input type="checkbox" checked={showInferred} onChange={(e) => setShowInferred(e.target.checked)} /> <span>Inferred</span></label>
+              <label className="ctb-toggle"><input type="checkbox" checked={showEdgeLabels} onChange={(e) => setShowEdgeLabels(e.target.checked)} /> <span>Edge labels</span></label>
+              <label className="ctb-toggle"><input type="checkbox" checked={showCounts} onChange={(e) => setShowCounts(e.target.checked)} /> <span>Counts</span></label>
             </div>
           </div>
           <Canvas
@@ -13103,6 +13405,7 @@ function App() {
             filter={filter} query={query} savedView={savedView}
             viewport={viewport} setViewport={setViewport}
             sidebarOpen={sidebarOpen}
+            showInferred={showInferred} showEdgeLabels={showEdgeLabels} showCounts={showCounts}
           />
           <Legend filter={filter} setFilter={setFilter} />
           <div className="bottomright">
