@@ -3917,9 +3917,9 @@ var SOURCE_CONNECTORS = [
   { id:"salesforce", name:"Salesforce",     category:"saas",      paradigm:"structured", auth:"oauth",   color:"#1798c1", letter:"S", brief:"CRM · 200+ objects",         popular:true },
   { id:"hubspot",    name:"HubSpot",        category:"saas",      paradigm:"structured", auth:"oauth",   color:"#ff7a59", letter:"H", brief:"CRM · contacts, companies",  popular:true },
   { id:"netsuite",   name:"NetSuite",       category:"saas",      paradigm:"structured", auth:"oauth",   color:"#b8923a", letter:"N", brief:"ERP · finance, ops",         popular:true },
-  { id:"stripe",     name:"Stripe",         category:"saas",      paradigm:"structured", auth:"apikey",  color:"#635bff", letter:"S", brief:"Billing · charges, invoices" },
-  { id:"zendesk",    name:"Zendesk",        category:"saas",      paradigm:"structured", auth:"oauth",   color:"#03363d", letter:"Z", brief:"Support · tickets" },
-  { id:"jira",       name:"Jira",           category:"saas",      paradigm:"structured", auth:"oauth",   color:"#0052cc", letter:"J", brief:"Projects · issues, epics" },
+  { id:"stripe",     name:"Stripe",         category:"saas",      paradigm:"structured", auth:"apikey",  color:"#635bff", letter:"S", brief:"Billing · charges, invoices", popular:true },
+  { id:"zendesk",    name:"Zendesk",        category:"saas",      paradigm:"structured", auth:"oauth",   color:"#03363d", letter:"Z", brief:"Support · tickets", popular:true },
+  { id:"jira",       name:"Jira",           category:"saas",      paradigm:"structured", auth:"oauth",   color:"#0052cc", letter:"J", brief:"Projects · issues, epics", popular:true },
   { id:"servicenow", name:"ServiceNow",     category:"saas",      paradigm:"structured", auth:"oauth",   color:"#293e40", letter:"S", brief:"ITSM · tickets, CMDB" },
   { id:"workday",    name:"Workday",        category:"saas",      paradigm:"structured", auth:"oauth",   color:"#0875e1", letter:"W", brief:"HR · employees, comp" },
   { id:"intercom",   name:"Intercom",       category:"saas",      paradigm:"structured", auth:"oauth",   color:"#1f8ded", letter:"I", brief:"Conversations" },
@@ -3928,26 +3928,26 @@ var SOURCE_CONNECTORS = [
   // ─── Warehouse / Database ─────
   { id:"snowflake",  name:"Snowflake",      category:"warehouse", paradigm:"structured", auth:"connstr", color:"#29b5e8", letter:"❄", brief:"Warehouse · tables, views",  popular:true },
   { id:"databricks", name:"Databricks",     category:"warehouse", paradigm:"structured", auth:"connstr", color:"#ff3621", letter:"D", brief:"Lakehouse · Delta tables",   popular:true },
-  { id:"bigquery",   name:"BigQuery",       category:"warehouse", paradigm:"structured", auth:"oauth",   color:"#4285f4", letter:"B", brief:"Warehouse · datasets" },
+  { id:"bigquery",   name:"BigQuery",       category:"warehouse", paradigm:"structured", auth:"oauth",   color:"#4285f4", letter:"B", brief:"Warehouse · datasets", popular:true },
   { id:"redshift",   name:"Redshift",       category:"warehouse", paradigm:"structured", auth:"connstr", color:"#cb0606", letter:"R", brief:"Warehouse · tables" },
-  { id:"postgres",   name:"PostgreSQL",     category:"warehouse", paradigm:"structured", auth:"connstr", color:"#336791", letter:"P", brief:"Relational DB" },
+  { id:"postgres",   name:"PostgreSQL",     category:"warehouse", paradigm:"structured", auth:"connstr", color:"#336791", letter:"P", brief:"Relational DB", popular:true },
   { id:"mysql",      name:"MySQL",          category:"warehouse", paradigm:"structured", auth:"connstr", color:"#4479a1", letter:"M", brief:"Relational DB" },
   { id:"mongodb",    name:"MongoDB",        category:"warehouse", paradigm:"structured", auth:"connstr", color:"#47a248", letter:"M", brief:"Document DB · collections" },
 
   // ─── Document stores (LLM extraction) ─────
   { id:"sharepoint", name:"SharePoint",     category:"docs",      paradigm:"documents",  auth:"oauth",   color:"#1f6dad", letter:"S", brief:"Folders · contracts, policies", popular:true },
-  { id:"gdrive",     name:"Google Drive",   category:"docs",      paradigm:"documents",  auth:"oauth",   color:"#4285f4", letter:"G", brief:"Folders · docs, PDFs" },
+  { id:"gdrive",     name:"Google Drive",   category:"docs",      paradigm:"documents",  auth:"oauth",   color:"#4285f4", letter:"G", brief:"Folders · docs, PDFs", popular:true },
   { id:"onedrive",   name:"OneDrive",       category:"docs",      paradigm:"documents",  auth:"oauth",   color:"#0078d4", letter:"O", brief:"Folders · docs, PDFs" },
   { id:"dropbox",    name:"Dropbox",        category:"docs",      paradigm:"documents",  auth:"oauth",   color:"#0061ff", letter:"D", brief:"Folders · files" },
   { id:"box",        name:"Box",            category:"docs",      paradigm:"documents",  auth:"oauth",   color:"#0061d5", letter:"B", brief:"Folders · files" },
-  { id:"confluence", name:"Confluence",     category:"docs",      paradigm:"documents",  auth:"oauth",   color:"#0052cc", letter:"C", brief:"Wiki · spaces, pages" },
+  { id:"confluence", name:"Confluence",     category:"docs",      paradigm:"documents",  auth:"oauth",   color:"#0052cc", letter:"C", brief:"Wiki · spaces, pages", popular:true },
   { id:"notion",     name:"Notion",         category:"docs",      paradigm:"documents",  auth:"oauth",   color:"#000000", letter:"N", brief:"Workspace · pages" },
-  { id:"s3",         name:"Amazon S3",      category:"docs",      paradigm:"documents",  auth:"keys",    color:"#ff9900", letter:"S", brief:"Buckets · objects, PDFs" },
+  { id:"s3",         name:"Amazon S3",      category:"docs",      paradigm:"documents",  auth:"keys",    color:"#ff9900", letter:"S", brief:"Buckets · objects, PDFs", popular:true },
   { id:"gcs",        name:"GCS",            category:"docs",      paradigm:"documents",  auth:"keys",    color:"#669df6", letter:"G", brief:"Buckets · objects" },
   { id:"azure-blob", name:"Azure Blob",     category:"docs",      paradigm:"documents",  auth:"keys",    color:"#0078d4", letter:"A", brief:"Containers · blobs" },
 
   // ─── Communication ─────
-  { id:"slack",      name:"Slack",          category:"comm",      paradigm:"documents",  auth:"oauth",   color:"#4a154b", letter:"S", brief:"Channels · messages" },
+  { id:"slack",      name:"Slack",          category:"comm",      paradigm:"documents",  auth:"oauth",   color:"#4a154b", letter:"S", brief:"Channels · messages", popular:true },
   { id:"gmail",      name:"Gmail",          category:"comm",      paradigm:"documents",  auth:"oauth",   color:"#ea4335", letter:"G", brief:"Inbox · emails" },
   { id:"outlook",    name:"Outlook",        category:"comm",      paradigm:"documents",  auth:"oauth",   color:"#0078d4", letter:"O", brief:"Inbox · emails" },
 
@@ -4017,6 +4017,34 @@ function LinkSourceFlow({ node, onClose }) {
   var [authDb, setAuthDb]        = useState("");
   var [authKey, setAuthKey]      = useState("");
   var [authConnected, setAuthConnected] = useState(false);
+  var [savedConnId, setSavedConnId] = useState(null);
+  var [connectionMode, setConnectionMode] = useState("saved"); // "saved" | "new"
+
+  // Mock saved connections per connector — represents what an enterprise already has
+  var SAVED_CONNECTIONS_BY_CONNECTOR = {
+    salesforce: [
+      { id:"sfdc-prod",    label:"Production",  hint:"acme.my.salesforce.com",       owner:"data-platform", connected:"3 months ago", health:"healthy" },
+      { id:"sfdc-sandbox", label:"Sandbox",     hint:"acme--sandbox.sandbox.my.sfdc",owner:"data-platform", connected:"6 days ago",   health:"healthy" },
+      { id:"sfdc-eu",      label:"EU instance", hint:"acme-eu.my.salesforce.com",    owner:"customer-ops",  connected:"1 month ago", health:"degraded" }
+    ],
+    netsuite:   [{ id:"netsuite-prod", label:"Production", hint:"acme.netsuite.com",   owner:"finance-ops", connected:"2 weeks ago", health:"healthy" }],
+    snowflake:  [
+      { id:"snow-prod",      label:"PROD_DW",     hint:"acme-prod.snowflakecomputing.com / PROD_DW",  owner:"data-platform", connected:"5 months ago", health:"healthy" },
+      { id:"snow-analytics", label:"ANALYTICS",   hint:"acme-prod.snowflakecomputing.com / ANALYTICS",owner:"analytics",     connected:"2 months ago", health:"healthy" }
+    ],
+    databricks: [{ id:"dbx-prod", label:"Production workspace", hint:"adb-acme-prod.azuredatabricks.net", owner:"data-platform", connected:"1 month ago", health:"healthy" }],
+    hubspot:    [{ id:"hubspot-mkt", label:"Marketing hub", hint:"hub 8472913", owner:"customer-ops", connected:"3 weeks ago", health:"healthy" }],
+    sharepoint: [
+      { id:"sp-legal",  label:"Legal site",  hint:"acme.sharepoint.com/sites/Legal",  owner:"legal-ops", connected:"2 weeks ago", health:"healthy" },
+      { id:"sp-sales",  label:"Sales site",  hint:"acme.sharepoint.com/sites/Sales",  owner:"customer-ops", connected:"1 month ago", health:"healthy" }
+    ],
+    s3:         [{ id:"s3-archive", label:"Legal archive bucket", hint:"s3://acme-legal-archive (us-east-1)", owner:"legal-ops", connected:"4 months ago", health:"healthy" }],
+    postgres:   [{ id:"pg-app",     label:"App DB (read replica)", hint:"app-replica.acme.internal / app_prod", owner:"engineering", connected:"7 months ago", health:"healthy" }],
+    stripe:     [{ id:"stripe-prod", label:"Production", hint:"acct_1Abc…", owner:"finance-ops", connected:"1 year ago", health:"healthy" }],
+    confluence: [{ id:"conf-eng",   label:"Engineering space", hint:"acme.atlassian.net/wiki/spaces/ENG", owner:"engineering", connected:"2 months ago", health:"healthy" }],
+    gdrive:     [{ id:"gdrive-shared", label:"Shared drives (Legal)", hint:"drives.google.com/drive/u/0/folders/0AB…", owner:"legal-ops", connected:"3 months ago", health:"healthy" }]
+  };
+  var savedConns = (connector && SAVED_CONNECTIONS_BY_CONNECTOR[connector]) || [];
   var [selectedObjects, setSelectedObjects] = useState([]);
   var [objectFilter, setObjectFilter]       = useState("");
   var [folderPath, setFolderPath]           = useState("");
@@ -4025,6 +4053,7 @@ function LinkSourceFlow({ node, onClose }) {
   var [topicName, setTopicName]             = useState("");
   var [targetNodeId, setTargetNodeId]   = useState(node ? node.id : "account");
   var [columnMap, setColumnMap]         = useState({});
+  var [columnTransform, setColumnTransform] = useState({}); // sourceCol → transform id
   var [extractionPrompt, setExtractionPrompt] = useState(DEFAULT_EXTRACTION_PROMPT);
   var [extractionFields, setExtractionFields] = useState(DEFAULT_EXTRACTION_FIELDS.slice());
   var [llmModel, setLlmModel]           = useState("claude-3.5-sonnet");
@@ -4034,10 +4063,11 @@ function LinkSourceFlow({ node, onClose }) {
   var [backfill, setBackfill]           = useState("90d");
   var [conflictHandling, setConflictHandling] = useState("merge");
   var [onError, setOnError]             = useState("retry");
-  var [piiFields, setPiiFields]         = useState([]);
-  var [ownerTeam, setOwnerTeam]         = useState("data-platform");
   var [sloTarget, setSloTarget]         = useState("30m");
-  var [alertChannel, setAlertChannel]   = useState("#data-alerts");
+  var [classification, setClassification] = useState("internal"); // public / internal / confidential / restricted
+  var [complianceTags, setComplianceTags] = useState(["SOC2"]);
+  var [allowedRegions, setAllowedRegions] = useState(["us"]);
+  var [approvers, setApprovers]         = useState([]);
   var [costCap, setCostCap]             = useState("100");
   var [activate, setActivate]           = useState(true);
 
@@ -4059,6 +4089,7 @@ function LinkSourceFlow({ node, onClose }) {
   function canContinue() {
     if (step === 1) return !!connector;
     if (step === 2) {
+      if (connectionMode === "saved" && savedConnId) return true;
       if (connectorDef.auth === "none") return true;
       if (connectorDef.auth === "oauth") return authConnected;
       if (connectorDef.auth === "apikey") return authKey.length > 0;
@@ -4156,7 +4187,7 @@ function LinkSourceFlow({ node, onClose }) {
                       : n === 3 ? (paradigm === "structured" ? selectedObjects.length + " object(s)" : paradigm === "documents" ? (folderPath ? "Folder set" : "Folder") : paradigm === "event" ? (topicName || "Topic") : "Manual")
                       : n === 4 ? (paradigm === "documents" ? extractionFields.length + " fields" : Object.keys(columnMap).length + " mapped")
                       : n === 5 ? syncStrategy + " · " + syncFrequency
-                      : n === 6 ? ownerTeam
+                      : n === 6 ? classification + " · SLO " + sloTarget
                       : (activate ? "Activate" : "Draft");
               return (
                 <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
@@ -4188,7 +4219,7 @@ function LinkSourceFlow({ node, onClose }) {
                 {step === 4 && paradigm === "event" && "Map fields of the incoming event payload to node properties."}
                 {step === 4 && paradigm === "manual" && "Pick the target node type. Records will be added or edited through the steward UI."}
                 {step === 5 && "Configure how often this source refreshes and how new vs existing records are reconciled."}
-                {step === 6 && "Mark sensitive fields, assign an owner, set the freshness SLO, and configure alerts."}
+                {step === 6 && "Classify the data, set the freshness SLO, declare compliance scope, and configure who must approve activation."}
                 {step === 7 && "Review the full source configuration. Activate immediately or save as a draft pending approval."}
               </div>
             </div>
@@ -4239,7 +4270,51 @@ function LinkSourceFlow({ node, onClose }) {
             )}
 
             {step === 2 && connectorDef && (
-              <div style={{ maxWidth:640 }}>
+              <div style={{ maxWidth:640, display:"flex", flexDirection:"column", gap:18 }}>
+                {/* Saved-connections picker — only if there are saved connections for this connector */}
+                {savedConns.length > 0 && (
+                  <div>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                      <label style={lbl}>USE AN EXISTING CONNECTION</label>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{savedConns.length + " linked to your org"}</span>
+                    </div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                      {savedConns.map(function(s){
+                        var isOn = connectionMode === "saved" && savedConnId === s.id;
+                        var healthColor = s.health === "healthy" ? "var(--green)" : s.health === "degraded" ? "var(--gold)" : "var(--coral)";
+                        return (
+                          <button key={s.id}
+                            onClick={function(){ setConnectionMode("saved"); setSavedConnId(s.id); setAuthConnected(true); }}
+                            style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--bg-canvas)" : "var(--panel)", borderRadius:9, cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 8%, transparent)" : "none" }}>
+                            <ConnLogo c={connectorDef} size={28} />
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3 }}>
+                                <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{s.label}</span>
+                                <span style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"JetBrains Mono", fontSize:9.5, color: healthColor, fontWeight:600 }}>
+                                  <span style={{ width:6, height:6, borderRadius:"50%", background: healthColor }} />
+                                  {s.health}
+                                </span>
+                              </div>
+                              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{s.hint}</div>
+                              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:3 }}>{"owned by " + s.owner + " · connected " + s.connected}</div>
+                            </div>
+                            {isOn && <span style={{ color:"var(--green)", fontFamily:"JetBrains Mono", fontWeight:700, fontSize:14 }}>✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button onClick={function(){ setConnectionMode("new"); setSavedConnId(null); setAuthConnected(false); }}
+                      style={{ marginTop:8, display:"flex", alignItems:"center", gap:8, padding:"10px 12px", border: "1px dashed " + (connectionMode === "new" ? "var(--ink)" : "var(--line)"), background: connectionMode === "new" ? "var(--bg-canvas)" : "transparent", borderRadius:9, cursor:"pointer", fontFamily:"inherit", fontSize:12.5, color: connectionMode === "new" ? "var(--ink)" : "var(--ink-3)", width:"100%", textAlign:"left" }}>
+                      <span style={{ width:22, height:22, borderRadius:5, border:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, color:"var(--ink-3)" }}>+</span>
+                      <span>Add a new {connectorDef.name} connection</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Show the auth form only when adding a new connection (or no saved ones exist) */}
+                {(connectionMode === "new" || savedConns.length === 0) && (
+                  <div>
+                    {savedConns.length > 0 && <label style={lbl}>NEW CONNECTION CREDENTIALS</label>}
                 {connectorDef.auth === "oauth" && (
                   <div style={{ padding:24, border:"1px solid var(--line)", borderRadius:10, background:"var(--panel)" }}>
                     <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14 }}>
@@ -4316,6 +4391,8 @@ function LinkSourceFlow({ node, onClose }) {
                 )}
                 {connectorDef.auth === "none" && (
                   <div style={{ padding:"16px 18px", background:"var(--panel-2)", border:"1px dashed var(--line)", borderRadius:8, fontSize:13, color:"var(--ink-3)" }}>No authentication required for this connector.</div>
+                )}
+                  </div>
                 )}
               </div>
             )}
@@ -4430,14 +4507,39 @@ function LinkSourceFlow({ node, onClose }) {
                     }} className="btn-ghost" style={{ fontSize:11.5 }}>⚡ Auto-detect</button>
                   </div>
                   <div style={{ border:"1px solid var(--line)", borderRadius:8, overflow:"hidden" }}>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 36px 1fr", gap:0, background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", padding:"7px 12px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
-                      <div>{paradigm === "structured" ? "Source column" : "Event field"}</div><div/><div>Target property</div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 24px 0.9fr 24px 1fr", gap:6, background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", padding:"7px 12px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
+                      <div>{paradigm === "structured" ? "Source column" : "Event field"}</div>
+                      <div/>
+                      <div>Transform <span style={{ textTransform:"none", color:"var(--ink-4)" }}>(optional)</span></div>
+                      <div/>
+                      <div>Target property</div>
                     </div>
                     {(paradigm === "structured" ? ["Id","Name","Email","Domain","Industry","Tier","Region","CreatedAt","AnnualRevenue","OwnerId","BillingCountry"] : ["id","name","email","status","timestamp","payload.amount","payload.currency","headers.source"]).map(function(srcCol, i, arr) {
                       var mapped = columnMap[srcCol];
+                      var transform = columnTransform[srcCol] || "";
                       return (
-                        <div key={srcCol} style={{ display:"grid", gridTemplateColumns:"1fr 36px 1fr", gap:0, padding:"6px 12px", alignItems:"center", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none" }}>
-                          <code style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)" }}>{srcCol}</code>
+                        <div key={srcCol} style={{ display:"grid", gridTemplateColumns:"1fr 24px 0.9fr 24px 1fr", gap:6, padding:"6px 12px", alignItems:"center", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                          <code style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{srcCol}</code>
+                          <span style={{ textAlign:"center", color:"var(--ink-3)", fontFamily:"JetBrains Mono" }}>→</span>
+                          <select value={transform} onChange={function(e){
+                            var v = e.target.value;
+                            setColumnTransform(function(m){ var n = Object.assign({}, m); if (v) n[srcCol] = v; else delete n[srcCol]; return n; });
+                          }} style={Object.assign({}, inp, { padding:"5px 8px", fontSize:11.5, fontFamily:"JetBrains Mono", color: transform ? "var(--purple)" : "var(--ink-3)" })}>
+                            <option value="">— none —</option>
+                            <option value="lower">lower()</option>
+                            <option value="upper">upper()</option>
+                            <option value="trim">trim()</option>
+                            <option value="normalize_domain">normalize_domain()</option>
+                            <option value="normalize_phone">normalize_phone()</option>
+                            <option value="normalize_email">normalize_email()</option>
+                            <option value="to_iso_date">to_iso_date()</option>
+                            <option value="to_decimal">to_decimal()</option>
+                            <option value="parse_currency">parse_currency()</option>
+                            <option value="bucket_arr">bucket_arr() → tier</option>
+                            <option value="hash_sha256">hash_sha256() — PII safe</option>
+                            <option value="regex_replace">regex_replace(…)</option>
+                            <option value="custom">custom JS expression…</option>
+                          </select>
                           <span style={{ textAlign:"center", color:"var(--ink-3)", fontFamily:"JetBrains Mono" }}>→</span>
                           <select value={mapped || ""} onChange={function(e){
                             var v = e.target.value;
@@ -4548,27 +4650,17 @@ function LinkSourceFlow({ node, onClose }) {
                     })}
                   </div>
                 </div>
-                <div>
-                  <label style={lbl}>FREQUENCY</label>
-                  <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-                    {[{ id:"realtime", l:"Real-time" },{ id:"15m", l:"Every 15m" },{ id:"hourly", l:"Hourly" },{ id:"6h", l:"Every 6h" },{ id:"daily", l:"Daily" },{ id:"weekly", l:"Weekly" },{ id:"manual", l:"Manual only" }].map(function(o){
-                      var isOn = syncFrequency === o.id;
-                      var disabled = syncStrategy === "streaming" && o.id !== "realtime";
-                      return <button key={o.id} disabled={disabled} onClick={function(){ if (!disabled) setSyncFrequency(o.id); }}
-                        style={{ padding:"6px 11px", borderRadius:6, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1 }}>{o.l}</button>;
-                    })}
-                  </div>
-                </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
                   <div>
-                    <label style={lbl}>BACKFILL ON FIRST SYNC</label>
-                    <select value={backfill} onChange={function(e){ setBackfill(e.target.value); }} style={inp}>
-                      <option value="none">No backfill — start from now</option>
-                      <option value="7d">Last 7 days</option>
-                      <option value="30d">Last 30 days</option>
-                      <option value="90d">Last 90 days</option>
-                      <option value="1y">Last 1 year</option>
-                      <option value="all">All historical data</option>
+                    <label style={lbl}>FREQUENCY</label>
+                    <select value={syncFrequency} onChange={function(e){ setSyncFrequency(e.target.value); }} disabled={syncStrategy === "streaming"} style={inp}>
+                      <option value="realtime">Real-time (CDC)</option>
+                      <option value="15m">Every 15 minutes</option>
+                      <option value="hourly">Hourly</option>
+                      <option value="6h">Every 6 hours</option>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="manual">Manual only</option>
                     </select>
                   </div>
                   <div>
@@ -4581,11 +4673,33 @@ function LinkSourceFlow({ node, onClose }) {
                   </div>
                 </div>
                 <div>
+                  <label style={lbl}>BACKFILL ON FIRST SYNC</label>
+                  <select value={backfill} onChange={function(e){ setBackfill(e.target.value); }} style={Object.assign({}, inp, { maxWidth:360 })}>
+                    <option value="none">No backfill — start from now</option>
+                    <option value="7d">Last 7 days</option>
+                    <option value="30d">Last 30 days</option>
+                    <option value="90d">Last 90 days</option>
+                    <option value="1y">Last 1 year</option>
+                    <option value="all">All historical data</option>
+                  </select>
+                </div>
+                <div>
                   <label style={lbl}>ON ERROR</label>
-                  <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                    {[{ id:"retry", l:"Retry with backoff" },{ id:"quarantine", l:"Quarantine the row" },{ id:"alert", l:"Page on-call" },{ id:"stop", l:"Stop the pipeline" }].map(function(o){
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                    {[
+                      { id:"retry",      l:"Retry with backoff",    d:"Auto-retry transient failures with exponential backoff up to 5 attempts." },
+                      { id:"quarantine", l:"Quarantine the row",    d:"Park failing rows in a quarantine table; let the rest of the batch continue." },
+                      { id:"alert",      l:"Page on-call",          d:"Open an incident and notify the on-call rotation. Pipeline keeps running." },
+                      { id:"stop",       l:"Stop the pipeline",     d:"Halt the entire pipeline on first error. Use for high-stakes critical sources." }
+                    ].map(function(o){
                       var isOn = onError === o.id;
-                      return <button key={o.id} onClick={function(){ setOnError(o.id); }} style={{ padding:"7px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--bg-canvas)" : "var(--panel)", color:"var(--ink)", fontSize:12, fontFamily:"inherit", cursor:"pointer" }}>{o.l}</button>;
+                      return (
+                        <button key={o.id} onClick={function(){ setOnError(o.id); }}
+                          style={{ textAlign:"left", padding:"11px 13px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:8, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit" }}>
+                          <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)", marginBottom:4 }}>{o.l}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", lineHeight:1.45 }}>{o.d}</div>
+                        </button>
+                      );
                     })}
                   </div>
                 </div>
@@ -4593,51 +4707,91 @@ function LinkSourceFlow({ node, onClose }) {
             )}
 
             {step === 6 && (
-              <div style={{ maxWidth:760, display:"flex", flexDirection:"column", gap:18 }}>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-                  <div>
-                    <label style={lbl}>OWNER TEAM</label>
-                    <select value={ownerTeam} onChange={function(e){ setOwnerTeam(e.target.value); }} style={inp}>
-                      <option value="data-platform">data-platform</option><option value="customer-ops">customer-ops</option><option value="finance-ops">finance-ops</option><option value="legal-ops">legal-ops</option><option value="security">security</option>
-                    </select>
+              <div style={{ maxWidth:780, display:"flex", flexDirection:"column", gap:20 }}>
+                <div>
+                  <label style={lbl}>DATA CLASSIFICATION</label>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8 }}>
+                    {[
+                      { id:"public",       l:"Public",       d:"No restrictions on access or storage", color:"var(--ink-3)" },
+                      { id:"internal",     l:"Internal",     d:"Internal-only; standard access controls", color:"var(--blue)" },
+                      { id:"confidential", l:"Confidential", d:"Limited access; encrypted in transit & at rest", color:"var(--gold)" },
+                      { id:"restricted",   l:"Restricted",   d:"Strict access; needs DLP and audit trail", color:"var(--coral)" }
+                    ].map(function(o){
+                      var isOn = classification === o.id;
+                      return (
+                        <button key={o.id} onClick={function(){ setClassification(o.id); }}
+                          style={{ textAlign:"left", padding:"11px 13px", border:"1px solid " + (isOn ? o.color : "var(--line)"), borderRadius:8, background: isOn ? o.color + "15" : "var(--panel)", cursor:"pointer", fontFamily:"inherit" }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+                            <span style={{ width:8, height:8, borderRadius:"50%", background:o.color }} />
+                            <span style={{ fontSize:13, fontWeight: isOn ? 600 : 500, color: isOn ? o.color : "var(--ink)" }}>{o.l}</span>
+                          </div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", lineHeight:1.45 }}>{o.d}</div>
+                        </button>
+                      );
+                    })}
                   </div>
+                </div>
+
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
                   <div>
                     <label style={lbl}>FRESHNESS SLO (p95 ≤)</label>
                     <select value={sloTarget} onChange={function(e){ setSloTarget(e.target.value); }} style={inp}>
                       <option value="5m">5 minutes</option><option value="15m">15 minutes</option><option value="30m">30 minutes</option><option value="1h">1 hour</option><option value="6h">6 hours</option><option value="24h">24 hours</option>
                     </select>
                   </div>
+                  <div>
+                    <label style={lbl}>ALLOWED PROCESSING REGIONS</label>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                      {[{ id:"us", l:"US" },{ id:"eu", l:"EU" },{ id:"apac", l:"APAC" },{ id:"any", l:"Any" }].map(function(r){
+                        var isOn = allowedRegions.indexOf(r.id) >= 0;
+                        return <button key={r.id} onClick={function(){
+                          setAllowedRegions(function(arr){ return isOn ? arr.filter(function(x){ return x !== r.id; }) : arr.concat([r.id]); });
+                        }} style={{ padding:"7px 11px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:6, background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11, cursor:"pointer" }}>{r.l}</button>;
+                      })}
+                    </div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", marginTop:6 }}>Where this source's data may be stored and processed.</div>
+                  </div>
                 </div>
+
                 <div>
-                  <label style={lbl}>ALERT CHANNEL ON FAILURE / SLO BREACH</label>
-                  <input value={alertChannel} onChange={function(e){ setAlertChannel(e.target.value); }} placeholder="#data-alerts or oncall@team" style={inp} />
+                  <label style={lbl}>COMPLIANCE TAGS</label>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                    {["SOC2","GDPR","HIPAA","ISO27001","CCPA","PCI-DSS"].map(function(t){
+                      var isOn = complianceTags.indexOf(t) >= 0;
+                      return <button key={t} onClick={function(){
+                        setComplianceTags(function(arr){ return isOn ? arr.filter(function(x){ return x !== t; }) : arr.concat([t]); });
+                      }} style={{ padding:"7px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:6, background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11, cursor:"pointer" }}>{t}</button>;
+                    })}
+                  </div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", marginTop:6 }}>Tag this source under the compliance frameworks it must satisfy.</div>
                 </div>
+
                 <div>
-                  <label style={lbl}>PII / SENSITIVE FIELDS</label>
-                  <div style={{ border:"1px solid var(--line)", borderRadius:8, padding:"8px 10px" }}>
-                    {(paradigm === "documents" ? extractionFields : targetProps).slice(0, 8).map(function(f, i, arr){
-                      var fname = f.name;
-                      var defaultPii = (f.pii || /email|phone|tax_id|ssn|address|dob/i.test(fname));
-                      var isMarked = piiFields.indexOf(fname) >= 0 || (piiFields.length === 0 && defaultPii);
+                  <label style={lbl}>REQUIRED APPROVERS BEFORE ACTIVATION</label>
+                  <div style={{ display:"flex", flexDirection:"column", gap:5, border:"1px solid var(--line)", borderRadius:8, padding:"6px 8px", background:"var(--panel)" }}>
+                    {[
+                      { id:"data-platform-owner", l:"Data platform owner", required: true },
+                      { id:"security",             l:"Security review",      required: classification === "confidential" || classification === "restricted" },
+                      { id:"legal",                l:"Legal / privacy",      required: complianceTags.indexOf("GDPR") >= 0 || complianceTags.indexOf("HIPAA") >= 0 },
+                      { id:"finance",              l:"Finance",              required: paradigm === "documents" && parseFloat(costCap) > 500 }
+                    ].map(function(a, i, arr){
+                      var isOn = approvers.indexOf(a.id) >= 0 || a.required;
                       return (
-                        <label key={fname} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 4px", cursor:"pointer", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none" }}>
-                          <input type="checkbox" checked={isMarked} onChange={function(e){
-                            setPiiFields(function(arr2){
-                              if (e.target.checked) return arr2.indexOf(fname) >= 0 ? arr2 : arr2.concat([fname]);
-                              return arr2.filter(function(x){ return x !== fname; });
-                            });
-                          }} style={{ accentColor:"var(--coral)" }} />
-                          <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", flex:1 }}>{fname}</code>
-                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{f.type}</span>
-                          {defaultPii && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 5px", borderRadius:3, background:"var(--coral-fill)", color:"var(--coral)", fontWeight:700 }}>SUSPECTED PII</span>}
+                        <label key={a.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"6px 8px", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", cursor: a.required ? "default" : "pointer" }}>
+                          <input type="checkbox" checked={isOn} disabled={a.required} onChange={function(e){
+                            setApprovers(function(arr2){ if (e.target.checked) return arr2.indexOf(a.id) >= 0 ? arr2 : arr2.concat([a.id]); return arr2.filter(function(x){ return x !== a.id; }); });
+                          }} style={{ accentColor:"var(--ink)" }} />
+                          <span style={{ fontSize:12.5, color:"var(--ink)", flex:1 }}>{a.l}</span>
+                          {a.required && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 6px", borderRadius:3, background:"var(--coral-fill)", color:"var(--coral)", fontWeight:700 }}>AUTO-REQUIRED</span>}
                         </label>
                       );
                     })}
                   </div>
                 </div>
+
                 {paradigm === "documents" && (
                   <div>
-                    <label style={lbl}>MONTHLY COST CAP ($)</label>
+                    <label style={lbl}>MONTHLY LLM COST CAP ($)</label>
                     <input value={costCap} onChange={function(e){ setCostCap(e.target.value); }} placeholder="100" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", maxWidth:200 })} />
                     <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>Pause extraction when LLM spend exceeds this in a calendar month.</div>
                   </div>
@@ -4667,8 +4821,8 @@ function LinkSourceFlow({ node, onClose }) {
                     <span style={{ color:"var(--ink)" }}>{backfill === "none" ? "no backfill" : backfill}</span>
                     <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>CONFLICTS</span>
                     <span style={{ color:"var(--ink)" }}>{conflictHandling}</span>
-                    <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>OWNER</span>
-                    <span style={{ color:"var(--ink)" }}>{ownerTeam + " · SLO " + sloTarget}</span>
+                    <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>GOVERNANCE</span>
+                    <span style={{ color:"var(--ink)" }}>{classification + " · SLO " + sloTarget + " · " + allowedRegions.join("/") + " · " + (complianceTags.length ? complianceTags.join(", ") : "no compliance tags")}</span>
                   </div>
                 </div>
                 <div>
