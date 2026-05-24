@@ -10741,17 +10741,26 @@ var GRAPH_INDUSTRIES = [
 ];
 
 var GRAPH_FUNCTIONS = [
-  { id:"enterprise",    code:"ENT", label:"Entire organisation",   desc:"Cross-functional, enterprise-wide context graph",      enterprise:true },
-  { id:"revenue",       code:"REV", label:"Sales & Revenue",       desc:"Pipeline, accounts, opportunities, forecasting" },
-  { id:"customer",      code:"CS",  label:"Customer Success",      desc:"Health, retention, renewals, escalations" },
-  { id:"marketing",     code:"MKT", label:"Marketing",             desc:"Campaigns, attribution, audiences, content" },
-  { id:"product",       code:"PE",  label:"Product & Engineering", desc:"Telemetry, releases, experiments, incidents" },
-  { id:"operations",    code:"OPS", label:"Operations",            desc:"Workflows, capacity, throughput, SLAs" },
-  { id:"finance",       code:"FIN", label:"Finance",               desc:"GL, journal, invoicing, payments, controls" },
-  { id:"people",        code:"HR",  label:"People / HR",           desc:"Employees, roles, teams, comp, tenure" },
-  { id:"legal",         code:"LGL", label:"Legal & Compliance",    desc:"Contracts, obligations, policies, audits" },
-  { id:"risk",          code:"RSK", label:"Risk & Trust",          desc:"Fraud, KYC, controls, holds, signals" },
-  { id:"data-platform", code:"DP",  label:"Data Platform",         desc:"Models, lineage, contracts, observability" }
+  { id:"enterprise",    code:"ENT", label:"Entire organisation",      desc:"Cross-functional, enterprise-wide context graph",         enterprise:true, accent:"var(--ink)" },
+  { id:"revenue",       code:"REV", label:"Sales & Revenue",          desc:"Pipeline, accounts, opportunities, forecasting",          accent:"var(--green)" },
+  { id:"customer",      code:"CS",  label:"Customer Success",         desc:"Health, retention, renewals, escalations",                accent:"var(--coral)" },
+  { id:"support",       code:"SUP", label:"Customer Support",         desc:"Tickets, escalations, resolution, CSAT",                  accent:"var(--coral)" },
+  { id:"marketing",     code:"MKT", label:"Marketing",                desc:"Campaigns, attribution, audiences, content",              accent:"var(--purple)" },
+  { id:"product-mgmt",  code:"PM",  label:"Product Management",       desc:"Roadmap, releases, experiments, adoption",                accent:"var(--blue)" },
+  { id:"engineering",   code:"ENG", label:"Engineering",              desc:"Services, incidents, deploys, on-call",                   accent:"var(--blue)" },
+  { id:"operations",    code:"OPS", label:"Operations",               desc:"Workflows, capacity, throughput, SLAs",                   accent:"var(--gold)" },
+  { id:"supply-chain",  code:"SCM", label:"Supply Chain & Procurement", desc:"Suppliers, POs, inventory, logistics",                  accent:"var(--gold)" },
+  { id:"finance",       code:"FIN", label:"Finance",                  desc:"GL, journal, invoicing, payments, controls",              accent:"var(--green)" },
+  { id:"people",        code:"HR",  label:"People / HR",              desc:"Employees, roles, teams, comp, tenure",                   accent:"var(--purple)" },
+  { id:"legal",         code:"LGL", label:"Legal & Compliance",       desc:"Contracts, obligations, policies, audits",                accent:"var(--ink-2)" },
+  { id:"risk",          code:"RSK", label:"Risk & Trust",             desc:"Fraud, KYC, controls, holds, signals",                    accent:"var(--coral)" },
+  { id:"it-security",   code:"SEC", label:"IT & Security",            desc:"Identity, access, devices, endpoints, SOC",               accent:"var(--ink-2)" },
+  { id:"data-platform", code:"DP",  label:"Data Platform",            desc:"Models, lineage, contracts, observability",               accent:"var(--blue)" },
+  { id:"analytics",     code:"BI",  label:"Analytics & BI",           desc:"Dashboards, metrics, semantic layer",                     accent:"var(--blue)" },
+  { id:"biz-ops",       code:"BIZ", label:"Strategy & BizOps",        desc:"OKRs, planning, cross-team programs",                     accent:"var(--ink)" },
+  { id:"partner",       code:"PRT", label:"Partner & Channel",        desc:"Resellers, alliances, co-sell, ISVs",                     accent:"var(--gold)" },
+  { id:"facilities",    code:"FAC", label:"Workplace & Facilities",   desc:"Offices, badges, capacity, real estate",                  accent:"var(--gold)" },
+  { id:"comms",         code:"PR",  label:"Communications & PR",      desc:"Stories, audiences, mentions, channels",                  accent:"var(--purple)" }
 ];
 
 // Per-entity metadata: short description + a few representative properties.
@@ -10869,6 +10878,57 @@ var GRAPH_STARTING_POINTS = [
     accent:"var(--blue)" }
 ];
 
+// Tiny stroke-based glyphs for each function in the dropdown.
+// 16×16 viewBox, currentColor strokes — rendered white on the coloured tile.
+function FunctionIcon({ id, size }) {
+  var s = size || 16;
+  var p = { width:s, height:s, viewBox:"0 0 16 16", fill:"none", stroke:"currentColor", strokeWidth:"1.4", strokeLinecap:"round", strokeLinejoin:"round" };
+  switch (id) {
+    case "enterprise":
+      return <svg {...p}><rect x="2" y="2" width="5" height="5" rx="0.5"/><rect x="9" y="2" width="5" height="5" rx="0.5"/><rect x="2" y="9" width="5" height="5" rx="0.5"/><rect x="9" y="9" width="5" height="5" rx="0.5"/></svg>;
+    case "revenue":
+      return <svg {...p}><polyline points="2,12 6,8 9,10 14,4"/><polyline points="10,4 14,4 14,8"/></svg>;
+    case "customer":
+      return <svg {...p}><path d="M8 13.5 S2.5 10.5 2.5 6.5 a3 3 0 0 1 5.5 -1.5 a3 3 0 0 1 5.5 1.5 c0 4 -5.5 7 -5.5 7 z"/></svg>;
+    case "support":
+      return <svg {...p}><path d="M3 11 v-2 a5 5 0 0 1 10 0 v2"/><rect x="2" y="10" width="3" height="4" rx="0.7"/><rect x="11" y="10" width="3" height="4" rx="0.7"/><path d="M13 14 v0.5 a1.5 1.5 0 0 1 -1.5 1.5 H9"/></svg>;
+    case "marketing":
+      return <svg {...p}><path d="M3 6 v4 l8 3 v-10 z"/><path d="M3 6 H1.5 v4 H3"/><path d="M11 5 v6"/></svg>;
+    case "product-mgmt":
+      return <svg {...p}><path d="M8 2 a4 4 0 0 0 -2.5 7.2 V11 h5 V9.2 A4 4 0 0 0 8 2 z"/><line x1="6" y1="13" x2="10" y2="13"/><line x1="6.5" y1="15" x2="9.5" y2="15"/></svg>;
+    case "engineering":
+      return <svg {...p}><polyline points="5,4 1.5,8 5,12"/><polyline points="11,4 14.5,8 11,12"/><line x1="9.5" y1="3" x2="6.5" y2="13"/></svg>;
+    case "operations":
+      return <svg {...p}><circle cx="8" cy="8" r="2.5"/><path d="M8 1 v2 M8 13 v2 M1 8 h2 M13 8 h2 M3.2 3.2 l1.4 1.4 M11.4 11.4 l1.4 1.4 M3.2 12.8 l1.4 -1.4 M11.4 4.6 l1.4 -1.4"/></svg>;
+    case "supply-chain":
+      return <svg {...p}><rect x="1.5" y="6" width="7" height="6" rx="0.5"/><path d="M8.5 7.5 H12 l2.5 2.5 V12 H8.5 z"/><circle cx="4.5" cy="13" r="1"/><circle cx="11.5" cy="13" r="1"/></svg>;
+    case "finance":
+      return <svg {...p}><path d="M11 4.5 a3 3 0 0 0 -3 -1.5 c-1.7 0 -3 1 -3 2.5 s1.3 2 3 2.5 s3 1 3 2.5 s-1.3 2.5 -3 2.5 a3 3 0 0 1 -3 -1.5"/><line x1="8" y1="1.5" x2="8" y2="14.5"/></svg>;
+    case "people":
+      return <svg {...p}><circle cx="5.5" cy="5.5" r="2"/><circle cx="11" cy="6.5" r="1.6"/><path d="M2 13 v-1.5 a2.5 2.5 0 0 1 2.5 -2.5 H6.5 a2.5 2.5 0 0 1 2.5 2.5 V13"/><path d="M9.5 13 v-1 a2 2 0 0 1 2 -2 H11.5 a2 2 0 0 1 2 2 V13"/></svg>;
+    case "legal":
+      return <svg {...p}><line x1="8" y1="2" x2="8" y2="14"/><path d="M4 4 H12 M3 9 L5 4 L7 9 z M9 9 L11 4 L13 9 z"/><line x1="5.5" y1="14" x2="10.5" y2="14"/></svg>;
+    case "risk":
+      return <svg {...p}><path d="M8 1.5 L13.5 4 V8 c0 3 -2.5 5.5 -5.5 6.5 c-3 -1 -5.5 -3.5 -5.5 -6.5 V4 z"/><line x1="8" y1="6" x2="8" y2="9"/><circle cx="8" cy="11" r="0.4" fill="currentColor"/></svg>;
+    case "it-security":
+      return <svg {...p}><rect x="3" y="7" width="10" height="7" rx="1"/><path d="M5 7 V4.5 a3 3 0 0 1 6 0 V7"/><circle cx="8" cy="10.5" r="0.8"/></svg>;
+    case "data-platform":
+      return <svg {...p}><ellipse cx="8" cy="3.5" rx="5" ry="1.6"/><path d="M3 3.5 V7 a5 1.6 0 0 0 10 0 V3.5"/><path d="M3 7 V10.5 a5 1.6 0 0 0 10 0 V7"/><path d="M3 10.5 V13 a5 1.6 0 0 0 10 0 V10.5"/></svg>;
+    case "analytics":
+      return <svg {...p}><line x1="2" y1="13.5" x2="14" y2="13.5"/><rect x="3" y="8" width="2" height="5"/><rect x="7" y="5" width="2" height="8"/><rect x="11" y="9.5" width="2" height="3.5"/></svg>;
+    case "biz-ops":
+      return <svg {...p}><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="3"/><circle cx="8" cy="8" r="0.6" fill="currentColor"/></svg>;
+    case "partner":
+      return <svg {...p}><path d="M3 7 L5.5 4.5 L8 7 L5.5 9.5 z"/><path d="M8 7 L10.5 4.5 L13 7 L10.5 9.5 z"/><path d="M5.5 9.5 V12 M10.5 9.5 V12"/></svg>;
+    case "facilities":
+      return <svg {...p}><rect x="3" y="5" width="10" height="9"/><line x1="3" y1="5" x2="8" y2="2" /><line x1="13" y1="5" x2="8" y2="2"/><rect x="6.5" y="9" width="3" height="5"/></svg>;
+    case "comms":
+      return <svg {...p}><path d="M2.5 4 H13.5 v6 H9 L6 13 V10 H2.5 z"/></svg>;
+    default:
+      return <svg {...p}><circle cx="8" cy="8" r="6"/></svg>;
+  }
+}
+
 function NewGraphFlow({ onClose, onCreate }) {
   var [step, setStep]        = useState(1);
   var [industry, setIndustry] = useState(null);
@@ -10886,7 +10946,6 @@ function NewGraphFlow({ onClose, onCreate }) {
   var [permsRead,  setPermsRead]      = useState([{ kind:"group", id:"everyone",       label:"Everyone in org" }]);
   var [permsWrite, setPermsWrite]     = useState([{ kind:"group", id:"data-platform",  label:"data-platform team" }]);
   var [permsAdmin, setPermsAdmin]     = useState([{ kind:"user",  id:"morgan.lee",     label:"Morgan Lee (you)" }]);
-  var [skipContext, setSkipContext]   = useState(false);
   var [expandedSp, setExpandedSp]     = useState(null); // starting point id with expanded details
 
   var stepNames = ["Context", "Starting point", "Customise", "Identity & access", "Review"];
@@ -10907,7 +10966,7 @@ function NewGraphFlow({ onClose, onCreate }) {
   var entitiesToInclude     = includedFromBlueprint.concat(customEntities.map(function(c){ return c.name; }));
 
   function canContinue() {
-    if (step === 1) return skipContext || !!industry || !!func;
+    if (step === 1) return !!industry || !!func;
     if (step === 2) return !!startId;
     if (step === 3) return entitiesToInclude.length > 0 || startId === "__blank";
     if (step === 4) return graphName.trim().length >= 2;
@@ -10995,20 +11054,18 @@ function NewGraphFlow({ onClose, onCreate }) {
   function RichDropdown({ value, onChange, options, placeholder, kind }) {
     var [open, setOpen] = useState(false);
     var sel = options.find(function(o){ return o.id === value; });
-    function countFor(o){
-      return GRAPH_STARTING_POINTS.filter(function(sp){
-        if (kind === "industry") return sp.industry.indexOf(o.id) >= 0 || o.id === "any";
-        return sp.fn.indexOf(o.id) >= 0;
-      }).length;
-    }
     function tileBg(o){ return o.accent || (o.enterprise ? "var(--ink)" : "var(--ink-3)"); }
+    function tileContent(o, sz){
+      if (kind === "function") return <FunctionIcon id={o.id} size={Math.round(sz * 0.55)} />;
+      return <span style={{ fontFamily:"JetBrains Mono", fontSize: sz <= 28 ? 10 : 11, fontWeight:700, letterSpacing:"0.5px" }}>{o.code}</span>;
+    }
     return (
       <div style={{ position:"relative" }}>
         <button onClick={function(){ setOpen(function(o){ return !o; }); }}
           style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid " + (sel ? "var(--ink-2)" : "var(--line)"), borderRadius:9, background: sel ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow: sel ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "inset 0 1px 0 rgba(255,255,255,0.6)" }}>
           {sel ? (
             <>
-              <span style={{ width:34, height:34, borderRadius:7, background:tileBg(sel), color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, letterSpacing:"0.5px", flexShrink:0 }}>{sel.code}</span>
+              <span style={{ width:34, height:34, borderRadius:7, background:tileBg(sel), color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{tileContent(sel, 34)}</span>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{sel.label}</div>
                 <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{sel.desc}</div>
@@ -11032,21 +11089,19 @@ function NewGraphFlow({ onClose, onCreate }) {
             <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setOpen(false); }} />
             <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:380, overflowY:"auto" }}>
               {options.map(function(o, i){
-                var matchCount = countFor(o);
                 var isSel = value === o.id;
                 return (
                   <button key={o.id} onClick={function(){ onChange(o.id); setOpen(false); }}
-                    style={{ display:"flex", alignItems:"flex-start", gap:12, width:"100%", padding:"10px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < options.length-1 ? 2 : 0 }}
+                    style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"9px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < options.length-1 ? 2 : 0 }}
                     onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
                     onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
-                    <span style={{ width:32, height:32, borderRadius:6, background:tileBg(o), color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10.5, fontWeight:700, letterSpacing:"0.5px", flexShrink:0, marginTop:1 }}>{o.code}</span>
+                    <span style={{ width:30, height:30, borderRadius:6, background:tileBg(o), color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{tileContent(o, 30)}</span>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ display:"flex", alignItems:"center", gap:7 }}>
-                        <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{o.label}</span>
+                        <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{o.label}</span>
                         {o.enterprise && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700, letterSpacing:"0.5px" }}>ENTERPRISE</span>}
                       </div>
-                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3, lineHeight:1.45 }}>{o.desc}</div>
-                      <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", marginTop:4, letterSpacing:"0.4px" }}>{matchCount + " starting point" + (matchCount === 1 ? "" : "s") + " available"}</div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:2, lineHeight:1.4 }}>{o.desc}</div>
                     </div>
                     {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
                   </button>
@@ -11130,7 +11185,7 @@ function NewGraphFlow({ onClose, onCreate }) {
           <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)" }}>✕</button>
         </div>
 
-        <div style={{ flex:1, display:"grid", gridTemplateColumns:"240px minmax(0, 1fr) 320px", minHeight:0 }}>
+        <div style={{ flex:1, display:"grid", gridTemplateColumns:"240px minmax(0, 1fr)", minHeight:0 }}>
 
           {/* SIDEBAR */}
           <div style={{ background:"var(--panel-2)", borderRight:"1px solid var(--line)", padding:"20px 14px", display:"flex", flexDirection:"column", gap:4, overflowY:"auto" }}>
@@ -11140,7 +11195,7 @@ function NewGraphFlow({ onClose, onCreate }) {
               var isDone = step > n;
               var indLabel  = (GRAPH_INDUSTRIES.find(function(x){ return x.id === industry; }) || {}).label;
               var funcLabel = (GRAPH_FUNCTIONS.find(function(x){ return x.id === func; }) || {}).label;
-              var sub = n === 1 ? (industry || func ? [indLabel, funcLabel].filter(Boolean).join(" · ") : skipContext ? "Skipped" : "Industry & function")
+              var sub = n === 1 ? (industry || func ? [indLabel, funcLabel].filter(Boolean).join(" · ") : "Industry & function")
                       : n === 2 ? (startId === "__blank" ? "Blank canvas" : picked ? picked.name : "Pick a starting point")
                       : n === 3 ? (entitiesToInclude.length === 0 ? "Add entities" : entitiesToInclude.length + " entities" + (customEntities.length ? " (" + customEntities.length + " custom)" : ""))
                       : n === 4 ? (graphName || "Name + access")
@@ -11179,7 +11234,7 @@ function NewGraphFlow({ onClose, onCreate }) {
                   <label style={lbl}>INDUSTRY OR SECTOR</label>
                   <RichDropdown
                     value={industry}
-                    onChange={function(v){ setIndustry(v); setSkipContext(false); }}
+                    onChange={function(v){ setIndustry(v); }}
                     options={GRAPH_INDUSTRIES}
                     placeholder="Pick an industry"
                     kind="industry"
@@ -11191,7 +11246,7 @@ function NewGraphFlow({ onClose, onCreate }) {
                   <label style={lbl}>TEAM OR FUNCTION USING IT</label>
                   <RichDropdown
                     value={func}
-                    onChange={function(v){ setFunc(v); setSkipContext(false); }}
+                    onChange={function(v){ setFunc(v); }}
                     options={GRAPH_FUNCTIONS}
                     placeholder="Pick a function"
                     kind="function"
@@ -11199,13 +11254,6 @@ function NewGraphFlow({ onClose, onCreate }) {
                   <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:8, lineHeight:1.5 }}>Who'll own and query this graph. Choose <b>Entire organisation</b> to spin up an enterprise-wide context graph that crosses team boundaries.</div>
                 </div>
 
-                <div style={{ paddingTop:14, borderTop:"1px dashed var(--line-2)" }}>
-                  <button onClick={function(){ setSkipContext(true); setIndustry(null); setFunc(null); }}
-                    style={{ background: skipContext ? "var(--bg-canvas)" : "transparent", border:"1px solid " + (skipContext ? "var(--ink)" : "var(--line)"), borderRadius:7, padding:"9px 14px", cursor:"pointer", fontFamily:"inherit", fontSize:13, color:"var(--ink-2)", display:"flex", alignItems:"center", gap:8 }}>
-                    {skipContext && <span style={{ color:"var(--green)" }}>✓</span>}
-                    I already know what I'm building — skip the suggestions
-                  </button>
-                </div>
               </div>
             )}
 
@@ -11317,59 +11365,33 @@ function NewGraphFlow({ onClose, onCreate }) {
                   </div>
                 </div>
 
-                {/* Blueprint entities */}
+                {/* Blueprint entities — one card per row, properties only */}
                 {picked && (
                   <div>
                     <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:8 }}>Entities from "{picked.name}"</div>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                       {picked.entities.map(function(e){
                         var on = included[e] !== false;
                         var m = entityMeta(e);
-                        var connEdges = picked.edges.filter(function(ed){ return ed[0] === e || ed[2] === e; });
                         return (
                           <div key={e}
-                            style={{ border:"1px solid " + (on ? "var(--line)" : "var(--line-2)"), borderRadius:9, background: on ? "var(--panel)" : "var(--panel-2)", padding:"12px 14px", opacity: on ? 1 : 0.55 }}>
-                            <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8 }}>
-                              <div style={{ flex:1, minWidth:0 }}>
-                                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                                  <span style={{ width:24, height:24, borderRadius:5, background:picked.accent, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0 }}>{e.split(" ").map(function(w){ return w[0]; }).join("").slice(0,2).toUpperCase()}</span>
-                                  <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{e}</span>
-                                </div>
-                                <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.5, marginTop:6 }}>{m.desc}</div>
+                            style={{ border:"1px solid " + (on ? "var(--line)" : "var(--line-2)"), borderRadius:9, background: on ? "var(--panel)" : "var(--panel-2)", padding:"14px 18px", opacity: on ? 1 : 0.55, display:"grid", gridTemplateColumns:"minmax(220px, 280px) 1fr auto", gap:20, alignItems:"center" }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0 }}>
+                              <span style={{ width:30, height:30, borderRadius:6, background:picked.accent, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0 }}>{e.split(" ").map(function(w){ return w[0]; }).join("").slice(0,2).toUpperCase()}</span>
+                              <div style={{ minWidth:0 }}>
+                                <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{e}</div>
+                                <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.4, marginTop:3 }}>{m.desc}</div>
                               </div>
-                              <label style={{ display:"flex", alignItems:"center", gap:5, cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.3px" }}>
-                                <input type="checkbox" checked={on} onChange={function(){ setIncluded(function(o){ var n = Object.assign({}, o); n[e] = !on; return n; }); }} style={{ accentColor:"var(--ink)", width:14, height:14 }} />
-                                <span>{on ? "INCLUDED" : "EXCLUDED"}</span>
-                              </label>
                             </div>
-
-                            {m.props.length > 0 && (
-                              <div style={{ marginTop:9, paddingTop:9, borderTop:"1px dashed var(--line-2)" }}>
-                                <div style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-3)", letterSpacing:"0.6px", marginBottom:5 }}>EXAMPLE PROPERTIES</div>
-                                <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                                  {m.props.map(function(p){
-                                    return <span key={p} style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-2)" }}>{p}</span>;
-                                  })}
-                                </div>
-                              </div>
-                            )}
-
-                            {connEdges.length > 0 && (
-                              <div style={{ marginTop:9, paddingTop:9, borderTop:"1px dashed var(--line-2)" }}>
-                                <div style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-3)", letterSpacing:"0.6px", marginBottom:5 }}>{"CONNECTED VIA " + connEdges.length + " EDGE" + (connEdges.length === 1 ? "" : "S")}</div>
-                                <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                                  {connEdges.map(function(ed, i){
-                                    var other = ed[0] === e ? ed[2] : ed[0];
-                                    var dir   = ed[0] === e ? "→" : "←";
-                                    return (
-                                      <div key={i} style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-2)" }}>
-                                        <span style={{ color:"var(--ink-4)" }}>{dir}</span> <b>{ed[1]}</b> <span style={{ color:"var(--ink-3)" }}>{other}</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
+                            <div style={{ display:"flex", flexWrap:"wrap", gap:4, alignItems:"center" }}>
+                              {m.props.length > 0 ? m.props.map(function(p){
+                                return <span key={p} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{p}</span>;
+                              }) : <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", fontStyle:"italic" }}>add properties after create</span>}
+                            </div>
+                            <label style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.3px" }}>
+                              <input type="checkbox" checked={on} onChange={function(){ setIncluded(function(o){ var n = Object.assign({}, o); n[e] = !on; return n; }); }} style={{ accentColor:"var(--ink)", width:14, height:14 }} />
+                              <span>{on ? "INCLUDED" : "EXCLUDED"}</span>
+                            </label>
                           </div>
                         );
                       })}
@@ -11377,26 +11399,27 @@ function NewGraphFlow({ onClose, onCreate }) {
                   </div>
                 )}
 
-                {/* Custom entities */}
+                {/* Custom entities — one card per row */}
                 {customEntities.length > 0 && (
                   <div>
                     <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:8 }}>Custom entities you've added</div>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                       {customEntities.map(function(c, i){
                         return (
-                          <div key={i} style={{ border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", padding:"12px 14px" }}>
-                            <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8 }}>
-                              <div style={{ flex:1, minWidth:0 }}>
-                                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                                  <span style={{ width:24, height:24, borderRadius:5, background:"var(--ink-2)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0 }}>{c.name.split(" ").map(function(w){ return w[0]; }).join("").slice(0,2).toUpperCase()}</span>
+                          <div key={i} style={{ border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", padding:"14px 18px", display:"grid", gridTemplateColumns:"minmax(220px, 280px) 1fr auto", gap:20, alignItems:"center" }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0 }}>
+                              <span style={{ width:30, height:30, borderRadius:6, background:"var(--ink-2)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0 }}>{c.name.split(" ").map(function(w){ return w[0]; }).join("").slice(0,2).toUpperCase()}</span>
+                              <div style={{ minWidth:0 }}>
+                                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                                   <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{c.name}</span>
                                   <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700, letterSpacing:"0.5px" }}>CUSTOM</span>
                                 </div>
-                                <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.5, marginTop:6 }}>{c.desc}</div>
+                                <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.4, marginTop:3 }}>{c.desc}</div>
                               </div>
-                              <button onClick={function(){ setCustomEntities(function(arr){ return arr.filter(function(_, idx){ return idx !== i; }); }); }}
-                                style={{ background:"none", border:"none", color:"var(--ink-3)", cursor:"pointer", fontSize:14, padding:"0 4px" }}>×</button>
                             </div>
+                            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", fontStyle:"italic" }}>add properties after create</div>
+                            <button onClick={function(){ setCustomEntities(function(arr){ return arr.filter(function(_, idx){ return idx !== i; }); }); }}
+                              style={{ background:"none", border:"none", color:"var(--ink-3)", cursor:"pointer", fontSize:16, padding:"0 6px" }}>×</button>
                           </div>
                         );
                       })}
@@ -11533,47 +11556,6 @@ function NewGraphFlow({ onClose, onCreate }) {
 
           </div>
 
-          {/* RIGHT PREVIEW */}
-          <div style={{ background:"var(--panel-2)", borderLeft:"1px solid var(--line)", padding:"20px 18px", overflowY:"auto", display:"flex", flexDirection:"column", gap:18 }}>
-            <div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>GRAPH PREVIEW</div>
-              <div style={{ padding:"14px 12px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:8 }}>
-                {picked ? <StartingPointPreview sp={picked} /> : <div style={{ padding:"30px 12px", textAlign:"center", color:"var(--ink-4)", fontSize:11.5 }}>{startId === "__blank" ? "Blank canvas" : "Pick a starting point"}</div>}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>WILL CREATE</div>
-              <div style={{ padding:"12px 14px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:8 }}>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-                  <div>
-                    <div style={{ fontFamily:"Instrument Serif", fontSize:24, color:"var(--ink)", lineHeight:1 }}>{entitiesToInclude.length}</div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", marginTop:3, letterSpacing:"0.4px", textTransform:"uppercase" }}>entities</div>
-                  </div>
-                  <div>
-                    <div style={{ fontFamily:"Instrument Serif", fontSize:24, color:"var(--ink)", lineHeight:1 }}>{picked ? picked.edges.filter(function(e){ return entitiesToInclude.indexOf(e[0]) >= 0 && entitiesToInclude.indexOf(e[2]) >= 0; }).length : 0}</div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", marginTop:3, letterSpacing:"0.4px", textTransform:"uppercase" }}>edges</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>VALIDATION</div>
-              <div style={{ display:"flex", flexDirection:"column", gap:6, fontFamily:"JetBrains Mono", fontSize:11 }}>
-                {[
-                  { ok: !!industry || !!func || skipContext, l:"Context noted" },
-                  { ok: !!startId,                            l:"Starting point picked" },
-                  { ok: graphName.trim().length >= 2,         l:"Graph named" },
-                  { ok: permsAdmin.length > 0,                l:"Admin assigned" }
-                ].map(function(v, i){
-                  return <div key={i} style={{ display:"flex", alignItems:"center", gap:8, color: v.ok ? "var(--green)" : "var(--ink-4)" }}>
-                    <span style={{ width:7, height:7, borderRadius:"50%", background: v.ok ? "var(--green)" : "var(--line)" }} />
-                    <span style={{ color:"var(--ink-2)" }}>{v.l}</span>
-                    {v.ok && <span style={{ marginLeft:"auto", fontWeight:700, color:"var(--green)" }}>✓</span>}
-                  </div>;
-                })}
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* FOOTER */}
