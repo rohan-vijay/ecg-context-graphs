@@ -9458,16 +9458,16 @@ function StewardshipTaskDetail({ task, onBack }) {
                   var isPrimary = i === 0;
                   return (
                     <button key={i}
-                      style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"13px 16px", border:"none", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", background: isPrimary ? "var(--ink)" : "transparent", color: isPrimary ? "var(--bg-canvas)" : "var(--ink)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", transition:"background 80ms" }}
-                      onMouseEnter={function(e){ if (!isPrimary) e.currentTarget.style.background = "var(--panel-2)"; }}
-                      onMouseLeave={function(e){ if (!isPrimary) e.currentTarget.style.background = "transparent"; }}>
-                      <span style={{ width:22, height:22, borderRadius:5, background: isPrimary ? "rgba(255,255,255,0.14)" : "var(--chip)", color: isPrimary ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, flexShrink:0, marginTop:1 }}>→</span>
+                      style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"13px 16px", border:"none", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", background:"transparent", color:"var(--ink)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", transition:"background 80ms" }}
+                      onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
+                      onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
+                      <span style={{ width:22, height:22, borderRadius:5, background:"var(--chip)", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, flexShrink:0, marginTop:1 }}>→</span>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ display:"flex", alignItems:"center", gap:7 }}>
-                          <span style={{ fontSize:13, fontWeight:600, color: isPrimary ? "var(--bg-canvas)" : "var(--ink)" }}>{s.lbl}</span>
-                          {isPrimary && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, letterSpacing:"0.5px", color:"var(--bg-canvas)", fontWeight:700, padding:"1.5px 6px", borderRadius:3, background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.18)" }}>RECOMMENDED</span>}
+                          <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{s.lbl}</span>
+                          {isPrimary && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, letterSpacing:"0.5px", color:"var(--ink-2)", fontWeight:700, padding:"1.5px 6px", borderRadius:3, background:"var(--chip)", border:"1px solid var(--line-2)" }}>RECOMMENDED</span>}
                         </div>
-                        <div style={{ fontSize:11.5, color: isPrimary ? "rgba(255,255,255,0.78)" : "var(--ink-3)", lineHeight:1.5, marginTop:3 }}>{s.desc}</div>
+                        <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.5, marginTop:3 }}>{s.desc}</div>
                       </div>
                     </button>
                   );
