@@ -2525,12 +2525,380 @@ function LineageDiagram({ node, sources, consumers }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// PROPERTY DETAIL VIEW — enterprise-grade per-property page
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function PropertyDetailView({ node, property, properties, onBack }) {
+  var [tab, setTab] = useState("Overview");
+  var p = property;
+  var c = colorForNode(node);
+  var seed = node.id.charCodeAt(0) + p.name.length * 11;
+
+  // Synthesised facts about this property
+  var nulls = p.required ? 0 : Math.floor((100 - p.fill) / 100 * (node.instancesN || 1000));
+  var violations = Math.max(0, 100 - p.conf);
+  var distinctRatio = p.pk ? 100 : p.type === "bool" ? 0.0 : p.type.indexOf("enum") === 0 ? Math.min(100, 0.5 + (seed % 12)) : Math.min(100, 80 + (seed % 18));
+  var distinct = Math.max(1, Math.floor((node.instancesN || 1000) * (distinctRatio / 100)));
+  var since = "v" + (1 + (seed % 3)) + "." + ((seed * 7) % 10) + ".0";
+  var addedBy = ["morgan.lee","ramin.k","data-platform","schema-bot"][seed % 4];
+
+  var description = p.name === "account_id" ? "Primary identifier for an account. UUID v4, auto-generated at creation time. Stable for the lifetime of the record and used as the join key across all downstream systems."
+                  : p.computed ? "Derived value. Recomputed automatically when any of its input fields change. Source: " + p.computed + "."
+                  : p.pii      ? "Contains personal data. Encrypted at rest; raw values exposed only to roles holding " + (p.name.indexOf("email") >= 0 ? "comms_admin" : "acct_admin") + ". All access is audit-logged."
+                  : "Stores the " + p.name.replace(/_/g, " ") + " value for each " + node.label + " record. Set at ingest time from upstream source systems and reconciled per the active survivorship rules.";
+
+  var exampleValues = (function(){
+    if (p.pk) return [(node.id.slice(0,3).toUpperCase() + "-" + (10000 + (seed * 13) % 89999)), (node.id.slice(0,3).toUpperCase() + "-" + (10000 + (seed * 17) % 89999)), (node.id.slice(0,3).toUpperCase() + "-" + (10000 + (seed * 19) % 89999))];
+    if (p.name === "name" || p.name === "company_name") return ["Acme Corp", "Quantum Dynamics", "Cascade Analytics", "Horizon Tech", "Summit Partners"];
+    if (p.name === "domain") return ["acme.com", "quantum.dy", "cascade.io", "horizon.tech", "summit.partners"];
+    if (p.name === "email")  return ["taylor.j@acme.com", "morgan.k@horizon.tech", "jordan.s@cascade.io"];
+    if (p.name === "industry") return ["SaaS", "Fintech", "Healthcare", "Manufacturing", "Logistics"];
+    if (p.name === "tier")     return ["SMB", "MM", "ENT", "Strategic"];
+    if (p.name === "region")   return ["NA-East", "NA-West", "EMEA", "APAC"];
+    if (p.name === "status")   return ["active", "pending", "review"];
+    if (p.type === "decimal" || p.type === "float") return ["1,240.50", "48,200.00", "127,840.75"];
+    if (p.type === "bool")      return ["true", "false"];
+    if (p.type === "timestamp") return ["2026-05-24T08:14:00Z", "2026-05-23T16:42:18Z"];
+    if (p.type === "date")      return ["2026-05-24", "2025-12-01"];
+    if (p.type.indexOf("enum") === 0) return ["alpha","beta","gamma","delta"];
+    return [p.name + "-1240", p.name + "-9871", p.name + "-3344"];
+  })();
+
+  // Top values distribution (for enums, strings; bars for numerics)
+  var topValuesDistribution = exampleValues.slice(0, 5).map(function(v, i){
+    var pct = i === 0 ? (35 + (seed % 25)) : Math.max(2, 30 - i * 6 + (seed % 5));
+    return { value: v, count: Math.floor((node.instancesN || 1000) * pct / 100), pct: pct };
+  });
+
+  // Rules touching this property
+  var allRules = generateRules(node);
+  var touchingRules = []
+    .concat((allRules.quality || []).filter(function(r){ return (r.expr || "").indexOf(p.name) >= 0 || (r.label || "").indexOf(p.name) >= 0 || (r.id || "").indexOf(p.name) >= 0; }))
+    .concat((allRules.match   || []).filter(function(r){ return r.signals && r.signals.some(function(s){ return s.field === p.name; }); }).map(function(r){ return Object.assign({}, r, { kind:"MATCH" }); }))
+    .concat((allRules.survivorship || []).filter(function(r){ return r.property === p.name; }).map(function(r){ return Object.assign({}, r, { kind:"SURV" }); }));
+
+  // Sources contributing to this property
+  var sources = generateSources(node);
+  var sourceShares = sources.slice(0, 4).map(function(s, i){
+    var share = i === 0 ? (40 + (seed % 18)) : i === 1 ? (25 + (seed % 12)) : Math.max(5, 20 - i * 4);
+    return { name: s.name, share: share, conf: (0.78 + ((seed + i * 7) % 21) / 100).toFixed(2) };
+  });
+
+  // Activity timeline for the property
+  var activity = [
+    { t:"now",     who:"runtime",   what:"evaluating on every write", color:"var(--green)" },
+    { t:"32m ago", who:"runtime",   what: violations > 0 ? Math.round(violations * 0.4) + " new violations" : "0 violations in last hour", color: violations > 0 ? "var(--gold)" : "var(--green)" },
+    { t:"2d ago",  who:"morgan.lee",what:"updated description",       color:"var(--blue)" },
+    { t:"6d ago",  who:"schema-bot",what:"baseline distribution recomputed", color:"var(--ink-4)" },
+    { t:since.indexOf("v") === 0 ? "added in " + since : "1mo ago", who:addedBy, what:"property created", color:"var(--purple)" }
+  ];
+
+  function NodeGlyph({ size }) {
+    return (
+      <svg width={size} height={size} viewBox={"-"+(size/2)+" -"+(size/2)+" "+size+" "+size} style={{ flexShrink:0 }}>
+        {node.type === "agent" ? <polygon points={[0,1,2,3,4,5].map(function(i){ var a=(Math.PI/3)*i-Math.PI/2; var r=size/2-1; return (r*Math.cos(a)).toFixed(1)+","+(r*Math.sin(a)).toFixed(1); }).join(" ")} fill={c.fill} stroke={c.stroke} strokeWidth="1.3"/>
+         : node.type === "source" ? <rect x={-(size/2-1)} y={-(size/2-1)} width={size-2} height={size-2} rx="2" fill={c.fill} stroke={c.stroke} strokeWidth="1.3"/>
+         : <circle r={size/2-1} fill={c.fill} stroke={c.stroke} strokeWidth="1.3"/>}
+      </svg>
+    );
+  }
+
+  var tabs = ["Overview", "Distribution", "Lineage", "Rules", "Activity"];
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+      {/* HEADER */}
+      <div className="card">
+        <div className="card-body" style={{ padding:"18px 22px 14px" }}>
+          <div className="detail-crumb" style={{ marginBottom:10 }}>
+            <button className="crumb-back" onClick={onBack}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+              Properties
+            </button>
+            <span className="crumb-sep">/</span>
+            <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{p.name}</code>
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:16 }}>
+            <div style={{ display:"flex", gap:14, alignItems:"center" }}>
+              <span style={{ width:38, height:38, borderRadius:9, background:"var(--chip)", color:"var(--ink)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, fontWeight:700, fontFamily:"JetBrains Mono", flexShrink:0 }}>{p.type === "uuid" ? "ID" : p.type === "decimal" || p.type === "float" || p.type === "int" ? "#" : p.type === "bool" ? "✓" : p.type === "timestamp" || p.type === "date" ? "◷" : p.type.indexOf("enum") === 0 ? "≡" : p.type === "struct" ? "{}" : "T"}</span>
+              <div>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:5 }}>
+                  <code style={{ fontFamily:"JetBrains Mono", fontSize:22, fontWeight:600, color:"var(--ink)" }}>{p.name}</code>
+                  {p.pk && <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700, letterSpacing:"0.5px" }}>PK</span>}
+                </div>
+                <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"3px 8px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)", letterSpacing:"0.3px" }}>{p.type}</span>
+                  {p.required && <span className="snap-tag" style={{ fontSize:10, padding:"2px 7px" }}>REQ</span>}
+                  {p.indexed  && <span className="snap-tag snap-idx" style={{ fontSize:10, padding:"2px 7px" }}>IDX</span>}
+                  {p.pii      && <span className="snap-tag snap-pii" style={{ fontSize:10, padding:"2px 7px" }}>PII</span>}
+                  {p.computed && <span className="snap-tag snap-comp" style={{ fontSize:10, padding:"2px 7px" }}>FX</span>}
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>· on</span>
+                  <NodeGlyph size={14} />
+                  <span style={{ fontSize:12, color:"var(--ink-2)" }}>{node.label}</span>
+                </div>
+              </div>
+            </div>
+            <div style={{ display:"flex", gap:8 }}>
+              <button className="btn-ghost">View as JSON</button>
+              <button className="btn-ghost" style={{ color:"var(--coral)" }}>Deprecate…</button>
+              <button className="btn-dark">Edit property</button>
+            </div>
+          </div>
+
+          {/* KPI strip */}
+          <div className="detail-kpis" style={{ gridTemplateColumns:"repeat(6, 1fr)", marginTop:16, marginBottom:0 }}>
+            <div className="kpi">
+              <div className="kpi-lbl">Fill rate</div>
+              <div className="kpi-v" style={{ color: metricColor(p.fill) }}>{p.fill + "%"}</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-lbl">Conformance</div>
+              <div className="kpi-v" style={{ color: metricColor(p.conf) }}>{p.conf + "%"}</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-lbl">Null count</div>
+              <div className="kpi-v" style={{ color: nulls > 0 ? "var(--gold)" : "var(--ink)" }}>{nulls.toLocaleString()}</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-lbl">Distinct</div>
+              <div className="kpi-v">{distinct.toLocaleString()}</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-lbl">Violations · 24h</div>
+              <div className="kpi-v" style={{ color: violations > 0 ? "var(--coral)" : "var(--ink)" }}>{violations}</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-lbl">Rules attached</div>
+              <div className="kpi-v">{touchingRules.length}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="detail-tabs" style={{ margin:0, padding:"0 22px", borderTop:"1px solid var(--line-2)" }}>
+          {tabs.map(function(t) {
+            return <button key={t} className={"detail-tab" + (tab === t ? " on" : "")} onClick={function(){ setTab(t); }}>{t}</button>;
+          })}
+        </div>
+      </div>
+
+      {/* TAB BODIES */}
+      {tab === "Overview" && (
+        <div style={{ display:"grid", gridTemplateColumns:"minmax(0, 1.6fr) minmax(280px, 1fr)", gap:18 }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+            <div className="card">
+              <div className="card-head">About this property</div>
+              <div className="card-body" style={{ fontSize:13, color:"var(--ink-2)", lineHeight:1.6 }}>{description}</div>
+            </div>
+
+            <div className="card">
+              <div className="card-head">Example values</div>
+              <div className="card-body">
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                  {exampleValues.map(function(v, i){
+                    return <code key={i} style={{ fontFamily:"JetBrains Mono", fontSize:12, padding:"5px 10px", background:"var(--chip)", color:"var(--ink-2)", borderRadius:5 }}>{String(v)}</code>;
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-head">Top values <span className="card-head-sub">distribution over {node.instancesN ? node.instancesN.toLocaleString() : "all"} records</span></div>
+              <div>
+                {topValuesDistribution.map(function(v, i, arr){
+                  return (
+                    <div key={i} style={{ display:"grid", gridTemplateColumns:"180px 1fr 80px 80px", gap:14, padding:"10px 18px", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", alignItems:"center" }}>
+                      <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{String(v.value)}</code>
+                      <div className="nv-bar"><div className="nv-bar-fill" style={{ width: v.pct + "%", background:"var(--blue)" }} /></div>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)", textAlign:"right" }}>{v.count.toLocaleString()}</span>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", textAlign:"right" }}>{v.pct + "%"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT */}
+          <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+            <div className="card">
+              <div className="card-head">Schema</div>
+              <div className="card-body">
+                <div style={{ display:"grid", gridTemplateColumns:"110px 1fr", gap:"7px 12px", fontSize:12 }}>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>TYPE</span>
+                  <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink)" }}>{p.type}</code>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>REQUIRED</span>
+                  <span style={{ color:"var(--ink)" }}>{p.required ? "yes" : "no"}</span>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>INDEXED</span>
+                  <span style={{ color:"var(--ink)" }}>{p.indexed ? "yes" : "no"}</span>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>DEFAULT</span>
+                  <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{p.pk ? "auto()" : p.type === "bool" ? "false" : "null"}</code>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>PK</span>
+                  <span style={{ color: p.pk ? "var(--green)" : "var(--ink-3)" }}>{p.pk ? "yes — primary key" : "no"}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-head">Governance</div>
+              <div className="card-body">
+                <div style={{ display:"grid", gridTemplateColumns:"110px 1fr", gap:"7px 12px", fontSize:12 }}>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>PII TIER</span>
+                  <span style={{ color: p.pii ? "var(--coral)" : "var(--ink-3)", fontWeight: p.pii ? 600 : 400 }}>{p.pii ? "personal data" : "not PII"}</span>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>MASKING</span>
+                  <span style={{ color:"var(--ink-2)" }}>{p.pii ? "hashed for non-priv roles" : "none"}</span>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>READ ROLES</span>
+                  <span style={{ color:"var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11 }}>{p.pii ? "acct_admin, security" : "all"}</span>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>RETENTION</span>
+                  <span style={{ color:"var(--ink-2)" }}>{p.pii ? "7 years (regulatory)" : "inherit"}</span>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>AUDIT</span>
+                  <span style={{ color:"var(--ink-2)" }}>{p.pii ? "all reads logged" : "writes logged"}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-head">Lineage</div>
+              <div className="card-body">
+                <div style={{ display:"grid", gridTemplateColumns:"110px 1fr", gap:"7px 12px", fontSize:12 }}>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>SOURCE</span>
+                  <span style={{ color:"var(--ink-2)" }}>{p.computed ? "computed — " + p.computed : p.source || "primary"}</span>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>ADDED IN</span>
+                  <span style={{ color:"var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11 }}>{since + " · " + addedBy}</span>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>LAST MODIFIED</span>
+                  <span style={{ color:"var(--ink-2)" }}>2d ago by morgan.lee</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DISTRIBUTION TAB */}
+      {tab === "Distribution" && (
+        <div className="card">
+          <div className="card-head card-head-row">
+            <span>Value distribution <span className="card-head-sub">{distinct.toLocaleString() + " distinct values across " + (node.instancesN || 1000).toLocaleString() + " records"}</span></span>
+            <button className="btn-ghost" style={{ fontSize:11.5 }}>Refresh</button>
+          </div>
+          <div>
+            {topValuesDistribution.concat([{ value: "… all others", count: Math.max(0, (node.instancesN || 1000) - topValuesDistribution.reduce(function(s,v){ return s+v.count; },0)), pct: Math.max(0, 100 - topValuesDistribution.reduce(function(s,v){ return s+v.pct; },0)) }]).filter(function(v){ return v.pct > 0; }).map(function(v, i, arr){
+              return (
+                <div key={i} style={{ display:"grid", gridTemplateColumns:"220px 1fr 80px 60px", gap:14, padding:"10px 18px", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", alignItems:"center" }}>
+                  <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color: v.value === "… all others" ? "var(--ink-4)" : "var(--ink-2)", fontStyle: v.value === "… all others" ? "italic" : "normal", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{String(v.value)}</code>
+                  <div className="nv-bar" style={{ height:8 }}><div className="nv-bar-fill" style={{ width: v.pct + "%", background: v.value === "… all others" ? "var(--ink-4)" : "var(--blue)" }} /></div>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", textAlign:"right" }}>{v.count.toLocaleString()}</span>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-3)", textAlign:"right" }}>{v.pct.toFixed(1) + "%"}</span>
+                </div>
+              );
+            })}
+            {nulls > 0 && (
+              <div style={{ display:"grid", gridTemplateColumns:"220px 1fr 80px 60px", gap:14, padding:"10px 18px", borderTop:"1px dashed var(--line-2)", background:"var(--gold-fill)", alignItems:"center" }}>
+                <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--gold)", fontWeight:700 }}>NULL</code>
+                <div className="nv-bar" style={{ height:8 }}><div className="nv-bar-fill" style={{ width: (100 - p.fill) + "%", background:"var(--gold)" }} /></div>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--gold)", textAlign:"right", fontWeight:700 }}>{nulls.toLocaleString()}</span>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--gold)", textAlign:"right", fontWeight:700 }}>{(100 - p.fill) + "%"}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* LINEAGE TAB — sources contributing this property */}
+      {tab === "Lineage" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+          <div className="card">
+            <div className="card-head">Source contributions <span className="card-head-sub">how each source system contributes values for {p.name}</span></div>
+            <div>
+              {sourceShares.map(function(s, i, arr){
+                return (
+                  <div key={i} style={{ padding:"14px 18px", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-2)", fontWeight:600 }}>{s.name}</span>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{s.share + "% of values · avg conf " + s.conf}</span>
+                    </div>
+                    <div className="nv-bar" style={{ height:6, maxWidth:"100%" }}>
+                      <div className="nv-bar-fill" style={{ width: s.share + "%", background:"var(--blue)" }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {p.computed && (
+            <div className="card">
+              <div className="card-head">Compute expression</div>
+              <div className="card-body">
+                <pre style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--purple)", margin:0, padding:"10px 12px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:6, whiteSpace:"pre-wrap" }}>{p.name + " := " + p.computed}</pre>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:8 }}>Recomputed on every input change. Last full recompute 2h ago.</div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* RULES TAB */}
+      {tab === "Rules" && (
+        <div className="card">
+          <div className="card-head card-head-row">
+            <span>Rules referencing {p.name} <span className="card-head-sub">{touchingRules.length + " rule" + (touchingRules.length !== 1 ? "s" : "")}</span></span>
+            <button className="btn-dark">+ New rule on this property</button>
+          </div>
+          {touchingRules.length === 0 ? (
+            <div style={{ padding:"40px 18px", textAlign:"center", color:"var(--ink-3)", fontSize:13 }}>No rules currently reference this property.</div>
+          ) : (
+            <div>
+              {touchingRules.map(function(r, i, arr){
+                var kc = r.kind === "VALIDATE" ? "var(--blue)" : r.kind === "COMPUTE" ? "var(--green)" : r.kind === "SLO" ? "var(--gold)" : r.kind === "ACCESS" ? "var(--ink-2)" : r.kind === "MATCH" ? "var(--purple)" : "var(--coral)";
+                return (
+                  <div key={i} style={{ display:"grid", gridTemplateColumns:"80px 1fr 100px 90px", gap:14, padding:"13px 18px", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", alignItems:"center" }}>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, color:kc, letterSpacing:"0.5px", padding:"2px 7px", borderRadius:4, background: kc + "1a", textAlign:"center" }}>{r.kind}</span>
+                    <div>
+                      <div style={{ fontSize:13, color:"var(--ink)", marginBottom:3 }}>{r.title || r.label || r.id}</div>
+                      <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{r.expr || (r.signals ? r.signals.map(function(sg){ return sg.field + "×" + sg.weight; }).join(" + ") : "—")}</code>
+                    </div>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{r.severity || (r.strategy || "")}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", textAlign:"right" }}>{r.last || "—"}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ACTIVITY TAB */}
+      {tab === "Activity" && (
+        <div className="card">
+          <div className="card-head">Recent activity</div>
+          <div>
+            {activity.map(function(a, i, arr){
+              return (
+                <div key={i} style={{ display:"grid", gridTemplateColumns:"100px 12px 1fr", gap:14, padding:"12px 18px", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", alignItems:"center" }}>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{a.t}</span>
+                  <span style={{ width:8, height:8, borderRadius:"50%", background:a.color, justifySelf:"center" }} />
+                  <div style={{ fontSize:12.5, color:"var(--ink-2)" }}>
+                    <span style={{ fontFamily:"JetBrains Mono", color:"var(--ink)", fontWeight:600 }}>{a.who}</span>
+                    {" " + a.what}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PropertiesPane({ node, properties }) {
   const [propFlowOpen, setPropFlowOpen] = useState(false);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState({ col: "name", dir: "asc" });
-  const [expanded, setExpanded] = useState(null);
+  const [selectedProp, setSelectedProp] = useState(null);
   const AddPropertyFlow = AddPropertyFlowModal;
 
   const FILTERS = [
@@ -2578,6 +2946,12 @@ function PropertiesPane({ node, properties }) {
     };
   }
 
+  // If a property is selected, show the detail page instead of the list (after all hooks)
+  if (selectedProp) {
+    var pp = properties.find(function(p){ return p.name === selectedProp; });
+    if (pp) return <PropertyDetailView node={node} property={pp} properties={properties} onBack={function(){ setSelectedProp(null); }} />;
+  }
+
   return (
     <div className="props-pane">
       {/* Single card wrapping toolbar + table */}
@@ -2613,82 +2987,34 @@ function PropertiesPane({ node, properties }) {
           </div>
 
           {filtered.map((p, i) => {
-            const detail = propDetail(p, i);
-            const isOpen = expanded === p.name;
             return (
-              <React.Fragment key={p.name}>
-                <div className={"props-row" + (isOpen ? " open" : "")} onClick={() => setExpanded(isOpen ? null : p.name)}>
-                  <div className="props-cell props-name-cell">
-                    {p.pk && <span className="snap-tag snap-pk">PK</span>}
-                    <span className="snap-n">{p.name}</span>
-                  </div>
-                  <div className="props-cell prop-type">{p.type}</div>
-                  <div className="props-cell prop-src">{p.computed ? <span className="prop-comp">fx · {p.computed}</span> : p.source}</div>
-                  <div className="props-cell props-num">
-                    <div style={{ display:"flex", alignItems:"center", gap:6, justifyContent:"flex-end" }}>
-                      <div className="nv-bar" style={{ flex:"1 1 60px", maxWidth:80 }}><div className="nv-bar-fill" style={{ width: p.fill + "%", background: metricColor(p.fill) }} /></div>
-                      <span className="nv-bar-v" style={{ color: metricColor(p.fill), minWidth:32 }}>{p.fill}%</span>
-                    </div>
-                  </div>
-                  <div className="props-cell props-num">
-                    <div style={{ display:"flex", alignItems:"center", gap:6, justifyContent:"flex-end" }}>
-                      <div className="nv-bar" style={{ flex:"1 1 60px", maxWidth:80 }}><div className="nv-bar-fill" style={{ width: p.conf + "%", background: metricColor(p.conf) }} /></div>
-                      <span className="nv-bar-v" style={{ color: metricColor(p.conf), minWidth:32 }}>{p.conf}%</span>
-                    </div>
-                  </div>
-                  <div className="props-cell props-flags-cell">
-                    {p.required && <span className="snap-tag">req</span>}
-                    {p.indexed  && <span className="snap-tag snap-idx">idx</span>}
-                    {p.pii      && <span className="snap-tag snap-pii">PII</span>}
-                    {p.computed && <span className="snap-tag snap-comp">fx</span>}
-                  </div>
-                  <div className="props-cell props-chevron">{isOpen ? "▲" : "▼"}</div>
+              <div key={p.name} className="props-row" onClick={() => setSelectedProp(p.name)}>
+                <div className="props-cell props-name-cell">
+                  {p.pk && <span className="snap-tag snap-pk">PK</span>}
+                  <span className="snap-n">{p.name}</span>
                 </div>
-
-                {isOpen && (
-                  <div className="props-expand">
-                    <div className="props-expand-grid">
-                      <div className="props-expand-col">
-                        <div className="pe-block">
-                          <div className="pe-head">Description</div>
-                          <div className="pe-val pe-desc">{detail.description}</div>
-                        </div>
-                        <div className="pe-block">
-                          <div className="pe-head">Lineage</div>
-                          <div className="pe-meta">
-                            <div><span className="pe-k">Source system</span><span className="pe-v">{p.source || "—"}</span></div>
-                            <div><span className="pe-k">Added in</span><span className="pe-v">{detail.since} by {detail.addedBy}</span></div>
-                            {p.computed && <div><span className="pe-k">Computed from</span><span className="pe-v pe-code">{p.computed}</span></div>}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="props-expand-col">
-                        <div className="pe-block">
-                          <div className="pe-head">Values</div>
-                          <div className="pe-meta">
-                            <div><span className="pe-k">Default</span><span className="pe-v pe-code">{detail.defaultVal}</span></div>
-                            <div><span className="pe-k">Example</span><span className="pe-v pe-code">{detail.example}</span></div>
-                            <div><span className="pe-k">Null count</span><span className="pe-v" style={{ color: detail.nulls > 0 ? "var(--gold)" : "var(--ink-3)" }}>{detail.nulls.toLocaleString()} rows</span></div>
-                          </div>
-                        </div>
-                        <div className="pe-block">
-                          <div className="pe-head">Governance</div>
-                          <div className="pe-meta">
-                            <div><span className="pe-k">PII tier</span><span className="pe-v" style={{ color: p.pii ? "var(--coral)" : "var(--ink-3)" }}>{p.pii ? "personal" : "none"}</span></div>
-                            <div><span className="pe-k">Retention</span><span className="pe-v">{detail.retention}</span></div>
-                            <div><span className="pe-k">Validation</span><span className="pe-v">{detail.validRule}</span></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="pe-actions">
-                      <button className="btn-ghost">Edit property</button>
-                      <button className="btn-ghost">View validation history</button>
-                      <button className="btn-ghost" style={{ color: "var(--coral)" }}>Deprecate…</button>
-                    </div>
+                <div className="props-cell prop-type">{p.type}</div>
+                <div className="props-cell prop-src">{p.computed ? <span className="prop-comp">fx · {p.computed}</span> : p.source}</div>
+                <div className="props-cell props-num">
+                  <div style={{ display:"flex", alignItems:"center", gap:6, justifyContent:"flex-end" }}>
+                    <div className="nv-bar" style={{ flex:"1 1 60px", maxWidth:80 }}><div className="nv-bar-fill" style={{ width: p.fill + "%", background: metricColor(p.fill) }} /></div>
+                    <span className="nv-bar-v" style={{ color: metricColor(p.fill), minWidth:32 }}>{p.fill}%</span>
                   </div>
-                )}
-              </React.Fragment>
+                </div>
+                <div className="props-cell props-num">
+                  <div style={{ display:"flex", alignItems:"center", gap:6, justifyContent:"flex-end" }}>
+                    <div className="nv-bar" style={{ flex:"1 1 60px", maxWidth:80 }}><div className="nv-bar-fill" style={{ width: p.conf + "%", background: metricColor(p.conf) }} /></div>
+                    <span className="nv-bar-v" style={{ color: metricColor(p.conf), minWidth:32 }}>{p.conf}%</span>
+                  </div>
+                </div>
+                <div className="props-cell props-flags-cell">
+                  {p.required && <span className="snap-tag">req</span>}
+                  {p.indexed  && <span className="snap-tag snap-idx">idx</span>}
+                  {p.pii      && <span className="snap-tag snap-pii">PII</span>}
+                  {p.computed && <span className="snap-tag snap-comp">fx</span>}
+                </div>
+                <div className="props-cell props-chevron">›</div>
+              </div>
             );
           })}
         </div>
