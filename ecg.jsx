@@ -12394,23 +12394,17 @@ function GraphLandingEmpty({ onCreate, onBack }) {
     // wraps around the hero copy instead of hiding in the corners. Tight
     // SAFE rectangle hugs just the hero text block.
     var clusters = [
-      // Top band
-      { cx: W*0.08, cy: H*0.14, n: 6, r: 90,  color:"var(--gold)"   },
-      { cx: W*0.24, cy: H*0.08, n: 5, r: 80,  color:"var(--gold)"   },
-      { cx: W*0.50, cy: H*0.08, n: 5, r: 90,  color:"var(--purple)" },
-      { cx: W*0.76, cy: H*0.08, n: 5, r: 80,  color:"var(--green)"  },
-      { cx: W*0.92, cy: H*0.14, n: 6, r: 90,  color:"var(--green)"  },
+      // Top — two clusters on the sides + a small accent above the title
+      { cx: W*0.10, cy: H*0.14, n: 5, r: 90,  color:"var(--gold)"   },
+      { cx: W*0.50, cy: H*0.08, n: 4, r: 80,  color:"var(--purple)" },
+      { cx: W*0.90, cy: H*0.14, n: 5, r: 90,  color:"var(--green)"  },
       // Mid-side bands
-      { cx: W*0.06, cy: H*0.42, n: 6, r:100,  color:"var(--blue)"   },
-      { cx: W*0.20, cy: H*0.62, n: 5, r: 90,  color:"var(--blue)"   },
-      { cx: W*0.80, cy: H*0.62, n: 5, r: 90,  color:"var(--coral)"  },
-      { cx: W*0.94, cy: H*0.42, n: 6, r:100,  color:"var(--coral)"  },
-      // Bottom band
-      { cx: W*0.10, cy: H*0.88, n: 6, r:100,  color:"var(--blue)"   },
-      { cx: W*0.30, cy: H*0.95, n: 4, r: 70,  color:"var(--green)"  },
-      { cx: W*0.50, cy: H*0.97, n: 4, r: 70,  color:"var(--gold)"   },
-      { cx: W*0.70, cy: H*0.95, n: 4, r: 70,  color:"var(--purple)" },
-      { cx: W*0.90, cy: H*0.88, n: 6, r:100,  color:"var(--coral)"  }
+      { cx: W*0.08, cy: H*0.52, n: 5, r: 95,  color:"var(--blue)"   },
+      { cx: W*0.92, cy: H*0.52, n: 5, r: 95,  color:"var(--coral)"  },
+      // Bottom — two side clusters + a small accent below the CTA row
+      { cx: W*0.14, cy: H*0.88, n: 5, r: 95,  color:"var(--blue)"   },
+      { cx: W*0.50, cy: H*0.96, n: 4, r: 70,  color:"var(--gold)"   },
+      { cx: W*0.86, cy: H*0.88, n: 5, r: 95,  color:"var(--coral)"  }
     ];
     // Tight safe zone — just the hero text + CTA + 3-step row.
     var SAFE = { x0: W*0.30, x1: W*0.70, y0: H*0.30, y1: H*0.78 };
@@ -12459,7 +12453,7 @@ function GraphLandingEmpty({ onCreate, onBack }) {
       });
     });
     // A few long bridges
-    for (var k = 0; k < 9; k++){
+    for (var k = 0; k < 5; k++){
       var i = nxt() % nodes.length;
       var j = nxt() % nodes.length;
       if (i === j) continue;
