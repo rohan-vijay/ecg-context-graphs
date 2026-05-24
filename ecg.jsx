@@ -10814,6 +10814,8 @@ var ENTITY_META = {
   "Subscription":    { desc:"An active product subscription.",                 props:["subscription_id","plan","mrr","status","renews_on"] },
   "Invoice":         { desc:"A billing document issued to a customer.",        props:["invoice_id","invoice_number","due_date","date_delivered","discount_amount","payment_terms_code"] },
   "Usage Event":     { desc:"A product usage signal from an account.",         props:["event_id","feature","timestamp","account_id"] },
+  "Competitor":      { desc:"A rival vendor on opportunities.",                props:["competitor_id","name","reporting_category","strengths","weaknesses","web_site_url"] },
+  "Price List Item": { desc:"A priced SKU on a quote or order line.",          props:["price_list_item_id","product_id","unit_id","amount","percentage"] },
 
   // ── Customer Service (CDM crmCommon/service) ───────────────────────────
   "Case":            { desc:"A customer service incident.",                    props:["incident_id","title","case_origin_code","case_type_code","priority_code","customer_satisfaction_code"] },
@@ -10823,6 +10825,9 @@ var ENTITY_META = {
   "Knowledge Article": { desc:"A published help-centre article.",              props:["article_id","title","content","key_words","publish_on","language_locale_id"] },
   "SLA":             { desc:"A service-level agreement.",                      props:["sla_id","name","applicable_from","sla_type","first_response_in_minutes"] },
   "Queue":           { desc:"A routing queue for cases.",                      props:["queue_id","name","queue_type","incoming_email","default_mailbox"] },
+  "Service":         { desc:"A bookable service offering.",                    props:["service_id","name","duration","granularity","calendar_id","is_schedulable"] },
+  "Task":            { desc:"An activity assigned to an owner.",               props:["task_id","subject","scheduled_start","scheduled_end","priority_code","status"] },
+  "Site":            { desc:"A physical service location.",                    props:["site_id","name","address","time_zone","capacity"] },
   "Customer":        { desc:"A person or org you serve.",                      props:["customer_id","name","status","ltv","segment"] },
   "Interaction":     { desc:"Any touchpoint with a customer.",                 props:["interaction_id","channel","sentiment","timestamp"] },
   "Health Score":    { desc:"Composite indicator of account health.",          props:["score","trend","computed_at","drivers"] },
@@ -10851,6 +10856,7 @@ var ENTITY_META = {
   // ── Healthcare (CDM accelerators/healthCare/EMR, FHIR-aligned) ─────────
   "Patient":         { desc:"An individual receiving care (CDM extends Contact).", props:["patient_id","date_of_birth","gender","mrn","primary_provider_id"] },
   "Provider":        { desc:"A practitioner or facility (CDM PractitionerRole).", props:["practitioner_id","name","npi","specialty","practitioner_role"] },
+  "Practitioner Role":{ desc:"A clinician's role at an organisation (CDM FHIR).", props:["role_id","practitioner_id","organisation_id","speciality","active"] },
   "Encounter":       { desc:"A clinical visit or admission.",                  props:["encounter_identifier","encounter_class","encounter_status","period_start","period_end","priority"] },
   "Condition":       { desc:"A clinical condition or diagnosis.",              props:["clinical_status","verification_status","asserted_date","onset_date","abatement_date","subject_type"] },
   "Observation":     { desc:"A measurement, finding or vital sign.",           props:["identifier","status","effective_start","value_quantity_unit","value_range_high","value_range_low"] },
@@ -10924,44 +10930,55 @@ var GRAPH_STARTING_POINTS = [
     edges:[["Customer","SHOPS_AT","Store"],["Employee","WORKS_AT","Store"],["Customer","PLACED","Order"],["Order","CONTAINS","Product"],["Product","STOCKED_IN","Inventory"],["Inventory","HELD_AT","Store"],["Customer","ENROLLED_IN","Loyalty Account"],["Order","APPLIES","Promotion"],["Order","SHIPPED_AS","Shipment"]],
     accent:"var(--gold)" },
   { id:"employee-360", industry:["any","saas","fintech","retail","manufacturing","professional","media","public","logistics","healthcare"], fn:["enterprise","people"],
-    name:"Employee 360 Graph", more:9,
-    desc:"The full workforce view — employees, roles, teams, manager chains, compensation, issued devices, system access and tenure facts.",
-    entities:["Employee","Role","Team","Manager Chain","Compensation","Device","Access Grant","Tenure"],
-    edges:[["Employee","HOLDS","Role"],["Employee","MEMBER_OF","Team"],["Employee","REPORTS_TO","Manager Chain"],["Employee","PAID_VIA","Compensation"],["Employee","USES","Device"],["Employee","GRANTED","Access Grant"],["Employee","HAS","Tenure"]],
+    name:"Employee 360 Graph",
+    cdm:"D365 Human Resources",
+    desc:"Aligned to Microsoft CDM Human Resources (HcmWorker / HcmPosition / HcmEmployment). The full workforce view — employees, jobs, positions, manager chains, compensation, issued devices, access and tenure.",
+    entities:["Employee","Worker","Position","Job","Employment","Role","Team","Manager Chain","Compensation","Pay Cycle","Device","Access Grant","Tenure"],
+    edges:[["Worker","ASSIGNED_TO","Position"],["Position","INSTANCE_OF","Job"],["Employee","HAS","Employment"],["Employee","HOLDS","Role"],["Employee","MEMBER_OF","Team"],["Employee","REPORTS_TO","Manager Chain"],["Employee","PAID_VIA","Compensation"],["Compensation","ON","Pay Cycle"],["Employee","USES","Device"],["Employee","GRANTED","Access Grant"],["Employee","HAS","Tenure"]],
     accent:"var(--blue)" },
 
   // ── Function-focused ───────────────────────────────────────────────────
   { id:"marketing-engagement", industry:["any","saas","retail","media","professional","fintech"], fn:["marketing","customer"],
-    name:"Marketing Engagement Graph", more:7,
+    name:"Marketing Engagement Graph",
+    cdm:"D365 Marketing",
     desc:"Aligned to Microsoft CDM marketing solution: Campaign → Marketing List → Lead → Customer Journey → Segment, with email sends and form captures.",
-    entities:["Campaign","Marketing List","Lead","Contact","Customer Journey","Segment","Marketing Email","Marketing Form"],
-    edges:[["Campaign","TARGETS","Marketing List"],["Marketing List","CONTAINS","Lead"],["Marketing List","CONTAINS","Contact"],["Campaign","ENROLS_IN","Customer Journey"],["Customer Journey","SENDS","Marketing Email"],["Segment","DEFINES","Marketing List"],["Marketing Form","CAPTURES","Lead"]],
+    entities:["Campaign","Marketing List","Lead","Contact","Account","Customer Journey","Segment","Marketing Email","Marketing Form","Interaction"],
+    edges:[["Campaign","TARGETS","Marketing List"],["Marketing List","CONTAINS","Lead"],["Marketing List","CONTAINS","Contact"],["Campaign","ENROLS_IN","Customer Journey"],["Customer Journey","SENDS","Marketing Email"],["Segment","DEFINES","Marketing List"],["Marketing Form","CAPTURES","Lead"],["Lead","WORKS_AT","Account"],["Contact","WORKS_AT","Account"],["Customer Journey","TRIGGERS","Interaction"]],
     accent:"var(--purple)" },
   { id:"customer-service-graph", industry:["any","saas","fintech","retail","manufacturing","healthcare","professional"], fn:["support","customer","operations"],
-    name:"Customer Service Graph", more:8,
-    desc:"Aligned to Microsoft CDM service accelerator: Case → SLA → Queue → Knowledge Article, governed by Contract and Entitlement. The substrate for support operations.",
-    entities:["Case","Case Resolution","Contract","Entitlement","Knowledge Article","SLA","Queue","Contact"],
-    edges:[["Contact","OPENED","Case"],["Case","RESOLVED_AS","Case Resolution"],["Case","GOVERNED_BY","SLA"],["Case","ROUTED_TO","Queue"],["Case","REFERENCES","Knowledge Article"],["Contract","INCLUDES","Entitlement"],["Entitlement","COVERS","Case"]],
+    name:"Customer Service Graph",
+    cdm:"CRM Service Accelerator",
+    desc:"Aligned to Microsoft CDM service accelerator: Case → SLA → Queue → Knowledge Article, governed by Contract and Entitlement; with bookable Services, Sites and Tasks.",
+    entities:["Case","Case Resolution","Contract","Entitlement","Knowledge Article","SLA","Queue","Service","Task","Site","Contact","Account"],
+    edges:[["Contact","OPENED","Case"],["Account","REPORTED","Case"],["Case","RESOLVED_AS","Case Resolution"],["Case","GOVERNED_BY","SLA"],["Case","ROUTED_TO","Queue"],["Case","REFERENCES","Knowledge Article"],["Contract","INCLUDES","Entitlement"],["Entitlement","COVERS","Case"],["Case","SPAWNS","Task"],["Case","BOOKS","Service"],["Service","DELIVERED_AT","Site"]],
     accent:"var(--coral)" },
-  { id:"saas-revenue",   industry:["saas"],          fn:["revenue","customer"],    name:"Customer Revenue Graph", more:8,
-    desc:"Aligned to Microsoft CDM CRM/Sales: Account → Contact → Lead → Opportunity → Quote → Subscription → Invoice. Joins the sales motion to product telemetry.",
-    entities:["Account","Contact","Lead","Opportunity","Quote","Subscription","Invoice","Usage Event"],
-    edges:[["Account","HAS_CONTACT","Contact"],["Lead","QUALIFIED_AS","Opportunity"],["Account","HAS_OPPORTUNITY","Opportunity"],["Opportunity","QUOTED_AS","Quote"],["Quote","CONVERTS_TO","Subscription"],["Subscription","BILLED_AS","Invoice"],["Account","EMITS","Usage Event"]],
+  { id:"saas-revenue",   industry:["saas"],          fn:["revenue","customer"],
+    name:"Customer Revenue Graph",
+    cdm:"CRM Sales",
+    desc:"Aligned to Microsoft CDM CRM/Sales: Account → Contact → Lead → Opportunity → Quote → Order → Invoice. Joins the sales motion to product telemetry.",
+    entities:["Account","Contact","Lead","Opportunity","Competitor","Quote","Order","Subscription","Invoice","Price List Item","Usage Event"],
+    edges:[["Account","HAS_CONTACT","Contact"],["Lead","QUALIFIED_AS","Opportunity"],["Account","HAS_OPPORTUNITY","Opportunity"],["Opportunity","COMPETES_WITH","Competitor"],["Opportunity","QUOTED_AS","Quote"],["Quote","CONTAINS","Price List Item"],["Quote","CONVERTS_TO","Order"],["Order","CONVERTS_TO","Subscription"],["Subscription","BILLED_AS","Invoice"],["Order","BILLED_AS","Invoice"],["Account","EMITS","Usage Event"]],
     accent:"var(--blue)" },
-  { id:"saas-success",   industry:["saas"],          fn:["customer","support","operations"], name:"Customer Health Graph",  more:6,
-    desc:"Brings health scores, tickets, NPS and usage trends into one canonical Customer entity. Uses Case + Entitlement from the CDM service accelerator.",
-    entities:["Account","Customer","Case","Entitlement","Interaction","Health Score","Renewal"],
-    edges:[["Account","HAS_CUSTOMER","Customer"],["Customer","OPENED","Case"],["Account","HOLDS","Entitlement"],["Customer","HAD","Interaction"],["Customer","SCORED_AS","Health Score"],["Account","RENEWS_AS","Renewal"]],
+  { id:"saas-success",   industry:["saas"],          fn:["customer","support","operations"],
+    name:"Customer Health Graph",
+    cdm:"CRM Service Accelerator",
+    desc:"Brings health scores, tickets, NPS and usage trends into one canonical Customer entity. Uses Case, Entitlement, SLA and Queue from the CDM service accelerator.",
+    entities:["Account","Customer","Contact","Case","Case Resolution","Entitlement","SLA","Queue","Knowledge Article","Interaction","Health Score","Renewal"],
+    edges:[["Account","HAS_CUSTOMER","Customer"],["Customer","IS","Contact"],["Customer","OPENED","Case"],["Case","RESOLVED_AS","Case Resolution"],["Case","GOVERNED_BY","SLA"],["Case","ROUTED_TO","Queue"],["Case","REFERENCES","Knowledge Article"],["Account","HOLDS","Entitlement"],["Customer","HAD","Interaction"],["Customer","SCORED_AS","Health Score"],["Account","RENEWS_AS","Renewal"]],
     accent:"var(--green)" },
-  { id:"fintech-risk",   industry:["fintech"],       fn:["risk","operations","it-security"],     name:"Customer Risk Graph",    more:10,
-    desc:"Aligned to Microsoft CDM banking accelerator: Customer 360 → Account → Financial Product → Transaction, with branches, collateral, KYC and regulatory holds.",
-    entities:["Customer","Account","Branch","Financial Product","Transaction","Collateral","KYC Case","Mortgage Application","Risk Signal","Hold","Compliance Case"],
-    edges:[["Customer","HOLDS","Account"],["Account","AT","Branch"],["Account","OF_TYPE","Financial Product"],["Financial Product","SECURED_BY","Collateral"],["Account","RECORDS","Transaction"],["Customer","SUBJECT_TO","KYC Case"],["Customer","SUBMITTED","Mortgage Application"],["Transaction","RAISES","Risk Signal"],["Account","UNDER","Hold"],["Risk Signal","ESCALATES_TO","Compliance Case"]],
+  { id:"fintech-risk",   industry:["fintech"],       fn:["risk","operations","it-security"],
+    name:"Customer Risk Graph",
+    cdm:"Financial Services Accelerator",
+    desc:"Aligned to Microsoft CDM banking accelerator: Customer 360 → Account → Financial Product → Transaction, with bank branches, collateral, KYC and regulatory holds.",
+    entities:["Customer","Account","Bank","Branch","Financial Product","Transaction","Collateral","KYC Case","Mortgage Application","Risk Signal","Hold","Compliance Case"],
+    edges:[["Customer","HOLDS","Account"],["Account","AT","Branch"],["Branch","OF","Bank"],["Account","OF_TYPE","Financial Product"],["Financial Product","SECURED_BY","Collateral"],["Account","RECORDS","Transaction"],["Customer","SUBJECT_TO","KYC Case"],["Customer","SUBMITTED","Mortgage Application"],["Transaction","RAISES","Risk Signal"],["Account","UNDER","Hold"],["Risk Signal","ESCALATES_TO","Compliance Case"]],
     accent:"var(--coral)" },
-  { id:"healthcare-ops", industry:["healthcare"],    fn:["operations","customer","support"], name:"Patient Journey Graph",  more:11,
-    desc:"FHIR-aligned (Microsoft CDM healthcare accelerator): Patient encounters joined with providers, conditions, observations, procedures, medications and care plans.",
-    entities:["Patient","Provider","Encounter","Condition","Observation","Procedure","Medication","Care Plan","Diagnostic Report","Claim"],
-    edges:[["Patient","SEEN_BY","Provider"],["Patient","HAD","Encounter"],["Encounter","RECORDED","Condition"],["Encounter","RECORDED","Observation"],["Encounter","PERFORMED","Procedure"],["Patient","PRESCRIBED","Medication"],["Patient","FOLLOWS","Care Plan"],["Encounter","PRODUCED","Diagnostic Report"],["Encounter","BILLED_VIA","Claim"]],
+  { id:"healthcare-ops", industry:["healthcare"],    fn:["operations","customer","support"],
+    name:"Patient Journey Graph",
+    cdm:"Healthcare Accelerator · FHIR",
+    desc:"FHIR-aligned (Microsoft CDM healthcare accelerator): Patient encounters joined with practitioners, conditions, observations, procedures, medications, allergies and care plans.",
+    entities:["Patient","Provider","Practitioner Role","Encounter","Condition","Observation","Procedure","Medication","Allergy Intolerance","Care Plan","Diagnostic Report","Healthcare Service","Claim"],
+    edges:[["Patient","SEEN_BY","Provider"],["Provider","HAS","Practitioner Role"],["Patient","HAD","Encounter"],["Encounter","DELIVERED_AS","Healthcare Service"],["Encounter","RECORDED","Condition"],["Encounter","RECORDED","Observation"],["Encounter","PERFORMED","Procedure"],["Patient","PRESCRIBED","Medication"],["Patient","HAS","Allergy Intolerance"],["Patient","FOLLOWS","Care Plan"],["Encounter","PRODUCED","Diagnostic Report"],["Encounter","BILLED_VIA","Claim"]],
     accent:"var(--purple)" },
   { id:"retail-commerce",industry:["retail"],        fn:["revenue","operations"],  name:"Order Fulfilment Graph", more:7, desc:"Customer → Order → Product → Shipment → Return, with inventory and pricing linked in.",
     entities:["Customer","Order","Product","Shipment","Return","Inventory"],
@@ -11052,17 +11069,22 @@ function NewGraphFlow({ onClose, onCreate }) {
   var [permsWrite, setPermsWrite]     = useState([{ kind:"group", id:"data-platform",  label:"data-platform team" }]);
   var [permsAdmin, setPermsAdmin]     = useState([{ kind:"user",  id:"morgan.lee",     label:"Morgan Lee (you)" }]);
 
-  var stepNames = ["Industry or Department", "Starting point", "Entities", "Identity & access", "Review"];
+  var stepNames = ["Industry Department", "Template", "Entities", "Governance", "Review"];
 
-  // Filter + rank suggestions by current industry + function. AND when both selected.
+  // Filter + rank suggestions. Either-axis match counts; perfect matches rank highest.
+  // Industry "any" is treated as a partial industry match.
   var suggestions = GRAPH_STARTING_POINTS.map(function(sp){
     var indMatch  = industry ? sp.industry.indexOf(industry) >= 0 : false;
     var funcMatch = func     ? sp.fn.indexOf(func)           >= 0 : false;
-    var indOk     = !industry || indMatch || sp.industry.indexOf("any") >= 0;
+    var indAny    = sp.industry.indexOf("any") >= 0;
+    // Industry side OK when: nothing picked, exact match, or it's cross-industry (any).
+    var indOk     = !industry || indMatch || indAny;
+    // Function side OK when: nothing picked or it's an exact match.
     var funcOk    = !func     || funcMatch;
-    // Both axes must satisfy. When neither is set, show everything.
-    var include   = (!industry && !func) || (indOk && funcOk);
-    var score     = (indMatch ? 2 : 0) + (funcMatch ? 2 : 0) + (sp.industry.indexOf("any") >= 0 ? 0.5 : 0);
+    // Show when nothing picked OR one of the two axes is OK (loose — better recall).
+    var include   = (!industry && !func) || indOk || funcOk;
+    // Score: exact industry > exact function > cross-industry > generic.
+    var score     = (indMatch ? 3 : 0) + (funcMatch ? 2 : 0) + (indAny && industry ? 0.5 : 0);
     return include ? Object.assign({}, sp, { _score: score, _exactInd: indMatch, _exactFn: funcMatch }) : null;
   }).filter(Boolean).sort(function(a, b){ return b._score - a._score; });
 
@@ -11299,10 +11321,10 @@ function NewGraphFlow({ onClose, onCreate }) {
               var isDone = step > n;
               var indLabel  = (GRAPH_INDUSTRIES.find(function(x){ return x.id === industry; }) || {}).label;
               var funcLabel = (GRAPH_FUNCTIONS.find(function(x){ return x.id === func; }) || {}).label;
-              var sub = n === 1 ? (industry || func ? [indLabel, funcLabel].filter(Boolean).join(" · ") : "Pick industry & dept")
+              var sub = n === 1 ? (industry || func ? [indLabel, funcLabel].filter(Boolean).join(" · ") : "Industry & department")
                       : n === 2 ? (startId === "__blank" ? "Blank canvas" : picked ? picked.name : "Pick a starting point")
                       : n === 3 ? (entitiesToInclude.length === 0 ? "Add entities" : entitiesToInclude.length + " entities" + (customEntities.length ? " (" + customEntities.length + " custom)" : ""))
-                      : n === 4 ? (graphName || "Name + access")
+                      : n === 4 ? "Identity and Access"
                       : "Activate";
               return (
                 <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
@@ -11398,6 +11420,12 @@ function NewGraphFlow({ onClose, onCreate }) {
                         <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                           <span style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{sp.name}</span>
                           <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px", borderRadius:3, background:"transparent", color:matchColor, border:"1px solid " + matchColor, fontWeight:700, letterSpacing:"0.5px" }}>{matchTag}</span>
+                          {sp.cdm && (
+                            <span title={"Aligned to Microsoft Common Data Model — " + sp.cdm} style={{ display:"inline-flex", alignItems:"center", gap:4, fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px 1.5px 5px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700, letterSpacing:"0.5px" }}>
+                              <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor"><rect x="0" y="0" width="4" height="4"/><rect x="6" y="0" width="4" height="4"/><rect x="0" y="6" width="4" height="4"/><rect x="6" y="6" width="4" height="4"/></svg>
+                              {"CDM · " + sp.cdm}
+                            </span>
+                          )}
                         </div>
                         <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5, marginTop:5, maxWidth:620 }}>{sp.desc}</div>
 
@@ -11431,7 +11459,15 @@ function NewGraphFlow({ onClose, onCreate }) {
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", background:"var(--panel-2)", border:"1px solid var(--line-2)", borderRadius:8 }}>
                   <div>
                     <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase" }}>Working from</div>
-                    <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)", marginTop:3 }}>{picked ? picked.name : "Blank canvas"}</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:3 }}>
+                      <span style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{picked ? picked.name : "Blank canvas"}</span>
+                      {picked && picked.cdm && (
+                        <span title={"Aligned to Microsoft Common Data Model — " + picked.cdm} style={{ display:"inline-flex", alignItems:"center", gap:4, fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px 1.5px 5px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700, letterSpacing:"0.5px" }}>
+                          <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor"><rect x="0" y="0" width="4" height="4"/><rect x="6" y="0" width="4" height="4"/><rect x="0" y="6" width="4" height="4"/><rect x="6" y="6" width="4" height="4"/></svg>
+                          {"CDM · " + picked.cdm}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div style={{ display:"flex", gap:24, fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>
                     <div><span style={{ color:"var(--ink-3)" }}>FROM BLUEPRINT</span> &nbsp;<b>{includedFromBlueprint.length}</b>{picked ? " / " + picked.entities.length : ""}</div>
