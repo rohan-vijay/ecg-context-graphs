@@ -286,7 +286,7 @@ function NodeShape({ node, selected, highlighted, dimmed, hover }) {
 
 // ---------- HEADER ----------------------------------------------------------
 
-const TABS = ["Graph", "Nodes", "Edges", "Sources"];
+const TABS = ["Graph", "Nodes", "Edges", "Sources", "Records"];
 
 function Header({ tab, onTab, onAddNode }) {
   return (
@@ -443,7 +443,6 @@ function Inspector({ node, onClose, onOpenDetail }) {
             <div className="ih-title">{node.label}</div>
             <div className="ih-tag">{TYPE_META[node.type].tag}</div>
           </div>
-          <div className="ih-desc">{node.desc}</div>
         </div>
         <button className="ih-close" onClick={onClose} title="Close">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
@@ -2196,13 +2195,11 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
                 {node.label}
                 <span className="nv-cat-tag" style={{ color: CAT_META[node.cat].color, marginLeft: 12 }}>{CAT_META[node.cat].label}</span>
               </div>
-              <div className="detail-title-desc">{node.desc}</div>
             </div>
           </div>
           <div className="detail-title-right">
             <button className="btn-ghost" onClick={onCanvas}>View on canvas →</button>
-            <button className="btn-ghost">Export</button>
-            <button className="btn-ghost">Pin</button>
+
             <button className="btn-dark" onClick={() => setEditOpen(true)}>Edit schema</button>
             <button className="btn-icon" title="More">⋯</button>
           </div>
@@ -2296,7 +2293,7 @@ function OverviewPane({ node, properties, sources, rules, consumers, activity, i
         <section className="card">
           <div className="card-head">About</div>
           <div className="card-body">
-            <div className="about-def">{node.desc}. Acts as the canonical anchor for downstream subscription, agreement, and account-health surfaces; required for any agent that needs to reason about a customer organisation as a single object.</div>
+            <div className="about-def">Acts as the canonical entity record for all downstream subscriptions, agreements, and account-health surfaces. Required by any agent that reasons about a customer organisation as a single object.</div>
             <div className="about-meta">
               <div><span className="meta-k">Owner team</span><span className="meta-v">{node.cat === "source" ? "data-platform" : node.type === "agent" ? "applied-ml" : "data-platform"}</span></div>
               <div><span className="meta-k">Stewards</span><span className="meta-v">morgan.lee, ramin.k, +2</span></div>
@@ -2549,29 +2546,27 @@ function PropertiesPane({ node, properties }) {
 
   return (
     <div className="props-pane">
-      {/* Toolbar */}
-      <div className="props-toolbar">
-        <div className="props-chips">
-          {FILTERS.map(f => (
-            <button key={f.id} className={"chip" + (filter === f.id ? " on" : "")} onClick={() => setFilter(f.id)}>
-              {f.label} <span className="chip-n">{f.count}</span>
-            </button>
-          ))}
-        </div>
-        <div className="props-toolbar-right">
-          <div style={{ position: "relative" }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"var(--ink-3)",pointerEvents:"none" }}>
-              <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-            </svg>
-            <input className="sample-search" placeholder="Search properties…" value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-          <button className="btn-ghost">Diff vs prev</button>
-          <button className="btn-dark" onClick={() => setPropFlowOpen(true)}>+ Add property</button>
-        </div>
-      </div>
-
-      {/* Table */}
+      {/* Single card wrapping toolbar + table */}
       <div className="card">
+        <div className="card-head card-head-row">
+          <div style={{ display:"flex", gap:4 }}>
+            {FILTERS.map(f => (
+              <button key={f.id} className={"chip" + (filter === f.id ? " on" : "")} onClick={() => setFilter(f.id)}>
+                {f.label} <span className="chip-n">{f.count}</span>
+              </button>
+            ))}
+          </div>
+          <div className="card-head-actions">
+            <div style={{ position: "relative" }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"var(--ink-3)",pointerEvents:"none" }}>
+                <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+              </svg>
+              <input className="sample-search" placeholder="Search properties…" value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+            <button className="btn-ghost">Diff vs prev</button>
+            <button className="btn-dark" onClick={() => setPropFlowOpen(true)}>+ Add property</button>
+          </div>
+        </div>
         <div className="props-table">
           <div className="props-head">
             <button className="props-th" onClick={() => onSort("name")}>Name{sortIcon("name")}</button>
@@ -2596,12 +2591,16 @@ function PropertiesPane({ node, properties }) {
                   <div className="props-cell prop-type">{p.type}</div>
                   <div className="props-cell prop-src">{p.computed ? <span className="prop-comp">fx · {p.computed}</span> : p.source}</div>
                   <div className="props-cell props-num">
-                    <div className="nv-bar"><div className="nv-bar-fill" style={{ width: p.fill + "%", background: metricColor(p.fill) }} /></div>
-                    <span className="nv-bar-v" style={{ color: metricColor(p.fill) }}>{p.fill}%</span>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, justifyContent:"flex-end" }}>
+                      <div className="nv-bar" style={{ flex:"1 1 60px", maxWidth:80 }}><div className="nv-bar-fill" style={{ width: p.fill + "%", background: metricColor(p.fill) }} /></div>
+                      <span className="nv-bar-v" style={{ color: metricColor(p.fill), minWidth:32 }}>{p.fill}%</span>
+                    </div>
                   </div>
                   <div className="props-cell props-num">
-                    <div className="nv-bar"><div className="nv-bar-fill" style={{ width: p.conf + "%", background: metricColor(p.conf) }} /></div>
-                    <span className="nv-bar-v" style={{ color: metricColor(p.conf) }}>{p.conf}%</span>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, justifyContent:"flex-end" }}>
+                      <div className="nv-bar" style={{ flex:"1 1 60px", maxWidth:80 }}><div className="nv-bar-fill" style={{ width: p.conf + "%", background: metricColor(p.conf) }} /></div>
+                      <span className="nv-bar-v" style={{ color: metricColor(p.conf), minWidth:32 }}>{p.conf}%</span>
+                    </div>
                   </div>
                   <div className="props-cell props-flags-cell">
                     {p.required && <span className="snap-tag">req</span>}
@@ -2978,279 +2977,563 @@ function AddPropertyFlowModal({ node, onClose }) {
 // ─── ADD EDGE FLOW ────────────────────────────────────────────────────────────
 
 function AddEdgeFlowModal({ fromNode, onClose }) {
-  const [step, setStep]         = useState(1);
-  const [eLabel, setELabel]     = useState("");
-  const [eDir, setEDir]         = useState("outgoing");
-  const [eTarget, setETarget]   = useState(NODES.filter(function(n){ return n.id !== fromNode.id && n.type !== "source"; })[0]?.id || "");
-  const [eCard, setECard]       = useState("1:N");
-  const [eKind, setEKind]       = useState("DIRECT");
-  const [eDesc, setEDesc]       = useState("");
-  const [eIndexed, setEIndexed] = useState(true);
-  const [eOwned, setEOwned]     = useState(false);
+  const [step, setStep]               = useState(1);
+  const [eLabel, setELabel]           = useState("");
+  const [eDesc, setEDesc]             = useState("");
+  const [eTarget, setETarget]         = useState("");
+  const [eCard, setECard]             = useState("1:N");
+  const [eInverse, setEInverse]       = useState("");
+  const [ePopKind, setEPopKind]       = useState(null);
+  const [eBackfill, setEBackfill]     = useState(true);
+  const [eProps, setEProps]           = useState([
+    { name:"since", type:"timestamp", req:true, pii:false },
+    { name:"confidence", type:"float", req:false, pii:false },
+  ]);
+  const [eOwner, setEOwner]           = useState("data-platform");
+  const [eRisk, setERisk]             = useState("MEDIUM");
+  const [eTags, setETags]             = useState("");
+  const [eAccess, setEAccess]         = useState(["read_all"]);
+  const [eTargetStage, setETargetStage] = useState("draft");
+  const [eAccessInput, setEAccessInput] = useState("");
 
   const targetNodes = NODES.filter(function(n){ return n.id !== fromNode.id && n.type !== "source"; });
   const targetNode  = NODES.find(function(n){ return n.id === eTarget; });
+  const fromC = colorForNode(fromNode);
 
-  const inp = { border:"1px solid var(--line)", borderRadius:8, padding:"8px 10px", fontSize:12.5, fontFamily:"inherit", color:"var(--ink)", background:"var(--bg-canvas)", outline:"none", boxSizing:"border-box" };
-  const sel = { border:"1px solid var(--line)", borderRadius:8, padding:"8px 10px", fontSize:12.5, fontFamily:"inherit", color:"var(--ink)", background:"var(--bg-canvas)", outline:"none", cursor:"pointer" };
-  const lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:7 };
-  const fg  = { display:"flex", flexDirection:"column", gap:6 };
-
-  const STEPS = [
-    { n:1, label:"Edge definition", sub: eLabel ? (":" + eLabel) : "Label & direction" },
-    { n:2, label:"Target & schema",  sub: targetNode ? targetNode.label : "Choose target node" },
-    { n:3, label:"Configuration",   sub: eKind + " · " + eCard },
-    { n:4, label:"Review",          sub: "Confirm & save" },
+  const STEP_META = [
+    { n:1, label:"Basics",     sub:"Label, endpoints, cardinality" },
+    { n:2, label:"Population", sub:"Where instances come from" },
+    { n:3, label:"Properties", sub:"Optional edge attributes" },
+    { n:4, label:"Governance", sub:"Owner, access, impact" },
+    { n:5, label:"Review",     sub:"Cypher diff & publish" },
   ];
 
-  const canNext = (function(){
-    if (step === 1) return eLabel.trim().length > 0;
-    if (step === 2) return !!eTarget;
+  const canContinue = (function(){
+    if (step === 1) return eLabel.trim().length >= 3 && eTarget !== "";
+    if (step === 2) return ePopKind !== null;
     return true;
   }());
 
-  const stepTitles = ["Edge definition", "Target & schema", "Configuration", "Review & save"];
-  const stepDescs  = [
-    "Define the edge label and traversal direction from " + fromNode.label + ". Edge labels use SCREAMING_SNAKE_CASE by convention.",
-    "Select which node type this edge connects to and what cardinality the relationship has.",
-    "Set the edge kind, whether it is indexed for fast traversal, and any ownership semantics.",
-    "Review the full edge definition before adding it to the graph schema.",
+  const inp = { border:"1px solid var(--line)", borderRadius:8, padding:"8px 11px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--bg-canvas)", outline:"none", boxSizing:"border-box" };
+  const lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 };
+  const fg  = { display:"flex", flexDirection:"column", gap:6 };
+  const fieldRow = { display:"flex", flexDirection:"column", gap:6, marginBottom:22 };
+
+  const popKinds = [
+    { id:"direct",   color:"var(--blue)",   tag:"DIRECT",   title:"Direct from source", desc:"Edge instances loaded from a source-system table or stream — one row, one edge." },
+    { id:"inferred", color:"var(--purple)", tag:"INFERRED", title:"Inferred by rule",   desc:"Materialised from a Cypher pattern on a schedule. No source row required." },
+    { id:"agent",    color:"var(--green)",  tag:"AGENT",    title:"Agent-derived",       desc:"Edge emitted by an agent's reasoning step as a structured write event." },
+    { id:"computed", color:"var(--gold)",   tag:"COMPUTED", title:"Property match",      desc:"Edge appears when a property on From equals a property on To. Cheapest path." },
   ];
 
-  const kindMeta = {
-    DIRECT:    { color:"var(--blue)",           desc:"A physical relationship that exists in the source data." },
-    INFERRED:  { color:"var(--purple,#9b6fdf)",  desc:"Materialized by the graph engine from co-occurrence patterns." },
-    COMPUTED:  { color:"var(--green)",           desc:"Derived by a rule or agent — not present in any source system." },
-    HIERARCHY: { color:"var(--gold)",            desc:"A parent-child containment relationship (e.g. :BELONGS_TO, :PART_OF)." },
-  };
+  const labelValid   = eLabel.trim().length >= 3;
+  const targetValid  = eTarget !== "";
+  const cypherLabel  = eLabel || "EDGE";
+  const fromLabelStr = fromNode.label;
+  const toLabelStr   = targetNode ? targetNode.label : "?";
+
+  const cypherText = "(:"+fromLabelStr+")\n  -[:"+cypherLabel+"]->\n  (:"+toLabelStr+")";
+
+  function NodeGlyph16({ node }) {
+    const c2 = colorForNode(node);
+    return (
+      <svg width="16" height="16" viewBox="-8 -8 16 16" style={{ flexShrink:0 }}>
+        {node.type === "agent"
+          ? <polygon points="0,-7 6,3.5 -6,3.5" fill={c2.fill} stroke={c2.stroke} strokeWidth="1.3" />
+          : node.type === "source"
+          ? <rect x="-6" y="-6" width="12" height="12" rx="1.5" fill={c2.fill} stroke={c2.stroke} strokeWidth="1.3" />
+          : <circle r="6" fill={c2.fill} stroke={c2.stroke} strokeWidth="1.3" />}
+      </svg>
+    );
+  }
+
+  function Toggle({ on, onChange }) {
+    return (
+      <div onClick={onChange}
+        style={{ width:40, height:22, borderRadius:11, background:on?"var(--ink)":"var(--line-2)", cursor:"pointer", position:"relative", flexShrink:0, transition:"background 150ms" }}>
+        <div style={{ position:"absolute", top:3, left:on?20:3, width:16, height:16, borderRadius:"50%", background:"#fff", transition:"left 150ms" }} />
+      </div>
+    );
+  }
+
+  function removeAccess(tag) {
+    setEAccess(function(prev){ return prev.filter(function(a){ return a !== tag; }); });
+  }
+
+  function addProp() {
+    setEProps(function(prev){ return prev.concat({ name:"new_prop", type:"string", req:false, pii:false }); });
+  }
+
+  function removeProp(idx) {
+    setEProps(function(prev){ return prev.filter(function(_, i){ return i !== idx; }); });
+  }
+
+  function updateProp(idx, key, val) {
+    setEProps(function(prev){ return prev.map(function(p, i){ return i === idx ? Object.assign({}, p, { [key]: val }) : p; }); });
+  }
+
+  const stepNames = ["Basics", "Population", "Properties", "Governance", "Review"];
 
   return (
-    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.48)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
+    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.4)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
       onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width:"80vw", maxWidth:1000, height:"84vh", background:"var(--bg-canvas)", borderRadius:14, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 28px 72px rgba(0,0,0,0.36)" }}>
+      <div style={{ width:"92vw", maxWidth:1340, height:"94vh", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.3)" }}>
 
-        {/* Header */}
-        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", padding:"20px 28px 16px", borderBottom:"1px solid var(--line)", flexShrink:0 }}>
+        {/* ── HEADER BAR ── */}
+        <div style={{ flexShrink:0, height:48, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 20px", background:"var(--panel)" }}>
           <div>
-            <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:7 }}>{fromNode.label + " · add edge type"}</div>
-            <h2 style={{ fontSize:17, fontWeight:600, color:"var(--ink)", margin:"0 0 5px" }}>{stepTitles[step-1]}</h2>
-            <p style={{ fontSize:12.5, color:"var(--ink-3)", margin:0, lineHeight:1.55, maxWidth:500 }}>{stepDescs[step-1]}</p>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>
+              {"SCHEMA \xB7 EDGE TYPES \xB7 NEW"}
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:7, marginTop:1 }}>
+              <NodeGlyph16 node={fromNode} />
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, fontWeight:500, color:"var(--ink)" }}>{fromNode.label}</span>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)", fontStyle:"italic" }}>{"→ " + (eLabel ? ":"+eLabel : "choose target")}</span>
+            </div>
           </div>
-          <button onClick={onClose} style={{ width:30, height:30, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginLeft:20 }}>✕</button>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 9px", borderRadius:4, border:"1px solid var(--line)", background:"var(--chip)", color:"var(--ink-2)", letterSpacing:"0.5px" }}>
+              {(eTarget ? toLabelStr : "TARGET") + " \xB7 DRAFT"}
+            </span>
+            <button onClick={onClose} style={{ width:28, height:28, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              {"×"}
+            </button>
+          </div>
         </div>
 
-        {/* Body */}
+        {/* ── BODY (sidebar + content + right panel) ── */}
         <div style={{ flex:1, display:"flex", minHeight:0 }}>
 
-          {/* Sidebar */}
-          <div style={{ width:200, flexShrink:0, borderRight:"1px solid var(--line)", padding:"24px 14px", display:"flex", flexDirection:"column", gap:2 }}>
-            {STEPS.map(function(s){
-              const done = step > s.n, active = step === s.n;
-              return (
-                <button key={s.n} onClick={function(){ if (done) setStep(s.n); }}
-                  style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px", borderRadius:7, border:"none", background:active?"var(--panel-2)":"transparent", cursor:done?"pointer":"default", textAlign:"left", width:"100%" }}>
-                  <span style={{ width:22, height:22, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0, background:done?"var(--green)":active?"var(--ink)":"var(--line)", color:done||active?"#fff":"var(--ink-3)", marginTop:1 }}>
-                    {done ? "✓" : s.n}
-                  </span>
-                  <div>
-                    <div style={{ fontSize:12.5, fontWeight:active?600:400, color:active?"var(--ink)":done?"var(--ink-2)":"var(--ink-3)" }}>{s.label}</div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:2 }}>{s.sub}</div>
+          {/* LEFT SIDEBAR */}
+          <div style={{ width:260, flexShrink:0, borderRight:"1px solid var(--line)", display:"flex", flexDirection:"column", background:"var(--panel)", padding:"24px 16px 0" }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+              {STEP_META.map(function(s){
+                const done = step > s.n;
+                const active = step === s.n;
+                return (
+                  <button key={s.n}
+                    onClick={function(){ if (done) setStep(s.n); }}
+                    style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"10px 12px", borderRadius:8, border:"none", background:active?"var(--bg-canvas)":"transparent", cursor:done?"pointer":"default", textAlign:"left", width:"100%" }}>
+                    <span style={{ width:24, height:24, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0, background:done?"var(--green)":active?"var(--ink)":"var(--line-2)", color:done||active?"#fff":"var(--ink-3)", marginTop:1 }}>
+                      {done ? "✓" : s.n}
+                    </span>
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:active?600:400, color:active?"var(--ink)":done?"var(--ink-2)":"var(--ink-3)" }}>{s.label}</div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>{s.sub}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ marginTop:"auto", paddingBottom:24, borderTop:"1px solid var(--line-2)", paddingTop:16 }}>
+              {[
+                { key:"⌘↵", label:"Publish" },
+                { key:"⌘S", label:"Draft" },
+              ].map(function(item){
+                return (
+                  <div key={item.label} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 12px", borderRadius:6 }}>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"2px 7px", border:"1px solid var(--line)", borderRadius:4, background:"var(--bg-canvas)", color:"var(--ink-2)" }}>{item.key}</span>
+                    <span style={{ fontSize:12.5, color:"var(--ink-3)" }}>{item.label}</span>
                   </div>
-                </button>
-              );
-            })}
-
-            {/* Live preview badge */}
-            {eLabel && (
-              <div style={{ marginTop:"auto", paddingTop:20 }}>
-                <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:8 }}>Preview</div>
-                <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)", lineHeight:1.8 }}>
-                  <span style={{ color:"var(--ink-3)" }}>{fromNode.label}</span>
-                  <div style={{ fontSize:9, color:"var(--blue)", fontWeight:700, marginLeft:4 }}>{":" + eLabel}</div>
-                  <span style={{ color:"var(--ink-3)", marginLeft:4 }}>{targetNode ? targetNode.label : "?"}</span>
-                </div>
-              </div>
-            )}
+                );
+              })}
+            </div>
           </div>
 
-          {/* Content */}
-          <div style={{ flex:1, overflowY:"auto", padding:"32px 36px" }}>
+          {/* CENTER CONTENT */}
+          <div style={{ flex:1, overflowY:"auto", padding:"36px 40px" }}>
 
-            {/* Step 1 — Edge definition */}
+            {/* STEP 1 — Basics */}
             {step === 1 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:540 }}>
-                <div style={fg}>
-                  <div style={lbl}>Edge label</div>
-                  <input value={eLabel} onChange={function(e){ setELabel(e.target.value.toUpperCase().replace(/\s+/g,"_")); }}
-                    placeholder="e.g. HAS_SUBSCRIPTION, GOVERNED_BY, PREVIOUSLY_AT"
-                    style={{ ...inp, width:"100%", fontFamily:"JetBrains Mono", fontSize:13 }} />
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>SCREAMING_SNAKE_CASE. Auto-formatted as you type. Prefixed with : in queries.</div>
-                </div>
-                <div style={fg}>
-                  <div style={lbl}>Traversal direction</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    {[
-                      { id:"outgoing", label:"Outgoing",    desc: fromNode.label + " -> target node. The relationship originates from this node type." },
-                      { id:"incoming", label:"Incoming",    desc: "target node -> " + fromNode.label + ". This node type is the destination of the relationship." },
-                      { id:"both",     label:"Bidirectional", desc:"Edge can be traversed in both directions. Use sparingly — most relationships are directional." },
-                    ].map(function(d){
-                      return (
-                        <div key={d.id} onClick={function(){ setEDir(d.id); }}
-                          style={{ display:"flex", alignItems:"center", gap:14, padding:"13px 16px", border:"2px solid "+(eDir===d.id?"var(--ink)":"var(--line)"), borderRadius:8, cursor:"pointer", background:eDir===d.id?"var(--panel-2)":"transparent" }}>
-                          <div style={{ width:14, height:14, borderRadius:"50%", border:"2px solid "+(eDir===d.id?"var(--ink)":"var(--line-2)"), background:eDir===d.id?"var(--ink)":"transparent", flexShrink:0 }} />
-                          <div>
-                            <div style={{ fontSize:13, fontWeight:eDir===d.id?600:400, color:"var(--ink)" }}>{d.label}</div>
-                            <div style={{ fontSize:11.5, color:"var(--ink-3)", marginTop:2, lineHeight:1.5 }}>{d.desc}</div>
-                          </div>
-                        </div>
-                      );
-                    })}
+              <div style={{ maxWidth:560 }}>
+                <div style={{ marginBottom:28 }}>
+                  <div style={{ fontFamily:"Instrument Serif, serif", fontSize:32, lineHeight:1.1, letterSpacing:"-0.3px", marginBottom:8 }}>
+                    {"Name the edge and pick its endpoints"}
+                  </div>
+                  <div style={{ fontSize:13.5, color:"var(--ink-3)", lineHeight:1.6 }}>
+                    {"Edge labels become part of the schema’s public contract. Use UPPER_SNAKE_CASE with a verb that reads naturally in both directions."}
                   </div>
                 </div>
-                <div style={fg}>
-                  <div style={lbl}>Description <span style={{ textTransform:"none", letterSpacing:0, fontSize:10, color:"var(--ink-4)" }}>(optional)</span></div>
-                  <textarea value={eDesc} onChange={function(e){ setEDesc(e.target.value); }}
-                    placeholder="What this edge represents and when it should exist..."
-                    rows={2} style={{ ...inp, width:"100%", resize:"vertical", lineHeight:1.55, fontFamily:"inherit", fontSize:12.5 }} />
-                </div>
-              </div>
-            )}
 
-            {/* Step 2 — Target & cardinality */}
-            {step === 2 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:540 }}>
-                <div style={fg}>
-                  <div style={lbl}>Target node type</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    {targetNodes.map(function(n){
-                      const c = colorForNode(n);
-                      return (
-                        <div key={n.id} onClick={function(){ setETarget(n.id); }}
-                          style={{ display:"flex", alignItems:"center", gap:14, padding:"12px 16px", border:"2px solid "+(eTarget===n.id?"var(--ink)":"var(--line)"), borderRadius:8, cursor:"pointer", background:eTarget===n.id?"var(--panel-2)":"transparent" }}>
-                          <svg width="18" height="18" viewBox="-18 -18 36 36">
-                            {n.type === "agent" ? (
-                              <polygon points="0,-14 12.1,7 -12.1,7" fill={c.fill} stroke={c.stroke} strokeWidth="1.5"/>
-                            ) : n.type === "source" ? (
-                              <rect x="-13" y="-13" width="26" height="26" rx="3" fill={c.fill} stroke={c.stroke} strokeWidth="1.5"/>
-                            ) : (
-                              <circle r="13" fill={c.fill} stroke={c.stroke} strokeWidth="1.5"/>
-                            )}
-                          </svg>
-                          <div style={{ flex:1 }}>
-                            <div style={{ fontSize:13, fontWeight:eTarget===n.id?600:400, color:"var(--ink)" }}>{n.label}</div>
-                            <div style={{ fontSize:11.5, color:"var(--ink-3)", marginTop:2 }}>{n.type} · {n.desc ? n.desc.slice(0,60) + (n.desc.length > 60 ? "..." : "") : ""}</div>
-                          </div>
-                          {eTarget===n.id && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-3)" }}>SELECTED</span>}
-                        </div>
-                      );
-                    })}
+                <div style={fieldRow}>
+                  <div style={lbl}>{"LABEL "}<span style={{ color:"var(--coral)" }}>{"*"}</span></div>
+                  <div style={{ position:"relative" }}>
+                    <span style={{ position:"absolute", left:11, top:"50%", transform:"translateY(-50%)", fontFamily:"JetBrains Mono", fontSize:13, color:"var(--ink-3)" }}>{":"}</span>
+                    <input value={eLabel}
+                      onChange={function(e){ setELabel(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g,"_")); }}
+                      placeholder="WORKS_AT"
+                      style={Object.assign({}, inp, { width:"100%", fontFamily:"JetBrains Mono", fontSize:13, paddingLeft:22 })} />
                   </div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{"UPPER_SNAKE_CASE \xB7 3–32 chars"}</div>
                 </div>
-                <div style={fg}>
-                  <div style={lbl}>Cardinality</div>
+
+                <div style={fieldRow}>
+                  <div style={lbl}>{"DESCRIPTION "}<span style={{ color:"var(--ink-4)", textTransform:"none", letterSpacing:0, fontSize:9 }}>{"(OPTIONAL)"}</span></div>
+                  <textarea value={eDesc} onChange={function(e){ setEDesc(e.target.value); }}
+                    placeholder={"What does this edge represent? Read both directions out loud — does it work?"}
+                    rows={3}
+                    style={Object.assign({}, inp, { width:"100%", resize:"vertical", lineHeight:1.55, fontFamily:"inherit", fontSize:13 })} />
+                </div>
+
+                <div style={fieldRow}>
+                  <div style={lbl}>{"FROM"}</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 12px", border:"1px solid var(--line-2)", borderRadius:8, background:"var(--panel)", opacity:0.8 }}>
+                    <NodeGlyph16 node={fromNode} />
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink)" }}>{fromNode.label}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-3)", marginLeft:4 }}>{"locked"}</span>
+                  </div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{"Locked to the current node."}</div>
+                </div>
+
+                <div style={fieldRow}>
+                  <div style={lbl}>{"TO "}<span style={{ color:"var(--coral)" }}>{"*"}</span></div>
+                  <select value={eTarget} onChange={function(e){ setETarget(e.target.value); }}
+                    style={Object.assign({}, inp, { width:"100%", cursor:"pointer" })}>
+                    <option value="">{"— pick a target node —"}</option>
+                    {targetNodes.map(function(n){
+                      return <option key={n.id} value={n.id}>{n.label}</option>;
+                    })}
+                  </select>
+                </div>
+
+                <div style={fieldRow}>
+                  <div style={lbl}>{"CARDINALITY"}</div>
                   <div style={{ display:"flex", gap:8 }}>
                     {["1:1","1:N","N:1","N:M"].map(function(c){
-                      const descs = { "1:1":"One-to-one", "1:N":"One-to-many", "N:1":"Many-to-one", "N:M":"Many-to-many" };
+                      const selected = eCard === c;
                       return (
-                        <div key={c} onClick={function(){ setECard(c); }}
-                          style={{ flex:1, padding:"12px 10px", border:"2px solid "+(eCard===c?"var(--ink)":"var(--line)"), borderRadius:8, cursor:"pointer", textAlign:"center", background:eCard===c?"var(--panel-2)":"transparent" }}>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:700, color:eCard===c?"var(--ink)":"var(--ink-3)" }}>{c}</div>
-                          <div style={{ fontSize:11, color:"var(--ink-3)", marginTop:4 }}>{descs[c]}</div>
-                        </div>
+                        <button key={c}
+                          onClick={function(){ setECard(c); }}
+                          style={{ flex:1, padding:"10px 8px", border:"2px solid "+(selected?"var(--ink)":"var(--line)"), borderRadius:8, cursor:"pointer", textAlign:"center", background:selected?"var(--panel-2)":"transparent", fontFamily:"inherit" }}>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:700, color:selected?"var(--ink)":"var(--ink-3)" }}>{c}</div>
+                        </button>
                       );
                     })}
                   </div>
                 </div>
+
+                <div style={fieldRow}>
+                  <div style={lbl}>{"INVERSE LABEL "}<span style={{ color:"var(--ink-4)", textTransform:"none", letterSpacing:0, fontSize:9 }}>{"(OPTIONAL)"}</span></div>
+                  <input value={eInverse} onChange={function(e){ setEInverse(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g,"_")); }}
+                    placeholder={"EMPLOYED_BY (the reverse direction)"}
+                    style={Object.assign({}, inp, { width:"100%", fontFamily:"JetBrains Mono", fontSize:13 })} />
+                </div>
               </div>
             )}
 
-            {/* Step 3 — Configuration */}
+            {/* STEP 2 — Population */}
+            {step === 2 && (
+              <div style={{ maxWidth:600 }}>
+                <div style={{ marginBottom:28 }}>
+                  <div style={{ fontFamily:"Instrument Serif, serif", fontSize:32, lineHeight:1.1, letterSpacing:"-0.3px", marginBottom:8 }}>{"How will edge instances be created?"}</div>
+                  <div style={{ fontSize:13.5, color:"var(--ink-3)", lineHeight:1.6 }}>{"Every edge needs a system of record. This determines freshness SLO, lineage, and backfill behaviour."}</div>
+                </div>
+
+                <div style={fieldRow}>
+                  <div style={lbl}>{"POPULATION KIND "}<span style={{ color:"var(--coral)" }}>{"*"}</span></div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                    {popKinds.map(function(pk){
+                      const sel = ePopKind === pk.id;
+                      return (
+                        <div key={pk.id}
+                          onClick={function(){ setEPopKind(pk.id); }}
+                          style={{ padding:"16px 16px", border:"2px solid "+(sel?pk.color:"var(--line)"), borderRadius:10, cursor:"pointer", background:sel?pk.color+"10":"var(--panel)", display:"flex", flexDirection:"column", gap:8 }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:4, background:pk.color+"20", color:pk.color }}>{pk.tag}</div>
+                            {sel && <span style={{ fontSize:12, color:pk.color }}>{"✓"}</span>}
+                          </div>
+                          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{pk.title}</div>
+                          <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5 }}>{pk.desc}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{"Select one to continue configuring."}</div>
+                </div>
+
+                <div style={{ border:"1px solid var(--line)", borderRadius:10, padding:"16px 18px", background:"var(--panel)", display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:8 }}>
+                  <div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:4, background:"var(--ink)", color:"var(--panel)" }}>{"BACKFILL"}</span>
+                      <span style={{ fontSize:13, fontWeight:500, color:"var(--ink)" }}>{"Historical data will be replayed"}</span>
+                    </div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>{"~12,400 traversals \xB7 ~3.2 min in staging"}</div>
+                  </div>
+                  <Toggle on={eBackfill} onChange={function(){ setEBackfill(function(v){ return !v; }); }} />
+                </div>
+              </div>
+            )}
+
+            {/* STEP 3 — Properties */}
             {step === 3 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:540 }}>
-                <div style={fg}>
-                  <div style={lbl}>Edge kind</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    {Object.keys(kindMeta).map(function(k){
-                      const m = kindMeta[k];
+              <div style={{ maxWidth:600 }}>
+                <div style={{ marginBottom:28 }}>
+                  <div style={{ fontFamily:"Instrument Serif, serif", fontSize:32, lineHeight:1.1, letterSpacing:"-0.3px", marginBottom:8 }}>{"Edge attributes"}</div>
+                  <div style={{ fontSize:13.5, color:"var(--ink-3)", lineHeight:1.6 }}>{"Edges can carry their own properties — timestamps, weights, roles, provenance. Each field is stored at edge cardinality, so keep this minimal."}</div>
+                </div>
+
+                <div style={fieldRow}>
+                  <div style={lbl}>{"EDGE PROPERTIES"}</div>
+                  <div style={{ border:"1px solid var(--line)", borderRadius:10, overflow:"hidden", background:"var(--panel)" }}>
+                    <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 60px 50px 32px", gap:0, padding:"8px 14px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase" }}>
+                      <div>{"NAME"}</div><div>{"TYPE"}</div><div>{"REQ"}</div><div>{"PII"}</div><div></div>
+                    </div>
+                    {eProps.map(function(p, i){
                       return (
-                        <div key={k} onClick={function(){ setEKind(k); }}
-                          style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 16px", border:"2px solid "+(eKind===k?m.color:"var(--line)"), borderRadius:8, cursor:"pointer", background:eKind===k?m.color+"08":"transparent" }}>
-                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, padding:"2px 9px", borderRadius:4, background:m.color+"18", color:m.color, flexShrink:0, minWidth:72, textAlign:"center" }}>{k}</span>
-                          <div style={{ fontSize:12.5, color:"var(--ink-2)", lineHeight:1.5 }}>{m.desc}</div>
+                        <div key={i} style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 60px 50px 32px", gap:0, padding:"10px 14px", borderBottom: i < eProps.length-1 ? "1px solid var(--line-2)" : "none", alignItems:"center" }}>
+                          <input value={p.name} onChange={function(e){ updateProp(i,"name",e.target.value); }}
+                            style={{ fontFamily:"JetBrains Mono", fontSize:12, border:"none", background:"transparent", outline:"none", color:"var(--ink)", padding:0 }} />
+                          <select value={p.type} onChange={function(e){ updateProp(i,"type",e.target.value); }}
+                            style={{ fontFamily:"JetBrains Mono", fontSize:11.5, border:"1px solid var(--line-2)", borderRadius:4, background:"var(--bg-canvas)", color:"var(--ink-2)", padding:"2px 6px", cursor:"pointer" }}>
+                            {["string","timestamp","float","int","bool","uuid","enum"].map(function(t){ return <option key={t} value={t}>{t}</option>; })}
+                          </select>
+                          <div style={{ display:"flex", justifyContent:"center" }}>
+                            <Toggle on={p.req} onChange={function(){ updateProp(i,"req",!p.req); }} />
+                          </div>
+                          <div style={{ display:"flex", justifyContent:"center" }}>
+                            <Toggle on={p.pii} onChange={function(){ updateProp(i,"pii",!p.pii); }} />
+                          </div>
+                          <button onClick={function(){ removeProp(i); }}
+                            style={{ border:"none", background:"none", cursor:"pointer", color:"var(--ink-3)", fontSize:14, padding:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                            {"×"}
+                          </button>
                         </div>
                       );
                     })}
                   </div>
-                </div>
-                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                  {[
-                    { key:"indexed", val:eIndexed, set:setEIndexed, label:"Index for traversal", desc:"Build a traversal index on this edge type. Recommended for high-volume edges used in frequent queries." },
-                    { key:"owned",   val:eOwned,   set:setEOwned,   label:"Ownership edge",       desc:"Source node owns the lifecycle of the target node. Deleting the source cascades to the target." },
-                  ].map(function(f){
-                    return (
-                      <div key={f.key} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 16px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel-2)" }}>
-                        <div>
-                          <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)", marginBottom:3 }}>{f.label}</div>
-                          <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.5 }}>{f.desc}</div>
-                        </div>
-                        <div onClick={function(){ f.set(!f.val); }}
-                          style={{ width:40, height:22, borderRadius:11, background:f.val?"var(--ink)":"var(--line-2)", cursor:"pointer", position:"relative", flexShrink:0, marginLeft:16, transition:"background 150ms" }}>
-                          <div style={{ position:"absolute", top:3, left:f.val?20:3, width:16, height:16, borderRadius:"50%", background:"#fff", transition:"left 150ms" }} />
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <button onClick={addProp} style={{ background:"none", border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, color:"var(--blue)", padding:"4px 0" }}>{"+ Add property"}</button>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{eProps.length + " defined \xB7 storage cost scales with edge count"}</div>
                 </div>
               </div>
             )}
 
-            {/* Step 4 — Review */}
+            {/* STEP 4 — Governance */}
             {step === 4 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:540 }}>
-                <div style={{ border:"1px solid var(--line)", borderRadius:12, overflow:"hidden" }}>
-                  <div style={{ padding:"18px 22px", borderBottom:"1px solid var(--line-2)" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
-                      <code style={{ fontFamily:"JetBrains Mono", fontSize:15, fontWeight:700, color:"var(--blue)" }}>{":" + (eLabel || "UNNAMED")}</code>
-                      <span className={"edge-kind edge-kind-" + eKind.toLowerCase()}>{eKind}</span>
-                    </div>
-                    <div style={{ fontSize:13, color:"var(--ink-2)", display:"flex", alignItems:"center", gap:8 }}>
-                      <strong>{fromNode.label}</strong>
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{eDir === "incoming" ? "<-" : "->"}</span>
-                      <strong>{targetNode ? targetNode.label : "?"}</strong>
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginLeft:4 }}>{eCard}</span>
-                    </div>
-                    {eDesc && <div style={{ fontSize:12.5, color:"var(--ink-3)", marginTop:8, lineHeight:1.55 }}>{eDesc}</div>}
-                  </div>
-                  <div style={{ display:"flex", gap:1, background:"var(--line-2)" }}>
-                    {[
-                      ["Direction", { outgoing:"Outgoing", incoming:"Incoming", both:"Bidirectional" }[eDir]],
-                      ["Cardinality", eCard],
-                      ["Indexed", eIndexed ? "Yes" : "No"],
-                      ["Status", "Will be added"],
-                    ].map(function(kv,i){
+              <div style={{ maxWidth:560 }}>
+                <div style={{ marginBottom:28 }}>
+                  <div style={{ fontFamily:"Instrument Serif, serif", fontSize:32, lineHeight:1.1, letterSpacing:"-0.3px", marginBottom:8 }}>{"Owner, access, and downstream effects"}</div>
+                  <div style={{ fontSize:13.5, color:"var(--ink-3)", lineHeight:1.6 }}>{"New edges are governance events — they expand the surface every downstream agent and dashboard can traverse."}</div>
+                </div>
+
+                <div style={fieldRow}>
+                  <div style={lbl}>{"OWNER TEAM"}</div>
+                  <select value={eOwner} onChange={function(e){ setEOwner(e.target.value); }}
+                    style={Object.assign({}, inp, { width:"100%", cursor:"pointer" })}>
+                    {["data-platform","engineering","analytics","product"].map(function(o){ return <option key={o} value={o}>{o}</option>; })}
+                  </select>
+                </div>
+
+                <div style={fieldRow}>
+                  <div style={lbl}>{"CHANGE RISK"}</div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    {["LOW","MEDIUM","HIGH"].map(function(r){
+                      const sel = eRisk === r;
+                      const rColor = r === "HIGH" ? "var(--coral)" : r === "MEDIUM" ? "var(--gold)" : "var(--green)";
                       return (
-                        <div key={i} style={{ flex:1, padding:"12px 16px", background:"var(--panel-2)" }}>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:3 }}>{kv[0]}</div>
-                          <div style={{ fontSize:12.5, color:kv[0]==="Status"?"var(--green)":"var(--ink)", fontWeight:kv[0]==="Status"?500:400 }}>{kv[1]}</div>
+                        <button key={r} onClick={function(){ setERisk(r); }}
+                          style={{ flex:1, padding:"9px 8px", border:"2px solid "+(sel?rColor:"var(--line)"), borderRadius:8, cursor:"pointer", background:sel?rColor+"18":"transparent", fontFamily:"inherit" }}>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, color:sel?rColor:"var(--ink-3)" }}>{r}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{"1 reviewer from owner team \xB7 CI must pass."}</div>
+                </div>
+
+                <div style={fieldRow}>
+                  <div style={lbl}>{"TAGS"}</div>
+                  <input value={eTags} onChange={function(e){ setETags(e.target.value); }}
+                    placeholder={"add tags…"}
+                    style={Object.assign({}, inp, { width:"100%" })} />
+                </div>
+
+                <div style={fieldRow}>
+                  <div style={lbl}>{"ACCESS ROLES"}</div>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:6, padding:"8px 10px", border:"1px solid var(--line)", borderRadius:8, background:"var(--bg-canvas)", minHeight:40, alignItems:"center" }}>
+                    {eAccess.map(function(tag){
+                      return (
+                        <span key={tag} style={{ fontFamily:"JetBrains Mono", fontSize:11.5, padding:"3px 8px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)", display:"inline-flex", alignItems:"center", gap:5 }}>
+                          {tag}
+                          <button onClick={function(){ removeAccess(tag); }}
+                            style={{ border:"none", background:"none", cursor:"pointer", color:"var(--ink-3)", fontSize:13, lineHeight:1, padding:0, marginTop:-1 }}>{"×"}</button>
+                        </span>
+                      );
+                    })}
+                    <input value={eAccessInput}
+                      onChange={function(e){ setEAccessInput(e.target.value); }}
+                      onKeyDown={function(e){ if ((e.key === "Enter" || e.key === ",") && eAccessInput.trim()) { setEAccess(function(prev){ return prev.concat(eAccessInput.trim()); }); setEAccessInput(""); e.preventDefault(); } }}
+                      placeholder={"add…"}
+                      style={{ border:"none", background:"transparent", outline:"none", fontSize:12.5, fontFamily:"JetBrains Mono", color:"var(--ink)", flex:1, minWidth:60, padding:0 }} />
+                  </div>
+                </div>
+
+                <div style={{ border:"1px solid var(--line-2)", borderRadius:10, padding:"14px 16px", background:"var(--panel)" }}>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>
+                    {"IMPACT PREVIEW \xB7 0 SURFACES AFFECTED"}
+                  </div>
+                  <div style={{ fontSize:12.5, color:"var(--ink-4)" }}>{"No downstream surfaces detected yet. Impact will be calculated on first publish."}</div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 5 — Review */}
+            {step === 5 && (
+              <div style={{ maxWidth:620 }}>
+                <div style={{ marginBottom:28 }}>
+                  <div style={{ fontFamily:"Instrument Serif, serif", fontSize:32, lineHeight:1.1, letterSpacing:"-0.3px", marginBottom:8 }}>{"Last look before this becomes part of the schema"}</div>
+                </div>
+
+                <div style={{ border:"1px solid var(--line)", borderRadius:12, overflow:"hidden", background:"var(--panel)", marginBottom:20 }}>
+                  <div style={{ padding:"14px 18px", borderBottom:"1px solid var(--line-2)", fontWeight:600, fontSize:13.5 }}>{"Summary"}</div>
+                  <div style={{ display:"flex", flexDirection:"column" }}>
+                    {[
+                      ["LABEL",      eLabel || "(none)"],
+                      ["ENDPOINTS",  fromNode.label + " → " + (targetNode ? targetNode.label : "?")],
+                      ["CARDINALITY", eCard],
+                      ["KIND",       ePopKind ? ePopKind.toUpperCase() : "(not set)"],
+                      ["PROPERTIES", eProps.length + " defined"],
+                      ["CADENCE",    "5 min"],
+                      ["OWNER",      eOwner],
+                      ["RISK",       eRisk],
+                      ["ACCESS",     eAccess.join(", ") || "none"],
+                      ["BACKFILL",   eBackfill ? "on \xB7 30 days" : "off"],
+                      ["IMPACT",     "0 surface(s) downstream"],
+                    ].map(function(row, i){
+                      return (
+                        <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", padding:"10px 18px", borderBottom: i < 10 ? "1px dashed var(--line-2)" : "none" }}>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", letterSpacing:"0.5px" }}>{row[0]}</span>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", fontWeight:500 }}>{row[1]}</span>
                         </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div style={{ border:"1px solid var(--line)", borderRadius:12, overflow:"hidden", background:"var(--panel)", marginBottom:20 }}>
+                  <div style={{ padding:"14px 18px", borderBottom:"1px solid var(--line-2)", fontWeight:600, fontSize:13.5 }}>{"Approvers"}</div>
+                  <div style={{ padding:"14px 18px", display:"flex", alignItems:"center", gap:12 }}>
+                    <div style={{ width:32, height:32, borderRadius:"50%", background:"var(--ink)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:13, color:"var(--panel)", fontWeight:700 }}>{"M"}</div>
+                    <div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:12.5, fontWeight:500, color:"var(--ink)" }}>{"morgan.lee"}</div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>{"data-platform"}</div>
+                    </div>
+                    <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 8px", borderRadius:4, background:"var(--gold-fill)", color:"var(--gold)", fontWeight:700 }}>{"AWAITING"}</span>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom:6 }}>
+                  <div style={lbl}>{"TARGET STAGE"}</div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    {["draft","staging","live"].map(function(s){
+                      const sel = eTargetStage === s;
+                      return (
+                        <button key={s} onClick={function(){ setETargetStage(s); }}
+                          style={{ flex:1, padding:"10px 8px", border:"2px solid "+(sel?"var(--ink)":"var(--line)"), borderRadius:8, cursor:"pointer", background:sel?"var(--panel-2)":"transparent", fontFamily:"inherit" }}>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:12, fontWeight:sel?700:400, color:sel?"var(--ink)":"var(--ink-3)" }}>{s}</div>
+                        </button>
                       );
                     })}
                   </div>
                 </div>
               </div>
             )}
+
+          </div>
+
+          {/* RIGHT PANEL */}
+          <div style={{ width:260, flexShrink:0, borderLeft:"1px solid var(--line)", background:"var(--panel)", overflowY:"auto", padding:"20px 16px", display:"flex", flexDirection:"column", gap:20 }}>
+
+            {/* Live Preview */}
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:10 }}>{"LIVE PREVIEW"}</div>
+              <div style={{ display:"flex", justifyContent:"center", padding:"16px 0" }}>
+                <svg width="228" height="80" viewBox="0 0 228 80">
+                  <circle cx="36" cy="40" r="22" fill={fromC.fill} stroke={fromC.stroke} strokeWidth="1.8" />
+                  <text x="36" y="69" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9px", fill:"var(--ink-3)" }}>{fromNode.label.slice(0,10)}</text>
+
+                  <line x1="60" y1="40" x2="168" y2="40" stroke="var(--line)" strokeWidth="1.5" markerEnd="url(#arr)" />
+                  <text x="114" y="32" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"8.5px", fill:"var(--blue)", fontWeight:"700" }}>{eCard}</text>
+                  <text x="114" y="52" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"8px", fill:"var(--ink-3)" }}>{eLabel ? ":"+eLabel : ""}</text>
+
+                  {targetNode ? (
+                    <circle cx="192" cy="40" r="22" fill={colorForNode(targetNode).fill} stroke={colorForNode(targetNode).stroke} strokeWidth="1.8" />
+                  ) : (
+                    <circle cx="192" cy="40" r="22" fill="var(--line-2)" stroke="var(--line)" strokeWidth="1.8" strokeDasharray="3,2" />
+                  )}
+                  <text x="192" y="69" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9px", fill:"var(--ink-3)" }}>{targetNode ? targetNode.label.slice(0,10) : "?"}</text>
+                  {!targetNode && <text x="192" y="44" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"14px", fill:"var(--ink-3)" }}>{"?"}</text>}
+
+                  <defs>
+                    <marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                      <path d="M0,0 L0,6 L6,3 Z" fill="var(--ink-3)" />
+                    </marker>
+                  </defs>
+                </svg>
+              </div>
+            </div>
+
+            {/* Cypher Pattern */}
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>{"CYPHER PATTERN"}</div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:11, lineHeight:1.9, background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:7, padding:"10px 12px", color:"var(--ink-2)", whiteSpace:"pre" }}>{cypherText}</div>
+            </div>
+
+            {/* Validation */}
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>{"VALIDATION"}</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+                {[
+                  { ok:labelValid,  text:"Label is unique and well-formed" },
+                  { ok:targetValid, text:"Target node selected" },
+                  { ok:true,        text:"Access roles assigned" },
+                  { ok:true,        text:"No conflict with existing edges" },
+                ].map(function(v, i){
+                  return (
+                    <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:7 }}>
+                      <div style={{ width:8, height:8, borderRadius:"50%", background:v.ok?"var(--green)":"var(--gold)", flexShrink:0, marginTop:3 }} />
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:v.ok?"var(--ink-2)":"var(--ink-3)", lineHeight:1.5 }}>{v.text}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Downstream Impact */}
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>{"DOWNSTREAM IMPACT"}</div>
+              <div style={{ textAlign:"center" }}>
+                <div style={{ fontFamily:"Instrument Serif, serif", fontSize:44, color:"var(--ink)", lineHeight:1 }}>{"0"}</div>
+                <div style={{ fontSize:12.5, color:"var(--ink-2)", marginTop:4 }}>{"surfaces will pick this up"}</div>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:2 }}>{"on publish to draft"}</div>
+              </div>
+            </div>
 
           </div>
         </div>
 
-        {/* Footer */}
-        <div style={{ flexShrink:0, padding:"14px 28px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"flex-end", gap:8, background:"var(--panel-2)" }}>
-          <button className="btn-ghost" onClick={onClose}>Cancel</button>
-          {step > 1 && <button className="btn-ghost" onClick={function(){ setStep(function(s){ return s-1; }); }}>Back</button>}
-          {step < 4
-            ? <button className="btn-dark" disabled={!canNext} onClick={function(){ setStep(function(s){ return s+1; }); }} style={{ opacity:canNext?1:0.45 }}>Continue</button>
-            : <button className="btn-dark" onClick={onClose}>Add edge type</button>
-          }
+        {/* ── FOOTER BAR ── */}
+        <div style={{ flexShrink:0, height:52, borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 20px", background:"var(--panel-2)" }}>
+          <button className="btn-ghost"
+            disabled={step === 1}
+            onClick={function(){ setStep(function(s){ return s-1; }); }}
+            style={{ opacity:step===1?0.35:1 }}>
+            {"← Back"}
+          </button>
+          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", letterSpacing:"0.3px" }}>
+            {"Step " + step + " of 5 \xB7 " + stepNames[step-1]}
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <button className="btn-ghost" onClick={onClose}>{"Save draft"}</button>
+            {step < 5
+              ? <button className="btn-dark"
+                  disabled={!canContinue}
+                  onClick={function(){ setStep(function(s){ return s+1; }); }}
+                  style={{ opacity:canContinue?1:0.45 }}>
+                  {"Continue →"}
+                </button>
+              : <button className="btn-dark" onClick={onClose}>{"Publish to draft ↵"}</button>
+            }
+          </div>
         </div>
 
       </div>
@@ -3839,7 +4122,7 @@ function SourcesPane({ sources, node, onLinkSource }) {
     const ss = seed + i * 7;
     const runs = Array.from({ length: 5 }, (_, j) => ({
       when: ["2m ago","12m ago","22m ago","32m ago","42m ago"][j],
-      dur:  `${1 + (ss+j)%4}m ${(ss*j+3)%60}s`,
+      dur:  (1 + (ss+j)%4) + "m " + ((ss*j+3)%60) + "s",
       rows: (parseInt(s.rows?.replace(/[^0-9]/g,"")) || 1000) - j * Math.floor((ss*j)%200),
       ok:   j < 4 || s.status === "healthy",
     }));
@@ -3858,7 +4141,7 @@ function SourcesPane({ sources, node, onLinkSource }) {
       totalCols:    8 + (ss % 6),
       strategy:     ["incremental","cdc","full"][ss % 3],
       sloTarget:    "30m",
-      sloActual:    `${1+(ss*3)%9}m ${(ss*7)%60}s`,
+      sloActual:    (1+(ss*3)%9) + "m " + ((ss*7)%60) + "s",
       sloOk:        s.status === "healthy",
       pkCol:        s.name.toLowerCase().includes("salesforce") ? "Id" : "id",
       joinCol:      node.id + "_id",
@@ -6575,6 +6858,263 @@ function SamplePane({ node, properties }) {
   );
 }
 
+// ─── RECORDS VIEW ─────────────────────────────────────────────────────────────
+
+function generateRecords(node) {
+  var seed = node.id.charCodeAt(0) * 7 + node.id.length * 13;
+  var props = generateProps(node);
+  var pkProp = props.find(function(p){ return p.pk; }) || props[0];
+  var records = [];
+  for (var i = 0; i < 12; i++) {
+    var s = seed + i * 31;
+    var rec = { id: node.id + "-" + (100000 + (s * 1597) % 899999), nodeType: node.label, nodeId: node.id, status: ["active","active","active","active","review","flagged"][s%6] };
+    props.slice(0, 6).forEach(function(p) {
+      var v = s * (p.name.charCodeAt(0) + 1);
+      if (p.pk) rec[p.name] = "uuid-" + ((v * 7) % 999999).toString(16);
+      else if (p.type === "decimal" || p.type === "float") rec[p.name] = ((v % 9999) + 100).toFixed(2);
+      else if (p.type === "bool") rec[p.name] = v % 3 !== 0 ? "true" : "false";
+      else if (p.type === "timestamp") rec[p.name] = "2026-0" + (1 + v%9) + "-" + (10 + v%19) + "T" + (8 + v%14) + ":00Z";
+      else if (p.type === "date") rec[p.name] = "2026-0" + (1 + v%9) + "-" + (10 + v%19);
+      else rec[p.name] = p.name + "-" + ((v * 3) % 9999);
+    });
+    rec._updatedAgo = [" 2m ago", "14m ago", " 1h ago", " 4h ago", "1d ago", "3d ago"][s%6];
+    rec._source = ["Salesforce CRM","NetSuite ERP","HubSpot Marketing","Manual / Admin"][s%4];
+    records.push(rec);
+  }
+  return records;
+}
+
+function RecordDetailView({ record, node, onBack }) {
+  var [tab, setTab] = React.useState("Overview");
+  var props = generateProps(node);
+  var c = colorForNode(node);
+  var tabs = ["Overview", "Graph", "Audit", "Lineage"];
+
+  var auditRows = props.slice(0, 8).map(function(p, i) {
+    var s = node.id.charCodeAt(0) * 7 + i * 17;
+    var conf = (0.70 + (s % 28) / 100).toFixed(2);
+    var sources = ["Salesforce CRM","NetSuite ERP","HubSpot Marketing","Manual / Admin"];
+    var src = sources[s%4];
+    var ages = ["2m", "18m", "1h", "4h", "12h", "1d", "3d"];
+    return { prop: p.name, type: p.type, value: record[p.name] || "null", source: src, conf: parseFloat(conf), age: ages[s%7], rule: p.required ? "NOT NULL constraint" : p.pii ? "PII access gate" : "none" };
+  });
+
+  return (
+    <div className="detail-view" style={{ display:"flex", flexDirection:"column", height:"100%" }}>
+      <div className="detail-head" style={{ flexShrink:0 }}>
+        <div className="detail-crumb">
+          <button className="crumb-back" onClick={onBack}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+            Records
+          </button>
+          <span className="crumb-sep">/</span>
+          <span className="crumb-cur">{node.label}</span>
+          <span className="crumb-sep">/</span>
+          <span className="crumb-cur" style={{ fontFamily:"JetBrains Mono", fontSize:10 }}>{record.id}</span>
+        </div>
+        <div className="detail-title-row">
+          <div className="detail-title-left">
+            <svg width="32" height="32" viewBox="-16 -16 32 32">
+              {node.type === "agent" ? (
+                <polygon points={[0,1,2,3,4,5].map(function(i){ var a=(Math.PI/3)*i-Math.PI/2; return (14*Math.cos(a)).toFixed(1)+","+(14*Math.sin(a)).toFixed(1); }).join(" ")} fill={c.fill} stroke={c.stroke} strokeWidth="1.5" />
+              ) : node.type === "source" ? (
+                <rect x="-12" y="-12" width="24" height="24" rx="3" fill={c.fill} stroke={c.stroke} strokeWidth="1.5" />
+              ) : (
+                <circle r="12" fill={c.fill} stroke={c.stroke} strokeWidth="1.5" />
+              )}
+            </svg>
+            <div>
+              <div className="detail-title-name" style={{ fontFamily:"JetBrains Mono", fontSize:16 }}>{record.id}</div>
+              <div style={{ display:"flex", gap:8, alignItems:"center", marginTop:4 }}>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 8px", borderRadius:4, background:"var(--chip)", color:"var(--ink-3)" }}>{node.label}</span>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 8px", borderRadius:4, background: record.status === "active" ? "rgba(72,199,142,0.12)" : record.status === "review" ? "var(--gold-fill)" : "var(--coral-fill)", color: record.status === "active" ? "var(--green)" : record.status === "review" ? "var(--gold)" : "var(--coral)" }}>{record.status.toUpperCase()}</span>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{"updated " + record._updatedAgo}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="detail-tabs">
+          {tabs.map(function(t) {
+            return (
+              <button key={t} className={"detail-tab" + (tab === t ? " on" : "")} onClick={function(){ setTab(t); }}>{t}</button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="detail-body">
+        {tab === "Overview" && (
+          <div className="card" style={{ margin:24 }}>
+            <div className="card-head">Property values</div>
+            <div>
+              {props.slice(0, 10).map(function(p, i) {
+                return (
+                  <div key={p.name} style={{ display:"flex", alignItems:"center", padding:"13px 18px", borderBottom: i < 9 ? "1px solid var(--line-2)" : "none" }}>
+                    <div style={{ width:200, flexShrink:0 }}>
+                      <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-2)" }}>{p.name}</code>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginLeft:8 }}>{p.type}</span>
+                    </div>
+                    <div style={{ flex:1, fontFamily:"JetBrains Mono", fontSize:13, color:"var(--ink)" }}>{record[p.name] || "null"}</div>
+                    <div style={{ flexShrink:0, display:"flex", gap:8 }}>
+                      {p.pii && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:3, background:"var(--coral-fill)", color:"var(--coral)", fontWeight:700 }}>PII</span>}
+                      {p.required && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", fontWeight:700 }}>REQ</span>}
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{record._source}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {tab === "Graph" && (
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100%" }}>
+            <svg width="520" height="360" viewBox="0 0 520 360">
+              <circle cx="260" cy="180" r="28" fill={c.fill} stroke={c.stroke} strokeWidth="2" />
+              <text x="260" y="224" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"10px", fill:"var(--ink-3)" }}>{node.label}</text>
+              {[{x:100,y:80,label:"Employee",r:18},{x:420,y:80,label:"Subscription",r:18},{x:80,y:280,label:"Ticket",r:18},{x:440,y:280,label:"Agreement",r:18}].map(function(n, i) {
+                return (
+                  <g key={i}>
+                    <line x1="260" y1="180" x2={n.x} y2={n.y} stroke="var(--line)" strokeWidth="1.5" strokeDasharray="4,3" />
+                    <circle cx={n.x} cy={n.y} r={n.r} fill="var(--panel-2)" stroke="var(--line)" strokeWidth="1.5" />
+                    <text x={n.x} y={n.y + n.r + 14} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9px", fill:"var(--ink-4)" }}>{n.label}</text>
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+        )}
+
+        {tab === "Audit" && (
+          <div className="card" style={{ margin:24 }}>
+            <div className="card-head">Value provenance</div>
+            <div>
+              {auditRows.map(function(r, i) {
+                var confColor = r.conf >= 0.9 ? "var(--green)" : r.conf >= 0.75 ? "var(--gold)" : "var(--coral)";
+                return (
+                  <div key={i} style={{ padding:"14px 18px", borderBottom: i < auditRows.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:16 }}>
+                      <code style={{ fontFamily:"JetBrains Mono", fontSize:12, fontWeight:600, color:"var(--ink)", minWidth:160 }}>{r.prop}</code>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", flex:1 }}>{"from " + r.source + " · " + r.age + " ago"}</span>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, color:confColor }}>{"conf " + r.conf}</span>
+                      {r.rule !== "none" && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-3)" }}>{r.rule}</span>}
+                    </div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)", marginTop:5, marginLeft:176 }}>{"value: " + r.value}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {tab === "Lineage" && (
+          <div className="card" style={{ margin:24 }}>
+            <div className="card-head">Source system contributions</div>
+            <div>
+              {["Salesforce CRM","NetSuite ERP","HubSpot Marketing","Manual / Admin"].map(function(src, i) {
+                var srcProps = props.filter(function(p, pi) { return (pi + i) % 4 === i % 4; });
+                return (
+                  <div key={src} style={{ padding:"16px 18px", borderBottom: i < 3 ? "1px solid var(--line-2)" : "none" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10 }}>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, color:"var(--ink-2)" }}>{src}</span>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{srcProps.length + " fields · last sync 1h ago"}</span>
+                    </div>
+                    <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                      {srcProps.slice(0,5).map(function(p) {
+                        return <span key={p.name} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 8px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{p.name}</span>;
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RecordsView() {
+  var [nodeFilter, setNodeFilter] = React.useState("all");
+  var [selectedRecord, setSelectedRecord] = React.useState(null);
+  var [selectedNode, setSelectedNode] = React.useState(null);
+
+  var entityNodes = NODES.filter(function(n){ return n.type !== "source"; });
+  var allRecords = [];
+  entityNodes.forEach(function(n) {
+    generateRecords(n).forEach(function(r) { allRecords.push(r); });
+  });
+  var visibleRecords = nodeFilter === "all" ? allRecords : allRecords.filter(function(r){ return r.nodeId === nodeFilter; });
+
+  if (selectedRecord && selectedNode) {
+    return <RecordDetailView record={selectedRecord} node={selectedNode} onBack={function(){ setSelectedRecord(null); setSelectedNode(null); }} />;
+  }
+
+  return (
+    <div className="nodes-view">
+      <div className="nv-head">
+        <div className="nv-head-left">
+          <div className="nv-eyebrow">RECORDS</div>
+          <div className="nv-title">Instance data</div>
+        </div>
+        <div className="nv-head-right">
+          <button className="btn-dark">+ Add record</button>
+        </div>
+      </div>
+
+      <div className="nv-chips-row">
+        <div className="nv-chips">
+          <button className={"chip" + (nodeFilter === "all" ? " on" : "")} onClick={function(){ setNodeFilter("all"); }}>
+            All <span className="chip-n">{allRecords.length}</span>
+          </button>
+          {entityNodes.map(function(n) {
+            var count = allRecords.filter(function(r){ return r.nodeId === n.id; }).length;
+            return (
+              <button key={n.id} className={"chip" + (nodeFilter === n.id ? " on" : "")} onClick={function(){ setNodeFilter(n.id); }}>
+                {n.label} <span className="chip-n">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="nv-meta">{visibleRecords.length + " records"}</div>
+      </div>
+
+      <div className="nv-table">
+        <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 2fr 1.2fr 100px 80px", gap:12, padding:"10px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line)", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", alignItems:"center" }}>
+          <div>Record ID</div><div>Node type</div><div>Key values</div><div>Source</div><div>Updated</div><div>Status</div>
+        </div>
+        {visibleRecords.slice(0, 50).map(function(r, i) {
+          var n = NODES.find(function(nd){ return nd.id === r.nodeId; });
+          var c = colorForNode(n);
+          var statusColor = r.status === "active" ? "var(--green)" : r.status === "review" ? "var(--gold)" : "var(--coral)";
+          var props = generateProps(n);
+          var keyVals = props.slice(1,3).map(function(p){ return p.name + ": " + (r[p.name] || "—"); }).join(" · ");
+          return (
+            <div key={r.id}
+              onClick={function(){ setSelectedRecord(r); setSelectedNode(n); }}
+              style={{ display:"grid", gridTemplateColumns:"2fr 1fr 2fr 1.2fr 100px 80px", gap:12, padding:"12px 18px", borderBottom: i < visibleRecords.length-1 ? "1px solid var(--line-2)" : "none", cursor:"pointer", alignItems:"center", transition:"background 80ms" }}
+              onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
+              onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--blue)" }}>{r.id}</div>
+              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <svg width="12" height="12" viewBox="-8 -8 16 16">
+                  {n.type === "agent" ? <polygon points="0,-7 6,3.5 -6,3.5" fill={c.fill} stroke={c.stroke} strokeWidth="1.2"/> : n.type === "source" ? <rect x="-6" y="-6" width="12" height="12" rx="2" fill={c.fill} stroke={c.stroke} strokeWidth="1.2"/> : <circle r="6" fill={c.fill} stroke={c.stroke} strokeWidth="1.2"/>}
+                </svg>
+                <span style={{ fontSize:12.5 }}>{r.nodeType}</span>
+              </div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{keyVals}</div>
+              <div style={{ fontSize:12, color:"var(--ink-3)" }}>{r._source}</div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)" }}>{r._updatedAgo}</div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 7px", borderRadius:4, background:statusColor+"18", color:statusColor, fontWeight:700, textTransform:"uppercase", display:"inline-block" }}>{r.status}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function NodesView({ onSelect, onSwitchToCanvas }) {
   const [catFilter, setCatFilter] = useState("all");
   const [sortBy, setSortBy] = useState("instances");
@@ -6732,6 +7272,8 @@ function App() {
         <GlobalEdgesView />
       ) : tab === "Sources" ? (
         <GlobalSourcesView />
+      ) : tab === "Records" ? (
+        <RecordsView />
       ) : tab !== "Graph" ? (
         <div className="placeholder-view">
           <div className="ph-eyebrow">SCHEMA · {tab.toUpperCase()}</div>
