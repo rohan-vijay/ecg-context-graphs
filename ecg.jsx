@@ -9444,27 +9444,30 @@ function StewardshipTaskDetail({ task, onBack }) {
 
           {/* RIGHT */}
           <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
-            {/* Take Action — compact card above Assignment */}
-            <div className="card" style={{ border:"1px solid " + km.color, background: km.fill, overflow:"hidden" }}>
-              <div className="card-head" style={{ borderBottom:"1px solid " + km.color + "40", background:"transparent" }}>
-                <span style={{ color:km.color, fontWeight:700, letterSpacing:"0.4px", fontFamily:"JetBrains Mono", fontSize:11, textTransform:"uppercase" }}>Take action</span>
-                <span className="card-head-sub" style={{ color:"var(--ink-2)" }}>{suggestions.length + " options"}</span>
+            {/* Take Action — neutral card; primary action is a dark ink button, secondaries are quiet rows */}
+            <div className="card" style={{ border:"1px solid var(--line)", background:"var(--panel)", overflow:"hidden" }}>
+              <div className="card-head card-head-row" style={{ background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)" }}>
+                <span style={{ display:"inline-flex", alignItems:"center", gap:7 }}>
+                  <span style={{ width:6, height:6, borderRadius:"50%", background:km.color }} />
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase" }}>Take action</span>
+                </span>
+                <span className="card-head-sub" style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{suggestions.length + " options"}</span>
               </div>
               <div style={{ display:"flex", flexDirection:"column" }}>
                 {suggestions.map(function(s, i, arr) {
                   var isPrimary = i === 0;
                   return (
                     <button key={i}
-                      style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"12px 14px", border:"none", borderBottom: i < arr.length-1 ? "1px solid " + km.color + "26" : "none", background: isPrimary ? km.color : "transparent", color: isPrimary ? "#fff" : "var(--ink)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", transition:"background 80ms" }}
-                      onMouseEnter={function(e){ if (!isPrimary) e.currentTarget.style.background = "var(--bg-canvas)"; }}
+                      style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"13px 16px", border:"none", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", background: isPrimary ? "var(--ink)" : "transparent", color: isPrimary ? "var(--bg-canvas)" : "var(--ink)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", transition:"background 80ms" }}
+                      onMouseEnter={function(e){ if (!isPrimary) e.currentTarget.style.background = "var(--panel-2)"; }}
                       onMouseLeave={function(e){ if (!isPrimary) e.currentTarget.style.background = "transparent"; }}>
-                      <span style={{ width:22, height:22, borderRadius:"50%", background: isPrimary ? "rgba(255,255,255,0.22)" : km.fill, color: isPrimary ? "#fff" : km.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, flexShrink:0, marginTop:1 }}>→</span>
+                      <span style={{ width:22, height:22, borderRadius:5, background: isPrimary ? "rgba(255,255,255,0.14)" : "var(--chip)", color: isPrimary ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, flexShrink:0, marginTop:1 }}>→</span>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                          <span style={{ fontSize:13, fontWeight:600, color: isPrimary ? "#fff" : "var(--ink)" }}>{s.lbl}</span>
-                          {isPrimary && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, letterSpacing:"0.5px", color:"rgba(255,255,255,0.85)", fontWeight:700, padding:"1px 5px", borderRadius:3, background:"rgba(255,255,255,0.18)" }}>RECOMMENDED</span>}
+                        <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+                          <span style={{ fontSize:13, fontWeight:600, color: isPrimary ? "var(--bg-canvas)" : "var(--ink)" }}>{s.lbl}</span>
+                          {isPrimary && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, letterSpacing:"0.5px", color:"var(--bg-canvas)", fontWeight:700, padding:"1.5px 6px", borderRadius:3, background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.18)" }}>RECOMMENDED</span>}
                         </div>
-                        <div style={{ fontSize:11, color: isPrimary ? "rgba(255,255,255,0.85)" : "var(--ink-3)", lineHeight:1.45, marginTop:3 }}>{s.desc}</div>
+                        <div style={{ fontSize:11.5, color: isPrimary ? "rgba(255,255,255,0.78)" : "var(--ink-3)", lineHeight:1.5, marginTop:3 }}>{s.desc}</div>
                       </div>
                     </button>
                   );
