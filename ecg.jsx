@@ -4335,72 +4335,90 @@ function SourcesPane({ sources, node, onLinkSource }) {
 // 6 categories × 5 steps × 3-column layout
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ─── 4 canonical MDM rule categories, each with sub-types ───
+// Validation, Data Quality, Matching, Survivorship.
+// Everything else (SLO, drift, compute, infer, access, identity-resolution flavours)
+// is nested as a sub-type under the appropriate parent category.
+
 var RULE_CATEGORIES = [
   {
-    id: "validate",
-    label: "Validate",
+    id: "validation",
+    label: "Validation",
     code: "VAL",
     color: "var(--blue)",
     fill: "var(--blue-fill)",
     icon: "✓",
-    title: "Field validation",
-    desc: "Constrain what values are accepted at write time. Block, quarantine, or flag bad data.",
-    example: "arr_usd ≥ 0 · email matches /^.+@.+\\..+$/ · tier IN (SMB, MM, ENT)"
+    title: "Validation rules",
+    purpose: "Gate at write & read time",
+    desc: "Constrain what values are accepted when a record is written. Also gates sensitive fields behind required roles at read time.",
+    examples: ["arr_usd ≥ 0", "email matches /^.+@.+\\..+$/", "tier IN (SMB, MM, ENT)", "fields(pii) → role:acct_admin"],
+    types: [
+      { id: "required",   label: "Required field",   desc: "Field must not be null on any record",          formId: "validate", preset: { vOp: "is_not_null" } },
+      { id: "format",     label: "Format / pattern", desc: "Value must match a regex or format",            formId: "validate", preset: { vOp: "regex" } },
+      { id: "range",      label: "Numeric range",    desc: "Numeric or date value within bounds",           formId: "validate", preset: { vOp: "between" } },
+      { id: "enum",       label: "Enum membership",  desc: "Value must be from an allowed set",             formId: "validate", preset: { vOp: "in" } },
+      { id: "comparison", label: "Comparison",       desc: "Compare against a constant or another field",   formId: "validate", preset: { vOp: "eq" } },
+      { id: "access",     label: "Access policy",    desc: "Gate sensitive fields behind required roles",   formId: "access" }
+    ]
   },
   {
-    id: "match",
-    label: "Match",
-    code: "MTC",
+    id: "quality",
+    label: "Data quality",
+    code: "DQ",
+    color: "var(--green)",
+    fill: "var(--green-fill)",
+    icon: "◷",
+    title: "Data quality rules",
+    purpose: "Monitor, enrich, alert",
+    desc: "Monitor data-quality dimensions over time, detect drift, and materialise derived or inferred values.",
+    examples: ["p95(ingest_lag) < 30m over 24h", "fill_rate(domain) > 95%", "tier := bucket(arr_usd)", "drift_score(industry) < 0.15"],
+    types: [
+      { id: "freshness",    label: "Freshness SLO",      desc: "p95 ingest lag below a target",          formId: "slo",     preset: { sloDim: "freshness" } },
+      { id: "completeness", label: "Completeness SLO",   desc: "Non-null fill rate over a field",        formId: "slo",     preset: { sloDim: "completeness" } },
+      { id: "validity",     label: "Validity SLO",       desc: "% records passing validation rules",     formId: "slo",     preset: { sloDim: "validity" } },
+      { id: "uniqueness",   label: "Uniqueness SLO",     desc: "Distinct value ratio for a field",       formId: "slo",     preset: { sloDim: "uniqueness" } },
+      { id: "drift",        label: "Drift detection",    desc: "Distribution shift vs baseline",         formId: "slo",     preset: { sloDim: "drift" } },
+      { id: "compute",      label: "Computed property",  desc: "Derive a property from formula or agent",formId: "compute", preset: { cMode: "property" } },
+      { id: "infer",        label: "Inferred edge",      desc: "Materialise an edge from a Cypher pattern", formId: "compute", preset: { cMode: "edge" } }
+    ]
+  },
+  {
+    id: "matching",
+    label: "Matching",
+    code: "MAT",
     color: "var(--purple)",
     fill: "var(--purple-fill)",
     icon: "≈",
-    title: "Identity resolution",
-    desc: "Recognise when two records refer to the same real-world entity across source systems.",
-    example: "domain exact + name fuzzy → auto-merge ≥ 0.92 · review band 0.75–0.92"
+    title: "Matching rules",
+    purpose: "Resolve identity across sources",
+    desc: "Recognise when two records refer to the same real-world entity. Identity resolution and deduplication.",
+    examples: ["tax_id exact → auto-merge", "domain + fuzzy(name)×0.4 → review", "common_neighbor(:HAS_SUBSCRIPTION) → score"],
+    types: [
+      { id: "deterministic", label: "Deterministic",        desc: "Exact key match (tax_id, domain, sso_id)",     formId: "match", preset: { signals: [{ strategy: "exact", weight: 1.0 }], mAuto: "1.00", mReview: "0.99" } },
+      { id: "probabilistic", label: "Probabilistic",        desc: "Multi-signal weighted fuzzy scoring",          formId: "match" },
+      { id: "topology",      label: "Common neighbour",     desc: "Match by shared graph topology",               formId: "match", preset: { signals: [{ strategy: "common_neighbor", weight: 1.0 }] } },
+      { id: "embedding",     label: "Embedding similarity", desc: "Vector / semantic similarity on text fields",  formId: "match", preset: { signals: [{ strategy: "embedding", weight: 1.0 }] } }
+    ]
   },
   {
-    id: "survive",
-    label: "Survive",
+    id: "survivorship",
+    label: "Survivorship",
     code: "SUR",
     color: "var(--coral)",
     fill: "var(--coral-fill)",
     icon: "★",
-    title: "Survivorship",
-    desc: "Decide which source's value wins for a property when multiple sources disagree.",
-    example: "arr_usd: NetSuite > Salesforce > HubSpot · domain: most-complete value wins"
-  },
-  {
-    id: "compute",
-    label: "Compute",
-    code: "CMP",
-    color: "var(--green)",
-    fill: "var(--green-fill)",
-    icon: "ƒ",
-    title: "Derived value",
-    desc: "Materialise a property or edge from other properties, agent output, or graph patterns.",
-    example: "tier := bucket(arr_usd, {SMB,MM,ENT}) · risk_score := agent:cust_health"
-  },
-  {
-    id: "slo",
-    label: "SLO",
-    code: "SLO",
-    color: "var(--gold)",
-    fill: "var(--gold-fill)",
-    icon: "◷",
-    title: "Service-level objective",
-    desc: "Monitor data-quality dimensions over time and alert when a target is breached.",
-    example: "p95(ingest_lag) < 30m over 24h · fill_rate(domain) > 95% over 7d"
-  },
-  {
-    id: "access",
-    label: "Access",
-    code: "ACC",
-    color: "var(--ink-2)",
-    fill: "var(--chip)",
-    icon: "⊕",
-    title: "Access & masking",
-    desc: "Gate PII fields behind required roles. Define masking strategy for non-privileged readers.",
-    example: "fields(pii=true) → require role:acct_admin · tax_id → hash for non-priv"
+    title: "Survivorship rules",
+    purpose: "Pick the winning value",
+    desc: "Decide which source's value wins for a property when multiple sources disagree. Builds the golden record.",
+    examples: ["arr_usd ← NetSuite > Salesforce > HubSpot", "domain ← most_complete wins", "company_name ← most_recent"],
+    types: [
+      { id: "source_priority", label: "Source priority",     desc: "Pick from a ranked list of source systems", formId: "survive", preset: { sStrategy: "source_priority" } },
+      { id: "recency",         label: "Most recent",         desc: "Newest updated_at wins",                    formId: "survive", preset: { sStrategy: "recency" } },
+      { id: "completeness",    label: "Most complete",       desc: "Longest non-null value wins",               formId: "survive", preset: { sStrategy: "completeness" } },
+      { id: "trust",           label: "Trust tier",          desc: "Sources classified by trust level",         formId: "survive", preset: { sStrategy: "source_trust" } },
+      { id: "confidence",      label: "Confidence weighted", desc: "Blend values by per-value confidence",      formId: "survive", preset: { sStrategy: "confidence_weighted" } },
+      { id: "manual",          label: "Manual override",     desc: "Steward edit always wins",                  formId: "survive", preset: { sStrategy: "manual_override" } }
+    ]
   }
 ];
 
@@ -4410,6 +4428,7 @@ function NewRuleFlow({ node, onClose }) {
 
   var [step, setStep] = useState(1);
   var [cat, setCat] = useState(null);
+  var [subType, setSubType] = useState(null);
 
   // VALIDATE state
   var [vField, setVField] = useState(firstField);
@@ -4466,6 +4485,34 @@ function NewRuleFlow({ node, onClose }) {
   var [activate, setActivate] = useState(true);
 
   var catDef = RULE_CATEGORIES.find(function(c){ return c.id === cat; });
+  var subTypeDef = catDef && subType ? catDef.types.find(function(t){ return t.id === subType; }) : null;
+  // formId determines which form body to render (validate, slo, compute, match, survive, access)
+  var formId = subTypeDef ? subTypeDef.formId : null;
+
+  // When category changes, default sub-type to the first one in that category and apply its preset
+  function pickCategory(newCatId) {
+    var newCatDef = RULE_CATEGORIES.find(function(c){ return c.id === newCatId; });
+    if (!newCatDef) return;
+    setCat(newCatId);
+    var firstType = newCatDef.types[0];
+    setSubType(firstType.id);
+    if (firstType.preset) applyPreset(firstType.preset);
+  }
+  // When sub-type changes within a category, just apply its preset
+  function pickSubType(newSubTypeId) {
+    setSubType(newSubTypeId);
+    var t = catDef && catDef.types.find(function(x){ return x.id === newSubTypeId; });
+    if (t && t.preset) applyPreset(t.preset);
+  }
+  function applyPreset(p) {
+    if (p.vOp !== undefined) setVOp(p.vOp);
+    if (p.sloDim !== undefined) setSloDim(p.sloDim);
+    if (p.cMode !== undefined) setCMode(p.cMode);
+    if (p.sStrategy !== undefined) setSStrategy(p.sStrategy);
+    if (p.mAuto !== undefined) setMAuto(p.mAuto);
+    if (p.mReview !== undefined) setMReview(p.mReview);
+    if (p.signals) setMSignals(p.signals.map(function(s){ return { field: firstField, strategy: s.strategy, weight: s.weight }; }));
+  }
 
   function opsForField(name) {
     var p = props.find(function(p){ return p.name === name; }) || {};
@@ -4478,7 +4525,7 @@ function NewRuleFlow({ node, onClose }) {
   }
 
   function buildExpression() {
-    if (cat === "validate") {
+    if (formId === "validate") {
       var v = vVal || "?";
       var quoted = isNaN(parseFloat(v)) ? "'" + v + "'" : v;
       var map = {
@@ -4494,18 +4541,18 @@ function NewRuleFlow({ node, onClose }) {
       };
       return map[vOp] || (vField + " " + vOp + " ?");
     }
-    if (cat === "match") {
+    if (formId === "match") {
       var parts = mSignals.map(function(s){ return s.strategy + "(" + s.field + ")×" + s.weight; });
       return "score = " + parts.join(" + ") + "\n  auto_merge ≥ " + mAuto + "\n  review " + mReview + "–" + mAuto;
     }
-    if (cat === "survive") {
+    if (formId === "survive") {
       return sProperty + " ← " + sStrategy + (sStrategy === "source_priority" ? "(" + sSources.join(" > ") + ")" : "") + (sMinConf ? "\n  min_confidence = " + sMinConf : "");
     }
-    if (cat === "compute") {
+    if (formId === "compute") {
       if (cMode === "property") return (cOutName || "?") + " : " + cOutType + " := " + (cExpr || "?") + "\n  recompute " + cRecompute;
       return ":" + (cEdgeLabel || "?") + " → " + (cEdgeTarget || "?") + " WHEN " + (cExpr || "?");
     }
-    if (cat === "slo") {
+    if (formId === "slo") {
       var dim = sloDim === "freshness" ? "p95(ingest_lag) < " + sloTarget + sloUnit
         : sloDim === "completeness" ? "fill_rate(" + sloField + ") > " + sloTarget + "%"
         : sloDim === "validity" ? "pass_rate(" + sloField + ") > " + sloTarget + "%"
@@ -4513,7 +4560,7 @@ function NewRuleFlow({ node, onClose }) {
         : "drift_score(" + sloField + ") < " + sloTarget;
       return dim + " over " + sloWindow + " → alert " + sloAlertChan;
     }
-    if (cat === "access") {
+    if (formId === "access") {
       var scope = accScope === "pii" ? "fields(pii=true)" : accScope === "all" ? "fields(*)" : accSpecific;
       return scope + " → require role:(" + accRoles.join(" OR ") + ")\n  on deny: " + accMasking;
     }
@@ -4523,12 +4570,12 @@ function NewRuleFlow({ node, onClose }) {
   function canContinue() {
     if (step === 1) return !!cat;
     if (step === 2) {
-      if (cat === "validate") return !!vField && !!vOp && (vOp === "is_not_null" || vOp === "is_true" || vOp === "is_false" || !!vVal);
-      if (cat === "match")    return mSignals.length > 0 && mSignals.every(function(s){ return s.field && s.weight > 0; });
-      if (cat === "survive")  return !!sProperty && !!sStrategy;
-      if (cat === "compute")  return cMode === "property" ? (!!cOutName && !!cExpr) : (!!cEdgeLabel && !!cEdgeTarget);
-      if (cat === "slo")      return !!sloTarget;
-      if (cat === "access")   return accRoles.length > 0;
+      if (formId === "validate") return !!vField && !!vOp && (vOp === "is_not_null" || vOp === "is_true" || vOp === "is_false" || !!vVal);
+      if (formId === "match")    return mSignals.length > 0 && mSignals.every(function(s){ return s.field && s.weight > 0; });
+      if (formId === "survive")  return !!sProperty && !!sStrategy;
+      if (formId === "compute")  return cMode === "property" ? (!!cOutName && !!cExpr) : (!!cEdgeLabel && !!cEdgeTarget);
+      if (formId === "slo")      return !!sloTarget;
+      if (formId === "access")   return accRoles.length > 0;
     }
     return true;
   }
@@ -4540,11 +4587,11 @@ function NewRuleFlow({ node, onClose }) {
   var STEP_HINTS = {
     1: "What kind of rule are you creating? Each category addresses a distinct concern in the enterprise graph.",
     2: catDef ? "Configure the " + catDef.label.toLowerCase() + " logic. " + (
-        cat === "validate" ? "Pick a field, an operator, and the value to enforce."
-      : cat === "match"    ? "Add signal fields, pick a comparison strategy per field, and assign weights that sum to 1.0."
-      : cat === "survive"  ? "Pick the property to govern and the arbitration strategy when sources disagree."
-      : cat === "compute"  ? "Define the output, the expression, and when to recompute."
-      : cat === "slo"      ? "Pick a data-quality dimension, the target, and the monitoring window."
+        formId === "validate" ? "Pick a field, an operator, and the value to enforce."
+      : formId === "match"    ? "Add signal fields, pick a comparison strategy per field, and assign weights that sum to 1.0."
+      : formId === "survive"  ? "Pick the property to govern and the arbitration strategy when sources disagree."
+      : formId === "compute"  ? "Define the output, the expression, and when to recompute."
+      : formId === "slo"      ? "Pick a data-quality dimension, the target, and the monitoring window."
       :                      "Pick the access scope, required roles, and the masking strategy on denial."
     ) : "",
     3: "Where does this rule apply and when does it run?",
@@ -4575,7 +4622,7 @@ function NewRuleFlow({ node, onClose }) {
           <div>
             <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>{node.label + " · NEW RULE"}</div>
             <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:2 }}>
-              <span style={{ fontFamily:"Instrument Serif", fontSize:18, color:"var(--ink)" }}>{catDef ? catDef.title : "Choose a category"}</span>
+              <span style={{ fontFamily:"Instrument Serif", fontSize:18, color:"var(--ink)" }}>{catDef ? (subTypeDef ? catDef.label + " · " + subTypeDef.label : catDef.title) : "Choose a category"}</span>
               {catDef && <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:catDef.fill, color:catDef.color, fontWeight:700, letterSpacing:"0.5px" }}>{catDef.code}</span>}
             </div>
           </div>
@@ -4595,10 +4642,10 @@ function NewRuleFlow({ node, onClose }) {
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400, lineHeight:1.2 }}>{name}</div>
                     <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, lineHeight:1.3 }}>
-                      {n === 1 && (catDef ? catDef.label : "Pick rule type")}
-                      {n === 2 && (catDef ? "Logic" : "—")}
+                      {n === 1 && (catDef ? catDef.label : "Pick category")}
+                      {n === 2 && (subTypeDef ? subTypeDef.label : (catDef ? "Pick type" : "—"))}
                       {n === 3 && (scopeMode === "all" ? "All " + node.label : "Filtered")}
-                      {n === 4 && (cat === "validate" || cat === "slo" || cat === "access" ? severity : (cat === "match" ? mAction : "—"))}
+                      {n === 4 && (formId === "validate" || formId === "slo" || formId === "access" ? severity : (formId === "match" ? mAction : "—"))}
                       {n === 5 && (activate ? "Activate" : "Draft")}
                     </div>
                   </div>
@@ -4624,31 +4671,65 @@ function NewRuleFlow({ node, onClose }) {
             </div>
 
             {step === 1 && (
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, maxWidth:760 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, maxWidth:880 }}>
                 {RULE_CATEGORIES.map(function(c) {
                   var isOn = cat === c.id;
                   return (
-                    <button key={c.id} onClick={function(){ setCat(c.id); }}
-                      style={{ textAlign:"left", padding:"16px 18px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--bg-canvas)" : "var(--panel)", borderRadius:10, cursor:"pointer", fontFamily:"inherit", transition:"border-color 80ms", display:"flex", flexDirection:"column", gap:10, boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 8%, transparent)" : "none" }}>
+                    <button key={c.id} onClick={function(){ pickCategory(c.id); }}
+                      style={{ textAlign:"left", padding:"18px 20px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--bg-canvas)" : "var(--panel)", borderRadius:10, cursor:"pointer", fontFamily:"inherit", transition:"border-color 80ms", display:"flex", flexDirection:"column", gap:12, boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 8%, transparent)" : "none" }}>
                       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                          <span style={{ width:30, height:30, borderRadius:7, background:c.fill, color:c.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700 }}>{c.icon}</span>
+                        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                          <span style={{ width:34, height:34, borderRadius:8, background:c.fill, color:c.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, fontWeight:700 }}>{c.icon}</span>
                           <div>
-                            <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{c.title}</div>
-                            <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:c.color, letterSpacing:"0.6px", fontWeight:700, marginTop:2 }}>{c.code}</div>
+                            <div style={{ fontSize:15, fontWeight:600, color:"var(--ink)" }}>{c.title}</div>
+                            <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:3 }}>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:c.color, letterSpacing:"0.6px", fontWeight:700 }}>{c.code}</span>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", letterSpacing:"0.4px" }}>{"· " + c.purpose}</span>
+                            </div>
                           </div>
                         </div>
                         {isOn && <span style={{ color:"var(--green)", fontFamily:"JetBrains Mono", fontWeight:700 }}>✓</span>}
                       </div>
-                      <div style={{ fontSize:12, color:"var(--ink-3)", lineHeight:1.5 }}>{c.desc}</div>
-                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", lineHeight:1.5, padding:"7px 9px", borderRadius:5, background:"var(--panel-2)", border:"1px dashed var(--line-2)" }}>{c.example}</div>
+                      <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5 }}>{c.desc}</div>
+                      <div style={{ borderTop:"1px dashed var(--line-2)", paddingTop:10 }}>
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:6 }}>{c.types.length + " RULE TYPES"}</div>
+                        <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+                          {c.types.map(function(t){
+                            return <span key={t.id} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{t.label}</span>;
+                          })}
+                        </div>
+                      </div>
                     </button>
                   );
                 })}
               </div>
             )}
 
-            {step === 2 && cat === "validate" && (
+            {/* SUB-TYPE PICKER — shown in Step 2 once a category is chosen */}
+            {step === 2 && catDef && (
+              <div style={{ marginBottom:24, padding:"14px 16px", border:"1px solid var(--line-2)", borderRadius:9, background:"var(--panel)" }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                  <div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>RULE TYPE WITHIN {catDef.label.toUpperCase()}</div>
+                    {subTypeDef && <div style={{ fontSize:11.5, color:"var(--ink-3)", marginTop:3 }}>{subTypeDef.desc}</div>}
+                  </div>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:catDef.color, padding:"2px 7px", borderRadius:4, background:catDef.fill, fontWeight:700, letterSpacing:"0.5px" }}>{catDef.code}</span>
+                </div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                  {catDef.types.map(function(t) {
+                    var isOn = subType === t.id;
+                    return (
+                      <button key={t.id} onClick={function(){ pickSubType(t.id); }}
+                        style={{ padding:"6px 11px", borderRadius:6, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"inherit", fontSize:11.5, cursor:"pointer", fontWeight: isOn ? 500 : 400 }}>
+                        {t.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {step === 2 && formId === "validate" && (
               <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:620 }}>
                 <div>
                   <label style={lbl}>FIELD</label>
@@ -4682,7 +4763,7 @@ function NewRuleFlow({ node, onClose }) {
               </div>
             )}
 
-            {step === 2 && cat === "match" && (
+            {step === 2 && formId === "match" && (
               <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:760 }}>
                 <div>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
@@ -4732,7 +4813,7 @@ function NewRuleFlow({ node, onClose }) {
               </div>
             )}
 
-            {step === 2 && cat === "survive" && (
+            {step === 2 && formId === "survive" && (
               <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:640 }}>
                 <div>
                   <label style={lbl}>PROPERTY THIS RULE GOVERNS</label>
@@ -4778,7 +4859,7 @@ function NewRuleFlow({ node, onClose }) {
               </div>
             )}
 
-            {step === 2 && cat === "compute" && (
+            {step === 2 && formId === "compute" && (
               <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:680 }}>
                 <div>
                   <label style={lbl}>OUTPUT</label>
@@ -4841,7 +4922,7 @@ function NewRuleFlow({ node, onClose }) {
               </div>
             )}
 
-            {step === 2 && cat === "slo" && (
+            {step === 2 && formId === "slo" && (
               <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:640 }}>
                 <div>
                   <label style={lbl}>DIMENSION</label>
@@ -4892,7 +4973,7 @@ function NewRuleFlow({ node, onClose }) {
               </div>
             )}
 
-            {step === 2 && cat === "access" && (
+            {step === 2 && formId === "access" && (
               <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:640 }}>
                 <div>
                   <label style={lbl}>SCOPE</label>
@@ -4966,7 +5047,7 @@ function NewRuleFlow({ node, onClose }) {
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
                     {[{ id:"on_write", l:"On write", d:"Evaluate at insert / update time" },{ id:"on_read", l:"On read", d:"Evaluate when a query touches it" },{ id:"scheduled", l:"Scheduled", d:"Run on a cron schedule" }].map(function(o){
                       var isOn = trigger === o.id;
-                      var disabled = (cat === "match" || cat === "slo") && o.id === "on_read";
+                      var disabled = (formId === "match" || formId === "slo") && o.id === "on_read";
                       return (
                         <button key={o.id} disabled={disabled} onClick={function(){ if (!disabled) setTrigger(o.id); }}
                           style={{ textAlign:"left", padding:"10px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1, fontFamily:"inherit" }}>
@@ -4992,13 +5073,13 @@ function NewRuleFlow({ node, onClose }) {
               <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:680 }}>
                 <div>
                   <label style={lbl}>RULE TITLE</label>
-                  <input value={title} onChange={function(e){ setTitle(e.target.value); }} placeholder={"e.g. " + (cat === "validate" ? "ARR is non-negative" : cat === "match" ? "Domain-based company match" : cat === "survive" ? "ARR: ERP wins" : cat === "compute" ? "Tier from ARR bands" : cat === "slo" ? "Freshness under 30m" : "PII gated on acct_admin")} style={inp} />
+                  <input value={title} onChange={function(e){ setTitle(e.target.value); }} placeholder={"e.g. " + (formId === "validate" ? "ARR is non-negative" : formId === "match" ? "Domain-based company match" : formId === "survive" ? "ARR: ERP wins" : formId === "compute" ? "Tier from ARR bands" : formId === "slo" ? "Freshness under 30m" : "PII gated on acct_admin")} style={inp} />
                 </div>
                 <div>
                   <label style={lbl}>DESCRIPTION (OPTIONAL)</label>
                   <textarea value={description} onChange={function(e){ setDescription(e.target.value); }} rows={2} placeholder="One-line summary visible in audit logs" style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.5 })} />
                 </div>
-                {(cat === "validate" || cat === "slo" || cat === "access") && (
+                {(formId === "validate" || formId === "slo" || formId === "access") && (
                   <div>
                     <label style={lbl}>SEVERITY</label>
                     <div style={{ display:"flex", gap:6 }}>
@@ -5011,7 +5092,7 @@ function NewRuleFlow({ node, onClose }) {
                   </div>
                 )}
                 <div>
-                  <label style={lbl}>{cat === "match" ? "WHEN A MATCH IS FOUND" : cat === "compute" ? "WHEN COMPUTE FAILS" : cat === "survive" ? "WHEN SOURCES CONFLICT" : "ON VIOLATION (multi-select)"}</label>
+                  <label style={lbl}>{formId === "match" ? "WHEN A MATCH IS FOUND" : formId === "compute" ? "WHEN COMPUTE FAILS" : formId === "survive" ? "WHEN SOURCES CONFLICT" : "ON VIOLATION (multi-select)"}</label>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                     {[
                       { id:"block", l:"Block the write", applies:["validate"] },
@@ -5059,7 +5140,7 @@ function NewRuleFlow({ node, onClose }) {
                     <span style={{ color:"var(--ink)" }}>{scopeMode === "all" ? "All " + node.label + " records" : "Filtered: " + scopeFilter}</span>
                     <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>TRIGGER</span>
                     <span style={{ color:"var(--ink)" }}>{trigger === "on_write" ? "On write" : trigger === "on_read" ? "On read" : "Scheduled (" + schedule + ")"}</span>
-                    {(cat === "validate" || cat === "slo" || cat === "access") && (
+                    {(formId === "validate" || formId === "slo" || formId === "access") && (
                       <>
                         <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>SEVERITY</span>
                         <span style={{ color: severity === "ERROR" ? "var(--coral)" : severity === "WARN" ? "var(--gold)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontWeight:700, fontSize:11 }}>{severity}</span>
@@ -5072,7 +5153,7 @@ function NewRuleFlow({ node, onClose }) {
                 <div style={{ border:"1px solid var(--line-2)", borderRadius:10, padding:16, background:"var(--panel-2)" }}>
                   <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:10 }}>APPROVERS</div>
                   <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-                    {[{ who:"data-platform owner", status:"required", sev:"var(--coral)" },{ who:"security@", status: cat === "access" ? "required" : "advisory", sev: cat === "access" ? "var(--coral)" : "var(--ink-3)" },{ who:"node steward (you)", status:"auto-approved", sev:"var(--green)" }].map(function(a, i){
+                    {[{ who:"data-platform owner", status:"required", sev:"var(--coral)" },{ who:"security@", status: formId === "access" ? "required" : "advisory", sev: formId === "access" ? "var(--coral)" : "var(--ink-3)" },{ who:"node steward (you)", status:"auto-approved", sev:"var(--green)" }].map(function(a, i){
                       return <div key={i} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"5px 0", borderBottom: i < 2 ? "1px dashed var(--line-2)" : "none" }}>
                         <span style={{ color:"var(--ink-2)" }}>{a.who}</span>
                         <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:a.sev, fontWeight:600 }}>{a.status}</span>
@@ -5116,9 +5197,9 @@ function NewRuleFlow({ node, onClose }) {
               <div style={{ padding:"12px 14px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:6 }}>
                 <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1 }}>{(node.instancesN || 0).toLocaleString()}</div>
                 <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4 }}>{node.label + " records evaluated"}</div>
-                {cat === "validate" && vField && <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--gold)", marginTop:8 }}>~{Math.round((node.instancesN || 0) * 0.014).toLocaleString()} likely violations</div>}
-                {cat === "match" && <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--gold)", marginTop:8 }}>~{Math.round((node.instancesN || 0) * 0.003).toLocaleString()} review candidates</div>}
-                {cat === "slo" && <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--green)", marginTop:8 }}>currently within target</div>}
+                {formId === "validate" && vField && <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--gold)", marginTop:8 }}>~{Math.round((node.instancesN || 0) * 0.014).toLocaleString()} likely violations</div>}
+                {formId === "match" && <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--gold)", marginTop:8 }}>~{Math.round((node.instancesN || 0) * 0.003).toLocaleString()} review candidates</div>}
+                {formId === "slo" && <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--green)", marginTop:8 }}>currently within target</div>}
               </div>
             </div>
           </div>
