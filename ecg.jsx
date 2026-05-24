@@ -2674,12 +2674,27 @@ function PropertiesPane({ node, properties }) {
 
 function EdgesPane({ node, outgoing, incoming }) {
   const [flowOpen, setFlowOpen] = useState(false);
+  const [dirFilter, setDirFilter] = useState("all");
   const AddEdgeFlow = window.AddEdgeFlow;
-  const rows = [...outgoing.map(e => ({ ...e, dir: "out" })), ...incoming.map(e => ({ ...e, dir: "in" }))];
+  const allRows = [...outgoing.map(e => ({ ...e, dir: "out" })), ...incoming.map(e => ({ ...e, dir: "in" }))];
+  const rows = dirFilter === "all" ? allRows : allRows.filter(e => e.dir === dirFilter);
+  const tabs = [
+    { id: "all", label: "All",      count: allRows.length },
+    { id: "out", label: "Outgoing", count: outgoing.length },
+    { id: "in",  label: "Incoming", count: incoming.length },
+  ];
   return (
     <div className="card">
       <div className="card-head card-head-row">
-        <div>Edges <span className="card-head-sub">{outgoing.length} outgoing · {incoming.length} incoming</span></div>
+        <div style={{ display:"flex", gap:4 }}>
+          {tabs.map(t => (
+            <button key={t.id}
+              className={"chip" + (dirFilter === t.id ? " on" : "")}
+              onClick={() => setDirFilter(t.id)}>
+              {t.label} <span className="chip-n">{t.count}</span>
+            </button>
+          ))}
+        </div>
         <div className="card-head-actions">
           <button className="btn-dark" onClick={() => setFlowOpen(true)}>+ Add edge type</button>
         </div>
