@@ -6976,11 +6976,40 @@ function generateRelatedRecords(record, node) {
 function RecordDetailView({ record, node, onBack }) {
   var [tab, setTab] = React.useState("Overview");
   var [expandedProp, setExpandedProp] = React.useState(null);
+  var [twoHop, setTwoHop] = React.useState(true);
   var props = generateProps(node);
   var c = colorForNode(node);
   var tabs = ["Overview", "Graph", "Provenance", "Activity"];
   var related = generateRelatedRecords(record, node);
   var totalRelated = related.reduce(function(s, r){ return s + r.count; }, 0);
+
+  // Build 2-hop neighbors: for each 1-hop related node, walk one more edge
+  function buildSecondHop(parentRec, parentNodeObj, parentSeed) {
+    var outE = EDGES.filter(function(e){ return e.s === parentNodeObj.id; }).slice(0, 2);
+    var inE  = EDGES.filter(function(e){ return e.t === parentNodeObj.id; }).slice(0, 1);
+    var childEdges = outE.concat(inE);
+    var children = [];
+    childEdges.slice(0, 2).forEach(function(e, ci) {
+      var isOut = e.s === parentNodeObj.id;
+      var grandId = isOut ? e.t : e.s;
+      var grand = NODES.find(function(n){ return n.id === grandId; });
+      if (!grand || grand.id === node.id) return; // skip self-loop back to root
+      var seed = parentSeed + ci * 41 + 17;
+      var gp = generateProps(grand);
+      var nameProp = gp.find(function(p){ return p.name === "name" || p.name === "title" || p.name === "company_name"; }) || gp[1] || gp[0];
+      children.push({
+        id: grand.id + "-" + (100000 + Math.abs(seed * 1597) % 899999),
+        label: grand.label,
+        nodeId: grand.id,
+        keyName: nameProp ? nameProp.name : "id",
+        keyValue: nameProp ? generateValueForProp(nameProp, seed) : "—",
+        edgeLabel: e.label,
+        kind: e.kind,
+        isOut: isOut
+      });
+    });
+    return children;
+  }
 
   // Build provenance for every property
   var provenance = props.map(function(p, i) {
@@ -7223,35 +7252,86 @@ function RecordDetailView({ record, node, onBack }) {
           <div style={{ display:"grid", gridTemplateColumns:"minmax(0, 2fr) minmax(300px, 1fr)", gap:18 }}>
             <div className="card" style={{ padding:0, overflow:"hidden" }}>
               <div className="card-head card-head-row">
-                <span>Relationship graph <span className="card-head-sub">center node = this record · edges show real values</span></span>
+                <span>Relationship graph <span className="card-head-sub">center = this record · {twoHop ? "showing 2-hop neighbourhood" : "showing direct neighbours"}</span></span>
                 <div style={{ display:"flex", gap:6 }}>
-                  <button className="btn-ghost" style={{ fontSize:11.5 }}>Expand 2-hop</button>
+                  <button className="btn-ghost" style={{ fontSize:11.5 }} onClick={function(){ setTwoHop(function(v){ return !v; }); }}>{twoHop ? "Collapse to 1-hop" : "Expand 2-hop"}</button>
                   <button className="btn-ghost" style={{ fontSize:11.5 }}>Reset</button>
                 </div>
               </div>
-              <div style={{ background:"var(--bg-canvas)", padding:"24px" }}>
+              <div style={{ background:"var(--bg-canvas)", padding:"20px" }}>
                 {(function() {
-                  var W = 720, H = 460, cx = W/2, cy = H/2;
-                  // Flatten related into a single list of nodes around center
+                  var W = twoHop ? 980 : 720;
+                  var H = twoHop ? 620 : 460;
+                  var cx = W/2, cy = H/2;
+                  var r1 = twoHop ? 160 : 170;
+                  var r2 = 290;
+
+                  // 1-hop nodes
                   var flat = [];
                   related.forEach(function(r, ri) {
-                    r.related.forEach(function(rr, ii) {
+                    r.related.forEach(function(rr) {
                       flat.push({ rr: rr, parentIdx: ri, isOut: r.isOut });
                     });
                   });
-                  var n = flat.length || 1;
-                  var radius = 170;
+                  var nFlat = flat.length || 1;
                   flat.forEach(function(f, i) {
-                    var a = (i / n) * Math.PI * 2 - Math.PI / 2;
-                    f.x = cx + Math.cos(a) * radius;
-                    f.y = cy + Math.sin(a) * radius;
+                    var a = (i / nFlat) * Math.PI * 2 - Math.PI / 2;
+                    f.x = cx + Math.cos(a) * r1;
+                    f.y = cy + Math.sin(a) * r1;
+                    f.angle = a;
                   });
+
+                  // 2-hop nodes (children of each 1-hop)
+                  var hops = [];
+                  if (twoHop) {
+                    flat.forEach(function(f, i) {
+                      var parentNodeObj = NODES.find(function(n){ return n.id === f.rr.nodeId; });
+                      if (!parentNodeObj) return;
+                      var pSeed = f.rr.id.length * 31 + i * 13;
+                      var kids = buildSecondHop(f.rr, parentNodeObj, pSeed);
+                      var k = kids.length;
+                      var arcSpan = Math.PI / 7;
+                      kids.forEach(function(kid, ki) {
+                        var offset = k > 1 ? ((ki - (k-1)/2) / (k-1)) * arcSpan : 0;
+                        var ang = f.angle + offset;
+                        hops.push({
+                          rr: kid,
+                          parent: f,
+                          x: cx + Math.cos(ang) * r2,
+                          y: cy + Math.sin(ang) * r2
+                        });
+                      });
+                    });
+                  }
+
                   return (
                     <svg width="100%" height={H} viewBox={"0 0 "+W+" "+H} style={{ display:"block" }}>
                       <defs>
                         <marker id="rec-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-3)"/></marker>
+                        <marker id="rec-arrow-2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-4)"/></marker>
                       </defs>
-                      {/* Edges */}
+
+                      {/* 2-hop edges (drawn first, behind) */}
+                      {hops.map(function(h, i) {
+                        var px = h.parent.x, py = h.parent.y;
+                        var dx = h.x - px, dy = h.y - py;
+                        var len = Math.sqrt(dx*dx + dy*dy);
+                        var ux = dx/len, uy = dy/len;
+                        var sx = px + ux * 16, sy = py + uy * 16;
+                        var tx = h.x - ux * 13, ty = h.y - uy * 13;
+                        var midX = (sx + tx) / 2, midY = (sy + ty) / 2;
+                        return (
+                          <g key={"h-e"+i}>
+                            <line x1={sx} y1={sy} x2={tx} y2={ty} stroke="var(--ink-4)" strokeWidth="0.9" opacity="0.45" strokeDasharray={h.rr.kind === "inferred" ? "3,2" : "none"} markerEnd="url(#rec-arrow-2)" />
+                            <g transform={"translate("+midX+" "+midY+")"} style={{ pointerEvents:"none" }}>
+                              <rect x="-32" y="-7" width="64" height="13" rx="2.5" fill="var(--panel)" stroke="var(--line-2)" />
+                              <text textAnchor="middle" y="2.5" style={{ fontFamily:"JetBrains Mono", fontSize:"8px", fill:"var(--ink-3)" }}>{":"+h.rr.edgeLabel}</text>
+                            </g>
+                          </g>
+                        );
+                      })}
+
+                      {/* 1-hop edges */}
                       {flat.map(function(f, i) {
                         var midX = (cx + f.x) / 2, midY = (cy + f.y) / 2;
                         var dx = f.x - cx, dy = f.y - cy;
@@ -7261,7 +7341,7 @@ function RecordDetailView({ record, node, onBack }) {
                         var tx = f.x - ux * 18, ty = f.y - uy * 18;
                         return (
                           <g key={"e"+i}>
-                            <line x1={sx} y1={sy} x2={tx} y2={ty} stroke="var(--ink-3)" strokeWidth="1.2" opacity="0.55" strokeDasharray={f.rr.kind === "inferred" ? "4,3" : "none"} markerEnd="url(#rec-arrow)" />
+                            <line x1={sx} y1={sy} x2={tx} y2={ty} stroke="var(--ink-3)" strokeWidth="1.3" opacity="0.6" strokeDasharray={f.rr.kind === "inferred" ? "4,3" : "none"} markerEnd="url(#rec-arrow)" />
                             <g transform={"translate("+midX+" "+midY+")"} style={{ pointerEvents:"none" }}>
                               <rect x="-44" y="-9" width="88" height="18" rx="3" fill="var(--panel)" stroke="var(--line-2)" />
                               <text textAnchor="middle" y="3.5" style={{ fontFamily:"JetBrains Mono", fontSize:"9.5px", fill:"var(--ink-2)" }}>{":"+f.rr.edgeLabel}</text>
@@ -7269,13 +7349,28 @@ function RecordDetailView({ record, node, onBack }) {
                           </g>
                         );
                       })}
-                      {/* Center node (this record) */}
+
+                      {/* 2-hop nodes */}
+                      {hops.map(function(h, i) {
+                        var nodeObj = NODES.find(function(n){ return n.id === h.rr.nodeId; });
+                        var col = colorForNode(nodeObj);
+                        return (
+                          <g key={"h-n"+i} opacity="0.92">
+                            <circle cx={h.x} cy={h.y} r="13" fill={col.fill} stroke={col.stroke} strokeWidth="1.2" />
+                            <text x={h.x} y={h.y - 19} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"7.5px", fontWeight:600, fill:"var(--ink-2)" }}>{h.rr.id}</text>
+                            <text x={h.x} y={h.y + 23} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"7.5px", fill:"var(--ink-4)" }}>{String(h.rr.keyValue).slice(0, 18)}</text>
+                          </g>
+                        );
+                      })}
+
+                      {/* Center node */}
                       <g>
                         <circle cx={cx} cy={cy} r="28" fill={c.fill} stroke={c.stroke} strokeWidth="2.5" />
                         <text x={cx} y={cy - 38} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"10.5px", fontWeight:600, fill:"var(--ink)" }}>{record.id}</text>
                         <text x={cx} y={cy + 48} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9.5px", fill:"var(--ink-3)" }}>{record[Object.keys(record).find(function(k){ return k === "name" || k === "company_name" || k === "title"; })] || node.label}</text>
                       </g>
-                      {/* Related nodes */}
+
+                      {/* 1-hop nodes (drawn last so they sit on top) */}
                       {flat.map(function(f, i) {
                         var otherCol = colorForNode(NODES.find(function(n){ return n.id === f.rr.nodeId; }));
                         return (
