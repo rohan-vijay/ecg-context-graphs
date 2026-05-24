@@ -8018,6 +8018,8 @@ function StewardshipView() {
   var [sevFilter, setSevFilter] = useState("all");
   var [search, setSearch] = useState("");
   var [assigneeDropOpen, setAssigneeDropOpen] = useState(false);
+  var [statusDropOpen, setStatusDropOpen] = useState(false);
+  var [kindDropOpen, setKindDropOpen] = useState(false);
 
   // ME — pretend morgan.lee is the logged-in user
   var ME = "morgan.lee";
@@ -8122,67 +8124,118 @@ function StewardshipView() {
         })}
       </div>
 
-      {/* TOOLBAR */}
-      <div style={{ padding:"0 40px 14px", display:"flex", flexDirection:"column", gap:10 }}>
-        {/* Status row */}
-        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-          {STATUS_FILTERS.map(function(f){
-            var isOn = statusFilter === f.id;
-            return <button key={f.id} onClick={function(){ setStatusFilter(f.id); }}
-              className={"chip" + (isOn ? " on" : "")}
-              style={isOn ? { background:"var(--ink)", color:"var(--bg-canvas)", borderColor:"var(--ink)" } : {}}>
-              {f.label} <span className="chip-n" style={isOn ? { color:"var(--ink-4)" } : {}}>{f.count}</span>
-            </button>;
-          })}
-        </div>
-        {/* Kind row + filters */}
-        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
-          <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-            {KIND_FILTERS.map(function(f){
-              var isOn = kindFilter === f.id;
-              var m = f.id !== "all" ? kindMeta(f.id) : null;
-              return <button key={f.id} onClick={function(){ setKindFilter(f.id); }}
-                className={"chip" + (isOn ? " on" : "")}
-                style={isOn && m ? { background: m.fill, color: m.color, borderColor: m.color } : {}}>
-                {m && <span style={{ marginRight:4, fontWeight:700 }}>{m.icon}</span>}
-                {f.label} <span className="chip-n">{f.count}</span>
-              </button>;
-            })}
-          </div>
-          <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
-            <select value={sevFilter} onChange={function(e){ setSevFilter(e.target.value); }} style={{ border:"1px solid var(--line)", borderRadius:7, padding:"6px 10px", fontFamily:"inherit", fontSize:12, background:"var(--panel)", color:"var(--ink)", cursor:"pointer" }}>
-              <option value="all">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
-            </select>
+      {/* TOOLBAR — two primary dropdowns + supporting filters */}
+      <div style={{ padding:"0 40px 14px", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+        {/* STATUS dropdown */}
+        {(function(){
+          var cur = STATUS_FILTERS.find(function(f){ return f.id === statusFilter; }) || STATUS_FILTERS[0];
+          return (
             <div style={{ position:"relative" }}>
-              <button onClick={function(){ setAssigneeDropOpen(function(o){ return !o; }); }}
-                style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", border:"1px solid var(--line)", borderRadius:7, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", fontSize:12, color:"var(--ink)" }}>
-                {assigneeFilter === "all" ? "All assignees" : <AssigneeChip id={assigneeFilter} size={16} />}
-                <span style={{ color:"var(--ink-3)", marginLeft:2 }}>▾</span>
+              <button onClick={function(){ setStatusDropOpen(function(o){ return !o; }); setKindDropOpen(false); setAssigneeDropOpen(false); }}
+                style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 14px", border:"1px solid var(--line)", borderRadius:8, background: statusDropOpen ? "var(--chip)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", fontSize:13, color:"var(--ink)", minWidth:220 }}>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>STATUS</span>
+                <span style={{ fontWeight:500 }}>{cur.label}</span>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginLeft:"auto" }}>{cur.count}</span>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style={{ transition:"transform 120ms", transform: statusDropOpen ? "rotate(180deg)" : "none" }}><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
-              {assigneeDropOpen && (
+              {statusDropOpen && (
                 <>
-                  <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setAssigneeDropOpen(false); }} />
-                  <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 8px 28px rgba(0,0,0,0.14)", padding:6, minWidth:220 }}>
-                    <button onClick={function(){ setAssigneeFilter("all"); setAssigneeDropOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 8px", borderRadius:5, border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, color:"var(--ink)", textAlign:"left" }}>All assignees <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{tasks.length}</span></button>
-                    <div style={{ height:1, background:"var(--line-2)", margin:"4px 0" }} />
-                    {STEWARDS.map(function(s){
-                      var n = tasks.filter(function(t){ return t.assignee === s.id; }).length;
-                      return <button key={s.id} onClick={function(){ setAssigneeFilter(s.id); setAssigneeDropOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 8px", borderRadius:5, border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, color:"var(--ink)", textAlign:"left" }}>
-                        <span style={{ width:18, height:18, borderRadius:"50%", background:s.color, color:"#fff", fontFamily:"JetBrains Mono", fontSize:9, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center" }}>{s.initials}</span>
-                        <span>{s.id}</span>
-                        <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{n}</span>
-                      </button>;
+                  <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setStatusDropOpen(false); }} />
+                  <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 8px 28px rgba(0,0,0,0.14)", padding:6, minWidth:260 }}>
+                    {STATUS_FILTERS.map(function(f){
+                      var isOn = statusFilter === f.id;
+                      return (
+                        <button key={f.id} onClick={function(){ setStatusFilter(f.id); setStatusDropOpen(false); }}
+                          style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 10px", borderRadius:5, border:"none", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, color:"var(--ink)", textAlign:"left", fontWeight: isOn ? 600 : 400 }}
+                          onMouseEnter={function(e){ if (!isOn) e.currentTarget.style.background = "var(--bg-canvas)"; }}
+                          onMouseLeave={function(e){ if (!isOn) e.currentTarget.style.background = "transparent"; }}>
+                          <span>{f.label}</span>
+                          <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{f.count}</span>
+                          {isOn && <span style={{ fontFamily:"JetBrains Mono", color:"var(--ink)", fontSize:11 }}>✓</span>}
+                        </button>
+                      );
                     })}
                   </div>
                 </>
               )}
             </div>
+          );
+        })()}
+
+        {/* KIND dropdown */}
+        {(function(){
+          var cur = KIND_FILTERS.find(function(f){ return f.id === kindFilter; }) || KIND_FILTERS[0];
+          var curMeta = cur.id !== "all" ? kindMeta(cur.id) : null;
+          return (
             <div style={{ position:"relative" }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"var(--ink-3)", pointerEvents:"none" }}>
-                <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-              </svg>
-              <input value={search} onChange={function(e){ setSearch(e.target.value); }} placeholder="Search tasks…" style={{ padding:"6px 10px 6px 30px", border:"1px solid var(--line)", borderRadius:7, fontFamily:"inherit", fontSize:12, background:"var(--panel)", color:"var(--ink)", outline:"none", width:200 }} />
+              <button onClick={function(){ setKindDropOpen(function(o){ return !o; }); setStatusDropOpen(false); setAssigneeDropOpen(false); }}
+                style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 14px", border:"1px solid var(--line)", borderRadius:8, background: kindDropOpen ? "var(--chip)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", fontSize:13, color:"var(--ink)", minWidth:220 }}>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>KIND</span>
+                {curMeta && <span style={{ width:18, height:18, borderRadius:4, background:curMeta.fill, color:curMeta.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0 }}>{curMeta.icon}</span>}
+                <span style={{ fontWeight:500 }}>{cur.label}</span>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginLeft:"auto" }}>{cur.count}</span>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style={{ transition:"transform 120ms", transform: kindDropOpen ? "rotate(180deg)" : "none" }}><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              {kindDropOpen && (
+                <>
+                  <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setKindDropOpen(false); }} />
+                  <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 8px 28px rgba(0,0,0,0.14)", padding:6, minWidth:260 }}>
+                    {KIND_FILTERS.map(function(f){
+                      var isOn = kindFilter === f.id;
+                      var m = f.id !== "all" ? kindMeta(f.id) : null;
+                      return (
+                        <button key={f.id} onClick={function(){ setKindFilter(f.id); setKindDropOpen(false); }}
+                          style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 10px", borderRadius:5, border:"none", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, color:"var(--ink)", textAlign:"left", fontWeight: isOn ? 600 : 400 }}
+                          onMouseEnter={function(e){ if (!isOn) e.currentTarget.style.background = "var(--bg-canvas)"; }}
+                          onMouseLeave={function(e){ if (!isOn) e.currentTarget.style.background = "transparent"; }}>
+                          {m ? <span style={{ width:18, height:18, borderRadius:4, background:m.fill, color:m.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0 }}>{m.icon}</span> : <span style={{ width:18, flexShrink:0 }} />}
+                          <span>{f.label}</span>
+                          <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{f.count}</span>
+                          {isOn && <span style={{ fontFamily:"JetBrains Mono", color:"var(--ink)", fontSize:11 }}>✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
+          );
+        })()}
+
+        {/* Supporting filters on the right */}
+        <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
+          <select value={sevFilter} onChange={function(e){ setSevFilter(e.target.value); }} style={{ border:"1px solid var(--line)", borderRadius:7, padding:"6px 10px", fontFamily:"inherit", fontSize:12, background:"var(--panel)", color:"var(--ink)", cursor:"pointer" }}>
+            <option value="all">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+          </select>
+          <div style={{ position:"relative" }}>
+            <button onClick={function(){ setAssigneeDropOpen(function(o){ return !o; }); setStatusDropOpen(false); setKindDropOpen(false); }}
+              style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", border:"1px solid var(--line)", borderRadius:7, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", fontSize:12, color:"var(--ink)" }}>
+              {assigneeFilter === "all" ? "All assignees" : <AssigneeChip id={assigneeFilter} size={16} />}
+              <span style={{ color:"var(--ink-3)", marginLeft:2 }}>▾</span>
+            </button>
+            {assigneeDropOpen && (
+              <>
+                <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setAssigneeDropOpen(false); }} />
+                <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 8px 28px rgba(0,0,0,0.14)", padding:6, minWidth:220 }}>
+                  <button onClick={function(){ setAssigneeFilter("all"); setAssigneeDropOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 8px", borderRadius:5, border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, color:"var(--ink)", textAlign:"left" }}>All assignees <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{tasks.length}</span></button>
+                  <div style={{ height:1, background:"var(--line-2)", margin:"4px 0" }} />
+                  {STEWARDS.map(function(s){
+                    var n = tasks.filter(function(t){ return t.assignee === s.id; }).length;
+                    return <button key={s.id} onClick={function(){ setAssigneeFilter(s.id); setAssigneeDropOpen(false); }} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 8px", borderRadius:5, border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, color:"var(--ink)", textAlign:"left" }}>
+                      <span style={{ width:18, height:18, borderRadius:"50%", background:s.color, color:"#fff", fontFamily:"JetBrains Mono", fontSize:9, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center" }}>{s.initials}</span>
+                      <span>{s.id}</span>
+                      <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{n}</span>
+                    </button>;
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+          <div style={{ position:"relative" }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"var(--ink-3)", pointerEvents:"none" }}>
+              <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+            <input value={search} onChange={function(e){ setSearch(e.target.value); }} placeholder="Search tasks…" style={{ padding:"6px 10px 6px 30px", border:"1px solid var(--line)", borderRadius:7, fontFamily:"inherit", fontSize:12, background:"var(--panel)", color:"var(--ink)", outline:"none", width:200 }} />
           </div>
         </div>
       </div>
