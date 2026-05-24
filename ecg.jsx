@@ -10914,6 +10914,19 @@ var ENTITY_META = {
 };
 function entityMeta(name){ return ENTITY_META[name] || { desc:"Custom entity — you can describe it once the graph is live.", props:[] }; }
 
+// Map a CDM module label → the canonical folder URL in microsoft/CDM.
+var CDM_REPO_BASE = "https://github.com/microsoft/CDM/tree/master/schemaDocuments";
+function cdmLink(module) {
+  if (!module) return CDM_REPO_BASE;
+  if (/Human Resources/i.test(module))       return CDM_REPO_BASE + "/core/operationsCommon/Entities/HumanResources/HRM";
+  if (/Marketing/i.test(module))             return CDM_REPO_BASE + "/core/applicationCommon/foundationCommon/crmCommon";
+  if (/CRM Sales|Sales/i.test(module))       return CDM_REPO_BASE + "/core/applicationCommon/foundationCommon/crmCommon/sales";
+  if (/Service Accelerator|Service/i.test(module)) return CDM_REPO_BASE + "/core/applicationCommon/foundationCommon/crmCommon/service";
+  if (/Financial Services|Banking/i.test(module))  return CDM_REPO_BASE + "/core/applicationCommon/foundationCommon/crmCommon/accelerators/financialServices/banking";
+  if (/Healthcare|FHIR/i.test(module))       return CDM_REPO_BASE + "/core/applicationCommon/foundationCommon/crmCommon/accelerators/healthCare/electronicMedicalRecords";
+  return CDM_REPO_BASE;
+}
+
 // Curated starting points — each suggests entities and edges for an industry+function combo
 var GRAPH_STARTING_POINTS = [
   // ── Enterprise-wide / cross-functional ─────────────────────────────────
@@ -11071,20 +11084,18 @@ function NewGraphFlow({ onClose, onCreate }) {
 
   var stepNames = ["Industry Department", "Template", "Entities", "Governance", "Review"];
 
-  // Filter + rank suggestions. Either-axis match counts; perfect matches rank highest.
-  // Industry "any" is treated as a partial industry match.
+  // Industry is the HARD filter when picked (Healthcare must never see Retail-only
+  // blueprints). When only a function is picked, function is the hard filter.
+  // Function affects RANKING (not visibility) when industry is the active filter.
   var suggestions = GRAPH_STARTING_POINTS.map(function(sp){
     var indMatch  = industry ? sp.industry.indexOf(industry) >= 0 : false;
     var funcMatch = func     ? sp.fn.indexOf(func)           >= 0 : false;
     var indAny    = sp.industry.indexOf("any") >= 0;
-    // Industry side OK when: nothing picked, exact match, or it's cross-industry (any).
-    var indOk     = !industry || indMatch || indAny;
-    // Function side OK when: nothing picked or it's an exact match.
-    var funcOk    = !func     || funcMatch;
-    // Show when nothing picked OR one of the two axes is OK (loose — better recall).
-    var include   = (!industry && !func) || indOk || funcOk;
-    // Score: exact industry > exact function > cross-industry > generic.
-    var score     = (indMatch ? 3 : 0) + (funcMatch ? 2 : 0) + (indAny && industry ? 0.5 : 0);
+    var include;
+    if (!industry && !func)      include = true;
+    else if (industry)           include = indMatch || indAny;        // industry rules
+    else                         include = funcMatch;                 // only function picked
+    var score = (indMatch ? 3 : 0) + (funcMatch ? 2 : 0) + (indAny && industry ? 0.5 : 0);
     return include ? Object.assign({}, sp, { _score: score, _exactInd: indMatch, _exactFn: funcMatch }) : null;
   }).filter(Boolean).sort(function(a, b){ return b._score - a._score; });
 
@@ -11421,10 +11432,16 @@ function NewGraphFlow({ onClose, onCreate }) {
                           <span style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{sp.name}</span>
                           <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px", borderRadius:3, background:"transparent", color:matchColor, border:"1px solid " + matchColor, fontWeight:700, letterSpacing:"0.5px" }}>{matchTag}</span>
                           {sp.cdm && (
-                            <span title={"Aligned to Microsoft Common Data Model — " + sp.cdm} style={{ display:"inline-flex", alignItems:"center", gap:4, fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px 1.5px 5px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700, letterSpacing:"0.5px" }}>
-                              <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor"><rect x="0" y="0" width="4" height="4"/><rect x="6" y="0" width="4" height="4"/><rect x="0" y="6" width="4" height="4"/><rect x="6" y="6" width="4" height="4"/></svg>
+                            <a href={cdmLink(sp.cdm)} target="_blank" rel="noopener noreferrer"
+                              title={"View Microsoft CDM — " + sp.cdm + " (opens GitHub)"}
+                              onClick={function(e){ e.stopPropagation(); }}
+                              style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 7px 1.5px 6px", borderRadius:3, background:"transparent", color:"var(--ink-3)", border:"1px solid var(--line-2)", fontWeight:600, letterSpacing:"0.4px", textDecoration:"none", cursor:"pointer", transition:"color 100ms, border-color 100ms" }}
+                              onMouseEnter={function(e){ e.currentTarget.style.color = "var(--ink)"; e.currentTarget.style.borderColor = "var(--ink-3)"; }}
+                              onMouseLeave={function(e){ e.currentTarget.style.color = "var(--ink-3)"; e.currentTarget.style.borderColor = "var(--line-2)"; }}>
+                              <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor" style={{ opacity:0.7 }}><rect x="0" y="0" width="4" height="4"/><rect x="6" y="0" width="4" height="4"/><rect x="0" y="6" width="4" height="4"/><rect x="6" y="6" width="4" height="4"/></svg>
                               {"CDM · " + sp.cdm}
-                            </span>
+                              <svg width="7" height="7" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" style={{ opacity:0.5, marginLeft:1 }}><path d="M3 1 H9 V7 M9 1 L1 9"/></svg>
+                            </a>
                           )}
                         </div>
                         <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5, marginTop:5, maxWidth:620 }}>{sp.desc}</div>
@@ -11462,10 +11479,15 @@ function NewGraphFlow({ onClose, onCreate }) {
                     <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:3 }}>
                       <span style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{picked ? picked.name : "Blank canvas"}</span>
                       {picked && picked.cdm && (
-                        <span title={"Aligned to Microsoft Common Data Model — " + picked.cdm} style={{ display:"inline-flex", alignItems:"center", gap:4, fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px 1.5px 5px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700, letterSpacing:"0.5px" }}>
-                          <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor"><rect x="0" y="0" width="4" height="4"/><rect x="6" y="0" width="4" height="4"/><rect x="0" y="6" width="4" height="4"/><rect x="6" y="6" width="4" height="4"/></svg>
+                        <a href={cdmLink(picked.cdm)} target="_blank" rel="noopener noreferrer"
+                          title={"View Microsoft CDM — " + picked.cdm + " (opens GitHub)"}
+                          style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 7px 1.5px 6px", borderRadius:3, background:"transparent", color:"var(--ink-3)", border:"1px solid var(--line-2)", fontWeight:600, letterSpacing:"0.4px", textDecoration:"none", cursor:"pointer", transition:"color 100ms, border-color 100ms" }}
+                          onMouseEnter={function(e){ e.currentTarget.style.color = "var(--ink)"; e.currentTarget.style.borderColor = "var(--ink-3)"; }}
+                          onMouseLeave={function(e){ e.currentTarget.style.color = "var(--ink-3)"; e.currentTarget.style.borderColor = "var(--line-2)"; }}>
+                          <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor" style={{ opacity:0.7 }}><rect x="0" y="0" width="4" height="4"/><rect x="6" y="0" width="4" height="4"/><rect x="0" y="6" width="4" height="4"/><rect x="6" y="6" width="4" height="4"/></svg>
                           {"CDM · " + picked.cdm}
-                        </span>
+                          <svg width="7" height="7" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" style={{ opacity:0.5, marginLeft:1 }}><path d="M3 1 H9 V7 M9 1 L1 9"/></svg>
+                        </a>
                       )}
                     </div>
                   </div>
@@ -12385,45 +12407,110 @@ function GraphLandingView({ onOpenGraph }) {
         </div>
       </div>
 
-      {/* GRID — max 3 columns, centred container with margin once wider than ~1400 */}
+      {/* GRID — hero (ECG full-row) + 3-column grid for the rest. Container centred under 1400px. */}
       {view === "grid" ? (
-        <div style={{ padding:"24px clamp(20px, 4vw, 64px) 40px", maxWidth:1400, margin:"0 auto", width:"100%", boxSizing:"border-box", display:"grid", gridTemplateColumns:"repeat(3, minmax(0, 1fr))", gap:20 }}>
-          {filtered.map(function(g, idx){
-            var hColor = healthColor(g.health);
+        <div style={{ padding:"24px clamp(20px, 4vw, 64px) 40px", maxWidth:1400, margin:"0 auto", width:"100%", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:20 }}>
+          {(function(){
+            var hero = filtered.find(function(g){ return g.id === "ecg"; });
+            var rest = filtered.filter(function(g){ return g.id !== "ecg"; });
             return (
-              <div key={g.id}
-                onClick={function(){ onOpenGraph(g.id); }}
-                style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:14, overflow:"hidden", cursor:"pointer", transition:"transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease" }}
-                onMouseEnter={function(e){ e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 10px 28px rgba(40,40,20,0.08)"; e.currentTarget.style.borderColor = "var(--ink-3)"; }}
-                onMouseLeave={function(e){ e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = "var(--line)"; }}>
-                {/* Mini viz — full-bleed, gradient flows edge to edge */}
-                <div style={{ position:"relative", height:180, overflow:"hidden" }}>
-                  <GraphMiniViz seed={g.id.charCodeAt(0) * 977 + g.id.length * 31} color={g.color} />
-                  <span style={{ position:"absolute", top:12, left:14, zIndex:2, fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"1.1px", color:"var(--ink-3)", padding:"3px 8px", background:"var(--panel)", border:"1px solid var(--line-2)", borderRadius:4 }}>{g.cat}</span>
-                  <span style={{ position:"absolute", top:12, right:14, zIndex:2, fontFamily:"JetBrains Mono", fontSize:11, color: hColor, display:"flex", alignItems:"center", gap:5, fontWeight:600, padding:"3px 8px", background:"var(--panel)", border:"1px solid var(--line-2)", borderRadius:4 }}>
-                    <span style={{ width:6, height:6, borderRadius:"50%", background: hColor }} />{g.health + "%"}
-                  </span>
+              <>
+                {hero && (function(){
+                  var g = hero;
+                  var hColor = healthColor(g.health);
+                  var seed = g.id.charCodeAt(0) * 977 + g.id.length * 31;
+                  return (
+                    <div key={g.id} onClick={function(){ onOpenGraph(g.id); }}
+                      style={{ background:"var(--panel)", border:"1px solid var(--ink-3)", borderRadius:16, overflow:"hidden", cursor:"pointer", transition:"transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease", display:"grid", gridTemplateColumns:"1.35fr 1fr", minHeight:280, boxShadow:"0 1px 0 var(--line-2), 0 4px 16px rgba(40,40,20,0.05)" }}
+                      onMouseEnter={function(e){ e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 12px 32px rgba(40,40,20,0.10)"; e.currentTarget.style.borderColor = "var(--ink)"; }}
+                      onMouseLeave={function(e){ e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 1px 0 var(--line-2), 0 4px 16px rgba(40,40,20,0.05)"; e.currentTarget.style.borderColor = "var(--ink-3)"; }}>
+                      {/* Hero viz on the LEFT */}
+                      <div style={{ position:"relative", overflow:"hidden", borderRight:"1px solid var(--line-2)" }}>
+                        <GraphMiniViz seed={seed} color={g.color} />
+                        <span style={{ position:"absolute", top:14, left:16, zIndex:2, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"1.1px", color:"var(--ink)", padding:"4px 9px", background:"var(--bg-canvas)", border:"1px solid var(--ink-3)", borderRadius:4, fontWeight:700 }}>
+                          <span style={{ width:5, height:5, background:"var(--ink)" }} />
+                          PRIMARY · ENTERPRISE-WIDE
+                        </span>
+                        <span style={{ position:"absolute", top:14, right:16, zIndex:2, fontFamily:"JetBrains Mono", fontSize:11, color: hColor, display:"flex", alignItems:"center", gap:5, fontWeight:600, padding:"4px 9px", background:"var(--panel)", border:"1px solid var(--line-2)", borderRadius:4 }}>
+                          <span style={{ width:6, height:6, borderRadius:"50%", background: hColor }} />{g.health + "%"}
+                        </span>
+                      </div>
+                      {/* Body on the RIGHT — richer than the standard card */}
+                      <div style={{ padding:"26px 30px 24px", display:"flex", flexDirection:"column", justifyContent:"space-between" }}>
+                        <div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:6 }}>{g.cat} · {g.owner}</div>
+                          <div style={{ fontFamily:"Instrument Serif", fontSize:32, color:"var(--ink)", lineHeight:1.05, marginBottom:10, letterSpacing:"-0.3px" }}>{g.name}</div>
+                          <div style={{ fontSize:13.5, color:"var(--ink-2)", lineHeight:1.55, marginBottom:18, maxWidth:480 }}>{g.desc}  Every other graph in this workspace draws from it — Customer, Sales, Support, Finance and beyond.</div>
+                        </div>
+                        <div>
+                          <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:18, paddingTop:16, borderTop:"1px dashed var(--line-2)" }}>
+                            {[
+                              { k:"NODES",   v: g.nodes.toLocaleString() },
+                              { k:"EDGES",   v: g.edges.toLocaleString() },
+                              { k:"AGENTS",  v: g.agents.toString() },
+                              { k:"SOURCES", v: "12" }
+                            ].map(function(it, i){
+                              return <div key={i}>
+                                <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>{it.k}</div>
+                                <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", marginTop:3, lineHeight:1 }}>{it.v}</div>
+                              </div>;
+                            })}
+                          </div>
+                          <div style={{ marginTop:14, display:"flex", alignItems:"center", justifyContent:"space-between", gap:14, fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>
+                            <span style={{ display:"flex", alignItems:"center", gap:6 }}>
+                              <span style={{ width:6, height:6, borderRadius:"50%", background:"var(--green)" }} />
+                              Synced {g.synced}
+                            </span>
+                            <span style={{ display:"inline-flex", alignItems:"center", gap:6, color:"var(--ink-2)", fontWeight:500 }}>
+                              Open workspace
+                              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6 H9 M6 3 L9 6 L6 9" /></svg>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(3, minmax(0, 1fr))", gap:20 }}>
+                  {rest.map(function(g, idx){
+                    var hColor = healthColor(g.health);
+                    return (
+                      <div key={g.id}
+                        onClick={function(){ onOpenGraph(g.id); }}
+                        style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:14, overflow:"hidden", cursor:"pointer", transition:"transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease" }}
+                        onMouseEnter={function(e){ e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 10px 28px rgba(40,40,20,0.08)"; e.currentTarget.style.borderColor = "var(--ink-3)"; }}
+                        onMouseLeave={function(e){ e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = "var(--line)"; }}>
+                        <div style={{ position:"relative", height:180, overflow:"hidden" }}>
+                          <GraphMiniViz seed={g.id.charCodeAt(0) * 977 + g.id.length * 31} color={g.color} />
+                          <span style={{ position:"absolute", top:12, left:14, zIndex:2, fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"1.1px", color:"var(--ink-3)", padding:"3px 8px", background:"var(--panel)", border:"1px solid var(--line-2)", borderRadius:4 }}>{g.cat}</span>
+                          <span style={{ position:"absolute", top:12, right:14, zIndex:2, fontFamily:"JetBrains Mono", fontSize:11, color: hColor, display:"flex", alignItems:"center", gap:5, fontWeight:600, padding:"3px 8px", background:"var(--panel)", border:"1px solid var(--line-2)", borderRadius:4 }}>
+                            <span style={{ width:6, height:6, borderRadius:"50%", background: hColor }} />{g.health + "%"}
+                          </span>
+                        </div>
+                        <div style={{ padding:"18px 22px 18px" }}>
+                          <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", lineHeight:1.15, marginBottom:8 }}>{g.name}</div>
+                          <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.55, marginBottom:14, minHeight:36, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{g.desc}</div>
+                          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14, paddingTop:12, borderTop:"1px dashed var(--line-2)" }}>
+                            {[{ k:"NODES", v: g.nodes.toLocaleString() },{ k:"EDGES", v: g.edges.toLocaleString() },{ k:"AGENTS", v: g.agents.toString() }].map(function(it, i){
+                              return <div key={i}>
+                                <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>{it.k}</div>
+                                <div style={{ fontFamily:"Instrument Serif", fontSize:17, color:"var(--ink)", marginTop:2, lineHeight:1 }}>{it.v}</div>
+                              </div>;
+                            })}
+                          </div>
+                          <div style={{ marginTop:12, display:"flex", alignItems:"center", gap:6, fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>
+                            <span style={{ width:6, height:6, borderRadius:"50%", background:"var(--green)" }} />
+                            <span>Synced {g.synced}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                {/* Body */}
-                <div style={{ padding:"18px 22px 18px" }}>
-                  <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", lineHeight:1.15, marginBottom:8 }}>{g.name}</div>
-                  <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.55, marginBottom:14, minHeight:36, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{g.desc}</div>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14, paddingTop:12, borderTop:"1px dashed var(--line-2)" }}>
-                    {[{ k:"NODES", v: g.nodes.toLocaleString() },{ k:"EDGES", v: g.edges.toLocaleString() },{ k:"AGENTS", v: g.agents.toString() }].map(function(it, i){
-                      return <div key={i}>
-                        <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>{it.k}</div>
-                        <div style={{ fontFamily:"Instrument Serif", fontSize:17, color:"var(--ink)", marginTop:2, lineHeight:1 }}>{it.v}</div>
-                      </div>;
-                    })}
-                  </div>
-                  <div style={{ marginTop:12, display:"flex", alignItems:"center", gap:6, fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>
-                    <span style={{ width:6, height:6, borderRadius:"50%", background:"var(--green)" }} />
-                    <span>Synced {g.synced}</span>
-                  </div>
-                </div>
-              </div>
+              </>
             );
-          })}
+          })()}
         </div>
       ) : (
         // LIST VIEW
