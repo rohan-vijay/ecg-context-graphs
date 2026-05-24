@@ -2062,9 +2062,11 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
   const [tab, setTab] = useState("Overview");
   const [editOpen, setEditOpen] = useState(false);
   const [violationRule, setViolationRule] = useState(null);
+  const [srcLinkOpen, setSrcLinkOpen] = useState(false);
   if (!node) return null;
   if (editOpen) return <EditSchemaView node={node} properties={generateProps(node)} onClose={() => setEditOpen(false)} />;
   if (violationRule) return <ViolationDetailView rule={violationRule} node={node} onClose={() => setViolationRule(null)} />;
+  if (srcLinkOpen) return <LinkSourceFlow node={node} onClose={() => setSrcLinkOpen(false)} />;
 
   const c = colorForNode(node);
   const properties = generateProps(node);
@@ -2203,7 +2205,7 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
         {tab === "Overview"   && <OverviewPane node={node} properties={properties} sources={sources} rules={rules} consumers={consumers} activity={activity} issues={issues} outgoing={outgoing} incoming={incoming} />}
         {tab === "Properties" && <PropertiesPane node={node} properties={properties} />}
         {tab === "Edges"      && <EdgesPane node={node} outgoing={outgoing} incoming={incoming} />}
-        {tab === "Sources"    && <SourcesPane sources={sources} node={node} />}
+        {tab === "Sources"    && <SourcesPane sources={sources} node={node} onLinkSource={() => setSrcLinkOpen(true)} />}
         {tab === "Rules"      && <RulesPane rules={rules} node={node} onViolationClick={setViolationRule} />}
         {tab === "Quality"    && <QualityPane node={node} properties={properties} />}
         {tab === "Access"     && <AccessPane node={node} properties={properties} />}
@@ -2640,14 +2642,583 @@ function EdgesPane({ node, outgoing, incoming }) {
   );
 }
 
-function SourcesPane({ sources, node }) {
-  const [srcFlowOpen, setSrcFlowOpen] = useState(false);
+// ─── LINK SOURCE FLOW ────────────────────────────────────────────────────────
+
+function LinkSourceFlow({ node, onClose }) {
+  const [step, setStep]             = useState(1);
+  const [paradigm, setParadigm]     = useState(null);   // "structured" | "unstructured"
+  const [connector, setConnector]   = useState(null);
+  const [approach, setApproach]     = useState(null);   // "table"|"sql"|"template"|"prompt"
+  const [selectedTable, setSelectedTable] = useState("");
+  const [sqlQuery, setSqlQuery]     = useState("SELECT\n  id,\n  name,\n  arr_usd,\n  domain,\n  industry\nFROM accounts\nWHERE is_active = true");
+  const [template, setTemplate]     = useState(null);
+  const [promptText, setPromptText] = useState("");
+  const [docPath, setDocPath]       = useState("");
+  const [schedule, setSchedule]     = useState("hourly");
+  const [saved, setSaved]           = useState(false);
+
+  const STRUCTURED = [
+    { id:"snowflake",  name:"Snowflake",   ch:"❄",  color:"#29b5e8", desc:"Data warehouse"    },
+    { id:"databricks", name:"Databricks",  ch:"◈",  color:"#ff3621", desc:"Lakehouse"          },
+    { id:"bigquery",   name:"BigQuery",    ch:"B",  color:"#4285f4", desc:"Google analytics DW"},
+    { id:"postgres",   name:"PostgreSQL",  ch:"pg", color:"#336791", desc:"Relational DB"      },
+    { id:"salesforce", name:"Salesforce",  ch:"S",  color:"#1798c1", desc:"CRM"                },
+    { id:"hubspot",    name:"HubSpot",     ch:"H",  color:"#ff7a59", desc:"Marketing CRM"      },
+    { id:"netsuite",   name:"NetSuite",    ch:"N",  color:"#b8923a", desc:"ERP"                },
+    { id:"mysql",      name:"MySQL",       ch:"M",  color:"#00758f", desc:"Relational DB"      },
+  ];
+  const UNSTRUCTURED = [
+    { id:"sharepoint", name:"SharePoint",  ch:"SP", color:"#038387", desc:"Microsoft docs"     },
+    { id:"gdrive",     name:"Google Drive",ch:"G",  color:"#4285f4", desc:"Google Workspace"   },
+    { id:"confluence", name:"Confluence",  ch:"C",  color:"#172b4d", desc:"Atlassian wiki"     },
+    { id:"notion",     name:"Notion",      ch:"N",  color:"#555",    desc:"Connected workspace"},
+    { id:"onedrive",   name:"OneDrive",    ch:"O",  color:"#0078d4", desc:"Microsoft personal" },
+    { id:"s3",         name:"S3 / Files",  ch:"S3", color:"#ff9900", desc:"Object storage"     },
+  ];
+  const DOC_TEMPLATES = [
+    { id:"contract",   icon:"📋", name:"Sales Contract",        fields:["party_name","contract_value","start_date","end_date","payment_terms","renewal_clause","jurisdiction","signed_date"]},
+    { id:"sow",        icon:"📄", name:"Statement of Work",      fields:["project_name","scope_summary","deliverables","timeline","budget","acceptance_criteria","milestones","change_order_policy"]},
+    { id:"employment", icon:"👤", name:"Employment Letter",      fields:["employee_name","title","start_date","base_salary","department","manager_name","equity_grant","probation_period"]},
+    { id:"nda",        icon:"🔒", name:"NDA / Confidentiality",  fields:["disclosing_party","receiving_party","effective_date","expiry_date","scope","exclusions","governing_law"]},
+    { id:"invoice",    icon:"🧾", name:"Invoice / Purchase Order",fields:["vendor_name","invoice_number","total_amount","due_date","line_items","payment_method","po_number"]},
+    { id:"custom",     icon:"✏️", name:"Custom template",        fields:[]},
+  ];
+  const FAKE_TABLES = {
+    snowflake:  ["ACCOUNTS","OPPORTUNITIES","CONTACTS","PRODUCTS","TRANSACTIONS","EVENTS"],
+    databricks: ["bronze.accounts","silver.accounts_clean","gold.account_metrics","ml.churn_scores"],
+    bigquery:   ["crm.accounts","analytics.account_kpis","marketing.touchpoints"],
+    postgres:   ["public.accounts","public.contacts","public.deals","public.activities"],
+    salesforce: ["Account","Opportunity","Contact","Lead","Case","Task"],
+    hubspot:    ["companies","contacts","deals","engagements","owners"],
+    netsuite:   ["CUSTOMER","TRANSACTION","ITEM","EMPLOYEE","VENDOR"],
+    mysql:      ["accounts","users","orders","products","events"],
+  };
+  const FAKE_COLS = {
+    ACCOUNTS:["Id","Name","Website","Industry","AnnualRevenue","CustomerPriority__c","BillingCountry","OwnerId","CreatedDate","LastModifiedDate"],
+    Account: ["Id","Name","Website","Industry","AnnualRevenue","OwnerId","BillingCity","Type","CreatedDate"],
+    _fallback: ["id","name","domain","industry","arr_usd","region","owner_id","created_at","updated_at","status"],
+  };
+
+  const tableKey = selectedTable.split(".").pop().toUpperCase();
+  const sourceCols = FAKE_COLS[tableKey] || FAKE_COLS[selectedTable] || FAKE_COLS._fallback;
+
+  const sqlOutputCols = useMemo(() => {
+    const m = sqlQuery.match(/SELECT\s+([\s\S]+?)\s+FROM/i);
+    if (!m) return [];
+    return m[1].split(",").map(s => s.trim().split(/\s+as\s+/i).pop().trim().replace(/[^a-z0-9_]/gi,"")).filter(Boolean);
+  }, [sqlQuery]);
+
+  const previewFields = useMemo(() => {
+    if (approach === "table" && selectedTable) {
+      return sourceCols.slice(0,6).map((col, i) => ({
+        name: col.toLowerCase().replace(/[^a-z0-9]/g,"_"),
+        type: i === 0 ? "uuid" : i <= 2 ? "string" : i === 3 ? "decimal" : "string",
+        kind: "mapped", sourceCol: col, via: `${selectedTable}.${col}`,
+      }));
+    }
+    if (approach === "sql" && sqlOutputCols.length) {
+      return sqlOutputCols.map((col, i) => ({
+        name: col, type: i === 0 ? "uuid" : i === 2 ? "decimal" : "string",
+        kind: "computed", sourceCol: col, via: "sql:query",
+      }));
+    }
+    if (approach === "template" && template && template !== "custom") {
+      const t = DOC_TEMPLATES.find(d => d.id === template);
+      return (t?.fields || []).map(f => ({ name: f, type: "string", kind: "extracted", sourceCol: f, via: `template:${template}` }));
+    }
+    if (approach === "prompt" && promptText) {
+      return [
+        { name: "extracted_value",   type: "string",  kind: "extracted", sourceCol: "—", via: "llm:prompt" },
+        { name: "extracted_date",    type: "date",    kind: "extracted", sourceCol: "—", via: "llm:prompt" },
+        { name: "extracted_party",   type: "string",  kind: "extracted", sourceCol: "—", via: "llm:prompt" },
+        { name: "confidence_score",  type: "float",   kind: "extracted", sourceCol: "—", via: "llm:prompt" },
+      ];
+    }
+    return [];
+  }, [approach, selectedTable, sourceCols, sqlOutputCols, template, promptText]);
+
+  const STEPS = [
+    { n:1, label:"Source type",   sub: paradigm ? (paradigm==="structured"?"Structured data":"Unstructured docs") : "Choose paradigm" },
+    { n:2, label:"Connector",     sub: connector ? connector.name : "Pick integration" },
+    { n:3, label:"Extraction",    sub: approach ? {table:"Table mapping",sql:"SQL computed",template:"Doc template",prompt:"Custom prompt"}[approach] : "How to extract" },
+    { n:4, label:"Field mapping", sub: previewFields.length ? `${previewFields.length} fields` : "Map to properties" },
+    { n:5, label:"Review",        sub: saved ? "Saved ✓" : "Schedule & confirm" },
+  ];
+
+  const canNext =
+    (step===1 && !!paradigm) ||
+    (step===2 && !!connector) ||
+    (step===3 && (approach==="table" ? !!selectedTable : approach==="sql" ? !!sqlQuery.trim() : approach==="template" ? !!template : approach==="prompt" ? !!promptText.trim() : false)) ||
+    (step===4 && previewFields.length > 0) ||
+    step===5;
+
+  const fldStyle = { padding:"8px 10px", border:"1px solid var(--line)", borderRadius:6, fontSize:12, fontFamily:"Geist, system-ui", background:"var(--bg-canvas)", color:"var(--ink)", width:"100%", boxSizing:"border-box" };
+  const kindColor = k => k==="computed" ? "var(--blue)" : k==="extracted" ? "var(--purple,#9b6fdf)" : "var(--green)";
+  const kindBg    = k => k==="computed" ? "rgba(99,143,255,0.12)" : k==="extracted" ? "rgba(155,111,223,0.12)" : "rgba(72,199,142,0.12)";
+
+  return (
+    <div className="detail-view" style={{ display:"flex", flexDirection:"column", height:"100%" }}>
+
+      {/* Header */}
+      <div className="detail-head" style={{ flexShrink:0 }}>
+        <div className="detail-crumb">
+          <button className="crumb-back" onClick={onClose}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+            {node.label}
+          </button>
+          <span className="crumb-sep">/</span>
+          <span className="crumb-cur">Sources</span>
+          <span className="crumb-sep">/</span>
+          <span className="crumb-cur">Link new source</span>
+        </div>
+        <div className="detail-title-row">
+          <div className="detail-title-left">
+            <h1 className="detail-title-name">Link a source</h1>
+            <div className="detail-title-desc">Connect structured data or extract fields from unstructured documents</div>
+          </div>
+          <div className="detail-title-right" style={{ display:"flex", gap:8, alignItems:"center" }}>
+            <button className="btn-ghost" onClick={onClose}>Cancel</button>
+            {step > 1 && <button className="btn-ghost" onClick={() => setStep(s=>s-1)}>← Back</button>}
+            {step < 5
+              ? <button className="btn-dark" disabled={!canNext} onClick={() => setStep(s=>s+1)} style={{ opacity: canNext?1:0.45 }}>Continue →</button>
+              : <button className="btn-dark" style={{ background: saved?"var(--green)":"var(--ink)", border:"none" }}
+                  onClick={() => { setSaved(true); setTimeout(onClose, 900); }}>
+                  {saved ? "✓ Saved" : "Save source"}
+                </button>
+            }
+          </div>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div style={{ flex:1, display:"flex", minHeight:0 }}>
+
+        {/* Left nav */}
+        <div style={{ width:220, flexShrink:0, borderRight:"1px solid var(--line)", padding:"24px 14px", display:"flex", flexDirection:"column", gap:4 }}>
+          {STEPS.map(s => {
+            const done = step > s.n, active = step === s.n;
+            return (
+              <button key={s.n} onClick={() => done && setStep(s.n)}
+                style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px 10px", borderRadius:7, border:"none", background: active?"var(--panel-2)":"transparent", cursor: done?"pointer":"default", textAlign:"left" }}>
+                <span style={{ width:22, height:22, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0, background: done?"var(--green)":active?"var(--ink)":"var(--line)", color: done||active?"#fff":"var(--ink-3)", marginTop:1 }}>
+                  {done ? "✓" : s.n}
+                </span>
+                <div>
+                  <div style={{ fontSize:12, fontWeight: active?600:400, color: active?"var(--ink)":done?"var(--ink-2)":"var(--ink-3)" }}>{s.label}</div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:1 }}>{s.sub}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Main content */}
+        <div style={{ flex:1, overflowY:"auto", padding:"28px 32px" }}>
+
+          {/* ── STEP 1: Paradigm ── */}
+          {step===1 && (
+            <div>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:22, marginBottom:8 }}>What kind of data are you connecting?</div>
+              <p style={{ color:"var(--ink-3)", fontSize:13, marginBottom:28, lineHeight:1.6 }}>
+                Choose how this source produces properties for <strong>{node.label}</strong>.
+              </p>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, maxWidth:680 }}>
+                {[
+                  { id:"structured", icon:"🗄️", title:"Structured data", color:"var(--blue)",
+                    desc:"Connect to a database, warehouse, or CRM. Map columns directly to properties, or write SQL to produce computed fields.",
+                    examples:["Snowflake table → mapped fields","SQL query → computed property","Salesforce object → field sync","Databricks lakehouse → derived metrics"] },
+                  { id:"unstructured", icon:"📄", title:"Unstructured documents", color:"var(--purple,#9b6fdf)",
+                    desc:"Point to a document folder. An LLM extracts and converts document content into structured properties using templates or a custom prompt.",
+                    examples:["Sales contracts → contract_value, end_date","SOWs → scope, budget, milestones","Employment letters → salary, title","Any doc → custom schema via prompt"] },
+                ].map(p => (
+                  <button key={p.id} onClick={() => setParadigm(p.id)}
+                    style={{ padding:"24px", border:`2px solid ${paradigm===p.id ? p.color : "var(--line)"}`, borderRadius:12, background: paradigm===p.id ? p.color+"12" : "var(--panel-2)", cursor:"pointer", textAlign:"left", transition:"all 140ms" }}>
+                    <div style={{ fontSize:28, marginBottom:10 }}>{p.icon}</div>
+                    <div style={{ fontSize:16, fontWeight:700, color:"var(--ink)", marginBottom:6 }}>{p.title}</div>
+                    <p style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.55, marginBottom:14, marginTop:0 }}>{p.desc}</p>
+                    <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                      {p.examples.map((ex,i) => (
+                        <div key={i} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", display:"flex", alignItems:"center", gap:5 }}>
+                          <span style={{ color: p.color }}>›</span> {ex}
+                        </div>
+                      ))}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── STEP 2: Connector ── */}
+          {step===2 && (
+            <div>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:22, marginBottom:8 }}>
+                {paradigm==="structured" ? "Choose a data connector" : "Choose a document store"}
+              </div>
+              <p style={{ color:"var(--ink-3)", fontSize:13, marginBottom:24, lineHeight:1.6 }}>
+                {paradigm==="structured"
+                  ? "Select the system where your data lives. Each connector handles auth, schema discovery, and incremental sync."
+                  : "Select where your documents are stored. We'll index new files automatically on the configured schedule."}
+              </p>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:10, maxWidth:640 }}>
+                {(paradigm==="structured" ? STRUCTURED : UNSTRUCTURED).map(c => (
+                  <button key={c.id} onClick={() => setConnector(c)}
+                    style={{ padding:"16px 12px", border:`2px solid ${connector?.id===c.id ? c.color : "var(--line)"}`, borderRadius:10, background: connector?.id===c.id ? c.color+"14" : "var(--panel-2)", cursor:"pointer", textAlign:"center", transition:"all 120ms" }}>
+                    <div style={{ width:36, height:36, borderRadius:8, background: c.color+"22", color: c.color, fontFamily:"JetBrains Mono", fontWeight:700, fontSize:13, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 8px" }}>{c.ch}</div>
+                    <div style={{ fontSize:12.5, fontWeight:600, color:"var(--ink)", marginBottom:3 }}>{c.name}</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{c.desc}</div>
+                  </button>
+                ))}
+              </div>
+              {connector && (
+                <div style={{ marginTop:24, padding:"16px 18px", background:"var(--panel-2)", border:"1px solid var(--line)", borderRadius:10, maxWidth:480 }}>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginBottom:10, letterSpacing:"0.5px" }}>CONNECTION</div>
+                  {(() => {
+                    const connFields = paradigm==="structured"
+                      ? [["Host / Account", connector.id==="snowflake"?"xy12345.snowflakecomputing.com":connector.id==="salesforce"?"yourorg.salesforce.com":"db.internal.company.com"],
+                         ["Database / Schema", "PROD / PUBLIC"],
+                         ["Auth method", "OAuth 2.0"],
+                         ["Status", "Connected ✓"]]
+                      : [["Root folder", docPath || "/shared/contracts"],
+                         ["File types", "PDF, DOCX, TXT"],
+                         ["Recurse subfolders", "Yes"],
+                         ["Status", "Connected ✓"]];
+                    return (
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                        {connFields.map(([k,v],i) => (
+                          <div key={i}>
+                            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginBottom:3 }}>{k}</div>
+                            <div style={{ fontSize:12.5, color: v.includes("✓")?"var(--green)":"var(--ink)", fontFamily: k==="Host / Account"||k==="Root folder"?"JetBrains Mono":"inherit", fontWeight: v.includes("✓")?600:400 }}>{v}</div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                  {paradigm==="unstructured" && (
+                    <div style={{ marginTop:12 }}>
+                      <label style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", display:"block", marginBottom:5 }}>FOLDER PATH</label>
+                      <input value={docPath} onChange={e=>setDocPath(e.target.value)} placeholder="/shared/contracts/2026" style={fldStyle} />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── STEP 3: Extraction approach ── */}
+          {step===3 && (
+            <div>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:22, marginBottom:8 }}>How should we extract data?</div>
+              <p style={{ color:"var(--ink-3)", fontSize:13, marginBottom:24, lineHeight:1.6 }}>
+                {paradigm==="structured"
+                  ? "Map columns from an existing table, or write a SQL query to produce computed fields."
+                  : "Use a predefined document template with a known schema, or write a custom LLM prompt to define what to extract."}
+              </p>
+
+              {paradigm==="structured" && (
+                <div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, maxWidth:580, marginBottom:24 }}>
+                    {[
+                      { id:"table", title:"Map a table", icon:"📊",
+                        desc:"Browse the source schema, pick a table, and map its columns to properties on this node. Best for direct field sync." },
+                      { id:"sql", title:"Write a SQL query", icon:"⌨️",
+                        desc:"Run any SELECT and use the output columns as computed properties. Good for aggregations, joins, and derived fields." },
+                    ].map(a => (
+                      <button key={a.id} onClick={() => setApproach(a.id)}
+                        style={{ padding:"20px", border:`2px solid ${approach===a.id?"var(--blue)":"var(--line)"}`, borderRadius:10, background: approach===a.id?"rgba(99,143,255,0.08)":"var(--panel-2)", cursor:"pointer", textAlign:"left", transition:"all 120ms" }}>
+                        <div style={{ fontSize:24, marginBottom:8 }}>{a.icon}</div>
+                        <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)", marginBottom:5 }}>{a.title}</div>
+                        <div style={{ fontSize:12, color:"var(--ink-3)", lineHeight:1.5 }}>{a.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {approach==="table" && (
+                    <div style={{ maxWidth:560 }}>
+                      <label style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.5px", display:"block", marginBottom:8 }}>SELECT TABLE</label>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6, marginBottom:16 }}>
+                        {(FAKE_TABLES[connector?.id] || FAKE_TABLES.default || []).map(t => (
+                          <button key={t} onClick={() => setSelectedTable(t)}
+                            style={{ padding:"8px 10px", border:`1px solid ${selectedTable===t?"var(--blue)":"var(--line)"}`, borderRadius:6, background: selectedTable===t?"rgba(99,143,255,0.1)":"transparent", cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:11, color: selectedTable===t?"var(--blue)":"var(--ink-3)", textAlign:"left", transition:"all 100ms" }}>
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                      {selectedTable && (
+                        <div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginBottom:8 }}>COLUMNS IN {selectedTable}</div>
+                          <div style={{ border:"1px solid var(--line-2)", borderRadius:8, overflow:"hidden" }}>
+                            {sourceCols.map((col, i) => (
+                              <div key={col} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 14px", borderBottom: i<sourceCols.length-1?"1px solid var(--line-2)":"none", background: i%2===0?"transparent":"var(--panel-2)" }}>
+                                <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--blue)", flex:1 }}>{col}</span>
+                                <span style={{ fontSize:11, color:"var(--ink-4)" }}>→</span>
+                                <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--green)", flex:1 }}>{col.toLowerCase().replace(/[^a-z0-9]/g,"_")}</span>
+                                <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", background:"var(--panel-2)", border:"1px solid var(--line-2)", padding:"1px 6px", borderRadius:3 }}>{i===0?"uuid":i<=2?"string":i===3?"decimal":"string"}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {approach==="sql" && (
+                    <div style={{ maxWidth:600 }}>
+                      <label style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.5px", display:"block", marginBottom:8 }}>SQL QUERY — each SELECT column becomes a computed property</label>
+                      <textarea value={sqlQuery} onChange={e=>setSqlQuery(e.target.value)} rows={9}
+                        style={{ ...fldStyle, fontFamily:"JetBrains Mono", fontSize:12.5, lineHeight:1.6, resize:"vertical" }} />
+                      {sqlOutputCols.length > 0 && (
+                        <div style={{ marginTop:12, padding:"10px 14px", background:"var(--panel-2)", borderRadius:8, border:"1px solid var(--line-2)" }}>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginBottom:6 }}>OUTPUT COLUMNS DETECTED</div>
+                          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                            {sqlOutputCols.map(c => (
+                              <span key={c} style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--blue)", background:"rgba(99,143,255,0.1)", padding:"2px 8px", borderRadius:4 }}>{c}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {paradigm==="unstructured" && (
+                <div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, maxWidth:580, marginBottom:24 }}>
+                    {[
+                      { id:"template", title:"Use a document template", icon:"📋",
+                        desc:"Pick a pre-built template (Contract, SOW, NDA…). The schema is predefined — the LLM extracts matching fields from each document." },
+                      { id:"prompt", title:"Write a custom prompt", icon:"✨",
+                        desc:"Describe what to extract and define the output schema manually. Best for novel document types or bespoke extraction logic." },
+                    ].map(a => (
+                      <button key={a.id} onClick={() => setApproach(a.id)}
+                        style={{ padding:"20px", border:`2px solid ${approach===a.id?"var(--purple,#9b6fdf)":"var(--line)"}`, borderRadius:10, background: approach===a.id?"rgba(155,111,223,0.08)":"var(--panel-2)", cursor:"pointer", textAlign:"left", transition:"all 120ms" }}>
+                        <div style={{ fontSize:24, marginBottom:8 }}>{a.icon}</div>
+                        <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)", marginBottom:5 }}>{a.title}</div>
+                        <div style={{ fontSize:12, color:"var(--ink-3)", lineHeight:1.5 }}>{a.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {approach==="template" && (
+                    <div style={{ maxWidth:600 }}>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.5px", marginBottom:10 }}>DOCUMENT TEMPLATE</div>
+                      <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:10, marginBottom:20 }}>
+                        {DOC_TEMPLATES.map(t => (
+                          <button key={t.id} onClick={() => setTemplate(t.id)}
+                            style={{ padding:"14px", border:`2px solid ${template===t.id?"var(--purple,#9b6fdf)":"var(--line)"}`, borderRadius:10, background: template===t.id?"rgba(155,111,223,0.08)":"var(--panel-2)", cursor:"pointer", textAlign:"left", transition:"all 120ms" }}>
+                            <div style={{ fontSize:20, marginBottom:6 }}>{t.icon}</div>
+                            <div style={{ fontSize:12.5, fontWeight:600, color:"var(--ink)", marginBottom:4 }}>{t.name}</div>
+                            <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)" }}>{t.fields.length ? t.fields.length+" fields" : "Define your own"}</div>
+                          </button>
+                        ))}
+                      </div>
+                      {template && template !== "custom" && (
+                        <div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginBottom:8 }}>FIELDS EXTRACTED BY THIS TEMPLATE</div>
+                          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                            {DOC_TEMPLATES.find(d=>d.id===template)?.fields.map(f => (
+                              <span key={f} style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--purple,#9b6fdf)", background:"rgba(155,111,223,0.1)", padding:"3px 9px", borderRadius:5 }}>{f}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {template === "custom" && (
+                        <div>
+                          <label style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", display:"block", marginBottom:6 }}>DEFINE FIELDS (comma-separated)</label>
+                          <input placeholder="field_one, field_two, field_three" style={fldStyle} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {approach==="prompt" && (
+                    <div style={{ maxWidth:600 }}>
+                      <label style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.5px", display:"block", marginBottom:8 }}>EXTRACTION PROMPT</label>
+                      <textarea value={promptText} onChange={e=>setPromptText(e.target.value)} rows={6} placeholder={"Extract the following from each document:\n- The counterparty company name\n- Total contract value in USD\n- Start and end dates\n- Any renewal or auto-renewal clauses"}
+                        style={{ ...fldStyle, lineHeight:1.6, resize:"vertical" }} />
+                      <div style={{ marginTop:16 }}>
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginBottom:8 }}>OUTPUT SCHEMA — define the properties this prompt will populate</div>
+                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 80px", gap:6, marginBottom:6 }}>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)" }}>Field name</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)" }}>Description</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)" }}>Type</div>
+                        </div>
+                        {[
+                          ["extracted_value","Monetary value or key number","decimal"],
+                          ["extracted_date","Primary date from document","date"],
+                          ["extracted_party","Counterparty or entity name","string"],
+                          ["confidence_score","LLM confidence 0–1","float"],
+                        ].map(([name,desc,type],i) => (
+                          <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 80px", gap:6, marginBottom:6 }}>
+                            <input defaultValue={name} style={{ ...fldStyle, fontFamily:"JetBrains Mono", fontSize:11 }} />
+                            <input defaultValue={desc} style={{ ...fldStyle, fontSize:11 }} />
+                            <select defaultValue={type} style={fldStyle}>
+                              {["string","decimal","float","date","bool","int"].map(t=><option key={t}>{t}</option>)}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── STEP 4: Field mapping ── */}
+          {step===4 && (
+            <div>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:22, marginBottom:8 }}>Map fields to properties</div>
+              <p style={{ color:"var(--ink-3)", fontSize:13, marginBottom:24, lineHeight:1.6 }}>
+                {approach==="table" && "Each source column maps to a property on this node. Rename or retype as needed."}
+                {approach==="sql"   && "Each SELECT column becomes a computed property. Set the target name and type."}
+                {(approach==="template"||approach==="prompt") && "Each extracted field maps to a property. The LLM populates these on every document sync."}
+              </p>
+
+              <div style={{ border:"1px solid var(--line-2)", borderRadius:10, overflow:"hidden", maxWidth:700 }}>
+                <div style={{ display:"grid", gridTemplateColumns: approach==="table"?"1.2fr 0.6fr 1fr 80px 90px":"1.2fr 1fr 80px 90px", padding:"9px 16px", background:"var(--panel-2)", borderBottom:"1px solid var(--line)", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.5px", textTransform:"uppercase" }}>
+                  {approach==="table" && <div>Source column</div>}
+                  <div>{approach==="sql"?"SQL output":approach==="table"?"↓":"Extracted field"}</div>
+                  <div>Property name</div>
+                  <div>Type</div>
+                  <div>Kind</div>
+                </div>
+                {previewFields.map((f, i) => (
+                  <div key={i} style={{ display:"grid", gridTemplateColumns: approach==="table"?"1.2fr 0.6fr 1fr 80px 90px":"1.2fr 1fr 80px 90px", padding:"10px 16px", borderBottom: i<previewFields.length-1?"1px solid var(--line-2)":"none", alignItems:"center", gap:8 }}>
+                    {approach==="table" && <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{f.sourceCol}</code>}
+                    {approach==="table" && <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)" }}>→</span>}
+                    <input defaultValue={f.name} style={{ ...fldStyle, fontFamily:"JetBrains Mono", fontSize:11, padding:"5px 8px" }} />
+                    <select defaultValue={f.type} style={{ ...fldStyle, fontSize:11, padding:"5px 8px" }}>
+                      {["string","uuid","int","decimal","float","bool","date","timestamp"].map(t=><option key={t}>{t}</option>)}
+                    </select>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, fontWeight:600, color:kindColor(f.kind), background:kindBg(f.kind), padding:"2px 7px", borderRadius:4, whiteSpace:"nowrap", textAlign:"center" }}>{f.kind}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginTop:16, padding:"12px 16px", background:"var(--panel-2)", borderRadius:8, border:"1px solid var(--line-2)", maxWidth:700, display:"flex", gap:20 }}>
+                <div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", marginBottom:4 }}>PROPERTY LINEAGE</div>
+                  <div style={{ fontSize:12, color:"var(--ink-2)", lineHeight:1.5 }}>
+                    Each property will carry a <code style={{ fontFamily:"JetBrains Mono", fontSize:11 }}>source</code> tag pointing back to <strong>{connector?.name}</strong> and a <code style={{ fontFamily:"JetBrains Mono", fontSize:11 }}>kind</code> of <span style={{ color:kindColor(approach==="table"?"mapped":approach==="sql"?"computed":"extracted"), fontWeight:600 }}>{approach==="table"?"mapped":approach==="sql"?"computed":"extracted"}</span>.
+                    You can filter and audit by kind in the Properties tab.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── STEP 5: Review & schedule ── */}
+          {step===5 && (
+            <div>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:22, marginBottom:8 }}>Review &amp; schedule</div>
+              <p style={{ color:"var(--ink-3)", fontSize:13, marginBottom:24, lineHeight:1.6 }}>Confirm what will be created and set the sync cadence.</p>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, maxWidth:680, marginBottom:24 }}>
+                {[
+                  ["Node", node.label],
+                  ["Connector", connector?.name || "—"],
+                  ["Paradigm", paradigm==="structured"?"Structured data":"Unstructured documents"],
+                  ["Extraction", {table:"Table mapping",sql:"SQL computed",template:"Doc template ("+DOC_TEMPLATES.find(d=>d.id===template)?.name+")",prompt:"Custom LLM prompt"}[approach] || "—"],
+                  ["Properties to add", String(previewFields.length)],
+                  ["Property kind", approach==="table"?"mapped":approach==="sql"?"computed":"extracted"],
+                ].map(([k,v]) => (
+                  <div key={k} style={{ padding:"12px 16px", background:"var(--panel-2)", borderRadius:8, border:"1px solid var(--line-2)" }}>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginBottom:4 }}>{k.toUpperCase()}</div>
+                    <div style={{ fontSize:13.5, color:"var(--ink)", fontWeight:500 }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ maxWidth:480, marginBottom:24 }}>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.5px", marginBottom:12, textTransform:"uppercase" }}>Sync schedule</div>
+                <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                  {[
+                    { id:"realtime", label:"Real-time", sub:"CDC / streaming" },
+                    { id:"15m",      label:"Every 15m",  sub:"Near real-time" },
+                    { id:"hourly",   label:"Hourly",     sub:"Recommended"    },
+                    { id:"daily",    label:"Daily",      sub:"Low frequency"  },
+                    { id:"manual",   label:"Manual",     sub:"On-demand only" },
+                  ].map(s => (
+                    <button key={s.id} onClick={() => setSchedule(s.id)}
+                      style={{ padding:"10px 14px", border:`2px solid ${schedule===s.id?"var(--ink)":"var(--line)"}`, borderRadius:8, background: schedule===s.id?"var(--ink)":"transparent", cursor:"pointer", textAlign:"left", transition:"all 120ms" }}>
+                      <div style={{ fontSize:12.5, fontWeight:600, color: schedule===s.id?"#fff":"var(--ink)", marginBottom:2 }}>{s.label}</div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color: schedule===s.id?"rgba(255,255,255,0.6)":"var(--ink-4)" }}>{s.sub}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {paradigm==="unstructured" && (
+                <div style={{ padding:"14px 16px", background:"var(--gold-fill)", border:"1px solid var(--gold)", borderRadius:8, maxWidth:540, marginBottom:16 }}>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--gold)", marginBottom:6, textTransform:"uppercase" }}>LLM extraction note</div>
+                  <p style={{ fontSize:12.5, color:"var(--ink-2)", margin:0, lineHeight:1.55 }}>
+                    Each document will be processed by an LLM on the configured schedule. Extraction quality depends on document consistency. Low-confidence extractions ({'<'}0.7) are flagged for steward review before populating properties.
+                  </p>
+                </div>
+              )}
+
+              {saved && (
+                <div style={{ padding:"14px 16px", background:"rgba(72,199,142,0.12)", border:"1px solid var(--green)", borderRadius:8, maxWidth:480, fontFamily:"JetBrains Mono", fontSize:12, color:"var(--green)", fontWeight:600 }}>
+                  ✓ Source saved — pipeline will run on next scheduled window
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Right preview panel */}
+        <div style={{ width:232, flexShrink:0, borderLeft:"1px solid var(--line)", padding:"20px 14px", overflowY:"auto" }}>
+          <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"1px", textTransform:"uppercase", marginBottom:12 }}>Properties to create</div>
+          {previewFields.length === 0 ? (
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)", lineHeight:1.6 }}>
+              Complete the extraction step to preview the properties this source will add to <strong>{node.label}</strong>.
+            </div>
+          ) : (
+            <>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginBottom:10 }}>
+                {previewFields.length} new · via {connector?.name}
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                {previewFields.map((f,i) => (
+                  <div key={i} style={{ padding:"8px 10px", background:"var(--panel-2)", borderRadius:7, border:"1px solid var(--line-2)" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:4, marginBottom:4 }}>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink)", fontWeight:500, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{f.name}</span>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", flexShrink:0 }}>{f.type}</span>
+                    </div>
+                    <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 5px", borderRadius:3, color:kindColor(f.kind), background:kindBg(f.kind) }}>{f.kind}</span>
+                      {f.sourceCol !== "—" && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", padding:"1px 5px" }}>← {f.sourceCol}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop:14, padding:"10px", background:"var(--panel-2)", borderRadius:7, border:"1px solid var(--line-2)" }}>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", marginBottom:6 }}>LINEAGE TAGS</div>
+                {[
+                  { k:"source", v: connector?.id || "—" },
+                  { k:"kind",   v: approach==="table"?"mapped":approach==="sql"?"computed":"extracted" },
+                  { k:"via",    v: approach==="table"?selectedTable||"table":approach==="sql"?"sql:query":approach==="template"?`template:${template}`:"llm:prompt" },
+                ].map(({k,v}) => (
+                  <div key={k} style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)" }}>{k}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-2)" }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SourcesPane({ sources, node, onLinkSource }) {
   const [expanded, setExpanded] = useState(null);
-  const LinkSourceFlow = window.LinkSourceFlow;
 
   const seed = node.id.charCodeAt(0) + node.id.length;
 
-  // Extended source data
   const srcExt = useMemo(() => sources.map((s, i) => {
     const ss = seed + i * 7;
     const runs = Array.from({ length: 5 }, (_, j) => ({
@@ -2706,7 +3277,7 @@ function SourcesPane({ sources, node }) {
           <div className="src-kpi-v">{(node.instancesN || 0).toLocaleString()}</div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center" }}>
-          <button className="btn-dark" onClick={() => setSrcFlowOpen(true)}>+ Link source</button>
+          <button className="btn-dark" onClick={onLinkSource}>+ Link source</button>
         </div>
       </div>
 
@@ -2821,7 +3392,6 @@ function SourcesPane({ sources, node }) {
         </div>
       ))}
 
-      {srcFlowOpen && LinkSourceFlow && <LinkSourceFlow node={node} existingSources={sources} onClose={() => setSrcFlowOpen(false)} />}
     </div>
   );
 }
