@@ -12468,20 +12468,6 @@ function GraphLandingEmpty({ onCreate, onBack }) {
           One unified layer where every entity — customers, products, employees, contracts, invoices — connects across every system. Agents, analysts and AI reason on the same source of truth, from CRM and ERP to billing, support and beyond.
         </p>
 
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:36, marginTop:24, flexWrap:"wrap", maxWidth:760 }}>
-          {[
-            { v:"30+",      l:"systems · one model" },
-            { v:"Real-time", l:"impact + lineage" },
-            { v:"AI-ready", l:"context for agents" }
-          ].map(function(s, i){
-            return (
-              <div key={i} style={{ display:"flex", alignItems:"baseline", gap:8 }}>
-                <span style={{ fontFamily:"Geist, system-ui, sans-serif", fontWeight:600, fontSize:15, color:"var(--ink)", letterSpacing:"-0.01em" }}>{s.v}</span>
-                <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", letterSpacing:"0.3px" }}>{s.l}</span>
-              </div>
-            );
-          })}
-        </div>
 
         <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:36 }}>
           <button onClick={onCreate} className="btn-dark" style={{ padding:"12px 22px", fontSize:14, display:"inline-flex", alignItems:"center", gap:8 }}>
