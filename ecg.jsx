@@ -12389,41 +12389,85 @@ function GraphLandingEmpty({ onCreate, onBack }) {
     var W = 1600, H = 900;
     var s = 7919 | 0;
     function nxt(){ s = (s * 1664525 + 1013904223) | 0; return Math.abs(s); }
-    // Clusters hug the corners + side edges. Each carries its own hue so the
-    // backdrop hints at the variety of graphs you'll build. The central
-    // 36%–64% × 22%–82% rectangle is reserved for hero copy and stays clear.
+    // A real-feeling graph layout: ~14 small clusters spread across the
+    // entire canvas (top band, two side bands, bottom band) so the network
+    // wraps around the hero copy instead of hiding in the corners. Tight
+    // SAFE rectangle hugs just the hero text block.
     var clusters = [
-      { cx: W*0.10, cy: H*0.20, n: 9, r: 110, color:"var(--gold)"   },
-      { cx: W*0.90, cy: H*0.20, n: 8, r: 100, color:"var(--green)"  },
-      { cx: W*0.08, cy: H*0.80, n: 9, r: 120, color:"var(--blue)"   },
-      { cx: W*0.92, cy: H*0.78, n: 9, r: 120, color:"var(--coral)"  },
-      { cx: W*0.50, cy: H*0.08, n: 5, r: 80,  color:"var(--purple)" }
+      // Top band
+      { cx: W*0.08, cy: H*0.14, n: 6, r: 90,  color:"var(--gold)"   },
+      { cx: W*0.24, cy: H*0.08, n: 5, r: 80,  color:"var(--gold)"   },
+      { cx: W*0.50, cy: H*0.08, n: 5, r: 90,  color:"var(--purple)" },
+      { cx: W*0.76, cy: H*0.08, n: 5, r: 80,  color:"var(--green)"  },
+      { cx: W*0.92, cy: H*0.14, n: 6, r: 90,  color:"var(--green)"  },
+      // Mid-side bands
+      { cx: W*0.06, cy: H*0.42, n: 6, r:100,  color:"var(--blue)"   },
+      { cx: W*0.20, cy: H*0.62, n: 5, r: 90,  color:"var(--blue)"   },
+      { cx: W*0.80, cy: H*0.62, n: 5, r: 90,  color:"var(--coral)"  },
+      { cx: W*0.94, cy: H*0.42, n: 6, r:100,  color:"var(--coral)"  },
+      // Bottom band
+      { cx: W*0.10, cy: H*0.88, n: 6, r:100,  color:"var(--blue)"   },
+      { cx: W*0.30, cy: H*0.95, n: 4, r: 70,  color:"var(--green)"  },
+      { cx: W*0.50, cy: H*0.97, n: 4, r: 70,  color:"var(--gold)"   },
+      { cx: W*0.70, cy: H*0.95, n: 4, r: 70,  color:"var(--purple)" },
+      { cx: W*0.90, cy: H*0.88, n: 6, r:100,  color:"var(--coral)"  }
     ];
-    var SAFE = { x0: W*0.30, x1: W*0.70, y0: H*0.22, y1: H*0.86 };
+    // Tight safe zone — just the hero text + CTA + 3-step row.
+    var SAFE = { x0: W*0.30, x1: W*0.70, y0: H*0.30, y1: H*0.78 };
     function inSafe(p){ return p.x > SAFE.x0 && p.x < SAFE.x1 && p.y > SAFE.y0 && p.y < SAFE.y1; }
+    // Line-vs-rect bbox test (conservative). Drops any edge whose bounding
+    // box overlaps SAFE — slightly over-aggressive but cheap and correct.
+    function crossesSafe(a, b){
+      if (Math.max(a.x, b.x) < SAFE.x0) return false;
+      if (Math.min(a.x, b.x) > SAFE.x1) return false;
+      if (Math.max(a.y, b.y) < SAFE.y0) return false;
+      if (Math.min(a.y, b.y) > SAFE.y1) return false;
+      return true;
+    }
+
     var nodes = [];
     clusters.forEach(function(c){
+      // 1 hub per cluster
+      nodes.push({ x: c.cx, y: c.cy, r: 9 + (nxt() % 5), c: true, color: c.color });
+      // satellites
       for (var i = 0; i < c.n; i++){
-        var ang = (i / c.n) * Math.PI * 2 + (nxt() % 100) / 600;
-        var rr  = c.r * (0.55 + (nxt() % 100) / 220);
-        var n = { x: c.cx + Math.cos(ang) * rr, y: c.cy + Math.sin(ang) * rr * 0.85, r: 5 + (nxt() % 9), c: i % c.n === 0, color: c.color };
+        var ang = (i / c.n) * Math.PI * 2 + (nxt() % 100) / 500;
+        var rr  = c.r * (0.55 + (nxt() % 100) / 200);
+        var n = { x: c.cx + Math.cos(ang) * rr, y: c.cy + Math.sin(ang) * rr * 0.88, r: 4 + (nxt() % 7), c: false, color: c.color };
         if (!inSafe(n)) nodes.push(n);
       }
     });
+
+    // Edges: each node connects to its 2-3 nearest peers (within ~280px), and
+    // a handful of long-range "bridges" link distant clusters so the canvas
+    // reads as one network rather than disjoint blobs.
     var edges = [];
-    nodes.forEach(function(n, i){
-      var k = 1 + (nxt() % 2);
-      for (var j = 0; j < k; j++){
-        var t = nxt() % nodes.length;
-        if (t === i) continue;
-        var a = nodes[i], b = nodes[t];
+    nodes.forEach(function(a, i){
+      var dists = [];
+      nodes.forEach(function(b, j){
+        if (j === i) return;
         var dx = a.x - b.x, dy = a.y - b.y;
-        if (Math.sqrt(dx*dx + dy*dy) >= 260) continue;
-        // Drop edges whose midpoint sits in the hero-copy safe zone.
-        if (inSafe({ x:(a.x+b.x)/2, y:(a.y+b.y)/2 })) continue;
-        edges.push([i, t]);
-      }
+        var d  = Math.sqrt(dx*dx + dy*dy);
+        if (d < 280) dists.push({ j: j, d: d });
+      });
+      dists.sort(function(p, q){ return p.d - q.d; });
+      var picks = dists.slice(0, 2 + (i % 2));
+      picks.forEach(function(p){
+        var b = nodes[p.j];
+        if (crossesSafe(a, b)) return;
+        edges.push([i, p.j]);
+      });
     });
+    // A few long bridges
+    for (var k = 0; k < 9; k++){
+      var i = nxt() % nodes.length;
+      var j = nxt() % nodes.length;
+      if (i === j) continue;
+      var a = nodes[i], b = nodes[j];
+      if (crossesSafe(a, b)) continue;
+      edges.push([i, j]);
+    }
+
     return { nodes: nodes, edges: edges, W: W, H: H };
   }, []);
 
@@ -12469,7 +12513,7 @@ function GraphLandingEmpty({ onCreate, onBack }) {
       </div>
 
       {/* Centre hero */}
-      <div style={{ position:"relative", zIndex:2, flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"40px 24px" }}>
+      <div style={{ position:"relative", zIndex:2, flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"12px 24px" }}>
         <h1 style={{ fontFamily:"Geist, system-ui, sans-serif", fontWeight:600, fontSize:"clamp(40px, 5.4vw, 64px)", lineHeight:1.08, color:"var(--ink)", margin:0, letterSpacing:"-0.022em", textAlign:"center", maxWidth:980 }}>
           Build your enterprise<br/>context graph
         </h1>
