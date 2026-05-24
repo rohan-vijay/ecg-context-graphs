@@ -11055,6 +11055,7 @@ var ENTITY_META = {
   "Employment":      { desc:"An employment record.",                           props:["worker","personnel_number","employment_start_date","employment_end_date","legal_entity","worker_type"] },
   "Role":            { desc:"A defined job role.",                             props:["role_id","title","level","department"] },
   "Team":            { desc:"An organisational unit.",                         props:["team_id","name","function","leader_id"] },
+  "Department":      { desc:"A top-level organisational division.",            props:["department_id","name","function","head_employee_id"] },
   "Manager Chain":   { desc:"Cached reporting hierarchy.",                     props:["employee_id","chain","depth"] },
   "Compensation":    { desc:"Pay and equity data.",                            props:["base","bonus","equity","effective"] },
   "Pay Cycle":       { desc:"A payroll pay-cycle.",                            props:["pay_cycle_id","name","frequency","starts_on"] },
@@ -11086,10 +11087,36 @@ function cdmLink(module) {
 var GRAPH_STARTING_POINTS = [
   // ── Enterprise-wide / cross-functional ─────────────────────────────────
   { id:"enterprise-core", industry:["any","saas","fintech","retail","manufacturing","professional","media","public","logistics","healthcare"], fn:["enterprise","data-platform"],
-    name:"Enterprise Context Graph", more:14,
-    desc:"The cross-functional layer every team queries: Customer, Employee, Product, Account, Finance and Asset all in one model.",
-    entities:["Customer","Account","Employee","Team","Product","Invoice","Contract","Asset","Location"],
-    edges:[["Customer","HAS","Account"],["Account","HOLDS","Contract"],["Contract","BILLED_AS","Invoice"],["Employee","MEMBER_OF","Team"],["Employee","OWNS","Account"],["Product","SOLD_AT","Location"],["Account","USES","Product"],["Asset","ASSIGNED_TO","Employee"]],
+    name:"Enterprise Context Graph",
+    desc:"The cross-functional spine every team queries — the union of CRM, HR, finance, service, marketing, procurement and governance entities in one model. Built to be the parent context graph that every other graph in this workspace draws from.",
+    entities:[
+      // People & org
+      "Customer","Contact","Account","Lead","Employee","Worker","Team","Department","Role","Position",
+      // Revenue
+      "Opportunity","Quote","Order","Subscription","Invoice","Payment","Contract","Product",
+      // Service
+      "Case","Knowledge Article","Entitlement","SLA",
+      // Marketing
+      "Campaign","Customer Journey","Segment",
+      // Assets & places
+      "Asset","Device","Location",
+      // Procurement & governance
+      "Vendor","Purchase Order","Policy","Risk"
+    ],
+    edges:[
+      ["Customer","HAS","Account"],["Account","HAS_CONTACT","Contact"],["Lead","QUALIFIED_AS","Opportunity"],
+      ["Account","HAS_OPPORTUNITY","Opportunity"],["Opportunity","QUOTED_AS","Quote"],["Quote","CONVERTS_TO","Order"],
+      ["Order","BILLED_AS","Invoice"],["Subscription","BILLED_AS","Invoice"],["Account","SUBSCRIBES_TO","Subscription"],
+      ["Account","HOLDS","Contract"],["Contract","BILLED_AS","Invoice"],["Invoice","SETTLED_BY","Payment"],
+      ["Account","USES","Product"],["Order","CONTAINS","Product"],
+      ["Employee","MEMBER_OF","Team"],["Team","PART_OF","Department"],["Employee","HOLDS","Role"],["Employee","ASSIGNED_TO","Position"],
+      ["Worker","ASSIGNED_TO","Position"],["Employee","OWNS","Account"],
+      ["Customer","OPENED","Case"],["Case","GOVERNED_BY","SLA"],["Case","REFERENCES","Knowledge Article"],["Account","HOLDS","Entitlement"],["Entitlement","COVERS","Case"],
+      ["Campaign","ENROLS_IN","Customer Journey"],["Segment","DEFINES","Campaign"],["Customer Journey","TARGETS","Contact"],
+      ["Asset","ASSIGNED_TO","Employee"],["Device","ISSUED_TO","Employee"],["Asset","AT","Location"],
+      ["Vendor","FULFILS","Purchase Order"],["Department","RAISED","Purchase Order"],
+      ["Policy","GOVERNS","Account"],["Risk","ATTACHED_TO","Account"]
+    ],
     accent:"var(--ink)" },
   { id:"retail-enterprise", industry:["retail"], fn:["enterprise"],
     name:"Retail Enterprise Graph", more:12,
@@ -11541,11 +11568,21 @@ function NewGraphFlow({ onClose, onCreate }) {
                         </div>
                         <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5, marginTop:5, maxWidth:620 }}>{sp.desc}</div>
 
-                        <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:10, alignItems:"center" }}>
-                          {sp.entities.map(function(e){
-                            return <span key={e} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"3px 8px", borderRadius:4, background:"var(--chip)", border:"1px solid var(--line-2)", color:"var(--ink-2)" }}>{e}</span>;
-                          })}
-                        </div>
+                        {(function(){
+                          var CAP = 12;
+                          var shown = sp.entities.slice(0, CAP);
+                          var overflow = sp.entities.length - shown.length;
+                          return (
+                            <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:10, alignItems:"center" }}>
+                              {shown.map(function(e){
+                                return <span key={e} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"3px 8px", borderRadius:4, background:"var(--chip)", border:"1px solid var(--line-2)", color:"var(--ink-2)" }}>{e}</span>;
+                              })}
+                              {overflow > 0 && (
+                                <span title={"Plus " + overflow + " more — see the Entities step"} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"3px 8px", borderRadius:4, background:"transparent", border:"1px dashed var(--line)", color:"var(--ink-3)", fontWeight:600 }}>{"+" + overflow + " more"}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:10, fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.3px" }}>
                           <span>{sp.entities.length + " entities"}</span>
@@ -12338,12 +12375,178 @@ function NewEdgeFlow({ onClose, onCreate, fromNode }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// GRAPH LANDING — EMPTY STATE
+// Shown when a workspace has no graphs yet (or via the E keyboard shortcut on
+// the landing). A quiet, ambient node constellation behind a serif hero +
+// description + "Create" CTA. Press B to return to the populated view.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function GraphLandingEmpty({ onCreate, onBack }) {
+  // Deterministic constellation — same kind of nodes/edges, but spread across
+  // the full canvas at very low opacity so it reads as a backdrop, not content.
+  var constellation = useMemo(function(){
+    var W = 1600, H = 900;
+    var s = 7919 | 0;
+    function nxt(){ s = (s * 1664525 + 1013904223) | 0; return Math.abs(s); }
+    var clusters = [
+      { cx: W*0.18, cy: H*0.32, n: 9,  r: 110 },
+      { cx: W*0.40, cy: H*0.72, n: 7,  r: 90  },
+      { cx: W*0.62, cy: H*0.28, n: 8,  r: 100 },
+      { cx: W*0.82, cy: H*0.62, n: 9,  r: 120 },
+      { cx: W*0.50, cy: H*0.50, n: 5,  r: 70  }
+    ];
+    var nodes = [];
+    clusters.forEach(function(c){
+      for (var i = 0; i < c.n; i++){
+        var ang = (i / c.n) * Math.PI * 2 + (nxt() % 100) / 600;
+        var rr  = c.r * (0.55 + (nxt() % 100) / 220);
+        nodes.push({ x: c.cx + Math.cos(ang) * rr, y: c.cy + Math.sin(ang) * rr * 0.85, r: 5 + (nxt() % 9), c: i % c.n === 0 });
+      }
+    });
+    var edges = [];
+    nodes.forEach(function(n, i){
+      var k = 1 + (nxt() % 2);
+      for (var j = 0; j < k; j++){
+        var t = nxt() % nodes.length;
+        if (t !== i){
+          var dx = nodes[i].x - nodes[t].x, dy = nodes[i].y - nodes[t].y;
+          if (Math.sqrt(dx*dx + dy*dy) < 260) edges.push([i, t]);
+        }
+      }
+    });
+    return { nodes: nodes, edges: edges, W: W, H: H };
+  }, []);
+
+  return (
+    <div style={{ flex:1, position:"relative", overflow:"hidden", background:"var(--bg-canvas)", display:"flex", flexDirection:"column" }}>
+      {/* Backdrop constellation */}
+      <svg width="100%" height="100%" viewBox={"0 0 " + constellation.W + " " + constellation.H} preserveAspectRatio="xMidYMid slice" style={{ position:"absolute", inset:0, pointerEvents:"none" }} aria-hidden="true">
+        <defs>
+          <radialGradient id="emptyHalo" cx="50%" cy="50%" r="55%">
+            <stop offset="0%"  stopColor="var(--blue)" stopOpacity="0.10" />
+            <stop offset="60%" stopColor="var(--blue)" stopOpacity="0.04" />
+            <stop offset="100%" stopColor="var(--blue)" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <rect x="0" y="0" width={constellation.W} height={constellation.H} fill="url(#emptyHalo)" />
+        <g stroke="var(--blue)" strokeOpacity="0.18" strokeWidth="1">
+          {constellation.edges.map(function(e, i){
+            var a = constellation.nodes[e[0]], b = constellation.nodes[e[1]];
+            return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} />;
+          })}
+        </g>
+        <g>
+          {constellation.nodes.map(function(n, i){
+            return (
+              <g key={i}>
+                <circle cx={n.x} cy={n.y} r={n.r + 4} fill="var(--blue)" fillOpacity="0.07" />
+                <circle cx={n.x} cy={n.y} r={n.r}     fill="var(--blue)" fillOpacity={n.c ? 0.42 : 0.28} />
+              </g>
+            );
+          })}
+        </g>
+      </svg>
+
+      {/* Top corner — title chip + back hint */}
+      <div style={{ position:"relative", zIndex:2, padding:"22px 32px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <span style={{ fontFamily:"Instrument Serif", fontSize:24, color:"var(--ink)", lineHeight:1 }}>Context Graphs</span>
+        <button onClick={onBack} className="btn-ghost" style={{ display:"inline-flex", alignItems:"center", gap:8, fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>
+          <span>Press</span>
+          <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"2px 7px", borderRadius:4, background:"var(--panel)", border:"1px solid var(--line)", color:"var(--ink)", fontWeight:700 }}>B</span>
+          <span>for populated view</span>
+        </button>
+      </div>
+
+      {/* Centre hero */}
+      <div style={{ position:"relative", zIndex:2, flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"40px 24px" }}>
+        <div style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"5px 12px", borderRadius:999, background:"var(--panel)", border:"1px solid var(--line)", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", letterSpacing:"0.8px", marginBottom:22 }}>
+          <span style={{ width:6, height:6, borderRadius:"50%", background:"var(--blue)" }} />
+          WORKSPACE · 0 GRAPHS
+        </div>
+
+        <h1 style={{ fontFamily:"Instrument Serif", fontSize:"clamp(48px, 7vw, 92px)", lineHeight:1.02, color:"var(--ink)", margin:0, letterSpacing:"-1.5px", textAlign:"center", maxWidth:980 }}>
+          Build your first<br/>context graph
+        </h1>
+
+        <p style={{ fontFamily:"Geist, system-ui", fontSize:"clamp(14px, 1.3vw, 17px)", color:"var(--ink-2)", lineHeight:1.6, margin:"22px 0 0", maxWidth:620, textAlign:"center" }}>
+          Connect your systems, model the entities that matter, and start querying the relationships across the organisation. Every other graph in this workspace will draw from it.
+        </p>
+
+        <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:36 }}>
+          <button onClick={onCreate} className="btn-dark" style={{ padding:"12px 22px", fontSize:14, display:"inline-flex", alignItems:"center", gap:8 }}>
+            <span style={{ fontSize:16, lineHeight:1, fontWeight:300 }}>+</span>
+            Create a context graph
+          </button>
+          <button onClick={onBack} className="btn-ghost" style={{ padding:"12px 18px", fontSize:13, color:"var(--ink-2)" }}>
+            Browse existing graphs
+          </button>
+        </div>
+
+        {/* Tiny feature trio under the CTA — keeps the centre feeling intentional, not empty */}
+        <div style={{ display:"flex", alignItems:"flex-start", gap:32, marginTop:54, flexWrap:"wrap", justifyContent:"center", maxWidth:820 }}>
+          {[
+            { t:"Pick a template",     d:"Industry blueprints aligned to Microsoft CDM — Healthcare, Banking, Sales, Service and more." },
+            { t:"Customise entities",  d:"Add or remove entities from the blueprint. Bring your own properties on top." },
+            { t:"Wire your access",    d:"Decide who reads, writes and administers — by team or by person." }
+          ].map(function(f, i){
+            return (
+              <div key={i} style={{ flex:"1 1 220px", maxWidth:240, textAlign:"left" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                  <span style={{ width:20, height:20, borderRadius:5, background:"var(--ink)", color:"var(--bg-canvas)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700 }}>{i + 1}</span>
+                  <span style={{ fontFamily:"Instrument Serif", fontSize:18, color:"var(--ink)" }}>{f.t}</span>
+                </div>
+                <div style={{ fontFamily:"Geist, system-ui", fontSize:12.5, color:"var(--ink-3)", lineHeight:1.55 }}>{f.d}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Bottom hint */}
+      <div style={{ position:"relative", zIndex:2, padding:"18px 32px", display:"flex", justifyContent:"center" }}>
+        <span style={{ display:"inline-flex", alignItems:"center", gap:8, fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>
+          <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"2px 7px", borderRadius:4, background:"var(--panel)", border:"1px solid var(--line-2)", color:"var(--ink-3)", fontWeight:700 }}>E</span>
+          empty state
+          <span style={{ color:"var(--ink-4)" }}>·</span>
+          <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"2px 7px", borderRadius:4, background:"var(--panel)", border:"1px solid var(--line-2)", color:"var(--ink-3)", fontWeight:700 }}>B</span>
+          populated
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function GraphLandingView({ onOpenGraph }) {
   var [newGraphOpen, setNewGraphOpen] = useState(false);
   var [view, setView]     = useState("grid"); // grid | list
   var [search, setSearch] = useState("");
   var [sort, setSort]     = useState("active");
   var [sortOpen, setSortOpen] = useState(false);
+  var [emptyState, setEmptyState] = useState(false);
+
+  // Keyboard shortcuts: E = empty state, B = back to populated.
+  // Ignore when typing into an input/textarea so search-in-page still works.
+  useEffect(function(){
+    function onKey(e){
+      var t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "e" || e.key === "E"){ setEmptyState(true); }
+      else if (e.key === "b" || e.key === "B"){ setEmptyState(false); }
+    }
+    document.addEventListener("keydown", onKey);
+    return function(){ document.removeEventListener("keydown", onKey); };
+  }, []);
+
+  if (emptyState) {
+    return (
+      <>
+        <GraphLandingEmpty onCreate={function(){ setNewGraphOpen(true); }} onBack={function(){ setEmptyState(false); }} />
+        {newGraphOpen && <NewGraphFlow onClose={function(){ setNewGraphOpen(false); }} onCreate={function(g){ setNewGraphOpen(false); setEmptyState(false); if (g && g.id) onOpenGraph(g.id); }} />}
+      </>
+    );
+  }
 
   var SORT_OPTIONS = [
     { id:"active",    label:"Most active" },
