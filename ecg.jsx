@@ -4820,19 +4820,22 @@ function AddPropertyFlowModal({ node, mode, initialProperty, onClose }) {
               {/* AUTOMATION — single rich-card dropdown of all available automations across providers.
                   Matches the Type picker visual (+ dashed tile when empty, label + sub when selected). */}
               {pComputeKind === "automation" && (function(){
+                // The sub-line under each automation is the short description of what the
+                // workflow does — owner / cadence / runtime metadata is one click away in the
+                // automation editor, so it shouldn't crowd the picker.
                 var AUTOMATIONS = [
-                  { id:"wf-customer-tier",   l:"compute_customer_tier",    d:"Internal · data-platform · weekly" },
-                  { id:"wf-health-score",    l:"refresh_health_score",     d:"Internal · data-platform · hourly" },
-                  { id:"wf-onboard-status",  l:"onboard_status_check",     d:"Internal · customer-ops · on-event" },
-                  { id:"wk-arr-rollup",      l:"ARR Rollup → Account",     d:"Workato · finance-ops · daily" },
-                  { id:"wk-renewal-stage",   l:"Renewal Stage Sync",       d:"Workato · revenue-ops · hourly" },
-                  { id:"zp-form-intake",     l:"Form Intake → Ticket",     d:"Zapier · customer-ops" },
-                  { id:"zp-notion-sync",     l:"Notion ↔ CRM",             d:"Zapier · data-platform" },
-                  { id:"tr-enrichment-pipe", l:"Enrichment Pipeline",      d:"Tray.io · data-platform" },
-                  { id:"n8-anomaly-detect",  l:"Anomaly Detection",        d:"n8n · data-platform" },
-                  { id:"af-customer-360",    l:"customer_360_dag",         d:"Airflow · data-platform · daily 02:00 UTC" },
-                  { id:"af-billing-sync",    l:"billing_sync_dag",         d:"Airflow · finance-ops · hourly" },
-                  { id:"wh-custom-1",        l:"POST /compute/property",   d:"Custom webhook · https://api.acme.com/v1" }
+                  { id:"wf-customer-tier",   l:"compute_customer_tier",    d:"Bucket accounts into Bronze / Silver / Gold tiers from ARR and engagement signals." },
+                  { id:"wf-health-score",    l:"refresh_health_score",     d:"Recalculate the customer health score from usage, support load and renewal posture." },
+                  { id:"wf-onboard-status",  l:"onboard_status_check",     d:"Roll up onboarding milestone completion into a single ready / blocked state." },
+                  { id:"wk-arr-rollup",      l:"ARR Rollup → Account",     d:"Aggregate active subscription MRR into an account-level ARR figure." },
+                  { id:"wk-renewal-stage",   l:"Renewal Stage Sync",       d:"Mirror the renewal-opportunity stage from the CRM onto the account record." },
+                  { id:"zp-form-intake",     l:"Form Intake → Ticket",     d:"Convert a submitted intake form into a triaged support ticket." },
+                  { id:"zp-notion-sync",     l:"Notion ↔ CRM",             d:"Keep the canonical customer notes in sync between Notion pages and the CRM." },
+                  { id:"tr-enrichment-pipe", l:"Enrichment Pipeline",      d:"Enrich the account with firmographics, tech-stack and intent signals from third-party providers." },
+                  { id:"n8-anomaly-detect",  l:"Anomaly Detection",        d:"Flag values that fall outside the expected band for this property type." },
+                  { id:"af-customer-360",    l:"customer_360_dag",         d:"Materialise the unified customer view from CRM, billing and product sources." },
+                  { id:"af-billing-sync",    l:"billing_sync_dag",         d:"Pull invoice and payment state from the billing system into the graph." },
+                  { id:"wh-custom-1",        l:"POST /compute/property",   d:"Send the record to a custom HTTP endpoint and use the response as the value." }
                 ];
                 return (
                   <div>
