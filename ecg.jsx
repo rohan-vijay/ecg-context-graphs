@@ -14339,7 +14339,7 @@ function NewGraphFlow({ onClose, onCreate }) {
   // block in the body still mentions `step` but Babel strips that branch.
   var [industry, setIndustry] = useState(null);
   var [func, setFunc]         = useState(null);
-  var [startId, setStartId]   = useState(null);
+  var [startId, setStartId]   = useState("__blank"); // matches the default "blank" startMode
   var [included, setIncluded] = useState({}); // entity name → boolean
   var [customEntities, setCustomEntities] = useState([]); // [{ name, desc, props:[] }]
   var [userPrompt, setUserPrompt] = useState("");
@@ -14525,7 +14525,9 @@ function NewGraphFlow({ onClose, onCreate }) {
   // a graph lives in one scrollable form: name, description, starting-point
   // choice, and (when "from template" is picked) a search + filters row above
   // the template list.
-  var [startMode, setStartMode] = useState("template"); // "blank" | "template"
+  // Default to "blank" — the fast path. Users who want a template can toggle and
+  // then advance via the "Choose template →" CTA in the footer.
+  var [startMode, setStartMode] = useState("blank"); // "blank" | "template"
   var [templateQuery, setTemplateQuery] = useState("");
   // Two-view modal: "form" (name/desc/starting-point) and "template" (picker).
   var [view, setView] = useState("form");
