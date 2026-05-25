@@ -2440,7 +2440,8 @@ function EditSchemaView({ node, properties: initProps, onClose }) {
 
 // ---------- NODE DETAIL VIEW ------------------------------------------------
 
-const DETAIL_TABS = ["Overview", "Properties", "Edges", "Sources", "Rules", "Quality", "Governance", "History", "Sample"];
+// Quality tab temporarily hidden — content lives behind tab === "Quality" but the chip is omitted from this list.
+const DETAIL_TABS = ["Overview", "Properties", "Edges", "Sources", "Rules", "Governance", "History", "Sample"];
 
 function NodeDetailView({ nodeId, onBack, onCanvas }) {
   const node = NODES.find(n => n.id === nodeId);
@@ -2451,6 +2452,8 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
   const [survConflict, setSurvConflict] = useState(null);
   const [srcLinkOpen, setSrcLinkOpen] = useState(false);
   const [newRuleOpen, setNewRuleOpen] = useState(false);
+  // Rule edit target — when set, NewRuleFlow opens with the rule pre-filled.
+  const [editRule, setEditRule] = useState(null);
   const [nodeMenuOpen, setNodeMenuOpen] = useState(false);
   if (!node) return null;
   if (editOpen) return <EditSchemaView node={node} properties={generateProps(node)} onClose={() => setEditOpen(false)} />;
@@ -2598,14 +2601,14 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
         {tab === "Properties" && <PropertiesPane node={node} properties={properties} />}
         {tab === "Edges"      && <EdgesPane node={node} outgoing={outgoing} incoming={incoming} />}
         {tab === "Sources"    && <SourcesPane sources={sources} node={node} onLinkSource={() => setSrcLinkOpen(true)} />}
-        {tab === "Rules"      && <RulesPane rules={rules} node={node} onViolationClick={setViolationRule} onMatchClick={setMatchRule} onSurvClick={setSurvConflict} onNewRule={() => setNewRuleOpen(true)} />}
+        {tab === "Rules"      && <RulesPane rules={rules} node={node} onViolationClick={setViolationRule} onMatchClick={setMatchRule} onSurvClick={setSurvConflict} onNewRule={() => setNewRuleOpen(true)} onEditRule={setEditRule} />}
         {tab === "Quality"    && <QualityPane node={node} properties={properties} />}
         {tab === "Governance" && <GovernancePane node={node} properties={properties} />}
         {tab === "History"    && <HistoryPane node={node} />}
         {tab === "Sample"     && <SamplePane node={node} properties={properties} />}
       </div>
 
-      {newRuleOpen && <NewRuleFlow node={node} onClose={() => setNewRuleOpen(false)} />}
+      {(newRuleOpen || editRule) && <NewRuleFlow node={node} initialRule={editRule} onClose={() => { setNewRuleOpen(false); setEditRule(null); }} />}
     </div>
   );
 }
@@ -3609,12 +3612,55 @@ function EdgesPane({ node, outgoing, incoming }) {
 
 // ─── ADD PROPERTY FLOW ───────────────────────────────────────────────────────
 
+// FormulaEditor — contenteditable wrapper used by the Formula computation mode.
+// Renders known property names as inline pills. Plain-text edits update parent state;
+// pills are re-tokenized on blur and on dropdown insertions.
+function FormulaEditor({ editorRef, value, onChange, rePill, propNames, toHtml, baseStyle }){
+  // On mount only — initialise with pill HTML. After that, React never touches innerHTML on
+  // each keystroke (which would jump the cursor).
+  React.useEffect(function(){
+    var el = editorRef.current;
+    if (!el) return;
+    if ((el.textContent || "") === (value || "")) return; // already in sync (typed input)
+    el.innerHTML = toHtml(value || "", propNames);
+  }, [value, propNames.join("|")]);
+  return (
+    <div ref={editorRef}
+      contentEditable
+      suppressContentEditableWarning
+      onInput={function(e){ onChange(e.currentTarget.textContent || ""); }}
+      onBlur={function(){ rePill(); }}
+      style={baseStyle}
+    />
+  );
+}
+
 function AddPropertyFlowModal({ node, mode, onClose }) {
   mode = mode || "manual";
   const [step, setStep]           = useState(1); // manual: 1=basics, 2=behaviour, 3=governance, 4=review
   const [pName, setPName]         = useState("");
   const [pType, setPType]         = useState("");
   const [pTypeOpen, setPTypeOpen] = useState(false);
+  // Type popover positioning — we use fixed positioning calculated from the trigger's
+  // bounding rect so the popover escapes the modal's overflow:hidden clip.
+  const pTypeBtnRef = React.useRef(null);
+  const [pTypeCoords, setPTypeCoords] = useState({ top:0, left:0, width:0, maxHeight:380, openUp:false });
+  function openPTypePicker(){
+    if (pTypeOpen){ setPTypeOpen(false); return; }
+    var btn = pTypeBtnRef.current;
+    if (!btn){ setPTypeOpen(true); return; }
+    var r = btn.getBoundingClientRect();
+    var MAX_H = 380;
+    var GAP = 6;
+    var SAFE = 16;
+    var spaceBelow = window.innerHeight - r.bottom - SAFE;
+    var spaceAbove = r.top - SAFE;
+    var openUp = spaceBelow < Math.min(MAX_H, 240) && spaceAbove > spaceBelow;
+    var maxH = openUp ? Math.min(MAX_H, spaceAbove - GAP) : Math.min(MAX_H, spaceBelow - GAP);
+    var top  = openUp ? Math.max(SAFE, r.top - GAP - maxH) : (r.bottom + GAP);
+    setPTypeCoords({ top: top, left: r.left, width: r.width, maxHeight: maxH, openUp: openUp });
+    setPTypeOpen(true);
+  }
   const [pDesc, setPDesc]         = useState("");
   const [pRequired, setPRequired] = useState(false);
   const [pIndexed, setPIndexed]   = useState(false);
@@ -3635,7 +3681,162 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
   const [pComputeBackfill, setPComputeBackfill] = useState(""); // all | forward | batched
   const [pComputeOnFail, setPComputeOnFail] = useState(""); // raise | default | null | quarantine
   const [pComputeCostCap, setPComputeCostCap] = useState("100"); // monthly USD cap for agent calls
+  // SQL/Cypher computation — picks the warehouse system and a specific connection before the query runs.
+  const [pSqlSystem, setPSqlSystem]         = useState("");
+  const [pSqlConnection, setPSqlConnection] = useState("");
+  const [pSqlRunState, setPSqlRunState]     = useState(null); // null | "running" | "ok" | "error"
+  // Automation computation — single rich-card dropdown listing all automations across providers.
+  const [pAutomation, setPAutomation]           = useState(""); // selected automation id
+  const [pAutomationOpen, setPAutomationOpen]   = useState(false);
+  // Formula builder — the editor is a contentEditable div for Formula mode (renders inline property
+  // pills) and a plain textarea for SQL/Agent. Both use the same ref + insertion helper.
+  const pFormulaTextareaRef = React.useRef(null);
+  const [pFmlPropOpen, setPFmlPropOpen] = useState(false);
+  const [pFmlFnOpen, setPFmlFnOpen]     = useState(false);
+  function escRegex(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+  function escHtml(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  // Build an HTML string where known property names + function calls are wrapped in styled "pill" spans.
+  // Properties get a blue pill; functions get a gold pill so the two are visually distinct.
+  function formulaToPillsHtml(text, propNames){
+    if (!text) return "";
+    var html = escHtml(text);
+    var KNOWN_FNS = ["bucket","if","concat","sum","avg","min","max","coalesce","lower","upper","trim","round","lookup"];
+    // Function pills first — match name followed by `(`, only pill the name portion
+    var fnPattern = new RegExp("\\b(" + KNOWN_FNS.join("|") + ")(?=\\s*\\()", "g");
+    html = html.replace(fnPattern, '<span data-fmlfn="1" contenteditable="false" style="display:inline-flex;align-items:center;padding:1px 7px;margin:0 1px;border-radius:5px;background:var(--gold-fill);color:var(--gold);font-weight:700;border:1px solid color-mix(in oklab, var(--gold) 30%, transparent);font-size:11.5px;">$1</span>');
+    // Property pills — but don't match tokens already inside a pill span
+    if (propNames && propNames.length > 0) {
+      var propPattern = new RegExp("\\b(" + propNames.map(escRegex).join("|") + ")\\b", "g");
+      // Split on existing spans, only run the property pill replacement on non-span fragments
+      html = html.replace(/(<span[^>]*>[\s\S]*?<\/span>)|([^<]+)/g, function(_, span, text){
+        if (span) return span;
+        return text.replace(propPattern, '<span data-fmlprop="1" contenteditable="false" style="display:inline-flex;align-items:center;padding:1px 8px;margin:0 1px;border-radius:5px;background:var(--blue-fill);color:var(--blue);font-weight:600;border:1px solid color-mix(in oklab, var(--blue) 30%, transparent);font-size:11.5px;">$1</span>');
+      });
+    }
+    return html;
+  }
+  function placeCursorAtEnd(el){
+    if (!el) return;
+    var range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  // Re-tokenize the contentEditable, rebuilding pills from the current plain text and placing the
+  // cursor at the end. Called on blur and after dropdown insertions.
+  function rePillEditor(){
+    var el = pFormulaTextareaRef.current;
+    if (!el || pComputeKind !== "formula") return;
+    var text = el.textContent || "";
+    var names = (typeof existingNodeProps !== "undefined" && existingNodeProps) ? existingNodeProps.map(function(p){ return p.name; }) : [];
+    el.innerHTML = formulaToPillsHtml(text, names);
+    placeCursorAtEnd(el);
+  }
+  function insertIntoFormula(text){
+    var el = pFormulaTextareaRef.current;
+    if (!el){ setPFormula(function(prev){ return (prev || "") + text; }); return; }
+    if (pComputeKind === "formula"){
+      el.focus();
+      try { document.execCommand("insertText", false, text); } catch(_e){ el.textContent = (el.textContent || "") + text; }
+      var newText = el.textContent || "";
+      setPFormula(newText);
+      var names = (typeof existingNodeProps !== "undefined" && existingNodeProps) ? existingNodeProps.map(function(p){ return p.name; }) : [];
+      el.innerHTML = formulaToPillsHtml(newText, names);
+      placeCursorAtEnd(el);
+      return;
+    }
+    var start = typeof el.selectionStart === "number" ? el.selectionStart : (pFormula || "").length;
+    var end   = typeof el.selectionEnd   === "number" ? el.selectionEnd   : start;
+    var current = pFormula || "";
+    var next = current.slice(0, start) + text + current.slice(end);
+    setPFormula(next);
+    setTimeout(function(){
+      try { el.focus(); el.setSelectionRange(start + text.length, start + text.length); } catch(_e){}
+    }, 0);
+  }
   const [pComputeTestOpen, setPComputeTestOpen] = useState(false);
+  // Basics — new fields per redesigned property flow
+  const [pDisplayName, setPDisplayName]   = useState(""); // human-readable label, e.g. "ARR (USD)"
+  const [pHelpOpen, setPHelpOpen]         = useState(false); // help text textarea expanded
+  const [pHelpText, setPHelpText]         = useState("");
+  const [pIsPrimary, setPIsPrimary]       = useState(false); // primary key checkbox — implies required + unique + indexed
+  // Single / multi select option list (used when pType is "single_select" or "multi_select")
+  const [pSelectOptions, setPSelectOptions] = useState(["Option 1", "Option 2"]);
+  // Bulk-add options via file upload — opened from a subtle CTA next to the Options label.
+  // The CTA triggers a hidden file input that accepts .xlsx / .csv. On select, we
+  // parse the values and merge them into the option list.
+  const pBulkFileRef = React.useRef(null);
+  const [pBulkUploadInfo, setPBulkUploadInfo] = useState(null); // { name, count } after a successful upload
+  function handleBulkOptionsFile(e){
+    var f = e.target.files && e.target.files[0];
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      var text = (ev.target.result || "") + "";
+      var parts = [];
+      var name = (f.name || "").toLowerCase();
+      if (name.endsWith(".csv") || name.endsWith(".tsv") || name.endsWith(".txt")){
+        // Read text, take first column from each row, drop a header if it looks like one
+        var rows = text.split(/\r?\n/).map(function(s){ return s.split(/[,\t]/)[0].trim(); }).filter(Boolean);
+        if (rows.length && /^(option|name|label|value)s?$/i.test(rows[0])) rows.shift();
+        parts = rows;
+      } else {
+        // .xlsx / .xls — full parse needs a library not loaded in this demo. Pull
+        // any printable ASCII runs ≥ 2 chars as a best-effort extraction.
+        var runs = (text.match(/[A-Za-z0-9 _\-\/]{2,40}/g) || []).map(function(s){ return s.trim(); });
+        var seen = {};
+        parts = runs.filter(function(s){
+          if (/^(xl|sheet|workbook|docProps|content|relationships|theme|font|style|number|format|application|core|x\d|rId)/i.test(s)) return false;
+          if (seen[s]) return false; seen[s] = true; return true;
+        }).slice(0, 20);
+      }
+      // Dedupe against existing
+      var existingLC = pSelectOptions.map(function(o){ return o.toLowerCase(); });
+      parts = parts.filter(function(p){ return existingLC.indexOf(p.toLowerCase()) < 0; });
+      if (parts.length > 0){
+        setPSelectOptions(function(arr){
+          var isDefault = arr.length === 2 && /^Option \d$/.test(arr[0]) && /^Option \d$/.test(arr[1]);
+          return (isDefault ? [] : arr).concat(parts);
+        });
+        setPBulkUploadInfo({ name: f.name, count: parts.length });
+      }
+      e.target.value = ""; // reset so the same file can be picked again later
+    };
+    if ((f.name || "").toLowerCase().endsWith(".csv") || (f.name || "").toLowerCase().endsWith(".tsv") || (f.name || "").toLowerCase().endsWith(".txt")){
+      reader.readAsText(f);
+    } else {
+      reader.readAsBinaryString(f);
+    }
+  }
+  // Nested field — allows defining the property under a parent struct/object field.
+  // When on, the property's effective path becomes parent.key (e.g. "address.street").
+  const [pIsNested, setPIsNested] = useState(false);
+  const [pParent, setPParent]     = useState("");
+  // Existing properties on this node — used to populate the parent picker.
+  // We include any property as a potential parent so users aren't forced to declare
+  // a struct upfront; the runtime treats it as path nesting regardless.
+  const existingNodeProps = generateProps(node);
+  // Advanced settings — secondary behaviour toggles surfaced under Constraints on the Behaviour step.
+  const [pAdvHash, setPAdvHash]                 = useState(false);
+  const [pAdvSecure, setPAdvSecure]             = useState(false);
+  const [pAdvDisplayInRefs, setPAdvDisplayInRefs] = useState(false);
+  const [pAdvSearch, setPAdvSearch]             = useState(false);
+  const [pAdvSort, setPAdvSort]                 = useState(false);
+  const [pAdvFilter, setPAdvFilter]             = useState(false);
+  // Rules step state — replaces Governance.
+  // Three slices: data quality (validate/cleanse/enrich), match (this prop as a match signal), survivorship.
+  const [pDqRules, setPDqRules]           = useState([]); // [{ id, kind, template, severity }]
+  const [pRuleAddOpen, setPRuleAddOpen]   = useState(false);
+  const [pRuleDraftKind, setPRuleDraftKind]   = useState("validation");
+  const [pRuleDraftTemplate, setPRuleDraftTemplate] = useState("required");
+  const [pRuleDraftSeverity, setPRuleDraftSeverity] = useState("ERROR");
+  const [pMatchSignal, setPMatchSignal]   = useState(false);
+  const [pMatchStrategy, setPMatchStrategy] = useState("exact");
+  const [pMatchWeight, setPMatchWeight]   = useState("0.40");
+  const [pSurvStrategy, setPSurvStrategy] = useState("inherit"); // inherit | source_priority | recency | completeness | trust_tier | confidence_weighted | manual
+  const [pSurvSources, setPSurvSources]   = useState(["NetSuite ERP","Salesforce CRM","HubSpot Marketing"]);
   // Property-level overrides on parent node governance — default null means "inherits"
   const [pTags, setPTags]                 = useState([]);
   const [pTagsOpen, setPTagsOpen]         = useState(false);
@@ -3675,30 +3876,35 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
   const SOURCES = ["Salesforce CRM","HubSpot Marketing","NetSuite ERP","Manual / Admin","Computed","Okta Identity"];
   // Reuse the property-type colours / glyphs from the AddNode flow.
   const TYPE_META_LOCAL = {
-    "uuid":      { color:"var(--purple)", glyph:"ID"  },
-    "string":    { color:"var(--blue)",   glyph:"T"   },
-    "string[]":  { color:"var(--blue)",   glyph:"[T]" },
-    "decimal":   { color:"var(--gold)",   glyph:"#"   },
-    "float":     { color:"var(--gold)",   glyph:".5"  },
-    "bool":      { color:"var(--coral)",  glyph:"01"  },
-    "timestamp": { color:"var(--green)",  glyph:"TS"  },
-    "date":      { color:"var(--green)",  glyph:"DT"  },
-    "enum(20)":  { color:"var(--purple)", glyph:"E"   },
-    "enum":      { color:"var(--purple)", glyph:"E"   },
-    "struct":    { color:"var(--ink-3)",  glyph:"{}"  },
-    "array":     { color:"var(--ink-3)",  glyph:"[ ]" }
+    "uuid":         { color:"var(--purple)", glyph:"ID"  },
+    "string":       { color:"var(--blue)",   glyph:"T"   },
+    "string[]":     { color:"var(--blue)",   glyph:"[T]" },
+    "decimal":      { color:"var(--gold)",   glyph:"#"   },
+    "float":        { color:"var(--gold)",   glyph:".5"  },
+    "bool":         { color:"var(--coral)",  glyph:"01"  },
+    "timestamp":    { color:"var(--green)",  glyph:"TS"  },
+    "date":         { color:"var(--green)",  glyph:"DT"  },
+    "enum(20)":     { color:"var(--purple)", glyph:"E"   },
+    "enum":         { color:"var(--purple)", glyph:"E"   },
+    "single_select":{ color:"var(--purple)", glyph:"S"   },
+    "multi_select": { color:"var(--purple)", glyph:"M"   },
+    "file":         { color:"var(--ink-3)",  glyph:"F"   },
+    "struct":       { color:"var(--ink-3)",  glyph:"{}"  },
+    "array":        { color:"var(--ink-3)",  glyph:"[ ]" }
   };
   const TYPE_LIST = [
-    { id:"string",    label:"String",    desc:"UTF-8 text of arbitrary length." },
-    { id:"decimal",   label:"Decimal",   desc:"Exact numeric — monetary values like ARR or spend." },
-    { id:"float",     label:"Float",     desc:"Floating-point numeric — scores and ratios." },
-    { id:"bool",      label:"Boolean",   desc:"True / false flag." },
-    { id:"timestamp", label:"Timestamp", desc:"Date and time with timezone (ISO 8601)." },
-    { id:"date",      label:"Date",      desc:"Calendar date without time." },
-    { id:"uuid",      label:"UUID",      desc:"Universally unique identifier — use for foreign keys." },
-    { id:"enum(20)",  label:"Enum",      desc:"Controlled vocabulary with up to 20 values." },
-    { id:"struct",    label:"Struct",    desc:"Nested JSON object for composite values." },
-    { id:"array",     label:"Array",     desc:"Ordered list of values." }
+    { id:"string",        label:"String",        desc:"UTF-8 text of arbitrary length." },
+    { id:"decimal",       label:"Decimal",       desc:"Exact numeric — monetary values like ARR or spend." },
+    { id:"float",         label:"Float",         desc:"Floating-point numeric — scores and ratios." },
+    { id:"bool",          label:"Boolean",       desc:"True / false flag." },
+    { id:"timestamp",     label:"Timestamp",     desc:"Date and time with timezone (ISO 8601)." },
+    { id:"date",          label:"Date",          desc:"Calendar date without time." },
+    { id:"uuid",          label:"UUID",          desc:"Universally unique identifier — use for foreign keys." },
+    { id:"single_select", label:"Single select", desc:"Pick exactly one value from a defined list of options." },
+    { id:"multi_select",  label:"Multi select",  desc:"Pick one or more values from a defined list of options." },
+    { id:"file",          label:"File",          desc:"Uploaded document, image, or attachment." },
+    { id:"struct",        label:"Struct",        desc:"Nested JSON object for composite values." },
+    { id:"array",         label:"Array",         desc:"Ordered list of values." }
   ];
 
   const inp = { border:"1px solid var(--line)", borderRadius:7, padding:"9px 11px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", outline:"none", boxSizing:"border-box", width:"100%", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" };
@@ -3711,11 +3917,11 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
   // Manual flow is 4 steps; when "computed" is toggled on in Behaviour, a
   // Computation step is inserted between Behaviour and Governance.
   const MANUAL_STEP_IDS = pComputed
-    ? ["basics","behaviour","computation","governance","review"]
-    : ["basics","behaviour","governance","review"];
+    ? ["basics","behaviour","computation","review"]
+    : ["basics","behaviour","review"];
   const MANUAL_STEPS = pComputed
-    ? ["Basics","Behaviour","Computation","Governance","Review"]
-    : ["Basics","Behaviour","Governance","Review"];
+    ? ["Basics","Behaviour","Computation","Review"]
+    : ["Basics","Behaviour","Review"];
   const stepId = MANUAL_STEP_IDS[step - 1] || MANUAL_STEP_IDS[0];
   const includedCount = bulkRows.filter(function(r){ return r.include; }).length;
 
@@ -3799,10 +4005,9 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
   var totalSteps = stepListNames.length;
   var SUBTITLES_BY_ID = mode === "manual"
     ? {
-        basics:      "Name the property, pick its type, and set a default value if needed.",
+        basics:      "Give the property a key and a display name, and pick its storage type.",
         behaviour:   "Flags shape how the platform stores, indexes, and protects the value.",
-        computation: "Define how this value is derived — the formula or agent, when to recompute, how to backfill, and what to do on failure.",
-        governance:  "Decide who owns this property, how long values are kept, and who is allowed to read them.",
+        computation: "Define how this value is derived — Formula, SQL Query, Agent or Automation — plus when to recompute, how to backfill, and what to do on failure.",
         review:      "Review every field before adding. The property will appear in the " + node.label + " table immediately."
       }
     : null;
@@ -3838,10 +4043,9 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
               var isDone = currentStep > n;
               var thisStepId = mode === "manual" ? MANUAL_STEP_IDS[i] : null;
               var sub = mode === "manual"
-                ? (thisStepId === "basics"      ? (pName.trim() || "Name & type")
-                   : thisStepId === "behaviour"   ? ([pRequired&&"req",pIndexed&&"idx",pUnique&&"unq",pPII&&"pii"].filter(Boolean).join(" · ") || "flags & defaults")
+                ? (thisStepId === "basics"      ? ((pIsNested && pParent ? pParent + "." : "") + (pName.trim() || "Key & type"))
+                   : thisStepId === "behaviour"   ? ((pIsPrimary ? "PK · " : "") + ([pRequired&&"req",pIndexed&&"idx",pUnique&&"unq",pPII&&"pii"].filter(Boolean).join(" · ") || "flags & defaults"))
                    : thisStepId === "computation" ? (pComputeKind + (pFormula ? " · expression set" : " · no expression"))
-                   : thisStepId === "governance"  ? (pOwner.split(".")[0] + " · " + pClassification)
                    : "Add")
                 : (n === 1 ? (bulkFileName || (bulkTemplate ? (TEMPLATE_PACKS.find(function(t){ return t.id === bulkTemplate; }) || {}).l : "pick source"))
                    : n === 2 ? (bulkRows.length ? includedCount + " of " + bulkRows.length + " included" : "—")
@@ -3869,23 +4073,54 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
               <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:680 }}>{SUBTITLES[currentStep]}</div>
             </div>
 
-          {/* MANUAL · STEP 1 — Basics: Name → Description → Type → Default value */}
+          {/* MANUAL · STEP 1 — Basics: Key → Display Name (+ help text) → Type → Default → Primary key */}
           {mode === "manual" && stepId === "basics" && (
           <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
-          {/* NAME */}
+          {/* KEY */}
           <div>
-            <label style={lbl}>NAME</label>
+            <label style={lbl}>Key</label>
             <input value={pName} onChange={function(e){ setPName(e.target.value); }}
-              placeholder="e.g. arr_usd, churn_probability, domain"
+              placeholder="e.g. arr_usd"
               style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:13 })} autoFocus />
-            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:5 }}>snake_case recommended. Unique within {node.label}.</div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:5 }}>snake_case · this is how the property is referenced in queries and APIs. Unique within {node.label}.</div>
+          </div>
+
+          {/* DISPLAY NAME — with inline "Add help text" subtle trigger */}
+          <div>
+            <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:8 }}>
+              <label style={Object.assign({}, lbl, { marginBottom:0 })}>Display name</label>
+              {!pHelpOpen && (
+                <button onClick={function(){ setPHelpOpen(true); }}
+                  style={{ border:"none", background:"none", padding:0, cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", textTransform:"uppercase", letterSpacing:"0.5px", textDecoration:"underline", textDecorationStyle:"dotted", textUnderlineOffset:3 }}>
+                  + Add help text
+                </button>
+              )}
+            </div>
+            <input value={pDisplayName} onChange={function(e){ setPDisplayName(e.target.value); }}
+              placeholder="e.g. ARR (USD)"
+              style={inp} />
+            {pHelpOpen && (
+              <div style={{ marginTop:10 }}>
+                <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:8 }}>
+                  <label style={Object.assign({}, lbl, { marginBottom:0 })}>Help text</label>
+                  <button onClick={function(){ setPHelpOpen(false); setPHelpText(""); }}
+                    style={{ border:"none", background:"none", padding:0, cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.5px" }}>
+                    × Remove
+                  </button>
+                </div>
+                <textarea value={pHelpText} onChange={function(e){ setPHelpText(e.target.value); }}
+                  rows={2}
+                  placeholder="Short explanation shown next to the field in forms and tooltips."
+                  style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.55 })} />
+              </div>
+            )}
           </div>
 
           {/* TYPE — card-style picker with proper coloured tiles */}
           <div>
             <label style={lbl}>TYPE</label>
             <div style={{ position:"relative" }}>
-              <button onClick={function(){ setPTypeOpen(function(o){ return !o; }); }}
+              <button ref={pTypeBtnRef} onClick={openPTypePicker}
                 style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
                 {pType ? (
                   <>
@@ -3909,8 +4144,10 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
               </button>
               {pTypeOpen && (
                 <>
-                  <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPTypeOpen(false); }} />
-                  <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:360, overflowY:"auto" }}>
+                  <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:299 }} onClick={function(){ setPTypeOpen(false); }} />
+                  {/* Fixed positioning — escapes the modal's overflow:hidden clip.
+                      Smart up/down based on viewport space (see openPTypePicker). */}
+                  <div style={{ position:"fixed", top: pTypeCoords.top, left: pTypeCoords.left, width: pTypeCoords.width, zIndex:300, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow: pTypeCoords.openUp ? "0 -14px 38px rgba(0,0,0,0.18)" : "0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight: pTypeCoords.maxHeight, overflowY:"auto" }}>
                     {TYPE_LIST.map(function(t, i){
                       var m = TYPE_META_LOCAL[t.id] || TYPE_META_LOCAL.string;
                       var isSel = pType === t.id;
@@ -3934,23 +4171,157 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
             </div>
           </div>
 
-          {/* DEFAULT VALUE — appears right after Type */}
-          {pType && pType !== "bool" && pType !== "struct" && (
+          {/* OPTIONS — appears between Type and Default value when type is single_select / multi_select.
+              Each row: text input + delete button. "+ Add option" button below. */}
+          {(pType === "single_select" || pType === "multi_select") && (
             <div>
-              <label style={lbl}>DEFAULT VALUE <span style={{ color:"var(--ink-4)", marginLeft:4, fontWeight:400, textTransform:"none", letterSpacing:0 }}>optional · used when the source omits a value</span></label>
-              <input value={pDefault} onChange={function(e){ setPDefault(e.target.value); }}
-                placeholder={pType === "decimal" || pType === "float" || pType === "int" ? "e.g. 0" : pType === "timestamp" || pType === "datetime" ? "e.g. NOW()" : pType === "date" ? "e.g. 2026-01-01" : pType === "uuid" ? "e.g. uuid_v4()" : pType === "enum" ? "e.g. unknown" : "e.g. —"}
-                style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12.5 })} />
+              <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:8 }}>
+                <label style={Object.assign({}, lbl, { marginBottom:0 })}>Options <span style={{ color:"var(--ink-4)", marginLeft:4, fontWeight:400, textTransform:"none", letterSpacing:0 }}>· {pSelectOptions.length} {pSelectOptions.length === 1 ? "value" : "values"} · {pType === "single_select" ? "users will pick one" : "users will pick any number"}</span></label>
+                <button onClick={function(){ if (pBulkFileRef.current) pBulkFileRef.current.click(); }}
+                  style={{ border:"none", background:"none", padding:0, cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", textTransform:"uppercase", letterSpacing:"0.5px", textDecoration:"underline", textDecorationStyle:"dotted", textUnderlineOffset:3 }}>
+                  + Upload in bulk
+                </button>
+                {/* Hidden file input — accepts xlsx / csv / tsv / txt. First column of each row becomes an option. */}
+                <input ref={pBulkFileRef} type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" style={{ display:"none" }} onChange={handleBulkOptionsFile} />
+              </div>
+              {pBulkUploadInfo && (
+                <div style={{ marginBottom:10, padding:"9px 12px", border:"1px dashed var(--line)", borderRadius:8, background:"var(--panel)", display:"flex", alignItems:"center", gap:10 }}>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:"var(--green-fill)", color:"var(--green)", fontWeight:700, letterSpacing:"0.4px", flexShrink:0 }}>UPLOADED</span>
+                  <div style={{ flex:1, fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{pBulkUploadInfo.name}</div>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", flexShrink:0 }}>{"+ " + pBulkUploadInfo.count + " added"}</span>
+                  <button onClick={function(){ setPBulkUploadInfo(null); }}
+                    style={{ width:22, height:22, border:"none", background:"none", cursor:"pointer", color:"var(--ink-3)", fontSize:13, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:5 }}>×</button>
+                </div>
+              )}
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                {pSelectOptions.map(function(opt, i){
+                  return (
+                    <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px 8px 12px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel)" }}>
+                      <span style={{ width:20, height:20, borderRadius:5, background:"var(--chip)", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0 }}>{i + 1}</span>
+                      <input value={opt} onChange={function(e){
+                        var v = e.target.value;
+                        setPSelectOptions(function(arr){ return arr.map(function(x, j){ return j === i ? v : x; }); });
+                      }} placeholder={"Option " + (i + 1)}
+                        style={{ flex:1, border:"none", background:"transparent", outline:"none", fontSize:13.5, fontFamily:"inherit", color:"var(--ink)", padding:0 }} />
+                      <button onClick={function(){ setPSelectOptions(function(arr){ return arr.filter(function(_, j){ return j !== i; }); }); }}
+                        disabled={pSelectOptions.length === 1}
+                        title={pSelectOptions.length === 1 ? "Need at least one option" : "Remove"}
+                        style={{ width:24, height:24, border:"none", background:"none", cursor: pSelectOptions.length === 1 ? "not-allowed" : "pointer", color:"var(--ink-3)", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:5, opacity: pSelectOptions.length === 1 ? 0.3 : 1 }}>×</button>
+                    </div>
+                  );
+                })}
+              </div>
+              <button onClick={function(){ setPSelectOptions(function(arr){ return arr.concat(["Option " + (arr.length + 1)]); }); }}
+                style={{ marginTop:8, padding:"9px 14px", border:"1px dashed var(--line)", borderRadius:8, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, color:"var(--ink-2)", display:"flex", alignItems:"center", gap:7 }}>
+                <span style={{ fontFamily:"JetBrains Mono", fontWeight:700, color:"var(--ink-3)" }}>+</span>
+                <span>Add option</span>
+              </button>
             </div>
           )}
+
+          {/* DEFAULT VALUE — appears right after Type (or after Options for select types). Skipped for bool, struct, file. */}
+          {pType && pType !== "bool" && pType !== "struct" && pType !== "file" && (
+            <div>
+              <label style={lbl}>Default value <span style={{ color:"var(--ink-4)", marginLeft:4, fontWeight:400, textTransform:"none", letterSpacing:0 }}>optional · used when the source omits a value</span></label>
+              {pType === "single_select" ? (
+                <select value={pDefault} onChange={function(e){ setPDefault(e.target.value); }} style={inp}>
+                  <option value="">— no default —</option>
+                  {pSelectOptions.filter(function(o){ return o.trim().length > 0; }).map(function(o){ return <option key={o} value={o}>{o}</option>; })}
+                </select>
+              ) : pType === "multi_select" ? (
+                <input value={pDefault} onChange={function(e){ setPDefault(e.target.value); }}
+                  placeholder="e.g. Option 1, Option 2 (comma-separated, must match the options above)"
+                  style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12.5 })} />
+              ) : (
+                <input value={pDefault} onChange={function(e){ setPDefault(e.target.value); }}
+                  placeholder={pType === "decimal" || pType === "float" || pType === "int" ? "e.g. 0" : pType === "timestamp" || pType === "datetime" ? "e.g. NOW()" : pType === "date" ? "e.g. 2026-01-01" : pType === "uuid" ? "e.g. uuid_v4()" : pType === "enum" ? "e.g. unknown" : "e.g. —"}
+                  style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12.5 })} />
+              )}
+            </div>
+          )}
+
+          {/* NESTING — subtle inline trigger at the END of Basics. Matches the help text pattern. */}
+          <div>
+            {!pIsNested ? (
+              <button onClick={function(){ setPIsNested(true); }}
+                style={{ border:"none", background:"none", padding:0, cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", textTransform:"uppercase", letterSpacing:"0.5px", textDecoration:"underline", textDecorationStyle:"dotted", textUnderlineOffset:3 }}>
+                + Nest under a parent field
+              </button>
+            ) : (
+              <div>
+                <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:8 }}>
+                  <label style={Object.assign({}, lbl, { marginBottom:0 })}>Parent field</label>
+                  <button onClick={function(){ setPIsNested(false); setPParent(""); }}
+                    style={{ border:"none", background:"none", padding:0, cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.5px" }}>
+                    × Remove
+                  </button>
+                </div>
+                <RichSelect
+                  value={pParent}
+                  onChange={setPParent}
+                  options={existingNodeProps.map(function(p){ return { value:p.name, label:p.name, sub:p.type }; })}
+                  placeholder="Pick parent field"
+                  mono
+                />
+                {pParent && pName && (
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6, display:"flex", alignItems:"center", gap:6 }}>
+                    <span>Full path:</span>
+                    <code style={{ color:"var(--ink-2)", padding:"1px 6px", borderRadius:4, background:"var(--chip)" }}>{pParent + "." + pName}</code>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           </div>
           )}
 
-          {/* MANUAL · STEP 2 — Behaviour: clean monochrome, properly spaced */}
+          {/* MANUAL · STEP 2 — Behaviour: Computed → Identity (PK) → Constraints → Advanced */}
           {mode === "manual" && stepId === "behaviour" && (
           <div style={{ display:"flex", flexDirection:"column", gap:28 }}>
 
-            {/* CONSTRAINTS — checkbox + label + description, no icon tile */}
+            {/* COMPUTED — top of the step. Toggle + (when on) inline note */}
+            <div>
+              <label style={lbl}>COMPUTED PROPERTY</label>
+              <div style={{ border:"1px solid var(--line)", borderRadius:10, background:"var(--panel)", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)", overflow:"hidden", transition:"all 100ms" }}>
+                <label style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"14px 16px", cursor:"pointer", borderBottom: pComputed ? "1px solid var(--line-2)" : "none", background:"transparent" }}>
+                  <input type="checkbox" checked={pComputed} onChange={function(e){ setPComputed(e.target.checked); setPKind(e.target.checked ? "computed" : "upstream"); }} style={{ accentColor:"var(--ink)", width:15, height:15, marginTop:2, flexShrink:0 }} />
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>Derive this property from a Formula, SQL Query, Agent or Automation</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4, lineHeight:1.5 }}>When on, the value is recomputed from the expression you configure on the next step — not written by upstream systems.</div>
+                  </div>
+                </label>
+                {pComputed && (
+                  <div style={{ padding:"12px 16px 14px", background:"var(--bg-canvas)", borderTop:"1px dashed var(--line)" }}>
+                    <div style={{ fontSize:12.5, color:"var(--ink-2)", lineHeight:1.55 }}>
+                      <b style={{ color:"var(--ink)" }}>Note:</b> A Computation step is now part of the flow — set the formula, recompute trigger, backfill and failure handling there.
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* IDENTITY — Primary Key checkbox card. Moved from Basics. Same subtle-border treatment. */}
+            <div>
+              <label style={lbl}>IDENTITY</label>
+              <label style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"13px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+                <input type="checkbox" checked={pIsPrimary} onChange={function(e){
+                  var on = e.target.checked;
+                  setPIsPrimary(on);
+                  // Primary key implies required + unique + indexed — apply immediately since they live on the same step
+                  if (on){ setPRequired(true); setPUnique(true); setPIndexed(true); }
+                }} style={{ accentColor:"var(--ink)", width:15, height:15, marginTop:2, flexShrink:0 }} />
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>Primary key</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)", fontWeight:700, letterSpacing:"0.4px" }}>PK</span>
+                  </div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:4, lineHeight:1.45 }}>This property uniquely identifies a {node.label} record. Marking it PK automatically enables <b style={{ color:"var(--ink-2)" }}>Required</b>, <b style={{ color:"var(--ink-2)" }}>Unique</b>, and <b style={{ color:"var(--ink-2)" }}>Indexed</b> below.</div>
+                </div>
+              </label>
+            </div>
+
+            {/* CONSTRAINTS — checkbox + label + description */}
             <div>
               <label style={lbl}>CONSTRAINTS</label>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
@@ -3975,29 +4346,30 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
               </div>
             </div>
 
-            {/* COMPUTED — one panel-card that owns the toggle + (when on) expression + recompute */}
+            {/* ADVANCED SETTINGS — secondary toggles for storage and discovery behaviour. */}
             <div>
-              <label style={lbl}>COMPUTED PROPERTY</label>
-              <div style={{ border:"1px solid var(--line)", borderRadius:10, background:"var(--panel)", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)", overflow:"hidden", transition:"all 100ms" }}>
-                {/* Toggle row */}
-                <label style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"14px 16px", cursor:"pointer", borderBottom: pComputed ? "1px solid var(--line-2)" : "none", background:"transparent" }}>
-                  <input type="checkbox" checked={pComputed} onChange={function(e){ setPComputed(e.target.checked); setPKind(e.target.checked ? "computed" : "upstream"); }} style={{ accentColor:"var(--ink)", width:15, height:15, marginTop:2, flexShrink:0 }} />
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>Derive this property from a formula or agent</div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4, lineHeight:1.5 }}>When on, the value is recomputed from the expression below — not written by upstream systems.</div>
-                  </div>
-                </label>
-
-                {pComputed && (
-                  <div style={{ padding:"12px 16px 14px", background:"var(--bg-canvas)", borderTop:"1px dashed var(--line)" }}>
-                    <div style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-3)", letterSpacing:"0.6px", fontWeight:700, marginBottom:8 }}>
-                      NOTE
-                    </div>
-                    <div style={{ fontSize:12.5, color:"var(--ink-2)", lineHeight:1.55 }}>
-                      A <b style={{ color:"var(--ink)" }}>Computation</b> step is now part of the flow — set the formula, recompute trigger, backfill and failure handling there.
-                    </div>
-                  </div>
-                )}
+              <label style={lbl}>Configure additional properties</label>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                {[
+                  { id:"hash",       val:pAdvHash,            set:setPAdvHash,            l:"Enable hashing",            d:"Securely hash the value at write time before storing." },
+                  { id:"secure",     val:pAdvSecure,          set:setPAdvSecure,          l:"Secure field",              d:"Store the value in encrypted form, decrypt on authorised read." },
+                  { id:"refs",       val:pAdvDisplayInRefs,   set:setPAdvDisplayInRefs,   l:"Display in references",     d:"Show this field's value when this record is referenced from elsewhere." },
+                  { id:"search",     val:pAdvSearch,          set:setPAdvSearch,          l:"Enable search",             d:"Include this field in the full-text search index." },
+                  { id:"sort",       val:pAdvSort,            set:setPAdvSort,            l:"Enable sorting",            d:"Allow record lists to be sorted by this field." },
+                  { id:"filter",     val:pAdvFilter,          set:setPAdvFilter,          l:"Enable filtering",          d:"Allow records to be filtered by this field." }
+                ].map(function(f){
+                  var on = f.val;
+                  return (
+                    <label key={f.id}
+                      style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"13px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)", transition:"all 100ms" }}>
+                      <input type="checkbox" checked={on} onChange={function(e){ f.set(e.target.checked); }} style={{ accentColor:"var(--ink)", width:15, height:15, marginTop:2, flexShrink:0 }} />
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{f.l}</div>
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:4, lineHeight:1.45 }}>{f.d}</div>
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -4013,9 +4385,10 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
             }
             var usesAgent = /agent:/.test(pFormula);
             var COMPUTE_TYPES = [
-              { id:"formula", l:"Formula",    d:"Math, string, conditional logic.",     icon:<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 13L13 3"/><circle cx="4" cy="4" r="1.2"/><circle cx="12" cy="12" r="1.2"/></svg>, color:"var(--gold)"   },
-              { id:"sql",     l:"SQL/Cypher", d:"Query over graph or warehouse.",       icon:<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="8" cy="4" rx="5" ry="1.5"/><path d="M3 4v4c0 0.8 2.2 1.5 5 1.5s5-0.7 5-1.5V4"/><path d="M3 8v4c0 0.8 2.2 1.5 5 1.5s5-0.7 5-1.5V8"/></svg>, color:"var(--blue)"   },
-              { id:"lookup",  l:"Lookup",     d:"Reference another property or table.", icon:<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="6.5" cy="6.5" r="4"/><line x1="9.5" y1="9.5" x2="13" y2="13"/></svg>, color:"var(--green)"  }
+              { id:"formula",    l:"Formula",    d:"Derive this value from other properties on the same record.", icon:<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 13L13 3"/><circle cx="4" cy="4" r="1.2"/><circle cx="12" cy="12" r="1.2"/></svg>, color:"var(--gold)"   },
+              { id:"sql",        l:"SQL/Cypher", d:"Query over graph or warehouse.",           icon:<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="8" cy="4" rx="5" ry="1.5"/><path d="M3 4v4c0 0.8 2.2 1.5 5 1.5s5-0.7 5-1.5V4"/><path d="M3 8v4c0 0.8 2.2 1.5 5 1.5s5-0.7 5-1.5V8"/></svg>, color:"var(--blue)"   },
+              { id:"automation", l:"Automation", d:"Run a workflow and map its output.",        icon:<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M8 1.5l5 3v7l-5 3-5-3v-7z"/><path d="M3.5 5L8 8.5L12.5 5"/><line x1="8" y1="8.5" x2="8" y2="14"/></svg>, color:"var(--purple)" },
+              { id:"agent",      l:"Agent",      d:"Invoke a pre-built agent that scores or classifies this record.", icon:<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="6" r="3"/><path d="M4 14c0-2.5 1.5-4 4-4s4 1.5 4 4"/><line x1="8" y1="2" x2="8" y2="1.5"/><line x1="11.5" y1="3.5" x2="11.8" y2="3.2"/><line x1="4.5" y1="3.5" x2="4.2" y2="3.2"/></svg>, color:"var(--green)"  }
             ];
             var selectedType = COMPUTE_TYPES.find(function(t){ return t.id === pComputeKind; });
             function renderPropPick(value, onChange, open, setOpen, options, placeholder){
@@ -4121,46 +4494,235 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
 
               {/* Everything below only appears once a computation type is picked */}
               {!selectedType ? null : (<>
-              {/* EXPRESSION */}
-              <div>
-                <label style={lbl}>{pComputeKind === "sql" ? "SQL / CYPHER QUERY" : pComputeKind === "lookup" ? "REFERENCE PATH" : pComputeKind === "agent" ? "AGENT CALL" : "COMPUTATION EXPRESSION"}</label>
-                <textarea value={pFormula} onChange={function(e){ setPFormula(e.target.value); }} rows={pComputeKind === "sql" ? 4 : 3}
-                  placeholder={
-                    pComputeKind === "sql" ? "SELECT SUM(amount) FROM Order WHERE Order.customer_id = :customer_id"
-                    : pComputeKind === "lookup" ? "Account.tier · or · ref:price_book.list_price(plan)"
-                    : pComputeKind === "agent" ? "agent:cust_health.score(customer_id)"
-                    : "e.g. risk_score := agent:cust_health.score · tier := bucket(arr_usd, [10k,100k,1M], ['SMB','MM','ENT'])"
-                  }
-                  style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12.5, lineHeight:1.55, resize:"vertical" })} />
-                <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6, lineHeight:1.5 }}>
-                  Use <code style={{ color:"var(--ink-2)" }}>:=</code> for assignment. Reference other properties by name, or call an agent with <code style={{ color:"var(--ink-2)" }}>agent:name.property</code>.
-                </div>
-              </div>
+              {/* SQL SYSTEM + CONNECTION — only when SQL/Cypher is chosen.
+                  System cards are inline (always visible) so the warehouse choice is obvious.
+                  Connection list is filtered by system. */}
+              {pComputeKind === "sql" && (function(){
+                var SQL_SYSTEMS = [
+                  { id:"databricks", l:"Databricks",  glyph:"DBX", color:"var(--coral)" },
+                  { id:"snowflake",  l:"Snowflake",   glyph:"SNW", color:"var(--blue)"  },
+                  { id:"bigquery",   l:"BigQuery",    glyph:"BQ",  color:"var(--gold)"  },
+                  { id:"redshift",   l:"Redshift",    glyph:"RS",  color:"var(--coral)" },
+                  { id:"postgres",   l:"Postgres",    glyph:"PG",  color:"var(--blue)"  },
+                  { id:"trino",      l:"Trino",       glyph:"TR",  color:"var(--purple)"},
+                  { id:"graph",      l:"Graph (Cypher)", glyph:"GR", color:"var(--green)" }
+                ];
+                var CONNECTIONS_BY_SYSTEM = {
+                  databricks: [
+                    { id:"dbx-prod",   l:"analytics-warehouse", sub:"prod · us-east-1" },
+                    { id:"dbx-dev",    l:"dev-cluster",         sub:"dev · us-east-1" }
+                  ],
+                  snowflake: [
+                    { id:"snw-prod",   l:"ANALYTICS_PROD",     sub:"data-platform · US-WEST-2" },
+                    { id:"snw-raw",    l:"RAW_INGEST",         sub:"ingest · US-EAST-1" }
+                  ],
+                  bigquery: [
+                    { id:"bq-metrics", l:"metrics-prod",       sub:"data-platform" },
+                    { id:"bq-logs",    l:"logs",               sub:"raw" }
+                  ],
+                  redshift: [
+                    { id:"rs-prod",    l:"warehouse-prod",     sub:"us-east-1" }
+                  ],
+                  postgres: [
+                    { id:"pg-billing", l:"billing-readonly",   sub:"prod" },
+                    { id:"pg-ops",     l:"ops-readonly",       sub:"prod" }
+                  ],
+                  trino: [
+                    { id:"trino-fed",  l:"federated-prod",     sub:"data-platform" }
+                  ],
+                  graph: [
+                    { id:"graph-main", l:"main-graph",         sub:"production · neo4j-aura" }
+                  ]
+                };
+                var systemConnections = CONNECTIONS_BY_SYSTEM[pSqlSystem] || [];
+                return (
+                  <>
+                    <div>
+                      <label style={lbl}>System</label>
+                      <RichSelect
+                        value={pSqlSystem}
+                        onChange={function(v){ setPSqlSystem(v); setPSqlConnection(""); setPSqlRunState(null); }}
+                        options={SQL_SYSTEMS.map(function(sys){ return { value:sys.id, label:sys.l, sub:sys.glyph }; })}
+                        placeholder="Pick a system"
+                      />
+                    </div>
+                    {pSqlSystem && (
+                      <div>
+                        <label style={lbl}>Connection</label>
+                        <RichSelect
+                          value={pSqlConnection}
+                          onChange={function(v){ setPSqlConnection(v); setPSqlRunState(null); }}
+                          options={systemConnections.map(function(c){ return { value:c.id, label:c.l, sub:c.sub }; })}
+                          placeholder={"Pick a " + (SQL_SYSTEMS.find(function(s){ return s.id === pSqlSystem; }) || {}).l + " connection"}
+                          mono
+                        />
+                        {systemConnections.length === 0 && (
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>No connections configured for this system yet. Add one in <code style={{ color:"var(--ink-2)" }}>Sources →</code> first.</div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
-              {/* DETECTED INPUTS */}
-              {pFormula && (
-                <div>
-                  <label style={lbl}>INPUTS DETECTED <span style={{ color:"var(--ink-4)", marginLeft:4, fontWeight:400, textTransform:"none", letterSpacing:0 }}>· auto-extracted from the expression</span></label>
-                  {detectedInputs.length === 0 ? (
-                    <div style={{ padding:"10px 13px", border:"1px dashed var(--line)", borderRadius:7, background:"var(--panel-2)", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)" }}>
-                      No property references found — only constants and operators.
+              {/* AUTOMATION — single rich-card dropdown of all available automations across providers.
+                  Matches the Type picker visual (+ dashed tile when empty, label + sub when selected). */}
+              {pComputeKind === "automation" && (function(){
+                var AUTOMATIONS = [
+                  { id:"wf-customer-tier",   l:"compute_customer_tier",    d:"Internal · data-platform · weekly" },
+                  { id:"wf-health-score",    l:"refresh_health_score",     d:"Internal · data-platform · hourly" },
+                  { id:"wf-onboard-status",  l:"onboard_status_check",     d:"Internal · customer-ops · on-event" },
+                  { id:"wk-arr-rollup",      l:"ARR Rollup → Account",     d:"Workato · finance-ops · daily" },
+                  { id:"wk-renewal-stage",   l:"Renewal Stage Sync",       d:"Workato · revenue-ops · hourly" },
+                  { id:"zp-form-intake",     l:"Form Intake → Ticket",     d:"Zapier · customer-ops" },
+                  { id:"zp-notion-sync",     l:"Notion ↔ CRM",             d:"Zapier · data-platform" },
+                  { id:"tr-enrichment-pipe", l:"Enrichment Pipeline",      d:"Tray.io · data-platform" },
+                  { id:"n8-anomaly-detect",  l:"Anomaly Detection",        d:"n8n · data-platform" },
+                  { id:"af-customer-360",    l:"customer_360_dag",         d:"Airflow · data-platform · daily 02:00 UTC" },
+                  { id:"af-billing-sync",    l:"billing_sync_dag",         d:"Airflow · finance-ops · hourly" },
+                  { id:"wh-custom-1",        l:"POST /compute/property",   d:"Custom webhook · https://api.acme.com/v1" }
+                ];
+                return (
+                  <div>
+                    <label style={lbl}>Select automation</label>
+                    {renderPropPick(pAutomation, setPAutomation, pAutomationOpen, setPAutomationOpen, AUTOMATIONS, "Select an existing automation")}
+                  </div>
+                );
+              })()}
+
+              {/* EXPRESSION — formula / sql / agent only (automation has its own block above).
+                  For Formula, subtle "+ Insert property" and "+ Insert function" dropdowns sit next to the
+                  label so the textarea stays the hero. */}
+              {pComputeKind !== "automation" && (function(){
+                var FORMULA_FUNCTIONS = [
+                  { id:"bucket",   l:"bucket()",   d:"Map a number into named tiers", insert:"bucket(field, [thr1, thr2], ['low', 'mid', 'high'])" },
+                  { id:"if",       l:"if()",       d:"Return one value or another based on a condition", insert:"if(condition, then, else)" },
+                  { id:"concat",   l:"concat()",   d:"Combine multiple strings into one", insert:"concat(a, ' ', b)" },
+                  { id:"sum",      l:"sum()",      d:"Add a list of numbers together", insert:"sum(a, b)" },
+                  { id:"avg",      l:"avg()",      d:"Mean of a list of numbers", insert:"avg(a, b)" },
+                  { id:"min",      l:"min()",      d:"Smallest value in the list", insert:"min(a, b)" },
+                  { id:"max",      l:"max()",      d:"Largest value in the list", insert:"max(a, b)" },
+                  { id:"coalesce", l:"coalesce()", d:"First non-null value (or fallback)", insert:"coalesce(a, b, 'default')" },
+                  { id:"lower",    l:"lower()",    d:"Convert string to lower case", insert:"lower(field)" },
+                  { id:"upper",    l:"upper()",    d:"Convert string to upper case", insert:"upper(field)" },
+                  { id:"trim",     l:"trim()",     d:"Strip leading and trailing whitespace", insert:"trim(field)" },
+                  { id:"round",    l:"round()",    d:"Round a number to N decimals", insert:"round(field, 2)" },
+                  { id:"lookup",   l:"lookup()",   d:"Pick a value from a reference table by key", insert:"lookup('table', key, 'return_field')" },
+                  { id:"agent",    l:"agent:",     d:"Delegate to an internal agent", insert:"agent:name.property" }
+                ];
+                return (
+                  <div>
+                    <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:8 }}>
+                      <label style={Object.assign({}, lbl, { marginBottom:0 })}>{pComputeKind === "sql" ? "SQL / CYPHER QUERY" : pComputeKind === "agent" ? "AGENT CALL" : "Formula"}</label>
+                      <div style={{ display:"flex", gap:14, alignItems:"center" }}>
+                        {pComputeKind === "formula" && (
+                          <>
+                            {/* Insert property */}
+                            <div style={{ position:"relative" }}>
+                              <button onClick={function(){ setPFmlPropOpen(function(o){ return !o; }); setPFmlFnOpen(false); }}
+                                style={{ border:"none", background:"none", padding:0, cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:10, color: pFmlPropOpen ? "var(--blue)" : "var(--ink-3)", textTransform:"uppercase", letterSpacing:"0.5px", textDecoration:"underline", textDecorationStyle:"dotted", textUnderlineOffset:3 }}>
+                                + Insert property
+                              </button>
+                              {pFmlPropOpen && (
+                                <>
+                                  <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPFmlPropOpen(false); }} />
+                                  <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, minWidth:260, maxHeight:320, overflowY:"auto" }}>
+                                    {existingNodeProps.length === 0 ? (
+                                      <div style={{ padding:"10px 12px", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)" }}>No existing properties on this node yet.</div>
+                                    ) : existingNodeProps.map(function(p, i){
+                                      return (
+                                        <button key={p.name} onClick={function(){ insertIntoFormula(p.name); setPFmlPropOpen(false); }}
+                                          style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"8px 11px", borderRadius:6, border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < existingNodeProps.length-1 ? 1 : 0 }}
+                                          onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
+                                          onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
+                                          <span style={{ width:6, height:6, borderRadius:"50%", background:"var(--blue)", flexShrink:0 }} />
+                                          <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", fontWeight:600 }}>{p.name}</span>
+                                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginLeft:"auto" }}>{p.type}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                            {/* Insert function */}
+                            <div style={{ position:"relative" }}>
+                              <button onClick={function(){ setPFmlFnOpen(function(o){ return !o; }); setPFmlPropOpen(false); }}
+                                style={{ border:"none", background:"none", padding:0, cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:10, color: pFmlFnOpen ? "var(--gold)" : "var(--ink-3)", textTransform:"uppercase", letterSpacing:"0.5px", textDecoration:"underline", textDecorationStyle:"dotted", textUnderlineOffset:3 }}>
+                                + Insert function
+                              </button>
+                              {pFmlFnOpen && (
+                                <>
+                                  <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPFmlFnOpen(false); }} />
+                                  <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, minWidth:300, maxHeight:360, overflowY:"auto" }}>
+                                    {FORMULA_FUNCTIONS.map(function(f, i){
+                                      return (
+                                        <button key={f.id} onClick={function(){ insertIntoFormula(f.insert); setPFmlFnOpen(false); }}
+                                          style={{ display:"flex", alignItems:"flex-start", gap:10, width:"100%", padding:"9px 11px", borderRadius:6, border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < FORMULA_FUNCTIONS.length-1 ? 1 : 0 }}
+                                          onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
+                                          onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
+                                          <div style={{ flex:1, minWidth:0 }}>
+                                            <div style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", fontWeight:600 }}>{f.l}</div>
+                                            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:2 }}>{f.d}</div>
+                                          </div>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </>
+                        )}
+                        {pComputeKind === "sql" && pSqlSystem && pSqlConnection && pFormula && (
+                          <button onClick={function(){
+                            setPSqlRunState("running");
+                            setTimeout(function(){ setPSqlRunState("ok"); }, 900);
+                          }}
+                            style={{ border:"none", background:"none", padding:0, cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:10, color: pSqlRunState === "running" ? "var(--ink-4)" : "var(--ink-3)", textTransform:"uppercase", letterSpacing:"0.5px", textDecoration:"underline", textDecorationStyle:"dotted", textUnderlineOffset:3 }}>
+                            {pSqlRunState === "running" ? "Running…" : pSqlRunState === "ok" ? "✓ Re-run" : "▷ Run query"}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  ) : (
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                      {detectedInputs.map(function(i){
-                        return <span key={i} style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"JetBrains Mono", fontSize:11, padding:"4px 9px", borderRadius:5, background:"var(--chip)", color:"var(--ink-2)", border:"1px solid var(--line-2)" }}>
-                          <span style={{ width:5, height:5, borderRadius:"50%", background:"var(--blue)" }} />
-                          {i}
-                        </span>;
-                      })}
-                      {usesAgent && <span style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"JetBrains Mono", fontSize:11, padding:"4px 9px", borderRadius:5, background:"var(--purple-fill)", color:"var(--purple)", border:"1px solid var(--purple-fill)", fontWeight:700 }}>
-                        <span style={{ width:5, height:5, borderRadius:"50%", background:"var(--purple)" }} />
-                        agent call
-                      </span>}
+                    {pComputeKind === "formula" ? (
+                      // Contenteditable editor — known property names render as inline pills.
+                      // We use a ref-callback for initial mount + a useEffect to sync external changes
+                      // (NOT dangerouslySetInnerHTML, which would re-render on every keystroke and break the cursor).
+                      <FormulaEditor
+                        editorRef={pFormulaTextareaRef}
+                        value={pFormula || ""}
+                        onChange={setPFormula}
+                        rePill={rePillEditor}
+                        propNames={(existingNodeProps || []).map(function(p){ return p.name; })}
+                        toHtml={formulaToPillsHtml}
+                        baseStyle={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12.5, lineHeight:1.8, minHeight:118, whiteSpace:"pre-wrap", wordBreak:"break-word", cursor:"text" })}
+                      />
+                    ) : (
+                      <textarea ref={pFormulaTextareaRef} value={pFormula} onChange={function(e){ setPFormula(e.target.value); setPSqlRunState(null); }} rows={pComputeKind === "sql" ? 4 : 3}
+                        placeholder={
+                          pComputeKind === "sql" ? "SELECT SUM(amount) FROM Order WHERE Order.customer_id = :customer_id"
+                          : pComputeKind === "agent" ? "agent:cust_health.score(customer_id)"
+                          : "Write the expression here."
+                        }
+                        style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12.5, lineHeight:1.55, resize:"vertical" })} />
+                    )}
+                    {pComputeKind === "sql" && pSqlRunState === "ok" && (
+                      <div style={{ marginTop:6, padding:"8px 11px", borderRadius:7, border:"1px solid var(--green-fill)", background:"var(--green-fill)", display:"flex", alignItems:"center", gap:8 }}>
+                        <span style={{ width:6, height:6, borderRadius:"50%", background:"var(--green)" }} />
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--green)", fontWeight:700, letterSpacing:"0.3px" }}>QUERY OK</span>
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>1 column · returns DECIMAL · 124 ms · 2,840 rows scanned</span>
+                      </div>
+                    )}
+                    <div style={{ fontSize:11.5, color:"var(--ink-3)", marginTop:8, lineHeight:1.55 }}>
+                      {pComputeKind === "formula"
+                        ? <span><b style={{ color:"var(--ink-2)" }}>When to use Formula:</b> when the value can be calculated from other properties on the same {node.label} record — math, conditionals, string concatenation, lookups, or agent calls. For values that live in another system, use <b style={{ color:"var(--ink-2)" }}>SQL/Cypher</b>. To run a multi-step workflow, use <b style={{ color:"var(--ink-2)" }}>Automation</b>.</span>
+                        : <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>Use <code style={{ color:"var(--ink-2)" }}>:=</code> for assignment. Reference other properties by name, or call an agent with <code style={{ color:"var(--ink-2)" }}>agent:name.property</code>.</span>}
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                );
+              })()}
+
 
               {/* renderPropPick: builds the Type-picker style trigger + popover for a single-value dropdown */}
 
@@ -4262,171 +4824,344 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
             );
           })()}
 
-          {/* MANUAL · STEP 3 — Governance: identical layout to AddNodeFlow's Governance step */}
-          {mode === "manual" && stepId === "governance" && (
-            <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:820 }}>
-              {/* OWNER + RETENTION row */}
-              <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr", gap:14 }}>
-                <div>
-                  <label style={lbl}>OWNER</label>
-                  <select value={pOwner} onChange={function(e){ setPOwner(e.target.value); }} style={inp}>
-                    <option value="morgan.lee">Morgan Lee (you · data-platform)</option>
-                    <option value="ramin.k">Ramin K · data-platform</option>
-                    <option value="jordan.s">Jordan S · customer-ops</option>
-                    <option value="alex.t">Alex T · revenue-ops</option>
-                  </select>
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>The owner is the single point of accountability for this property.</div>
-                </div>
-                <div>
-                  <label style={lbl}>RETENTION POLICY</label>
-                  <select value={pRetention} onChange={function(e){ setPRetention(e.target.value); }} style={inp}>
-                    <option value="forever">Keep forever</option>
-                    <option value="7y">7 years</option>
-                    <option value="3y">3 years</option>
-                    <option value="1y">1 year</option>
-                    <option value="90d">90 days</option>
-                  </select>
+          {/* Rules step intentionally removed — governance inherits from the {node.label} node type. */}
+          {false && (function(){
+            // Templates per data-quality rule kind. Aligned with the rule categories used in the global flow.
+            var DQ_TEMPLATES = {
+              validation: [
+                { id:"required",     l:"Required",        d:"Reject writes that omit a value." },
+                { id:"format_email", l:"Email format",    d:"Must match a standard email pattern." },
+                { id:"format_url",   l:"URL format",      d:"Must be a well-formed URL." },
+                { id:"format_uuid",  l:"UUID format",     d:"Must match UUID v4 pattern." },
+                { id:"range",        l:"Numeric range",   d:"Value must fall within bounds." },
+                { id:"enum",         l:"Enum membership", d:"Value must come from an allowed set." },
+                { id:"regex",        l:"Custom regex",    d:"Match a custom pattern." }
+              ],
+              cleansing: [
+                { id:"trim",             l:"Trim whitespace",   d:"Strip leading, trailing and excess interior spaces." },
+                { id:"lowercase",        l:"Lowercase",         d:"Convert the value to lower case." },
+                { id:"title_case",       l:"Title case",        d:"Capitalize the first letter of each word." },
+                { id:"normalize_email",  l:"Normalize email",   d:"Lowercase + strip plus / dot aliases." },
+                { id:"normalize_phone",  l:"Normalize phone",   d:"Coerce to E.164 international format." },
+                { id:"strip_special",    l:"Strip special",     d:"Whitelist allowed characters via regex." }
+              ],
+              enrichment: [
+                { id:"vendor_lookup",   l:"Vendor lookup",     d:"Augment via ZoomInfo / Clearbit / Apollo." },
+                { id:"identity_verify", l:"Identity verify",   d:"Aadhaar, DigiLocker, FDIC, OFAC." },
+                { id:"geocode",         l:"Geocode address",   d:"Get latitude / longitude + components." },
+                { id:"timezone_convert",l:"Timezone convert",  d:"Convert timestamp to a target zone." },
+                { id:"currency_convert",l:"Currency convert",  d:"FX-convert at the record timestamp." }
+              ]
+            };
+            var KIND_META = {
+              validation: { code:"VAL", color:"var(--blue)",   fill:"var(--blue-fill)",   label:"Validation" },
+              cleansing:  { code:"CLN", color:"var(--green)",  fill:"var(--green-fill)",  label:"Cleansing" },
+              enrichment: { code:"ENR", color:"var(--gold)",   fill:"var(--gold-fill)",   label:"Enrichment" }
+            };
+            var SEV_META = {
+              ERROR: { color:"var(--coral)", fill:"var(--coral-fill)" },
+              WARN:  { color:"var(--gold)",  fill:"var(--gold-fill)" },
+              INFO:  { color:"var(--ink-3)", fill:"var(--chip)" }
+            };
+            var draftKindMeta = KIND_META[pRuleDraftKind];
+            var draftTemplates = DQ_TEMPLATES[pRuleDraftKind] || [];
+
+            function saveDraftRule(){
+              var tmpl = draftTemplates.find(function(t){ return t.id === pRuleDraftTemplate; });
+              setPDqRules(function(arr){ return arr.concat([{ id: "r_" + Date.now(), kind: pRuleDraftKind, template: pRuleDraftTemplate, label: (tmpl && tmpl.l) || pRuleDraftTemplate, desc: (tmpl && tmpl.d) || "", severity: pRuleDraftSeverity }]); });
+              setPRuleAddOpen(false);
+              setPRuleDraftKind("validation");
+              setPRuleDraftTemplate("required");
+              setPRuleDraftSeverity("ERROR");
+            }
+
+            return (
+            <div style={{ display:"flex", flexDirection:"column", gap:28, maxWidth:860 }}>
+
+              {/* Inherited banner — communicates the node-level inheritance model */}
+              <div style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"11px 14px", border:"1px dashed var(--line)", borderRadius:8, background:"transparent" }}>
+                <span style={{ width:6, height:6, borderRadius:"50%", background:"var(--ink-3)", marginTop:7, flexShrink:0 }} />
+                <div style={{ flex:1, fontSize:12.5, color:"var(--ink-3)", lineHeight:1.55 }}>
+                  Access policies, retention, tags and ownership are <b style={{ color:"var(--ink-2)" }}>inherited</b> from the <code style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"1px 6px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{node.label}</code> node type. Define what's unique to this property below.
                 </div>
               </div>
 
-              {/* TAGS — open multi-select with grouped suggestions */}
-              <div style={{ position:"relative" }}>
-                <label style={lbl}>TAGS</label>
-                <button onClick={function(){ setPTagsOpen(function(o){ return !o; }); }}
-                  style={Object.assign({}, inp, { display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer", textAlign:"left", padding:"9px 12px", minHeight:42 })}>
-                  <span style={{ display:"flex", flexWrap:"wrap", gap:5, flex:1, alignItems:"center" }}>
-                    {pTags.length === 0 && <span style={{ color:"var(--ink-4)", fontSize:13 }}>Add tags — compliance, domain, lifecycle…</span>}
-                    {pTags.map(function(t){
-                      var tone = /SOC|GDPR|HIPAA|ISO|CCPA|PCI/.test(t) ? { bg:"var(--coral-fill)", fg:"var(--coral)" }
-                               : /CORE|SHARED|GOLDEN|DRAFT|DEPRECATED/.test(t) ? { bg:"var(--gold-fill)", fg:"var(--gold)" }
-                               : { bg:"var(--blue-fill)", fg:"var(--blue)" };
-                      return (
-                        <span key={t} style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"JetBrains Mono", fontSize:10.5, padding:"3px 5px 3px 8px", borderRadius:4, background:tone.bg, color:tone.fg, fontWeight:600, letterSpacing:"0.3px" }}>
-                          {t}
-                          <button onClick={function(e){ e.stopPropagation(); setPTags(function(arr){ return arr.filter(function(x){ return x !== t; }); }); }} style={{ background:"none", border:"none", color:"currentColor", cursor:"pointer", padding:0, fontSize:12, lineHeight:1, opacity:0.6 }}>×</button>
-                        </span>
-                      );
-                    })}
-                  </span>
-                  <span style={{ color:"var(--ink-3)", marginLeft:8, fontFamily:"JetBrains Mono", fontSize:11 }}>▾</span>
-                </button>
-                {pTagsOpen && (
-                  <>
-                    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPTagsOpen(false); }} />
-                    <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:380, overflowY:"auto" }}>
-                      {[
-                        { group:"Compliance", tone:{ bg:"var(--coral-fill)", fg:"var(--coral)" }, items:["SOC2","GDPR","HIPAA","ISO27001","CCPA","PCI-DSS"] },
-                        { group:"Domain",     tone:{ bg:"var(--blue-fill)",  fg:"var(--blue)"  }, items:["Customer","Finance","Product","Sales","Support","Marketing","HR"] },
-                        { group:"Lifecycle",  tone:{ bg:"var(--gold-fill)",  fg:"var(--gold)"  }, items:["Core","Shared","Golden record","Draft","Deprecated"] }
-                      ].map(function(grp){
+              {/* ── DATA QUALITY ────────────────────────────────────────────── */}
+              <div>
+                <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:10 }}>
+                  <div>
+                    <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>Data quality</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, letterSpacing:"0.3px" }}>Validate, cleanse or enrich this property at read &amp; write time.</div>
+                  </div>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{pDqRules.length + " " + (pDqRules.length === 1 ? "rule" : "rules")}</span>
+                </div>
+
+                {/* Existing rule cards */}
+                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  {pDqRules.length === 0 && !pRuleAddOpen && (
+                    <div style={{ padding:"22px 14px", border:"1px dashed var(--line)", borderRadius:8, fontSize:12.5, color:"var(--ink-3)", textAlign:"center", background:"var(--panel)" }}>
+                      No data quality rules yet. Add one below — start with the templates that fit this property's shape.
+                    </div>
+                  )}
+                  {pDqRules.map(function(r){
+                    var km = KIND_META[r.kind] || KIND_META.validation;
+                    var sm = SEV_META[r.severity] || SEV_META.ERROR;
+                    return (
+                      <div key={r.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel)" }}>
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 7px", borderRadius:4, background:km.fill, color:km.color, fontWeight:700, letterSpacing:"0.4px", flexShrink:0 }}>{km.code}</span>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{r.label}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, lineHeight:1.45 }}>{r.desc}</div>
+                        </div>
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 7px", borderRadius:4, background:sm.fill, color:sm.color, fontWeight:700, letterSpacing:"0.4px", flexShrink:0 }}>{r.severity}</span>
+                        <button onClick={function(){ setPDqRules(function(arr){ return arr.filter(function(x){ return x.id !== r.id; }); }); }} title="Remove rule"
+                          style={{ width:26, height:26, border:"none", background:"none", cursor:"pointer", color:"var(--ink-3)", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:5 }}>×</button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Inline rule editor — opens below the list */}
+                {pRuleAddOpen ? (
+                  <div style={{ marginTop:10, padding:"16px 18px", border:"1px solid " + draftKindMeta.color, borderRadius:10, background:"var(--panel)", boxShadow:"0 0 0 2px color-mix(in oklab, " + draftKindMeta.color + " 12%, transparent)" }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase" }}>New rule</div>
+                      <button onClick={function(){ setPRuleAddOpen(false); }} style={{ border:"none", background:"none", padding:0, cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>Cancel</button>
+                    </div>
+
+                    {/* Kind selector — 3 segmented buttons */}
+                    <div style={{ marginBottom:14 }}>
+                      <label style={Object.assign({}, lbl, { marginBottom:6 })}>Rule kind</label>
+                      <div style={{ display:"grid", gridTemplateColumns:"repeat(3, minmax(0, 1fr))", gap:8 }}>
+                        {["validation","cleansing","enrichment"].map(function(k){
+                          var m = KIND_META[k]; var on = pRuleDraftKind === k;
+                          return (
+                            <button key={k} onClick={function(){ setPRuleDraftKind(k); setPRuleDraftTemplate((DQ_TEMPLATES[k] || [])[0] && (DQ_TEMPLATES[k][0]).id); }}
+                              style={{ textAlign:"left", padding:"10px 12px", border:"1px solid " + (on ? m.color : "var(--line)"), borderRadius:8, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", boxShadow: on ? "0 0 0 2px color-mix(in oklab, " + m.color + " 14%, transparent)" : "none", display:"flex", alignItems:"center", gap:8 }}>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:4, background:m.fill, color:m.color, fontWeight:700, letterSpacing:"0.4px" }}>{m.code}</span>
+                              <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{m.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Template */}
+                    <div style={{ marginBottom:14 }}>
+                      <label style={Object.assign({}, lbl, { marginBottom:6 })}>Template</label>
+                      <select value={pRuleDraftTemplate} onChange={function(e){ setPRuleDraftTemplate(e.target.value); }} style={inp}>
+                        {draftTemplates.map(function(t){ return <option key={t.id} value={t.id}>{t.l + " · " + t.d}</option>; })}
+                      </select>
+                    </div>
+
+                    {/* Severity */}
+                    <div style={{ marginBottom:14 }}>
+                      <label style={Object.assign({}, lbl, { marginBottom:6 })}>Severity on violation</label>
+                      <div style={{ display:"flex", gap:8 }}>
+                        {["ERROR","WARN","INFO"].map(function(s){
+                          var m = SEV_META[s]; var on = pRuleDraftSeverity === s;
+                          return (
+                            <button key={s} onClick={function(){ setPRuleDraftSeverity(s); }}
+                              style={{ padding:"8px 14px", border:"1px solid " + (on ? m.color : "var(--line)"), borderRadius:8, background:"var(--panel)", color: on ? m.color : "var(--ink-3)", fontSize:11.5, fontFamily:"JetBrains Mono", fontWeight: on ? 700 : 500, letterSpacing:"0.5px", cursor:"pointer", boxShadow: on ? "0 0 0 2px " + m.color + "22" : "none" }}>{s}</button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div style={{ display:"flex", gap:8, justifyContent:"flex-end", paddingTop:8, borderTop:"1px dashed var(--line-2)" }}>
+                      <button className="btn-ghost" onClick={function(){ setPRuleAddOpen(false); }}>Cancel</button>
+                      <button className="btn-dark" onClick={saveDraftRule}>Add rule</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={function(){ setPRuleAddOpen(true); }}
+                    style={{ marginTop:10, padding:"10px 14px", border:"1px dashed var(--line)", borderRadius:8, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, color:"var(--ink-2)", display:"flex", alignItems:"center", gap:7 }}>
+                    <span style={{ fontFamily:"JetBrains Mono", fontWeight:700, color:"var(--ink-3)" }}>+</span>
+                    <span>Add data quality rule</span>
+                  </button>
+                )}
+              </div>
+
+              {/* ── MATCH BEHAVIOR ──────────────────────────────────────────── */}
+              <div>
+                <div style={{ marginBottom:10 }}>
+                  <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>Match behavior</div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, letterSpacing:"0.3px" }}>How this property contributes when match rules run across {node.label} records.</div>
+                </div>
+                <label style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"13px 14px", border:"1px solid " + (pMatchSignal ? "var(--purple)" : "var(--line)"), borderRadius:9, background:"var(--panel)", cursor:"pointer", boxShadow: pMatchSignal ? "0 0 0 2px color-mix(in oklab, var(--purple) 14%, transparent)" : "none", transition:"border-color 100ms, box-shadow 100ms" }}>
+                  <input type="checkbox" checked={pMatchSignal} onChange={function(e){ setPMatchSignal(e.target.checked); }} style={{ accentColor:"var(--purple)", width:15, height:15, marginTop:2, flexShrink:0 }} />
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>Use this property as a match signal</span>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:4, background:"var(--purple-fill)", color:"var(--purple)", fontWeight:700, letterSpacing:"0.4px" }}>MTC</span>
+                    </div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:4, lineHeight:1.45 }}>When match rules run, this property's strategy and weight feed the score that decides auto-merge vs review.</div>
+                  </div>
+                </label>
+                {pMatchSignal && (
+                  <div style={{ marginTop:10, display:"grid", gridTemplateColumns:"1.4fr 1fr", gap:14 }}>
+                    <div>
+                      <label style={lbl}>Match strategy</label>
+                      <select value={pMatchStrategy} onChange={function(e){ setPMatchStrategy(e.target.value); }} style={inp}>
+                        <option value="exact">Exact · case-sensitive equality</option>
+                        <option value="exact_ci">Exact · case-insensitive</option>
+                        <option value="fuzzy_name">Fuzzy name · Jaro-Winkler</option>
+                        <option value="fuzzy_token">Fuzzy token · token-set ratio</option>
+                        <option value="normalized_email">Normalized email</option>
+                        <option value="normalized_domain">Normalized domain</option>
+                        <option value="normalized_phone">Normalized phone (E.164)</option>
+                        <option value="embedding">Embedding cosine similarity</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={lbl}>Weight · 0–1</label>
+                      <input type="number" min="0" max="1" step="0.05" value={pMatchWeight} onChange={function(e){ setPMatchWeight(e.target.value); }} style={inp} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── SURVIVORSHIP ────────────────────────────────────────────── */}
+              <div>
+                <div style={{ marginBottom:10 }}>
+                  <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>Survivorship</div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, letterSpacing:"0.3px" }}>When sources disagree on this property's value, which one wins?</div>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(3, minmax(0, 1fr))", gap:10 }}>
+                  {[
+                    { id:"inherit",             l:"Inherit from node",  d:"Use the " + node.label + " default policy." },
+                    { id:"source_priority",     l:"Source priority",    d:"Pick from a ranked list of sources." },
+                    { id:"recency",             l:"Most recent",        d:"Newest updated_at wins." },
+                    { id:"completeness",        l:"Most complete",      d:"Longest non-null value wins." },
+                    { id:"trust_tier",          l:"Trust tier",          d:"By source trust level." },
+                    { id:"confidence_weighted", l:"Confidence weighted", d:"Blend by per-value confidence." }
+                  ].map(function(o){
+                    var on = pSurvStrategy === o.id;
+                    return (
+                      <button key={o.id} onClick={function(){ setPSurvStrategy(o.id); }}
+                        style={{ textAlign:"left", padding:"12px 14px", border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), borderRadius:8, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", boxShadow: on ? "0 0 0 2px color-mix(in oklab, var(--ink) 10%, transparent)" : "none", transition:"border-color 100ms, box-shadow 100ms" }}>
+                        <div style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{o.l}</div>
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4, lineHeight:1.45 }}>{o.d}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {pSurvStrategy === "source_priority" && (
+                  <div style={{ marginTop:14 }}>
+                    <label style={lbl}>Source ranking · highest first</label>
+                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                      {pSurvSources.map(function(src, i){
+                        var isTop = i === 0;
                         return (
-                          <div key={grp.group} style={{ marginBottom:4 }}>
-                            <div style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"6px 10px 4px", color:"var(--ink-4)", letterSpacing:"0.7px", textTransform:"uppercase" }}>{grp.group}</div>
-                            <div style={{ display:"flex", flexWrap:"wrap", gap:4, padding:"0 8px 6px" }}>
-                              {grp.items.map(function(t){
-                                var isOn = pTags.indexOf(t) >= 0;
-                                return (
-                                  <button key={t} onClick={function(){ setPTags(function(arr){ return isOn ? arr.filter(function(x){ return x !== t; }) : arr.concat([t]); }); }}
-                                    style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"JetBrains Mono", fontSize:10.5, padding:"4px 8px", borderRadius:4, background: isOn ? grp.tone.bg : "transparent", color: isOn ? grp.tone.fg : "var(--ink-2)", border:"1px solid " + (isOn ? grp.tone.fg + "55" : "var(--line)"), fontWeight: isOn ? 700 : 500, cursor:"pointer", letterSpacing:"0.3px" }}>
-                                    {isOn && <span style={{ fontWeight:700 }}>✓</span>}
-                                    {t}
-                                  </button>
-                                );
-                              })}
+                          <div key={i} style={{ display:"flex", alignItems:"center", padding:"10px 14px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel)", gap:12 }}>
+                            <span style={{ width:22, height:22, borderRadius:"50%", background: isTop ? "var(--ink)" : "var(--chip)", color: isTop ? "var(--panel)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, flexShrink:0 }}>{i + 1}</span>
+                            <span style={{ fontSize:13, color:"var(--ink)", flex:1 }}>{src}</span>
+                            <div style={{ display:"flex", gap:2 }}>
+                              <button onClick={function(){ if (i > 0) setPSurvSources(function(arr){ var n = arr.slice(); var t = n[i]; n[i] = n[i-1]; n[i-1] = t; return n; }); }} disabled={i === 0} title="Move up" style={{ width:24, height:24, borderRadius:5, border:"1px solid var(--line)", background:"var(--panel)", cursor:"pointer", color:"var(--ink-3)", opacity: i === 0 ? 0.3 : 1, display:"flex", alignItems:"center", justifyContent:"center", fontSize:9 }}>▲</button>
+                              <button onClick={function(){ if (i < pSurvSources.length-1) setPSurvSources(function(arr){ var n = arr.slice(); var t = n[i]; n[i] = n[i+1]; n[i+1] = t; return n; }); }} disabled={i === pSurvSources.length-1} title="Move down" style={{ width:24, height:24, borderRadius:5, border:"1px solid var(--line)", background:"var(--panel)", cursor:"pointer", color:"var(--ink-3)", opacity: i === pSurvSources.length-1 ? 0.3 : 1, display:"flex", alignItems:"center", justifyContent:"center", fontSize:9 }}>▼</button>
                             </div>
                           </div>
                         );
                       })}
                     </div>
-                  </>
+                  </div>
                 )}
-                <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6, lineHeight:1.5 }}>Surface this property for the right audience — compliance frameworks, business domain, lifecycle stage.</div>
               </div>
 
-              {/* PERMISSIONS — identical card + PermRow pattern as AddNodeFlow */}
-              <div>
-                <label style={lbl}>WHO CAN ACCESS THIS PROPERTY?</label>
-                <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
-                  <PermRow k="read"  label="Read"  list={pPermsRead}  setList={setPPermsRead}  tone={{ bg:"var(--blue-fill)",   fg:"var(--blue)"   }} desc="Can query records and view this property's value." />
-                  <PermRow k="write" label="Write" list={pPermsWrite} setList={setPPermsWrite} tone={{ bg:"var(--green-fill)",  fg:"var(--green)"  }} desc="Can set or update this property's value on records." />
-                  <PermRow k="admin" label="Admin" list={pPermsAdmin} setList={setPPermsAdmin} tone={{ bg:"var(--coral-fill)",  fg:"var(--coral)"  }} desc="Can edit the property definition, rules, and access policies." />
-                </div>
-              </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* MANUAL · STEP 4 — Review */}
-          {mode === "manual" && stepId === "review" && (
+          {mode === "manual" && stepId === "review" && (function(){
+            // Lookup labels for the various dropdown choices on Computation step
+            var RECOMPUTE_LABELS = { on_change:"On input change", on_read:"On read (lazy)", daily:"Daily batch", schedule:"Custom schedule", manual:"Manual trigger" };
+            var BACKFILL_LABELS  = { all:"All existing", forward:"Forward only", batched:"In batches" };
+            var ONFAIL_LABELS    = { raise:"Raise — block the write", "default":"Use default value", "null":"Leave null — skip silently", quarantine:"Route to steward queue" };
+            var SQL_SYS_LABELS   = { databricks:"Databricks", snowflake:"Snowflake", bigquery:"BigQuery", redshift:"Redshift", postgres:"Postgres", trino:"Trino", graph:"Graph (Cypher)" };
+            var CONN_LABELS      = { "dbx-prod":"analytics-warehouse · prod", "dbx-dev":"dev-cluster · dev", "snw-prod":"ANALYTICS_PROD · US-WEST-2", "snw-raw":"RAW_INGEST · US-EAST-1", "bq-metrics":"metrics-prod (data-platform)", "bq-logs":"logs (raw)", "rs-prod":"warehouse-prod · us-east-1", "pg-billing":"billing-readonly · prod", "pg-ops":"ops-readonly · prod", "trino-fed":"federated-prod", "graph-main":"main-graph · neo4j-aura" };
+            var AUTO_LABELS      = { "wf-customer-tier":"compute_customer_tier (Internal · weekly)", "wf-health-score":"refresh_health_score (Internal · hourly)", "wf-onboard-status":"onboard_status_check (Internal · on-event)", "wk-arr-rollup":"ARR Rollup → Account (Workato · daily)", "wk-renewal-stage":"Renewal Stage Sync (Workato · hourly)", "zp-form-intake":"Form Intake → Ticket (Zapier)", "zp-notion-sync":"Notion ↔ CRM (Zapier)", "tr-enrichment-pipe":"Enrichment Pipeline (Tray.io)", "n8-anomaly-detect":"Anomaly Detection (n8n)", "af-customer-360":"customer_360_dag (Airflow · daily 02:00 UTC)", "af-billing-sync":"billing_sync_dag (Airflow · hourly)", "wh-custom-1":"POST /compute/property (webhook)" };
+            var COMPUTE_KIND_LABEL = { formula:"Formula", sql:"SQL/Cypher", automation:"Automation", agent:"Agent" };
+            // Build a flat row list for the Summary card
+            var summaryRows = [];
+            summaryRows.push({ k:"KEY", v:<code style={{ fontFamily:"JetBrains Mono", fontSize:12, padding:"3px 8px", background:"var(--chip)", borderRadius:5, color:"var(--ink)" }}>{(pIsNested && pParent ? pParent + "." : "") + (pName || "untitled")}</code> });
+            summaryRows.push({ k:"DISPLAY NAME", v: pDisplayName || <span style={{ color:"var(--ink-4)" }}>— inferred from key</span> });
+            if (pIsNested) summaryRows.push({ k:"NESTED UNDER", v: pParent ? <code style={{ fontFamily:"JetBrains Mono", color:"var(--ink-2)" }}>{pParent}</code> : <span style={{ color:"var(--ink-4)" }}>not picked</span> });
+            summaryRows.push({ k:"TYPE", v:<span style={{ display:"inline-flex", alignItems:"center", gap:6 }}><span style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", minWidth:24, height:18, padding:"0 6px", borderRadius:4, background:typeMeta.color, color:"#fff", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700 }}>{typeMeta.glyph}</span><code style={{ fontFamily:"JetBrains Mono" }}>{pType}</code></span> });
+            if (pType === "single_select" || pType === "multi_select") summaryRows.push({ k:"OPTIONS", v: <span style={{ display:"inline-flex", flexWrap:"wrap", gap:4, justifyContent:"flex-end" }}>{pSelectOptions.filter(function(o){ return o.trim().length > 0; }).map(function(o){ return <span key={o} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"2px 7px", borderRadius:4, background:"var(--purple-fill)", color:"var(--purple)", fontWeight:600 }}>{o}</span>; })}</span> });
+            summaryRows.push({ k:"DEFAULT", v: pDefault ? <code style={{ fontFamily:"JetBrains Mono", color:"var(--ink)" }}>{pDefault}</code> : <span style={{ color:"var(--ink-4)" }}>—</span> });
+            summaryRows.push({ k:"PRIMARY KEY", v: pIsPrimary ? <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:"var(--ink)", color:"var(--panel)", fontWeight:700, letterSpacing:"0.4px" }}>PK</span> : <span style={{ color:"var(--ink-4)" }}>no</span> });
+            summaryRows.push({ k:"HELP TEXT", v: pHelpText || <span style={{ color:"var(--ink-4)" }}>—</span> });
+            // Flags
+            var flagChips = [
+              pRequired && { l:"REQUIRED", bg:"var(--chip)",        fg:"var(--ink-2)" },
+              pIndexed  && { l:"INDEXED",  bg:"var(--blue-fill)",   fg:"var(--blue)"  },
+              pUnique   && { l:"UNIQUE",   bg:"var(--green-fill)",  fg:"var(--green)" },
+              pPII      && { l:"PII",      bg:"var(--coral-fill)",  fg:"var(--coral)" }
+            ].filter(Boolean);
+            summaryRows.push({ k:"FLAGS", v: flagChips.length === 0 ? <span style={{ color:"var(--ink-4)" }}>none</span> : <span style={{ display:"inline-flex", flexWrap:"wrap", gap:4, justifyContent:"flex-end" }}>{flagChips.map(function(f){ return <span key={f.l} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:f.bg, color:f.fg, fontWeight:700, letterSpacing:"0.4px" }}>{f.l}</span>; })}</span> });
+            // Advanced flags (only enabled ones)
+            var advChips = [
+              pAdvHash          && "Hashing",
+              pAdvSecure        && "Secure field",
+              pAdvDisplayInRefs && "Display in refs",
+              pAdvSearch        && "Search",
+              pAdvSort          && "Sort",
+              pAdvFilter        && "Filter"
+            ].filter(Boolean);
+            summaryRows.push({ k:"ADVANCED", v: advChips.length === 0 ? <span style={{ color:"var(--ink-4)" }}>none</span> : <span style={{ display:"inline-flex", flexWrap:"wrap", gap:4, justifyContent:"flex-end" }}>{advChips.map(function(a){ return <span key={a} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)", fontWeight:600 }}>{a}</span>; })}</span> });
+            summaryRows.push({ k:"SOURCE", v: pComputed ? <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}><span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 6px", borderRadius:4, background:"var(--green-fill)", color:"var(--green)", fontWeight:700, letterSpacing:"0.4px" }}>FX</span>{COMPUTE_KIND_LABEL[pComputeKind] || "(not configured)"}</span> : pSource });
+
+            // Build the Computation card rows when computed
+            var compRows = [];
+            if (pComputed){
+              compRows.push({ k:"COMPUTATION TYPE", v: <code style={{ fontFamily:"JetBrains Mono", color:"var(--ink)" }}>{COMPUTE_KIND_LABEL[pComputeKind] || "(not set)"}</code> });
+              if (pComputeKind === "formula"){
+                compRows.push({ k:"FORMULA", v: pFormula ? <code style={{ fontFamily:"JetBrains Mono", fontSize:11.5, padding:"4px 8px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:5, color:"var(--ink)", whiteSpace:"pre-wrap", display:"inline-block", maxWidth:"100%", textAlign:"left" }}>{pFormula}</code> : <span style={{ color:"var(--ink-4)" }}>(no expression set)</span> });
+              } else if (pComputeKind === "sql"){
+                compRows.push({ k:"SYSTEM",     v: SQL_SYS_LABELS[pSqlSystem] || <span style={{ color:"var(--ink-4)" }}>(not picked)</span> });
+                compRows.push({ k:"CONNECTION", v: CONN_LABELS[pSqlConnection] || <span style={{ color:"var(--ink-4)" }}>(not picked)</span> });
+                compRows.push({ k:"QUERY", v: pFormula ? <code style={{ fontFamily:"JetBrains Mono", fontSize:11.5, padding:"4px 8px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:5, color:"var(--ink)", whiteSpace:"pre-wrap", display:"inline-block", maxWidth:"100%", textAlign:"left" }}>{pFormula}</code> : <span style={{ color:"var(--ink-4)" }}>(no query set)</span> });
+              } else if (pComputeKind === "automation"){
+                compRows.push({ k:"AUTOMATION", v: AUTO_LABELS[pAutomation] || <span style={{ color:"var(--ink-4)" }}>(not picked)</span> });
+              } else if (pComputeKind === "agent"){
+                compRows.push({ k:"AGENT", v: pFormula ? <code style={{ fontFamily:"JetBrains Mono" }}>{pFormula}</code> : <span style={{ color:"var(--ink-4)" }}>(not picked)</span> });
+              }
+              compRows.push({ k:"RECOMPUTE", v: RECOMPUTE_LABELS[pComputeMode] || <span style={{ color:"var(--ink-4)" }}>(not picked)</span> });
+              if (pComputeMode === "schedule") compRows.push({ k:"CRON SCHEDULE", v: <code style={{ fontFamily:"JetBrains Mono" }}>{pComputeSchedule}</code> });
+              compRows.push({ k:"BACKFILL",  v: BACKFILL_LABELS[pComputeBackfill] || <span style={{ color:"var(--ink-4)" }}>(not picked)</span> });
+              compRows.push({ k:"ON FAILURE", v: ONFAIL_LABELS[pComputeOnFail] || <span style={{ color:"var(--ink-4)" }}>(not picked)</span> });
+            }
+
+            function renderCard(title, sub, rows){
+              return (
+                <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
+                  <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
+                    <span style={{ fontSize:14, fontWeight:600 }}>{title}</span>
+                    <span className="card-head-sub">{sub}</span>
+                  </div>
+                  <div style={{ padding:"4px 0" }}>
+                    {rows.map(function(row, i, arr){
+                      return (
+                        <div key={row.k} style={{ display:"grid", gridTemplateColumns:"160px 1fr", gap:16, padding:"10px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"baseline" }}>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>{row.k}</span>
+                          <span style={{ fontSize:13, color:"var(--ink)", textAlign:"right" }}>{row.v}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            }
+
+            return (
           <div style={{ display:"flex", flexDirection:"column", gap:22, maxWidth:760 }}>
-            {/* Headline */}
-            <div>
-              <div style={{ fontFamily:"Instrument Serif", fontSize:30, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>Last look before this property lands on {node.label}</div>
-              <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:600 }}>
-                Once published the field appears in the {node.label} table with a full audit trail. You can roll back from History within the 30-day change window.
-              </div>
-            </div>
-
-            {/* SHAPE & BEHAVIOUR — first card */}
-            <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
-              <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
-                <span style={{ fontSize:14, fontWeight:600 }}>Shape &amp; behaviour</span>
-                <span className="card-head-sub">{pType + (pComputed ? " · computed" : "") + " · " + ([pRequired&&"req",pIndexed&&"idx",pUnique&&"unq",pPII&&"pii"].filter(Boolean).join(" · ") || "no flags")}</span>
-              </div>
-              <div style={{ padding:"4px 0" }}>
-                {[
-                  { k:"NAME",        v:<code style={{ fontFamily:"JetBrains Mono", fontSize:12, padding:"3px 8px", background:"var(--chip)", borderRadius:5, color:"var(--ink)" }}>{pName || "untitled"}</code> },
-                  { k:"TYPE",        v:<span style={{ display:"inline-flex", alignItems:"center", gap:6 }}><span style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", minWidth:24, height:18, padding:"0 6px", borderRadius:4, background:typeMeta.color, color:"#fff", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700 }}>{typeMeta.glyph}</span><code style={{ fontFamily:"JetBrains Mono" }}>{pType}</code></span> },
-                  { k:"DESCRIPTION", v: pDesc || <span style={{ color:"var(--ink-4)" }}>—</span> },
-                  { k:"FLAGS",       v: ([
-                                          pRequired && { l:"REQUIRED", bg:"var(--chip)",        fg:"var(--ink-2)" },
-                                          pIndexed  && { l:"INDEXED",  bg:"var(--blue-fill)",   fg:"var(--blue)"  },
-                                          pUnique   && { l:"UNIQUE",   bg:"var(--green-fill)",  fg:"var(--green)" },
-                                          pPII      && { l:"PII",      bg:"var(--coral-fill)",  fg:"var(--coral)" }
-                                        ].filter(Boolean)).length === 0
-                                        ? <span style={{ color:"var(--ink-4)" }}>none</span>
-                                        : <span style={{ display:"inline-flex", flexWrap:"wrap", gap:4, justifyContent:"flex-end" }}>{[
-                                            pRequired && { l:"REQUIRED", bg:"var(--chip)",        fg:"var(--ink-2)" },
-                                            pIndexed  && { l:"INDEXED",  bg:"var(--blue-fill)",   fg:"var(--blue)"  },
-                                            pUnique   && { l:"UNIQUE",   bg:"var(--green-fill)",  fg:"var(--green)" },
-                                            pPII      && { l:"PII",      bg:"var(--coral-fill)",  fg:"var(--coral)" }
-                                          ].filter(Boolean).map(function(f){ return <span key={f.l} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:f.bg, color:f.fg, fontWeight:700, letterSpacing:"0.4px" }}>{f.l}</span>; })}</span> },
-                  { k:"SOURCE",      v: pComputed ? <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}><span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 6px", borderRadius:4, background:"var(--green-fill)", color:"var(--green)", fontWeight:700, letterSpacing:"0.4px" }}>FX</span>{pFormula || <span style={{ color:"var(--ink-4)" }}>(no formula set)</span>}</span> : pSource },
-                  { k:"DEFAULT",     v: pDefault ? <code style={{ fontFamily:"JetBrains Mono", color:"var(--ink)" }}>{pDefault}</code> : <span style={{ color:"var(--ink-4)" }}>—</span> }
-                ].map(function(row, i, arr){
-                  return (
-                    <div key={row.k} style={{ display:"grid", gridTemplateColumns:"160px 1fr", gap:16, padding:"10px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"baseline" }}>
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>{row.k}</span>
-                      <span style={{ fontSize:13, color:"var(--ink)", textAlign:"right" }}>{row.v}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* GOVERNANCE — second card */}
-            <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
-              <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
-                <span style={{ fontSize:14, fontWeight:600 }}>Governance</span>
-                <span className="card-head-sub">{pOwner + " · " + pClassification + (pPII ? " · PII auditable" : "")}</span>
-              </div>
-              <div style={{ padding:"4px 0" }}>
-                {[
-                  { k:"OWNER",          v: pOwner },
-                  { k:"CLASSIFICATION", v: <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)", textTransform:"uppercase", letterSpacing:"0.4px", fontWeight:700 }}>{pClassification}</span> },
-                  { k:"RETENTION",      v: pRetention === "inherit" ? <span><span style={{ color:"var(--ink-4)" }}>inherits from </span><code style={{ fontFamily:"JetBrains Mono", color:"var(--ink-2)" }}>{node.label}</code></span> : pRetention },
-                  { k:"ACCESS",         v: pAccess === "inherit" ? <span><span style={{ color:"var(--ink-4)" }}>inherits from </span><code style={{ fontFamily:"JetBrains Mono", color:"var(--ink-2)" }}>{node.label}</code></span> : pAccess }
-                ].map(function(row, i, arr){
-                  return (
-                    <div key={row.k} style={{ display:"grid", gridTemplateColumns:"160px 1fr", gap:16, padding:"10px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"baseline" }}>
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>{row.k}</span>
-                      <span style={{ fontSize:13, color:"var(--ink)", textAlign:"right" }}>{row.v}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            {/* SUMMARY — primary card */}
+            {renderCard("Summary", pType + (pComputed ? " · computed" : "") + " · " + ([pRequired&&"req",pIndexed&&"idx",pUnique&&"unq",pPII&&"pii"].filter(Boolean).join(" · ") || "no flags"), summaryRows)}
+            {pComputed && renderCard("Computation", (COMPUTE_KIND_LABEL[pComputeKind] || "—") + " · " + (RECOMPUTE_LABELS[pComputeMode] || "no trigger"), compRows)}
           </div>
-          )}
+            );
+          })()}
 
           {/* BULK · SPREADSHEET / DOCUMENT — Step 1 */}
           {(mode === "spreadsheet" || mode === "document") && bulkStep === 1 && (
@@ -4536,61 +5271,52 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
 // ─── ADD EDGE FLOW ────────────────────────────────────────────────────────────
 
 function AddEdgeFlowModal({ fromNode, onClose }) {
-  const [step, setStep]               = useState(1);
-  const [eLabel, setELabel]           = useState("");
-  const [eDesc, setEDesc]             = useState("");
-  const [eTarget, setETarget]         = useState("");
-  const [eCard, setECard]             = useState("1:N");
-  const [eInverse, setEInverse]       = useState("");
-  const [ePopKind, setEPopKind]       = useState(null);
-  const [eBackfill, setEBackfill]     = useState(true);
-  const [eProps, setEProps]           = useState([
-    { name:"since", type:"timestamp", req:true, pii:false },
-    { name:"confidence", type:"float", req:false, pii:false },
+  // ── Edge creation flow — 3 steps: Basics, Properties, Review ──
+  // Stripped: description (redundant), inverse label (rarely used),
+  // risk classification, tags, access roles, target stage —
+  // those add cognitive load without changing the schema contract.
+  const [step, setStep]           = useState(1);
+  const [eLabel, setELabel]       = useState("");
+  const [eTarget, setETarget]     = useState("");
+  const [eCard, setECard]         = useState("1:N");
+  const [ePopKind, setEPopKind]   = useState(null);
+  const [eBackfill, setEBackfill] = useState(true);
+  const [eProps, setEProps]       = useState([
+    { name:"since",      type:"timestamp", req:true,  pii:false },
+    { name:"confidence", type:"float",     req:false, pii:false },
   ]);
-  const [eOwner, setEOwner]           = useState("data-platform");
-  const [eRisk, setERisk]             = useState("MEDIUM");
-  const [eTags, setETags]             = useState("");
-  const [eAccess, setEAccess]         = useState(["read_all"]);
-  const [eTargetStage, setETargetStage] = useState("draft");
-  const [eAccessInput, setEAccessInput] = useState("");
+  const [eOwner, setEOwner]   = useState("data-platform");
+  const [eActivate, setEActivate] = useState(false); // false = save as draft (safer default)
 
   const targetNodes = NODES.filter(function(n){ return n.id !== fromNode.id && n.type !== "source"; });
   const targetNode  = NODES.find(function(n){ return n.id === eTarget; });
-  const fromC = colorForNode(fromNode);
+  const fromC       = colorForNode(fromNode);
+  const toC         = targetNode ? colorForNode(targetNode) : null;
 
-  const STEP_META = [
-    { n:1, label:"Basics",     sub:"Label, endpoints, cardinality" },
-    { n:2, label:"Population", sub:"Where instances come from" },
-    { n:3, label:"Properties", sub:"Optional edge attributes" },
-    { n:4, label:"Governance", sub:"Owner, access, impact" },
-    { n:5, label:"Review",     sub:"Cypher diff & publish" },
-  ];
-
+  const stepNames = ["Basics", "Properties", "Review"];
   const canContinue = (function(){
-    if (step === 1) return eLabel.trim().length >= 3 && eTarget !== "";
+    if (step === 1) return eLabel.trim().length >= 3 && eTarget !== "" && ePopKind !== null;
     return true;
   }());
 
-  const inp = { border:"1px solid var(--line)", borderRadius:8, padding:"11px 13px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", outline:"none", boxSizing:"border-box", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6), 0 1px 0 rgba(40,40,20,0.02)" };
-  const lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 };
-  const fg  = { display:"flex", flexDirection:"column", gap:6 };
-  const fieldRow = { display:"flex", flexDirection:"column", gap:6, marginBottom:22 };
+  // Form baseline — consistent with rule flow polish: white inputs, 8px radius, slight padding.
+  const inp = { border:"1px solid var(--line)", borderRadius:8, padding:"11px 14px", fontSize:13.5, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", outline:"none", boxSizing:"border-box", width:"100%" };
+  const lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 };
 
+  // The four population paradigms. Card-style picker (always visible, not hidden behind dropdown)
+  // because this is the most consequential decision in edge design — where do instances come from.
   const popKinds = [
-    { id:"direct",   color:"var(--blue)",   tag:"DIRECT",   title:"Direct from source", desc:"Edge instances loaded from a source-system table or stream — one row, one edge." },
+    { id:"direct",   color:"var(--blue)",   tag:"DIRECT",   title:"From source",        desc:"One source row → one edge. Use when a foreign-key relation already exists in the source system." },
     { id:"inferred", color:"var(--purple)", tag:"INFERRED", title:"Inferred by rule",   desc:"Materialised from a Cypher pattern on a schedule. No source row required." },
-    { id:"agent",    color:"var(--green)",  tag:"AGENT",    title:"Agent-derived",       desc:"Edge emitted by an agent's reasoning step as a structured write event." },
-    { id:"computed", color:"var(--gold)",   tag:"COMPUTED", title:"Property match",      desc:"Edge appears when a property on From equals a property on To. Cheapest path." },
+    { id:"computed", color:"var(--gold)",   tag:"COMPUTED", title:"Property match",     desc:"Edge appears when a property on From equals a property on To. Cheapest path." },
+    { id:"agent",    color:"var(--green)",  tag:"AGENT",    title:"Agent write",        desc:"Edge emitted by an agent's reasoning step as a structured write event." },
   ];
+  const ownerOptions = ["data-platform","engineering","analytics","product","customer-ops","revenue-ops","finance-ops","security"];
 
-  const labelValid   = eLabel.trim().length >= 3;
-  const targetValid  = eTarget !== "";
-  const cypherLabel  = eLabel || "EDGE";
-  const fromLabelStr = fromNode.label;
-  const toLabelStr   = targetNode ? targetNode.label : "?";
-
-  const cypherText = "(:"+fromLabelStr+")\n  -[:"+cypherLabel+"]->\n  (:"+toLabelStr+")";
+  const labelValid  = eLabel.trim().length >= 3;
+  const targetValid = eTarget !== "";
+  const cypherLabel = eLabel || "EDGE";
+  const cypherText  = "(:"+fromNode.label+")\n  -[:"+cypherLabel+"]->\n  (:"+(targetNode ? targetNode.label : "?")+")";
 
   function NodeGlyph16({ node }) {
     const c2 = colorForNode(node);
@@ -4614,216 +5340,201 @@ function AddEdgeFlowModal({ fromNode, onClose }) {
     );
   }
 
-  function removeAccess(tag) {
-    setEAccess(function(prev){ return prev.filter(function(a){ return a !== tag; }); });
-  }
+  function addProp()             { setEProps(function(p){ return p.concat({ name:"new_prop", type:"string", req:false, pii:false }); }); }
+  function removeProp(i)         { setEProps(function(p){ return p.filter(function(_, j){ return j !== i; }); }); }
+  function updateProp(i, k, v)   { setEProps(function(p){ return p.map(function(x, j){ return j === i ? Object.assign({}, x, { [k]: v }) : x; }); }); }
 
-  function addProp() {
-    setEProps(function(prev){ return prev.concat({ name:"new_prop", type:"string", req:false, pii:false }); });
-  }
+  const popKindDef  = popKinds.find(function(k){ return k.id === ePopKind; });
+  const cardinalityHint = {
+    "1:1": "Each From has at most one " + (targetNode ? targetNode.label : "target") + ", and vice versa.",
+    "1:N": "Each From has many " + (targetNode ? targetNode.label : "targets") + " — typical for ownership.",
+    "N:1": "Many From point to one " + (targetNode ? targetNode.label : "target") + " — typical for hierarchy.",
+    "N:M": "Each side can point to many on the other — typical for tags or memberships."
+  };
 
-  function removeProp(idx) {
-    setEProps(function(prev){ return prev.filter(function(_, i){ return i !== idx; }); });
-  }
-
-  function updateProp(idx, key, val) {
-    setEProps(function(prev){ return prev.map(function(p, i){ return i === idx ? Object.assign({}, p, { [key]: val }) : p; }); });
-  }
-
-  const stepNames = ["Basics", "Properties", "Review"];
+  // Sidebar sub-text — live values per step
+  const sidebarSub = function(n){
+    if (n === 1) return (eLabel ? ":" + eLabel : "Label, endpoints…") + (eTarget ? " · " + (targetNode ? targetNode.label : "") : "");
+    if (n === 2) return eProps.length === 0 ? "None — optional" : eProps.length + " defined";
+    return eActivate ? "Activate" : "Draft";
+  };
 
   return (
-    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.4)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
+    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
       onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width:"92vw", maxWidth:1340, height:"94vh", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.3)" }}>
+      <div style={{ width:"94vw", maxWidth:1280, height:"94vh", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
 
-        {/* ── HEADER BAR ── */}
-        <div style={{ flexShrink:0, height:48, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 20px", background:"var(--panel)" }}>
+        {/* ── HEADER ── */}
+        <div style={{ flexShrink:0, height:54, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 22px", background:"var(--panel)" }}>
           <div>
-            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>
-              {"SCHEMA \xB7 EDGE TYPES \xB7 NEW"}
-            </div>
-            <div style={{ display:"flex", alignItems:"center", gap:7, marginTop:1 }}>
-              <NodeGlyph16 node={fromNode} />
-              <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, fontWeight:500, color:"var(--ink)" }}>{fromNode.label}</span>
-              <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)", fontStyle:"italic" }}>{"→ " + (eLabel ? ":"+eLabel : "choose target")}</span>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>{fromNode.label.toUpperCase() + " · NEW EDGE"}</div>
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:2 }}>
+              <span style={{ fontFamily:"Instrument Serif", fontSize:18, color:"var(--ink)" }}>{eLabel ? ":" + eLabel : "Define an edge"}</span>
+              {eTarget && targetNode && <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{"→ " + targetNode.label}</span>}
+              {ePopKind && popKindDef && <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:popKindDef.color, fontWeight:700, letterSpacing:"0.4px" }}>{popKindDef.tag}</span>}
             </div>
           </div>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 9px", borderRadius:4, border:"1px solid var(--line)", background:"var(--chip)", color:"var(--ink-2)", letterSpacing:"0.5px" }}>
-              {(eTarget ? toLabelStr : "TARGET") + " \xB7 DRAFT"}
-            </span>
-            <button onClick={onClose} style={{ width:28, height:28, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-              {"×"}
-            </button>
-          </div>
+          <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
         </div>
 
-        {/* ── BODY (sidebar + content + right panel) ── */}
-        <div style={{ flex:1, display:"flex", minHeight:0 }}>
+        {/* ── BODY — sidebar + form + right preview panel ── */}
+        <div style={{ flex:1, display:"grid", gridTemplateColumns:"240px minmax(0, 1fr) 240px", minHeight:0 }}>
 
-          {/* LEFT SIDEBAR */}
-          <div style={{ width:260, flexShrink:0, borderRight:"1px solid var(--line)", display:"flex", flexDirection:"column", background:"var(--panel)", padding:"24px 16px 0" }}>
-            <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-              {STEP_META.map(function(s){
-                const done = step > s.n;
-                const active = step === s.n;
-                return (
-                  <button key={s.n}
-                    onClick={function(){ if (done) setStep(s.n); }}
-                    style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"10px 12px", borderRadius:8, border:"none", background:active?"var(--bg-canvas)":"transparent", cursor:done?"pointer":"default", textAlign:"left", width:"100%" }}>
-                    <span style={{ width:24, height:24, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0, background:done?"var(--green)":active?"var(--ink)":"var(--line-2)", color:done||active?"#fff":"var(--ink-3)", marginTop:1 }}>
-                      {done ? "✓" : s.n}
-                    </span>
-                    <div>
-                      <div style={{ fontSize:13, fontWeight:active?600:400, color:active?"var(--ink)":done?"var(--ink-2)":"var(--ink-3)" }}>{s.label}</div>
-                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>{s.sub}</div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            <div style={{ marginTop:"auto", paddingBottom:24, borderTop:"1px solid var(--line-2)", paddingTop:16 }}>
-              {[
-                { key:"⌘↵", label:"Publish" },
-                { key:"⌘S", label:"Draft" },
-              ].map(function(item){
-                return (
-                  <div key={item.label} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 12px", borderRadius:6 }}>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"2px 7px", border:"1px solid var(--line)", borderRadius:4, background:"var(--panel)", color:"var(--ink-2)" }}>{item.key}</span>
-                    <span style={{ fontSize:12.5, color:"var(--ink-3)" }}>{item.label}</span>
+          {/* SIDEBAR */}
+          <div style={{ background:"var(--panel-2)", borderRight:"1px solid var(--line)", padding:"20px 14px", display:"flex", flexDirection:"column", gap:4, overflowY:"auto" }}>
+            {stepNames.map(function(name, i){
+              var n = i + 1; var isOn = step === n; var isDone = step > n;
+              return (
+                <button key={n} onClick={function(){ if (n < step || canContinue) setStep(n); }}
+                  style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily:"inherit", textAlign:"left", alignItems:"center" }}>
+                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:12, fontWeight:700, flexShrink:0, lineHeight:1 }}>{isDone ? <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg> : n}</span>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400, lineHeight:1.2 }}>{name}</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{sidebarSub(n)}</div>
                   </div>
-                );
-              })}
+                </button>
+              );
+            })}
+            <div style={{ marginTop:"auto", padding:"12px 8px", borderTop:"1px dashed var(--line-2)" }}>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", letterSpacing:"0.4px", textTransform:"uppercase", marginBottom:6 }}>Shortcuts</div>
+              <div style={{ display:"grid", gridTemplateColumns:"auto 1fr", gap:"5px 10px", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", alignItems:"center" }}>
+                <span style={{ padding:"1px 5px", borderRadius:3, background:"var(--bg-canvas)", border:"1px solid var(--line)" }}>⌘↵</span><span>Publish</span>
+                <span style={{ padding:"1px 5px", borderRadius:3, background:"var(--bg-canvas)", border:"1px solid var(--line)" }}>⌘S</span><span>Save draft</span>
+                <span style={{ padding:"1px 5px", borderRadius:3, background:"var(--bg-canvas)", border:"1px solid var(--line)" }}>esc</span><span>Cancel</span>
+              </div>
             </div>
           </div>
 
-          {/* CENTER CONTENT */}
-          <div style={{ flex:1, overflowY:"auto", padding:"36px 40px" }}>
+          {/* FORM */}
+          <div style={{ padding:"24px 32px 28px", overflowY:"auto" }}>
 
-            {/* STEP 1 — Basics */}
+            {/* STEP 1 — Basics: label, endpoints, cardinality, population, owner */}
             {step === 1 && (
-              <div style={{ maxWidth:560 }}>
-                <div style={{ marginBottom:28 }}>
-                  <div style={{ fontFamily:"Instrument Serif, serif", fontSize:32, lineHeight:1.1, letterSpacing:"-0.3px", marginBottom:8 }}>
-                    {"Name the edge and pick its endpoints"}
+              <div style={{ maxWidth:760 }}>
+                <div style={{ marginBottom:20 }}>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>Step 1 / 3</div>
+                  <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>Define the relationship</div>
+                  <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55 }}>An edge type is a typed directed link between two node types. Pick the endpoints, name the relationship, and choose how instances are populated.</div>
+                </div>
+
+                <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
+
+                  {/* ENDPOINTS — visual from → to */}
+                  <div>
+                    <label style={lbl}>Endpoints</label>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 28px 1fr", gap:10, alignItems:"center" }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel)" }}>
+                        <span style={{ width:28, height:28, borderRadius:"50%", background:fromC.fill, border:"1px solid "+fromC.stroke, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                          <NodeGlyph16 node={fromNode} />
+                        </span>
+                        <div style={{ minWidth:0, flex:1 }}>
+                          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{fromNode.label}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:1 }}>from · locked</div>
+                        </div>
+                      </div>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", color:"var(--ink-3)" }}>
+                        <svg width="20" height="14" viewBox="0 0 20 14" fill="none"><path d="M1 7h16M14 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      </div>
+                      <RichSelect
+                        value={eTarget}
+                        onChange={setETarget}
+                        options={targetNodes.map(function(n){ return { value:n.id, label:n.label, sub:(n.type || "entity") }; })}
+                        placeholder="Pick target node"
+                      />
+                    </div>
                   </div>
-                  <div style={{ fontSize:13.5, color:"var(--ink-3)", lineHeight:1.6 }}>
-                    {"Edge labels become part of the schema’s public contract. Use UPPER_SNAKE_CASE with a verb that reads naturally in both directions."}
+
+                  {/* LABEL */}
+                  <div>
+                    <label style={lbl}>Label <span style={{ color:"var(--coral)" }}>*</span></label>
+                    <div style={{ position:"relative" }}>
+                      <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", fontFamily:"JetBrains Mono", fontSize:13.5, color:"var(--ink-3)" }}>:</span>
+                      <input value={eLabel}
+                        onChange={function(e){ setELabel(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g,"_")); }}
+                        placeholder="WORKS_AT"
+                        style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", paddingLeft:24 })} />
+                    </div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>UPPER_SNAKE_CASE · verb that reads naturally · 3–32 chars</div>
                   </div>
-                </div>
 
-                <div style={fieldRow}>
-                  <div style={lbl}>{"LABEL "}<span style={{ color:"var(--coral)" }}>{"*"}</span></div>
-                  <div style={{ position:"relative" }}>
-                    <span style={{ position:"absolute", left:11, top:"50%", transform:"translateY(-50%)", fontFamily:"JetBrains Mono", fontSize:13, color:"var(--ink-3)" }}>{":"}</span>
-                    <input value={eLabel}
-                      onChange={function(e){ setELabel(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g,"_")); }}
-                      placeholder="WORKS_AT"
-                      style={Object.assign({}, inp, { width:"100%", fontFamily:"JetBrains Mono", fontSize:13, paddingLeft:22 })} />
+                  {/* CARDINALITY — 4 cards in a row */}
+                  <div>
+                    <label style={lbl}>Cardinality</label>
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(4, minmax(0, 1fr))", gap:10 }}>
+                      {["1:1","1:N","N:1","N:M"].map(function(c){
+                        var isOn = eCard === c;
+                        return (
+                          <button key={c} onClick={function(){ setECard(c); }}
+                            style={{ padding:"14px 12px", textAlign:"center", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:8, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 10%, transparent)" : "none", transition:"border-color 100ms, box-shadow 100ms" }}>
+                            <div style={{ fontFamily:"JetBrains Mono", fontSize:15, fontWeight:700, color: isOn ? "var(--ink)" : "var(--ink-2)", letterSpacing:"0.5px" }}>{c}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div style={{ fontSize:11.5, color:"var(--ink-3)", marginTop:8, lineHeight:1.5 }}>{cardinalityHint[eCard] || ""}</div>
                   </div>
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{"UPPER_SNAKE_CASE \xB7 3–32 chars"}</div>
-                </div>
 
-                <div style={fieldRow}>
-                  <div style={lbl}>{"DESCRIPTION "}<span style={{ color:"var(--ink-4)", textTransform:"none", letterSpacing:0, fontSize:9 }}>{"(OPTIONAL)"}</span></div>
-                  <textarea value={eDesc} onChange={function(e){ setEDesc(e.target.value); }}
-                    placeholder={"What does this edge represent? Read both directions out loud — does it work?"}
-                    rows={3}
-                    style={Object.assign({}, inp, { width:"100%", resize:"vertical", lineHeight:1.55, fontFamily:"inherit", fontSize:13 })} />
-                </div>
-
-                <div style={fieldRow}>
-                  <div style={lbl}>{"FROM"}</div>
-                  <div style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 12px", border:"1px solid var(--line-2)", borderRadius:8, background:"var(--panel)", opacity:0.8 }}>
-                    <NodeGlyph16 node={fromNode} />
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink)" }}>{fromNode.label}</span>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-3)", marginLeft:4 }}>{"locked"}</span>
+                  {/* POPULATION — 4 cards in 2x2 grid, inline (not behind dropdown). The key decision. */}
+                  <div>
+                    <label style={lbl}>How is this populated <span style={{ color:"var(--coral)" }}>*</span></label>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                      {popKinds.map(function(k){
+                        var isOn = ePopKind === k.id;
+                        return (
+                          <button key={k.id} onClick={function(){ setEPopKind(k.id); }}
+                            style={{ textAlign:"left", padding:"14px 16px", border:"1px solid " + (isOn ? k.color : "var(--line)"), borderRadius:8, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, " + k.color + " 14%, transparent)" : "none", transition:"border-color 100ms, box-shadow 100ms", display:"flex", flexDirection:"column", gap:6 }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:k.color, fontWeight:700, letterSpacing:"0.4px" }}>{k.tag}</span>
+                              <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{k.title}</span>
+                              {isOn && <span style={{ marginLeft:"auto", color:k.color, fontWeight:700, fontSize:13 }}>✓</span>}
+                            </div>
+                            <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", lineHeight:1.5 }}>{k.desc}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{"Locked to the current node."}</div>
-                </div>
 
-                <div style={fieldRow}>
-                  <div style={lbl}>{"TO "}<span style={{ color:"var(--coral)" }}>{"*"}</span></div>
-                  <RichSelect
-                    value={eTarget}
-                    onChange={setETarget}
-                    options={[{ value:"", label:"— pick a target node —" }].concat(targetNodes.map(function(n){ return { value:n.id, label:n.label, sub:(n.props || "—") + (typeof n.props === "number" ? " properties" : "") }; }))}
-                    placeholder="— pick a target node —"
-                    leadingColor={eTarget ? "var(--blue)" : null}
-                  />
-                </div>
-
-                <div style={fieldRow}>
-                  <div style={lbl}>{"CARDINALITY"}</div>
-                  <div style={{ display:"flex", gap:8 }}>
-                    {["1:1","1:N","N:1","N:M"].map(function(c){
-                      const selected = eCard === c;
-                      return (
-                        <button key={c}
-                          onClick={function(){ setECard(c); }}
-                          style={{ flex:1, padding:"10px 8px", border:"2px solid "+(selected?"var(--ink)":"var(--line)"), borderRadius:8, cursor:"pointer", textAlign:"center", background:selected?"var(--panel-2)":"transparent", fontFamily:"inherit" }}>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:700, color:selected?"var(--ink)":"var(--ink-3)" }}>{c}</div>
-                        </button>
-                      );
-                    })}
+                  {/* OWNER */}
+                  <div style={{ maxWidth:360 }}>
+                    <label style={lbl}>Owner team</label>
+                    <RichSelect
+                      value={eOwner}
+                      onChange={setEOwner}
+                      options={ownerOptions.map(function(o){ return { value:o, label:o }; })}
+                      mono
+                    />
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>Who gets paged when this edge breaks or drifts.</div>
                   </div>
-                </div>
-
-                <div style={fieldRow}>
-                  <div style={lbl}>{"INVERSE LABEL "}<span style={{ color:"var(--ink-4)", textTransform:"none", letterSpacing:0, fontSize:9 }}>{"(OPTIONAL)"}</span></div>
-                  <input value={eInverse} onChange={function(e){ setEInverse(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g,"_")); }}
-                    placeholder={"EMPLOYED_BY (the reverse direction)"}
-                    style={Object.assign({}, inp, { width:"100%", fontFamily:"JetBrains Mono", fontSize:13 })} />
-                </div>
-
-                {/* HOW IS THIS POPULATED — was a full step; now an inline picker */}
-                <div style={fieldRow}>
-                  <div style={lbl}>{"HOW IS THIS POPULATED?"}</div>
-                  <RichSelect
-                    value={ePopKind || ""}
-                    onChange={setEPopKind}
-                    options={popKinds.map(function(k){ return { value:k.id, label:k.title, sub:k.tag }; })}
-                    placeholder="— pick a population mode —"
-                  />
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6, lineHeight:1.5 }}>
-                    {ePopKind ? (popKinds.find(function(k){ return k.id === ePopKind; }) || {}).desc : "Direct = source row · Inferred = scheduled rule · Agent = reasoning write · Computed = property match."}
-                  </div>
-                </div>
-
-                {/* OWNER — optional inline (was its own Governance step) */}
-                <div style={fieldRow}>
-                  <div style={lbl}>{"OWNER TEAM "}<span style={{ color:"var(--ink-4)", textTransform:"none", letterSpacing:0, fontSize:9 }}>{"(OPTIONAL)"}</span></div>
-                  <RichSelect
-                    value={eOwner}
-                    onChange={setEOwner}
-                    options={["data-platform","engineering","analytics","product"].map(function(o){ return { value:o, label:o }; })}
-                    mono
-                  />
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6, lineHeight:1.5 }}>{"Who gets paged when this edge breaks or drifts. Access inherits from the endpoint nodes."}</div>
                 </div>
               </div>
             )}
 
-            {/* STEP 2 — Properties */}
+            {/* STEP 2 — Properties: flat list with subtle row borders, no nested panel headers */}
             {step === 2 && (
-              <div style={{ maxWidth:600 }}>
-                <div style={{ marginBottom:28 }}>
-                  <div style={{ fontFamily:"Instrument Serif, serif", fontSize:32, lineHeight:1.1, letterSpacing:"-0.3px", marginBottom:8 }}>{"Edge attributes"}</div>
-                  <div style={{ fontSize:13.5, color:"var(--ink-3)", lineHeight:1.6 }}>{"Edges can carry their own properties — timestamps, weights, roles, provenance. Each field is stored at edge cardinality, so keep this minimal."}</div>
+              <div style={{ maxWidth:760 }}>
+                <div style={{ marginBottom:20 }}>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>Step 2 / 3</div>
+                  <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>Edge attributes</div>
+                  <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55 }}>Edges can carry their own properties — timestamps, weights, roles, provenance. Each field is stored at edge cardinality, so keep it minimal.</div>
                 </div>
 
-                <div style={fieldRow}>
-                  <div style={lbl}>{"EDGE PROPERTIES"}</div>
-                  <div style={{ border:"1px solid var(--line)", borderRadius:10, overflow:"hidden", background:"var(--panel)" }}>
-                    <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 60px 50px 32px", gap:0, padding:"8px 14px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase" }}>
-                      <div>{"NAME"}</div><div>{"TYPE"}</div><div>{"REQ"}</div><div>{"PII"}</div><div></div>
+                <div>
+                  <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:10 }}>
+                    <label style={lbl}>Properties · {eProps.length} defined</label>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>storage scales with edge count</span>
+                  </div>
+                  {eProps.length > 0 && (
+                    <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 70px 60px 28px", gap:14, padding:"0 14px 8px", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase" }}>
+                      <div>Name</div><div>Type</div><div style={{ textAlign:"center" }}>Required</div><div style={{ textAlign:"center" }}>PII</div><div></div>
                     </div>
+                  )}
+                  <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                     {eProps.map(function(p, i){
                       return (
-                        <div key={i} style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 60px 50px 32px", gap:0, padding:"10px 14px", borderBottom: i < eProps.length-1 ? "1px solid var(--line-2)" : "none", alignItems:"center" }}>
+                        <div key={i} style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 70px 60px 28px", gap:14, padding:"10px 14px", alignItems:"center", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel)" }}>
                           <input value={p.name} onChange={function(e){ updateProp(i,"name",e.target.value); }}
-                            style={{ fontFamily:"JetBrains Mono", fontSize:12, border:"none", background:"transparent", outline:"none", color:"var(--ink)", padding:0 }} />
+                            style={{ fontFamily:"JetBrains Mono", fontSize:12.5, border:"none", background:"transparent", outline:"none", color:"var(--ink)", padding:0, fontWeight:500 }} />
                           <RichSelect
                             value={p.type}
                             onChange={function(v){ updateProp(i,"type",v); }}
@@ -4836,83 +5547,115 @@ function AddEdgeFlowModal({ fromNode, onClose }) {
                           <div style={{ display:"flex", justifyContent:"center" }}>
                             <Toggle on={p.pii} onChange={function(){ updateProp(i,"pii",!p.pii); }} />
                           </div>
-                          <button onClick={function(){ removeProp(i); }}
-                            style={{ border:"none", background:"none", cursor:"pointer", color:"var(--ink-3)", fontSize:14, padding:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                            {"×"}
-                          </button>
+                          <button onClick={function(){ removeProp(i); }} title="Remove"
+                            style={{ width:24, height:24, border:"none", background:"none", cursor:"pointer", color:"var(--ink-3)", fontSize:14, padding:0, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:5 }}>×</button>
                         </div>
                       );
                     })}
+                    {eProps.length === 0 && (
+                      <div style={{ padding:"22px 14px", border:"1px dashed var(--line)", borderRadius:8, fontSize:12.5, color:"var(--ink-3)", textAlign:"center" }}>No properties yet. This edge will be a simple typed link with no metadata.</div>
+                    )}
                   </div>
-                  <button onClick={addProp} style={{ background:"none", border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, color:"var(--blue)", padding:"4px 0" }}>{"+ Add property"}</button>
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{eProps.length + " defined \xB7 storage cost scales with edge count"}</div>
+                  <button onClick={addProp}
+                    style={{ marginTop:10, padding:"9px 14px", border:"1px dashed var(--line)", borderRadius:8, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, color:"var(--ink-2)", display:"flex", alignItems:"center", gap:7 }}>
+                    <span style={{ fontFamily:"JetBrains Mono", fontWeight:700, color:"var(--ink-3)" }}>+</span>
+                    <span>Add property</span>
+                  </button>
                 </div>
               </div>
             )}
 
-            {/* STEP 3 — Review */}
+            {/* STEP 3 — Review: flat sections with dashed dividers, no nested cards */}
             {step === 3 && (
-              <div style={{ maxWidth:620 }}>
-                <div style={{ marginBottom:28 }}>
-                  <div style={{ fontFamily:"Instrument Serif, serif", fontSize:32, lineHeight:1.1, letterSpacing:"-0.3px", marginBottom:8 }}>{"Last look before this becomes part of the schema"}</div>
+              <div style={{ maxWidth:760 }}>
+                <div style={{ marginBottom:20 }}>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>Step 3 / 3</div>
+                  <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>Review and publish</div>
+                  <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55 }}>Confirm the contract. The edge type goes into draft on save — endpoints, governance and queries will pick it up after promotion.</div>
                 </div>
 
-                <div style={{ border:"1px solid var(--line)", borderRadius:12, overflow:"hidden", background:"var(--panel)", marginBottom:20 }}>
-                  <div style={{ padding:"14px 18px", borderBottom:"1px solid var(--line-2)", fontWeight:600, fontSize:13.5 }}>{"Summary"}</div>
-                  <div style={{ display:"flex", flexDirection:"column" }}>
-                    {(function(){
-                      var rows = [
-                        ["LABEL",      eLabel || "(none)"],
-                        ["ENDPOINTS",  fromNode.label + " → " + (targetNode ? targetNode.label : "?")],
-                        ["CARDINALITY", eCard],
-                        ["POPULATED",  ePopKind ? ePopKind.toUpperCase() : "(not set)"],
-                        ["PROPERTIES", eProps.length + " defined"],
-                        ["OWNER",      eOwner],
-                        ["BACKFILL",   eBackfill ? "on \xB7 replay history" : "off \xB7 new edges only"]
-                      ];
-                      return rows.map(function(row, i){
-                        return (
-                          <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", padding:"10px 18px", borderBottom: i < rows.length - 1 ? "1px dashed var(--line-2)" : "none" }}>
-                            <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", letterSpacing:"0.5px" }}>{row[0]}</span>
-                            <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", fontWeight:500 }}>{row[1]}</span>
-                          </div>
-                        );
-                      });
-                    })()}
+                {/* Edge header — flat, with the visual relationship */}
+                <div style={{ display:"flex", alignItems:"center", gap:14, paddingBottom:20, borderBottom:"1px dashed var(--line)" }}>
+                  <span style={{ width:36, height:36, borderRadius:"50%", background:fromC.fill, border:"1px solid "+fromC.stroke, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <NodeGlyph16 node={fromNode} />
+                  </span>
+                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:3, flexShrink:0 }}>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)", fontWeight:700, letterSpacing:"0.3px" }}>{eLabel ? ":" + eLabel : ":EDGE"}</span>
+                    <svg width="80" height="10" viewBox="0 0 80 10" fill="none">
+                      <line x1="2" y1="5" x2="72" y2="5" stroke="var(--ink-3)" strokeWidth="1.4" />
+                      <path d="M70 1l5 4-5 4" stroke="var(--ink-3)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                    </svg>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.5px" }}>{eCard}</span>
                   </div>
-                </div>
-
-                <div style={{ border:"1px solid var(--line)", borderRadius:12, overflow:"hidden", background:"var(--panel)", marginBottom:20 }}>
-                  <div style={{ padding:"14px 18px", borderBottom:"1px solid var(--line-2)", fontWeight:600, fontSize:13.5 }}>{"Approvers"}</div>
-                  <div style={{ padding:"14px 18px", display:"flex", alignItems:"center", gap:12 }}>
-                    <div style={{ width:32, height:32, borderRadius:"50%", background:"var(--ink)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:13, color:"var(--panel)", fontWeight:700 }}>{"M"}</div>
-                    <div>
-                      <div style={{ fontFamily:"JetBrains Mono", fontSize:12.5, fontWeight:500, color:"var(--ink)" }}>{"morgan.lee"}</div>
-                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>{"data-platform"}</div>
+                  {targetNode ? (
+                    <span style={{ width:36, height:36, borderRadius:"50%", background:toC.fill, border:"1px solid "+toC.stroke, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                      <NodeGlyph16 node={targetNode} />
+                    </span>
+                  ) : (
+                    <span style={{ width:36, height:36, borderRadius:"50%", background:"var(--line-2)", border:"1px dashed var(--line)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontFamily:"JetBrains Mono", color:"var(--ink-3)" }}>?</span>
+                  )}
+                  <div style={{ flex:1, marginLeft:6 }}>
+                    <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", lineHeight:1.15 }}>{fromNode.label} <span style={{ color:"var(--ink-3)" }}>→</span> {targetNode ? targetNode.label : "?"}</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:5 }}>
+                      {popKindDef && <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:popKindDef.color, fontWeight:700, letterSpacing:"0.4px" }}>{popKindDef.tag}</span>}
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{eOwner}</span>
                     </div>
-                    <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 8px", borderRadius:4, background:"var(--gold-fill)", color:"var(--gold)", fontWeight:700 }}>{"AWAITING"}</span>
                   </div>
                 </div>
 
-                <div style={{ border:"1px solid var(--line)", borderRadius:12, padding:"14px 18px", background:"var(--panel)", marginBottom:20, display:"flex", alignItems:"center", justifyContent:"space-between", gap:14 }}>
+                {/* Definition rows — flat */}
+                <div style={{ paddingTop:20, paddingBottom:20, borderBottom:"1px dashed var(--line)", display:"grid", gridTemplateColumns:"140px 1fr", gap:"16px 18px", alignItems:"start" }}>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.6px", textTransform:"uppercase", paddingTop:6 }}>Cypher</span>
+                  <pre style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", margin:0, padding:"10px 13px", background:"var(--panel)", borderRadius:7, border:"1px solid var(--line)", whiteSpace:"pre-wrap", lineHeight:1.55 }}>{cypherText}</pre>
+
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.6px", textTransform:"uppercase" }}>Cardinality</span>
+                  <span style={{ color:"var(--ink)", fontSize:13 }}><span style={{ fontFamily:"JetBrains Mono", fontWeight:700 }}>{eCard}</span> · {cardinalityHint[eCard]}</span>
+
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.6px", textTransform:"uppercase" }}>Population</span>
+                  <span style={{ color:"var(--ink)", fontSize:13 }}>{popKindDef ? popKindDef.title + " · " + popKindDef.desc : "—"}</span>
+
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.6px", textTransform:"uppercase" }}>Properties</span>
+                  <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                    {eProps.length === 0 ? <span style={{ color:"var(--ink-3)", fontSize:12.5 }}>None</span> : eProps.map(function(p){ return <span key={p.name} style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"3px 9px", borderRadius:5, background:"var(--chip)", color:"var(--ink-2)" }}>{p.name + " · " + p.type}{p.req && <span style={{ color:"var(--coral)", marginLeft:4 }}>*</span>}</span>; })}
+                  </div>
+
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.6px", textTransform:"uppercase" }}>Owner</span>
+                  <span style={{ fontFamily:"JetBrains Mono", color:"var(--ink)", fontSize:12.5 }}>{eOwner}</span>
+                </div>
+
+                {/* Backfill — flat row */}
+                <div style={{ paddingTop:20, paddingBottom:20, borderBottom:"1px dashed var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", gap:18 }}>
                   <div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", letterSpacing:"0.5px", textTransform:"uppercase", marginBottom:4 }}>{"BACKFILL HISTORICAL EDGES"}</div>
-                    <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5 }}>{eBackfill ? "Existing rows in the From / To node types will be evaluated and edges materialised on publish." : "Only edges from new or updated records will be created. Existing rows stay untouched."}</div>
+                    <div style={lbl}>Backfill historical edges</div>
+                    <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.55, maxWidth:520 }}>{eBackfill ? "Existing rows in the From / To node types will be evaluated and edges materialised on publish." : "Only edges from new or updated records will be created. Existing rows stay untouched."}</div>
                   </div>
                   <Toggle on={eBackfill} onChange={function(){ setEBackfill(function(v){ return !v; }); }} />
                 </div>
 
-                <div style={{ marginBottom:6 }}>
-                  <div style={lbl}>{"TARGET STAGE"}</div>
+                {/* Approvers — flat list */}
+                <div style={{ paddingTop:20, paddingBottom:20, borderBottom:"1px dashed var(--line)" }}>
+                  <div style={lbl}>Approvers</div>
+                  <div style={{ display:"flex", flexDirection:"column" }}>
+                    {[
+                      { who: eOwner + " owner", status:"required", sev:"var(--coral)" },
+                      { who:"schema-platform team", status:"advisory", sev:"var(--ink-3)" },
+                      { who:"node steward (you)",   status:"auto-approved", sev:"var(--green)" }
+                    ].map(function(a, i){
+                      return <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", fontSize:13, padding:"10px 0", borderBottom: i < 2 ? "1px dashed var(--line-2)" : "none" }}>
+                        <span style={{ color:"var(--ink)" }}>{a.who}</span>
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:a.sev, fontWeight:700, letterSpacing:"0.4px" }}>{a.status}</span>
+                      </div>;
+                    })}
+                  </div>
+                </div>
+
+                {/* On save — pills */}
+                <div style={{ paddingTop:20 }}>
+                  <label style={lbl}>On save</label>
                   <div style={{ display:"flex", gap:8 }}>
-                    {["draft","staging","live"].map(function(s){
-                      const sel = eTargetStage === s;
-                      return (
-                        <button key={s} onClick={function(){ setETargetStage(s); }}
-                          style={{ flex:1, padding:"10px 8px", border:"2px solid "+(sel?"var(--ink)":"var(--line)"), borderRadius:8, cursor:"pointer", background:sel?"var(--panel-2)":"transparent", fontFamily:"inherit" }}>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:12, fontWeight:sel?700:400, color:sel?"var(--ink)":"var(--ink-3)" }}>{s}</div>
-                        </button>
-                      );
+                    {[{ id:true, l:"Activate immediately" },{ id:false, l:"Save as draft" }].map(function(o){
+                      var isOn = eActivate === o.id;
+                      return <button key={String(o.id)} onClick={function(){ setEActivate(o.id); }} style={{ padding:"10px 16px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:8, background: isOn ? "var(--ink)" : "var(--panel)", color: isOn ? "var(--panel)" : "var(--ink-2)", fontSize:13, fontFamily:"inherit", fontWeight: isOn ? 600 : 400, cursor:"pointer", transition:"border-color 100ms, background 100ms" }}>{o.l}</button>;
                     })}
                   </div>
                 </div>
@@ -4921,98 +5664,64 @@ function AddEdgeFlowModal({ fromNode, onClose }) {
 
           </div>
 
-          {/* RIGHT PANEL */}
-          <div style={{ width:260, flexShrink:0, borderLeft:"1px solid var(--line)", background:"var(--panel)", overflowY:"auto", padding:"20px 16px", display:"flex", flexDirection:"column", gap:20 }}>
-
-            {/* Live Preview */}
+          {/* RIGHT PREVIEW — minimal: visual graph + cypher pattern. Validation + downstream impact removed (low signal). */}
+          <div style={{ background:"var(--panel-2)", borderLeft:"1px solid var(--line)", padding:"22px 18px", display:"flex", flexDirection:"column", gap:22, overflowY:"auto" }}>
             <div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:10 }}>{"LIVE PREVIEW"}</div>
-              <div style={{ display:"flex", justifyContent:"center", padding:"16px 0" }}>
-                <svg width="228" height="80" viewBox="0 0 228 80">
-                  <circle cx="36" cy="40" r="22" fill={fromC.fill} stroke={fromC.stroke} strokeWidth="1.8" />
-                  <text x="36" y="69" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9px", fill:"var(--ink-3)" }}>{fromNode.label.slice(0,10)}</text>
-
-                  <line x1="60" y1="40" x2="168" y2="40" stroke="var(--line)" strokeWidth="1.5" markerEnd="url(#arr)" />
-                  <text x="114" y="32" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"8.5px", fill:"var(--blue)", fontWeight:"700" }}>{eCard}</text>
-                  <text x="114" y="52" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"8px", fill:"var(--ink-3)" }}>{eLabel ? ":"+eLabel : ""}</text>
-
-                  {targetNode ? (
-                    <circle cx="192" cy="40" r="22" fill={colorForNode(targetNode).fill} stroke={colorForNode(targetNode).stroke} strokeWidth="1.8" />
-                  ) : (
-                    <circle cx="192" cy="40" r="22" fill="var(--line-2)" stroke="var(--line)" strokeWidth="1.8" strokeDasharray="3,2" />
-                  )}
-                  <text x="192" y="69" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9px", fill:"var(--ink-3)" }}>{targetNode ? targetNode.label.slice(0,10) : "?"}</text>
-                  {!targetNode && <text x="192" y="44" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"14px", fill:"var(--ink-3)" }}>{"?"}</text>}
-
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:12 }}>Live preview</div>
+              <div style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, padding:"18px 12px", display:"flex", justifyContent:"center" }}>
+                <svg width="200" height="92" viewBox="0 0 200 92">
+                  <circle cx="32" cy="40" r="20" fill={fromC.fill} stroke={fromC.stroke} strokeWidth="1.6" />
+                  <text x="32" y="80" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9px", fill:"var(--ink-3)" }}>{fromNode.label.slice(0,12)}</text>
+                  <line x1="56" y1="40" x2="144" y2="40" stroke={ePopKind && popKindDef ? popKindDef.color : "var(--ink-3)"} strokeWidth="1.4" markerEnd="url(#arrEdge)" />
+                  <text x="100" y="32" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9px", fill:"var(--ink-2)", fontWeight:"700" }}>{eCard}</text>
+                  <text x="100" y="54" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"8.5px", fill:"var(--ink-3)" }}>{eLabel ? ":"+eLabel : ""}</text>
+                  {targetNode
+                    ? <circle cx="168" cy="40" r="20" fill={toC.fill} stroke={toC.stroke} strokeWidth="1.6" />
+                    : <circle cx="168" cy="40" r="20" fill="var(--panel-2)" stroke="var(--line)" strokeWidth="1.5" strokeDasharray="3,2" />}
+                  <text x="168" y="80" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9px", fill:"var(--ink-3)" }}>{targetNode ? targetNode.label.slice(0,12) : "target"}</text>
+                  {!targetNode && <text x="168" y="44" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"13px", fill:"var(--ink-3)" }}>?</text>}
                   <defs>
-                    <marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                      <path d="M0,0 L0,6 L6,3 Z" fill="var(--ink-3)" />
+                    <marker id="arrEdge" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                      <path d="M0,0 L0,6 L6,3 Z" fill={ePopKind && popKindDef ? popKindDef.color : "var(--ink-3)"} />
                     </marker>
                   </defs>
                 </svg>
               </div>
+              {ePopKind && popKindDef && (
+                <div style={{ marginTop:10, display:"flex", alignItems:"center", gap:7, justifyContent:"center" }}>
+                  <span style={{ width:6, height:6, borderRadius:"50%", background:popKindDef.color }} />
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{popKindDef.tag} · {popKindDef.title}</span>
+                </div>
+              )}
             </div>
 
-            {/* Cypher Pattern */}
             <div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>{"CYPHER PATTERN"}</div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:11, lineHeight:1.9, background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:7, padding:"10px 12px", color:"var(--ink-2)", whiteSpace:"pre" }}>{cypherText}</div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>Cypher pattern</div>
+              <pre style={{ fontFamily:"JetBrains Mono", fontSize:11, lineHeight:1.65, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:7, padding:"10px 12px", color:"var(--ink-2)", whiteSpace:"pre", margin:0 }}>{cypherText}</pre>
             </div>
 
-            {/* Validation */}
-            <div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>{"VALIDATION"}</div>
-              <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
-                {[
-                  { ok:labelValid,  text:"Label is unique and well-formed" },
-                  { ok:targetValid, text:"Target node selected" },
-                  { ok:true,        text:"Access roles assigned" },
-                  { ok:true,        text:"No conflict with existing edges" },
-                ].map(function(v, i){
-                  return (
-                    <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:7 }}>
-                      <div style={{ width:8, height:8, borderRadius:"50%", background:v.ok?"var(--green)":"var(--gold)", flexShrink:0, marginTop:3 }} />
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:v.ok?"var(--ink-2)":"var(--ink-3)", lineHeight:1.5 }}>{v.text}</span>
-                    </div>
-                  );
-                })}
+            {(step === 1 && (!labelValid || !targetValid || !ePopKind)) && (
+              <div style={{ paddingTop:14, borderTop:"1px dashed var(--line)" }}>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>Still needed</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                  {!labelValid && <div style={{ display:"flex", alignItems:"center", gap:7, fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}><span style={{ width:6, height:6, borderRadius:"50%", background:"var(--gold)" }} />Label ≥ 3 chars</div>}
+                  {!targetValid && <div style={{ display:"flex", alignItems:"center", gap:7, fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}><span style={{ width:6, height:6, borderRadius:"50%", background:"var(--gold)" }} />Pick target node</div>}
+                  {!ePopKind && <div style={{ display:"flex", alignItems:"center", gap:7, fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}><span style={{ width:6, height:6, borderRadius:"50%", background:"var(--gold)" }} />Pick population mode</div>}
+                </div>
               </div>
-            </div>
-
-            {/* Downstream Impact */}
-            <div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>{"DOWNSTREAM IMPACT"}</div>
-              <div style={{ textAlign:"center" }}>
-                <div style={{ fontFamily:"Instrument Serif, serif", fontSize:44, color:"var(--ink)", lineHeight:1 }}>{"0"}</div>
-                <div style={{ fontSize:12.5, color:"var(--ink-2)", marginTop:4 }}>{"surfaces will pick this up"}</div>
-                <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:2 }}>{"on publish to draft"}</div>
-              </div>
-            </div>
-
+            )}
           </div>
         </div>
 
-        {/* ── FOOTER BAR ── */}
-        <div style={{ flexShrink:0, height:52, borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 20px", background:"var(--panel-2)" }}>
-          <button className="btn-ghost"
-            disabled={step === 1}
-            onClick={function(){ setStep(function(s){ return s-1; }); }}
-            style={{ opacity:step===1?0.35:1 }}>
-            {"← Back"}
-          </button>
-          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", letterSpacing:"0.3px" }}>
-            {"Step " + step + " of 3 \xB7 " + stepNames[step-1]}
-          </div>
+        {/* ── FOOTER ── */}
+        <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
+          <button className="btn-ghost" onClick={function(){ if (step > 1) setStep(function(s){ return s - 1; }); }} disabled={step === 1} style={{ opacity: step === 1 ? 0.4 : 1 }}>← Back</button>
+          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of 3 · " + stepNames[step-1]}</span>
           <div style={{ display:"flex", gap:8 }}>
-            <button className="btn-ghost" onClick={onClose}>{"Save draft"}</button>
+            <button className="btn-ghost" onClick={onClose}>Cancel</button>
             {step < 3
-              ? <button className="btn-dark"
-                  disabled={!canContinue}
-                  onClick={function(){ setStep(function(s){ return s+1; }); }}
-                  style={{ opacity:canContinue?1:0.45 }}>
-                  {"Continue →"}
-                </button>
-              : <button className="btn-dark" onClick={onClose}>{"Publish to draft ↵"}</button>
+              ? <button className="btn-dark" disabled={!canContinue} onClick={function(){ setStep(function(s){ return s + 1; }); }} style={{ opacity: canContinue ? 1 : 0.45 }}>Continue →</button>
+              : <button className="btn-dark" onClick={onClose}>{eActivate ? "Publish ↵" : "Save draft ↵"}</button>
             }
           </div>
         </div>
@@ -5601,7 +6310,7 @@ function LinkSourceFlow({ node, onClose }) {
                   <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
                     {["pdf","docx","xlsx","pptx","txt","md","html","eml"].map(function(t){
                       var isOn = fileTypes.indexOf(t) >= 0;
-                      return <button key={t} onClick={function(){ toggleFileType(t); }} style={{ padding:"6px 11px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:6, background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11, cursor:"pointer" }}>.{t}</button>;
+                      return <button key={t} onClick={function(){ toggleFileType(t); }} style={{ padding:"6px 11px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:6, background: isOn ? "var(--ink)" : "var(--panel)", color: isOn ? "var(--panel)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11, cursor:"pointer" }}>.{t}</button>;
                     })}
                   </div>
                 </div>
@@ -5918,7 +6627,7 @@ function LinkSourceFlow({ node, onClose }) {
                   <div style={{ display:"flex", gap:6 }}>
                     {[{ id:true, l:"Activate immediately" },{ id:false, l:"Save as draft" }].map(function(o){
                       var isOn = activate === o.id;
-                      return <button key={String(o.id)} onClick={function(){ setActivate(o.id); }} style={{ padding:"8px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontSize:12.5, fontFamily:"inherit", cursor:"pointer" }}>{o.l}</button>;
+                      return <button key={String(o.id)} onClick={function(){ setActivate(o.id); }} style={{ padding:"8px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--panel)", color: isOn ? "var(--panel)" : "var(--ink-2)", fontSize:12.5, fontFamily:"inherit", cursor:"pointer" }}>{o.l}</button>;
                     })}
                   </div>
                 </div>
@@ -6262,15 +6971,34 @@ var RULE_CATEGORIES = [
   }
 ];
 
-function NewRuleFlow({ node, onClose }) {
+function NewRuleFlow({ node, onClose, initialRule }) {
   var props = generateProps(node);
   var firstField = (props[0] && props[0].name) || "";
 
-  var [step, setStep] = useState(1);
-  var [cat, setCat] = useState(null);
-  var [subType, setSubType] = useState(null);
-  // Sub-type picker — open by default; once a sub-type is chosen the popover collapses.
-  var [subTypeOpen, setSubTypeOpen] = useState(true);
+  // ── Edit mode: derive starting category / sub-type from the rule's kind+bucket ──
+  // Maps a runtime rule.kind to its (cat, subType) in this flow's taxonomy.
+  function deriveSeed(r) {
+    if (!r) return null;
+    var k = (r.kind || "").toUpperCase();
+    var KIND_MAP = {
+      VALIDATE: { cat:"validation",   subType:"required" },
+      ACCESS:   { cat:"validation",   subType:"access" },
+      COMPUTE:  { cat:"quality",      subType:"compute" },
+      INFER:    { cat:"quality",      subType:"infer" },
+      SLO:      { cat:"quality",      subType:"freshness" },
+      MATCH:    { cat:"matching",     subType:"deterministic" },
+      SURV:     { cat:"survivorship", subType: r.strategy === "recency" ? "recency" : r.strategy === "trust" ? "trust" : "source_priority" }
+    };
+    return KIND_MAP[k] || null;
+  }
+  var seed = deriveSeed(initialRule);
+  var isEdit = !!initialRule;
+
+  var [step, setStep] = useState(isEdit ? 2 : 1);
+  var [cat, setCat] = useState(seed ? seed.cat : null);
+  var [subType, setSubType] = useState(seed ? seed.subType : null);
+  // Sub-type picker — open by default for new rules; closed (selection shown) when editing.
+  var [subTypeOpen, setSubTypeOpen] = useState(!isEdit);
 
   // VALIDATE state
   var [vField, setVField] = useState(firstField);
@@ -6278,16 +7006,20 @@ function NewRuleFlow({ node, onClose }) {
   var [vVal, setVVal] = useState("");
   var [vVal2, setVVal2] = useState("");
 
-  // MATCH state
-  var [mSignals, setMSignals] = useState([{ field: firstField, strategy: "exact", weight: 1.0 }]);
-  var [mAuto, setMAuto] = useState("0.92");
-  var [mReview, setMReview] = useState("0.75");
+  // MATCH state — prefilled from rule.signals / thresholds when editing
+  var [mSignals, setMSignals] = useState(
+    isEdit && initialRule._bucket === "match" && initialRule.signals && initialRule.signals.length
+      ? initialRule.signals.map(function(s){ return { field: s.field || firstField, strategy: s.strategy || "exact", weight: s.weight || 0 }; })
+      : [{ field: firstField, strategy: "exact", weight: 1.0 }]
+  );
+  var [mAuto, setMAuto] = useState(isEdit && initialRule.threshold_auto !== undefined ? String(initialRule.threshold_auto) : "0.92");
+  var [mReview, setMReview] = useState(isEdit && initialRule.threshold_review !== undefined ? String(initialRule.threshold_review) : "0.75");
   var [mAction, setMAction] = useState("queue");
 
-  // SURVIVE state
-  var [sProperty, setSProperty] = useState(firstField);
-  var [sStrategy, setSStrategy] = useState("source_priority");
-  var [sSources, setSSources] = useState(["NetSuite ERP", "Salesforce CRM", "HubSpot Marketing"]);
+  // SURVIVE state — prefilled from rule.property / strategy / sources when editing
+  var [sProperty, setSProperty] = useState(isEdit && initialRule._bucket === "surv" && initialRule.property ? initialRule.property : firstField);
+  var [sStrategy, setSStrategy] = useState(isEdit && initialRule._bucket === "surv" && initialRule.strategy ? initialRule.strategy : "source_priority");
+  var [sSources, setSSources] = useState(isEdit && initialRule._bucket === "surv" && initialRule.sources && initialRule.sources.length ? initialRule.sources : ["NetSuite ERP", "Salesforce CRM", "HubSpot Marketing"]);
   var [sMinConf, setSMinConf] = useState("0.80");
 
   // COMPUTE state
@@ -6314,17 +7046,17 @@ function NewRuleFlow({ node, onClose }) {
   var [accRolesInput, setAccRolesInput] = useState("");
   var [accMasking, setAccMasking] = useState("redact");
 
-  // Common
-  var [title, setTitle] = useState("");
+  // Common — prefilled from rule when editing
+  var [title, setTitle] = useState(isEdit ? (initialRule.title || initialRule.label || initialRule.id || "") : "");
   var [description, setDescription] = useState("");
   var [scopeMode, setScopeMode] = useState("all");
   var [scopeFilter, setScopeFilter] = useState("");
   var [trigger, setTrigger] = useState("on_write");
   var [schedule, setSchedule] = useState("hourly");
-  var [severity, setSeverity] = useState("ERROR");
+  var [severity, setSeverity] = useState(isEdit && initialRule.severity ? initialRule.severity : "ERROR");
   var [onViolation, setOnViolation] = useState(["log"]);
   var [notifyChan, setNotifyChan] = useState("");
-  var [activate, setActivate] = useState(true);
+  var [activate, setActivate] = useState(isEdit ? (initialRule.on !== false) : true);
 
   var catDef = RULE_CATEGORIES.find(function(c){ return c.id === cat; });
   var subTypeDef = catDef && subType ? catDef.types.find(function(t){ return t.id === subType; }) : null;
@@ -6423,8 +7155,9 @@ function NewRuleFlow({ node, onClose }) {
     return true;
   }
 
-  var inp = { border:"1px solid var(--line)", borderRadius:7, padding:"11px 13px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--bg-canvas)", outline:"none", boxSizing:"border-box", width:"100%" };
-  var lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:6 };
+  // Form input baseline — white panel background, slightly larger padding for prominence.
+  var inp = { border:"1px solid var(--line)", borderRadius:8, padding:"11px 14px", fontSize:13.5, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", outline:"none", boxSizing:"border-box", width:"100%" };
+  var lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 };
 
   var stepNames = ["Category", "Configure", "Scope & trigger", "Behaviour", "Review"];
   var STEP_HINTS = {
@@ -6463,7 +7196,7 @@ function NewRuleFlow({ node, onClose }) {
 
         <div style={{ flexShrink:0, height:54, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 22px", background:"var(--panel)" }}>
           <div>
-            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>{node.label + " · NEW RULE"}</div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>{node.label + (isEdit ? " · EDIT RULE" : " · NEW RULE")}</div>
             <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:2 }}>
               <span style={{ fontFamily:"Instrument Serif", fontSize:18, color:"var(--ink)" }}>{catDef ? (subTypeDef ? catDef.label + " · " + subTypeDef.label : catDef.title) : "Choose a category"}</span>
               {catDef && <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:catDef.fill, color:catDef.color, fontWeight:700, letterSpacing:"0.5px" }}>{catDef.code}</span>}
@@ -6514,34 +7247,40 @@ function NewRuleFlow({ node, onClose }) {
             </div>
 
             {step === 1 && (
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, maxWidth:880 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(2, minmax(0, 1fr))", gap:14, maxWidth:960 }}>
                 {RULE_CATEGORIES.map(function(c) {
                   var isOn = cat === c.id;
+                  var typeNames = c.types.map(function(t){ return t.label; });
                   return (
                     <button key={c.id} onClick={function(){ pickCategory(c.id); }}
-                      style={{ textAlign:"left", padding:"18px 20px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--bg-canvas)" : "var(--panel)", borderRadius:10, cursor:"pointer", fontFamily:"inherit", transition:"border-color 80ms", display:"flex", flexDirection:"column", gap:12, boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 8%, transparent)" : "none" }}>
-                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                          <span style={{ width:34, height:34, borderRadius:8, background:c.fill, color:c.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, fontWeight:700 }}>{c.icon}</span>
-                          <div>
-                            <div style={{ fontSize:15, fontWeight:600, color:"var(--ink)" }}>{c.title}</div>
-                            <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:3 }}>
-                              <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:c.color, letterSpacing:"0.6px", fontWeight:700 }}>{c.code}</span>
-                              <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", letterSpacing:"0.4px" }}>{"· " + c.purpose}</span>
-                            </div>
-                          </div>
+                      style={{ textAlign:"left", padding:"18px 20px 16px", border:"1px solid " + (isOn ? c.color : "var(--line)"), background: isOn ? c.fill : "var(--panel)", borderRadius:10, cursor:"pointer", fontFamily:"inherit", transition:"border-color 120ms, background 120ms", display:"flex", flexDirection:"column", gap:12, position:"relative", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, " + c.color + " 14%, transparent)" : "inset 0 1px 0 rgba(255,255,255,0.5)" }}
+                      onMouseEnter={function(e){ if (!isOn) e.currentTarget.style.borderColor = "var(--ink-3)"; }}
+                      onMouseLeave={function(e){ if (!isOn) e.currentTarget.style.borderColor = "var(--line)"; }}>
+                      {/* Header — icon + label + purpose (allowed to wrap) + code chip */}
+                      <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
+                        <span style={{ width:34, height:34, borderRadius:8, background: isOn ? c.color : c.fill, color: isOn ? "#fff" : c.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700, flexShrink:0, transition:"background 120ms", marginTop:1 }}>{c.icon}</span>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:15, fontWeight:600, color:"var(--ink)", lineHeight:1.2 }}>{c.label}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.4px", marginTop:3, lineHeight:1.45 }}>{c.purpose}</div>
                         </div>
-                        {isOn && <span style={{ color:"var(--green)", fontFamily:"JetBrains Mono", fontWeight:700 }}>✓</span>}
+                        {/* Code chip — hidden when selected so the floating checkmark can sit in that corner */}
+                        {!isOn && <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 8px", borderRadius:4, background:"var(--chip)", color:c.color, fontWeight:700, letterSpacing:"0.4px", flexShrink:0, marginTop:2 }}>{c.code}</span>}
                       </div>
-                      <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5 }}>{c.desc}</div>
-                      <div style={{ borderTop:"1px dashed var(--line-2)", paddingTop:10 }}>
-                        <div style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:6 }}>{c.types.length + " RULE TYPES"}</div>
-                        <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                          {c.types.map(function(t){
-                            return <span key={t.id} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{t.label}</span>;
-                          })}
+                      {/* Description — full, no truncation; wraps naturally at the wider 2-col width */}
+                      <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.55 }}>{c.desc}</div>
+                      {/* Footer — type count + full inline list of type names */}
+                      <div style={{ marginTop:"auto", paddingTop:12, borderTop:"1px dashed var(--line-2)" }}>
+                        <div style={{ display:"flex", alignItems:"baseline", gap:10, flexWrap:"wrap" }}>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:c.color, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{c.types.length + " types"}</span>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", lineHeight:1.6 }}>{typeNames.join(" · ")}</span>
                         </div>
                       </div>
+                      {/* Selected checkmark — top-right floating indicator */}
+                      {isOn && (
+                        <span style={{ position:"absolute", top:12, right:12, width:20, height:20, borderRadius:"50%", background:c.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 2px 6px rgba(0,0,0,0.12)" }}>
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5"/></svg>
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -6596,16 +7335,10 @@ function NewRuleFlow({ node, onClose }) {
                 manual:         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 14h6"/><path d="M11 2.5a1.5 1.5 0 0 1 2 2L5 12.5 2 13.5 3 10.5z"/></svg>
               };
               return (
-              <div style={{ marginBottom:24, padding:"16px 18px", border:"1px solid var(--line-2)", borderRadius:10, background:"var(--panel)", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6), 0 1px 0 var(--line-2)" }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-                  <div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>RULE TYPE WITHIN {catDef.label.toUpperCase()}</div>
-                    <div style={{ fontSize:12, color:"var(--ink-3)", marginTop:4 }}>{subTypeDef ? subTypeDef.desc : "Pick a sub-type — the form below adapts to its shape."}</div>
-                  </div>
-                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:catDef.color, padding:"3px 8px", borderRadius:4, background:catDef.fill, fontWeight:700, letterSpacing:"0.5px" }}>{catDef.code}</span>
-                </div>
-                {/* SUB-TYPE PICKER — single-card trigger + popover, matching the Computation Type style.
-                    Open by default; the form below is gated on `subType` being chosen. */}
+              <div style={{ marginBottom:28 }}>
+                {/* Flat label only — no boxed container, no redundant category chip (modal header already shows it) */}
+                <label style={lbl}>Rule type</label>
+                {/* SUB-TYPE PICKER — single-card trigger + popover. Open by default for new rules. */}
                 <div style={{ position:"relative" }}>
                   <button onClick={function(){ setSubTypeOpen(function(o){ return !o; }); }}
                     style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
@@ -6698,13 +7431,11 @@ function NewRuleFlow({ node, onClose }) {
                   var key = catDef.id + "." + subTypeDef.id;
                   var hint = hints[key];
                   if (!hint) return null;
+                  // Flat hint — small accent dot + text, no box, no border, no fill background.
                   return (
-                    <div style={{ marginTop:14, padding:"11px 13px", borderRadius:7, background:"var(--bg-canvas)", border:"1px dashed var(--line)", display:"flex", alignItems:"flex-start", gap:10 }}>
-                      <span style={{ width:22, height:22, borderRadius:5, background:catDef.fill, color:catDef.color, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0, marginTop:1 }}>{catDef.icon}</span>
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:3 }}>How this {subTypeDef.label.toLowerCase()} rule works</div>
-                        <div style={{ fontSize:12, color:"var(--ink-2)", lineHeight:1.6 }}>{hint}</div>
-                      </div>
+                    <div style={{ marginTop:10, paddingLeft:2, display:"flex", alignItems:"flex-start", gap:10 }}>
+                      <span style={{ width:6, height:6, borderRadius:"50%", background:catDef.color, flexShrink:0, marginTop:8 }} />
+                      <div style={{ flex:1, fontSize:12.5, color:"var(--ink-3)", lineHeight:1.6 }}>{hint}</div>
                     </div>
                   );
                 })()}
@@ -6725,7 +7456,7 @@ function NewRuleFlow({ node, onClose }) {
                   <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
                     {opsForField(vField).map(function(op){
                       var isOn = vOp === op.id;
-                      return <button key={op.id} onClick={function(){ setVOp(op.id); }} style={{ padding:"6px 11px", borderRadius:6, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11, cursor:"pointer" }}>{op.label}</button>;
+                      return <button key={op.id} onClick={function(){ setVOp(op.id); }} style={{ padding:"6px 11px", borderRadius:6, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--ink)" : "var(--panel)", color: isOn ? "var(--panel)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11, cursor:"pointer" }}>{op.label}</button>;
                     })}
                   </div>
                 </div>
@@ -6797,22 +7528,22 @@ function NewRuleFlow({ node, onClose }) {
             )}
 
             {step === 2 && formId === "survive" && (
-              <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:640 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:22, maxWidth:680 }}>
                 <div>
-                  <label style={lbl}>PROPERTY THIS RULE GOVERNS</label>
+                  <label style={lbl}>Property this rule governs</label>
                   <select value={sProperty} onChange={function(e){ setSProperty(e.target.value); }} style={inp}>
                     {props.map(function(p){ return <option key={p.name} value={p.name}>{p.name + "  ·  " + p.type}</option>; })}
                   </select>
                 </div>
                 <div>
-                  <label style={lbl}>STRATEGY</label>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                  <label style={lbl}>Strategy</label>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                     {[{ id:"source_priority", l:"Source priority", d:"Pick from a ranked list" },{ id:"recency", l:"Most recent", d:"Newest updated_at wins" },{ id:"completeness", l:"Most complete", d:"Longest non-null value wins" },{ id:"source_trust", l:"Trust tier", d:"By source trust level" },{ id:"confidence_weighted", l:"Confidence weighted", d:"Blend by per-value confidence" },{ id:"manual_override", l:"Manual override", d:"Steward edit always wins" }].map(function(o){
                       var isOn = sStrategy === o.id;
                       return (
-                        <button key={o.id} onClick={function(){ setSStrategy(o.id); }} style={{ textAlign:"left", padding:"10px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit" }}>
-                          <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)" }}>{o.l}</div>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3 }}>{o.d}</div>
+                        <button key={o.id} onClick={function(){ setSStrategy(o.id); }} style={{ textAlign:"left", padding:"12px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:8, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 10%, transparent)" : "none", transition:"border-color 100ms, box-shadow 100ms" }}>
+                          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{o.l}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4 }}>{o.d}</div>
                         </button>
                       );
                     })}
@@ -6820,23 +7551,26 @@ function NewRuleFlow({ node, onClose }) {
                 </div>
                 {sStrategy === "source_priority" && (
                   <div>
-                    <label style={lbl}>SOURCE RANKING (highest first)</label>
-                    <div style={{ border:"1px solid var(--line)", borderRadius:8, overflow:"hidden" }}>
+                    <label style={lbl}>Source ranking · highest first</label>
+                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                       {sSources.map(function(src, i){
+                        var isTop = i === 0;
                         return (
-                          <div key={i} style={{ display:"flex", alignItems:"center", padding:"8px 12px", borderBottom: i < sSources.length-1 ? "1px solid var(--line-2)" : "none", background: i === 0 ? "var(--panel-2)" : "var(--panel)" }}>
-                            <span style={{ width:22, height:22, borderRadius:"50%", background: i === 0 ? "var(--ink)" : "var(--chip)", color: i === 0 ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, marginRight:10 }}>{i + 1}</span>
-                            <span style={{ fontSize:13, color:"var(--ink)", flex:1 }}>{src}</span>
-                            <button onClick={function(){ if (i > 0) setSSources(function(arr){ var n = arr.slice(); var t = n[i]; n[i] = n[i-1]; n[i-1] = t; return n; }); }} disabled={i === 0} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--ink-3)", padding:"2px 6px", opacity: i === 0 ? 0.3 : 1 }}>▲</button>
-                            <button onClick={function(){ if (i < sSources.length-1) setSSources(function(arr){ var n = arr.slice(); var t = n[i]; n[i] = n[i+1]; n[i+1] = t; return n; }); }} disabled={i === sSources.length-1} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--ink-3)", padding:"2px 6px", opacity: i === sSources.length-1 ? 0.3 : 1 }}>▼</button>
+                          <div key={i} style={{ display:"flex", alignItems:"center", padding:"11px 14px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel)", gap:12 }}>
+                            <span style={{ width:24, height:24, borderRadius:"50%", background: isTop ? "var(--ink)" : "var(--chip)", color: isTop ? "var(--panel)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0 }}>{i + 1}</span>
+                            <span style={{ fontSize:13.5, color:"var(--ink)", flex:1 }}>{src}</span>
+                            <div style={{ display:"flex", gap:2 }}>
+                              <button onClick={function(){ if (i > 0) setSSources(function(arr){ var n = arr.slice(); var t = n[i]; n[i] = n[i-1]; n[i-1] = t; return n; }); }} disabled={i === 0} title="Move up" style={{ width:26, height:26, borderRadius:5, border:"1px solid var(--line)", background:"var(--panel)", cursor:"pointer", color:"var(--ink-3)", opacity: i === 0 ? 0.3 : 1, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10 }}>▲</button>
+                              <button onClick={function(){ if (i < sSources.length-1) setSSources(function(arr){ var n = arr.slice(); var t = n[i]; n[i] = n[i+1]; n[i+1] = t; return n; }); }} disabled={i === sSources.length-1} title="Move down" style={{ width:26, height:26, borderRadius:5, border:"1px solid var(--line)", background:"var(--panel)", cursor:"pointer", color:"var(--ink-3)", opacity: i === sSources.length-1 ? 0.3 : 1, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10 }}>▼</button>
+                            </div>
                           </div>
                         );
                       })}
                     </div>
                   </div>
                 )}
-                <div>
-                  <label style={lbl}>MIN CONFIDENCE (0–1)</label>
+                <div style={{ maxWidth:280 }}>
+                  <label style={lbl}>Min confidence · 0–1</label>
                   <input value={sMinConf} onChange={function(e){ setSMinConf(e.target.value); }} style={inp} />
                 </div>
               </div>
@@ -6849,7 +7583,7 @@ function NewRuleFlow({ node, onClose }) {
                   <div style={{ display:"flex", gap:6 }}>
                     {[{ id:"property", l:"Property" },{ id:"edge", l:"Inferred edge" }].map(function(o){
                       var isOn = cMode === o.id;
-                      return <button key={o.id} onClick={function(){ setCMode(o.id); }} style={{ padding:"7px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontSize:12.5, fontFamily:"inherit", cursor:"pointer" }}>{o.l}</button>;
+                      return <button key={o.id} onClick={function(){ setCMode(o.id); }} style={{ padding:"7px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--panel)", color: isOn ? "var(--panel)" : "var(--ink-2)", fontSize:12.5, fontFamily:"inherit", cursor:"pointer" }}>{o.l}</button>;
                     })}
                   </div>
                 </div>
@@ -6913,9 +7647,9 @@ function NewRuleFlow({ node, onClose }) {
                     {[{ id:"freshness", l:"Freshness", d:"p95 ingest lag below target" },{ id:"completeness", l:"Completeness", d:"Non-null fill rate" },{ id:"validity", l:"Validity", d:"% records passing VALIDATE rules" },{ id:"uniqueness", l:"Uniqueness", d:"Distinct value ratio" },{ id:"drift", l:"Drift", d:"Distribution shift vs baseline" }].map(function(o){
                       var isOn = sloDim === o.id;
                       return (
-                        <button key={o.id} onClick={function(){ setSloDim(o.id); }} style={{ textAlign:"left", padding:"10px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit" }}>
-                          <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)" }}>{o.l}</div>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3 }}>{o.d}</div>
+                        <button key={o.id} onClick={function(){ setSloDim(o.id); }} style={{ textAlign:"left", padding:"12px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:8, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 10%, transparent)" : "none", transition:"border-color 100ms, box-shadow 100ms" }}>
+                          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{o.l}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4 }}>{o.d}</div>
                         </button>
                       );
                     })}
@@ -6963,7 +7697,7 @@ function NewRuleFlow({ node, onClose }) {
                   <div style={{ display:"flex", gap:6 }}>
                     {[{ id:"pii", l:"All PII fields" },{ id:"specific", l:"Specific field" },{ id:"all", l:"All fields" }].map(function(o){
                       var isOn = accScope === o.id;
-                      return <button key={o.id} onClick={function(){ setAccScope(o.id); }} style={{ padding:"7px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontSize:12, fontFamily:"inherit", cursor:"pointer" }}>{o.l}</button>;
+                      return <button key={o.id} onClick={function(){ setAccScope(o.id); }} style={{ padding:"7px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--panel)", color: isOn ? "var(--panel)" : "var(--ink-2)", fontSize:12, fontFamily:"inherit", cursor:"pointer" }}>{o.l}</button>;
                     })}
                   </div>
                 </div>
@@ -6977,7 +7711,7 @@ function NewRuleFlow({ node, onClose }) {
                 )}
                 <div>
                   <label style={lbl}>REQUIRED ROLES (any of)</label>
-                  <div style={{ border:"1px solid var(--line)", borderRadius:8, padding:"6px 8px", display:"flex", flexWrap:"wrap", gap:5, alignItems:"center", background:"var(--bg-canvas)" }}>
+                  <div style={{ border:"1px solid var(--line)", borderRadius:8, padding:"7px 10px", display:"flex", flexWrap:"wrap", gap:6, alignItems:"center", background:"var(--panel)" }}>
                     {accRoles.map(function(r, i) {
                       return (
                         <span key={i} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 5px 3px 8px", borderRadius:5, background:"var(--chip)", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>
@@ -6997,9 +7731,9 @@ function NewRuleFlow({ node, onClose }) {
                     {[{ id:"redact", l:"Redact entirely", d:"Return null / [REDACTED]" },{ id:"hash", l:"Hash one-way", d:"Stable hash for joins, no PII" },{ id:"partial", l:"Partial mask", d:"e.g. j***@a***.com" },{ id:"deny", l:"Deny request entirely", d:"Return 403, log denial" }].map(function(o){
                       var isOn = accMasking === o.id;
                       return (
-                        <button key={o.id} onClick={function(){ setAccMasking(o.id); }} style={{ textAlign:"left", padding:"10px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit" }}>
-                          <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)" }}>{o.l}</div>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3 }}>{o.d}</div>
+                        <button key={o.id} onClick={function(){ setAccMasking(o.id); }} style={{ textAlign:"left", padding:"12px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:8, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 10%, transparent)" : "none", transition:"border-color 100ms, box-shadow 100ms" }}>
+                          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{o.l}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4 }}>{o.d}</div>
                         </button>
                       );
                     })}
@@ -7009,41 +7743,41 @@ function NewRuleFlow({ node, onClose }) {
             )}
 
             {step === 3 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:680 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:760 }}>
                 <div>
-                  <label style={lbl}>APPLIES TO</label>
-                  <div style={{ display:"flex", gap:6 }}>
+                  <label style={lbl}>Applies to</label>
+                  <div style={{ display:"flex", gap:8 }}>
                     {[{ id:"all", l:"All " + node.label + " records" },{ id:"filtered", l:"Filtered subset" }].map(function(o){
                       var isOn = scopeMode === o.id;
-                      return <button key={o.id} onClick={function(){ setScopeMode(o.id); }} style={{ padding:"8px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontSize:12.5, fontFamily:"inherit", cursor:"pointer" }}>{o.l}</button>;
+                      return <button key={o.id} onClick={function(){ setScopeMode(o.id); }} style={{ padding:"10px 16px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:8, background: isOn ? "var(--ink)" : "var(--panel)", color: isOn ? "var(--panel)" : "var(--ink-2)", fontSize:13, fontFamily:"inherit", cursor:"pointer", fontWeight: isOn ? 600 : 400, transition:"border-color 100ms, background 100ms" }}>{o.l}</button>;
                     })}
                   </div>
                 </div>
                 {scopeMode === "filtered" && (
                   <div>
-                    <label style={lbl}>FILTER (WHERE clause)</label>
-                    <input value={scopeFilter} onChange={function(e){ setScopeFilter(e.target.value); }} placeholder="e.g. tier IN ('ENT', 'Strategic')" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12 })} />
+                    <label style={lbl}>Filter · WHERE clause</label>
+                    <input value={scopeFilter} onChange={function(e){ setScopeFilter(e.target.value); }} placeholder="e.g. tier IN ('ENT', 'Strategic')" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12.5 })} />
                   </div>
                 )}
                 <div>
-                  <label style={lbl}>WHEN TO RUN</label>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                  <label style={lbl}>When to run</label>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
                     {[{ id:"on_write", l:"On write", d:"Evaluate at insert / update time" },{ id:"on_read", l:"On read", d:"Evaluate when a query touches it" },{ id:"scheduled", l:"Scheduled", d:"Run on a cron schedule" }].map(function(o){
                       var isOn = trigger === o.id;
                       var disabled = (formId === "match" || formId === "slo") && o.id === "on_read";
                       return (
                         <button key={o.id} disabled={disabled} onClick={function(){ if (!disabled) setTrigger(o.id); }}
-                          style={{ textAlign:"left", padding:"10px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1, fontFamily:"inherit" }}>
-                          <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)" }}>{o.l}</div>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3 }}>{o.d}</div>
+                          style={{ textAlign:"left", padding:"12px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:8, background:"var(--panel)", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1, fontFamily:"inherit", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 10%, transparent)" : "none", transition:"border-color 100ms, box-shadow 100ms" }}>
+                          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{o.l}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4 }}>{o.d}</div>
                         </button>
                       );
                     })}
                   </div>
                 </div>
                 {trigger === "scheduled" && (
-                  <div>
-                    <label style={lbl}>CADENCE</label>
+                  <div style={{ maxWidth:320 }}>
+                    <label style={lbl}>Cadence</label>
                     <select value={schedule} onChange={function(e){ setSchedule(e.target.value); }} style={inp}>
                       <option value="every_15m">Every 15 minutes</option><option value="hourly">Hourly</option><option value="every_6h">Every 6 hours</option><option value="daily">Daily</option><option value="weekly">Weekly</option>
                     </select>
@@ -7053,30 +7787,30 @@ function NewRuleFlow({ node, onClose }) {
             )}
 
             {step === 4 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:680 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:24, maxWidth:760 }}>
                 <div>
-                  <label style={lbl}>RULE TITLE</label>
+                  <label style={lbl}>Rule title</label>
                   <input value={title} onChange={function(e){ setTitle(e.target.value); }} placeholder={"e.g. " + (formId === "validate" ? "ARR is non-negative" : formId === "match" ? "Domain-based company match" : formId === "survive" ? "ARR: ERP wins" : formId === "compute" ? "Tier from ARR bands" : formId === "slo" ? "Freshness under 30m" : "PII gated on acct_admin")} style={inp} />
                 </div>
                 <div>
-                  <label style={lbl}>DESCRIPTION (OPTIONAL)</label>
-                  <textarea value={description} onChange={function(e){ setDescription(e.target.value); }} rows={2} placeholder="One-line summary visible in audit logs" style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.5 })} />
+                  <label style={lbl}>Description · optional</label>
+                  <textarea value={description} onChange={function(e){ setDescription(e.target.value); }} rows={2} placeholder="One-line summary visible in audit logs" style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.55 })} />
                 </div>
                 {(formId === "validate" || formId === "slo" || formId === "access") && (
                   <div>
-                    <label style={lbl}>SEVERITY</label>
-                    <div style={{ display:"flex", gap:6 }}>
+                    <label style={lbl}>Severity</label>
+                    <div style={{ display:"flex", gap:8 }}>
                       {["ERROR","WARN","INFO"].map(function(s){
                         var isOn = severity === s;
                         var col = s === "ERROR" ? "var(--coral)" : s === "WARN" ? "var(--gold)" : "var(--ink-3)";
-                        return <button key={s} onClick={function(){ setSeverity(s); }} style={{ padding:"7px 14px", border:"1px solid " + (isOn ? col : "var(--line)"), borderRadius:7, background: isOn ? col + "1a" : "var(--bg-canvas)", color: isOn ? col : "var(--ink-2)", fontSize:12, fontFamily:"JetBrains Mono", fontWeight: isOn ? 700 : 400, letterSpacing:"0.4px", cursor:"pointer" }}>{s}</button>;
+                        return <button key={s} onClick={function(){ setSeverity(s); }} style={{ padding:"9px 16px", border:"1px solid " + (isOn ? col : "var(--line)"), borderRadius:8, background:"var(--panel)", color: isOn ? col : "var(--ink-3)", fontSize:12, fontFamily:"JetBrains Mono", fontWeight: isOn ? 700 : 500, letterSpacing:"0.5px", cursor:"pointer", boxShadow: isOn ? "0 0 0 2px " + col + "22" : "none", transition:"border-color 100ms, box-shadow 100ms, color 100ms" }}>{s}</button>;
                       })}
                     </div>
                   </div>
                 )}
                 <div>
-                  <label style={lbl}>{formId === "match" ? "WHEN A MATCH IS FOUND" : formId === "compute" ? "WHEN COMPUTE FAILS" : formId === "survive" ? "WHEN SOURCES CONFLICT" : "ON VIOLATION (multi-select)"}</label>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                  <label style={lbl}>{formId === "match" ? "When a match is found" : formId === "compute" ? "When compute fails" : formId === "survive" ? "When sources conflict" : "On violation · multi-select"}</label>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                     {[
                       { id:"block", l:"Block the write", applies:["validate"] },
                       { id:"quarantine", l:"Route to quarantine", applies:["validate","compute"] },
@@ -7088,9 +7822,9 @@ function NewRuleFlow({ node, onClose }) {
                       var isOn = onViolation.indexOf(o.id) >= 0;
                       return (
                         <button key={o.id} onClick={function(){ setOnViolation(function(arr){ return isOn ? arr.filter(function(x){ return x !== o.id; }) : arr.concat([o.id]); }); }}
-                          style={{ textAlign:"left", padding:"9px 12px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:10 }}>
-                          <span style={{ width:16, height:16, borderRadius:4, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--ink)" : "transparent", color:"var(--bg-canvas)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, flexShrink:0 }}>{isOn ? "✓" : ""}</span>
-                          <span style={{ fontSize:13, color:"var(--ink)" }}>{o.l}</span>
+                          style={{ textAlign:"left", padding:"11px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:8, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:11, boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 10%, transparent)" : "none", transition:"border-color 100ms, box-shadow 100ms" }}>
+                          <span style={{ width:18, height:18, borderRadius:4, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--ink)" : "var(--panel)", color:"var(--panel)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, flexShrink:0 }}>{isOn ? "✓" : ""}</span>
+                          <span style={{ fontSize:13.5, color:"var(--ink)", fontWeight:500 }}>{o.l}</span>
                         </button>
                       );
                     })}
@@ -7098,7 +7832,7 @@ function NewRuleFlow({ node, onClose }) {
                 </div>
                 {onViolation.indexOf("notify") >= 0 && (
                   <div>
-                    <label style={lbl}>NOTIFICATION CHANNEL</label>
+                    <label style={lbl}>Notification channel</label>
                     <input value={notifyChan} onChange={function(e){ setNotifyChan(e.target.value); }} placeholder="#schema-alerts or owner@team" style={inp} />
                   </div>
                 )}
@@ -7106,50 +7840,65 @@ function NewRuleFlow({ node, onClose }) {
             )}
 
             {step === 5 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:760 }}>
-                <div style={{ border:"1px solid var(--line)", borderRadius:10, padding:20, background:"var(--panel)" }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
-                    {catDef && <span style={{ width:32, height:32, borderRadius:7, background:catDef.fill, color:catDef.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700 }}>{catDef.icon}</span>}
-                    <div>
-                      <div style={{ fontSize:15, fontWeight:600, color:"var(--ink)" }}>{title || (catDef ? catDef.title : "Untitled rule")}</div>
-                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, letterSpacing:"0.4px" }}>{catDef ? catDef.code + " · " + node.label.toUpperCase() : ""}</div>
+              <div style={{ display:"flex", flexDirection:"column", maxWidth:760 }}>
+                {/* Header — flat: category glyph + title + meta line */}
+                <div style={{ display:"flex", alignItems:"center", gap:14, paddingBottom:20, borderBottom:"1px dashed var(--line)" }}>
+                  {catDef && <span style={{ width:40, height:40, borderRadius:9, background:catDef.fill, color:catDef.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, fontWeight:700, flexShrink:0 }}>{catDef.icon}</span>}
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", lineHeight:1.15 }}>{title || (catDef ? catDef.title : "Untitled rule")}</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:5 }}>
+                      {catDef && <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:catDef.fill, color:catDef.color, fontWeight:700, letterSpacing:"0.4px" }}>{catDef.code}</span>}
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", letterSpacing:"0.4px" }}>{node.label.toUpperCase()}</span>
+                      {subTypeDef && <>
+                        <span style={{ width:3, height:3, borderRadius:"50%", background:"var(--ink-3)" }} />
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{subTypeDef.label}</span>
+                      </>}
                     </div>
                   </div>
-                  {description && <div style={{ fontSize:12.5, color:"var(--ink-3)", marginBottom:14, lineHeight:1.55 }}>{description}</div>}
-                  <div style={{ display:"grid", gridTemplateColumns:"160px 1fr", gap:"8px 14px", fontSize:12 }}>
-                    <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>EXPRESSION</span>
-                    <pre style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)", margin:0, padding:"7px 10px", background:"var(--bg-canvas)", borderRadius:5, border:"1px solid var(--line-2)", whiteSpace:"pre-wrap" }}>{buildExpression()}</pre>
-                    <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>SCOPE</span>
-                    <span style={{ color:"var(--ink)" }}>{scopeMode === "all" ? "All " + node.label + " records" : "Filtered: " + scopeFilter}</span>
-                    <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>TRIGGER</span>
-                    <span style={{ color:"var(--ink)" }}>{trigger === "on_write" ? "On write" : trigger === "on_read" ? "On read" : "Scheduled (" + schedule + ")"}</span>
-                    {(formId === "validate" || formId === "slo" || formId === "access") && (
-                      <>
-                        <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>SEVERITY</span>
-                        <span style={{ color: severity === "ERROR" ? "var(--coral)" : severity === "WARN" ? "var(--gold)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontWeight:700, fontSize:11 }}>{severity}</span>
-                      </>
-                    )}
-                    <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>ACTIONS</span>
-                    <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>{onViolation.map(function(a){ return <span key={a} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{a}</span>; })}</div>
-                  </div>
                 </div>
-                <div style={{ border:"1px solid var(--line-2)", borderRadius:10, padding:16, background:"var(--panel-2)" }}>
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:10 }}>APPROVERS</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                {description && (
+                  <div style={{ paddingTop:18, fontSize:13, color:"var(--ink-2)", lineHeight:1.6 }}>{description}</div>
+                )}
+                {/* Definition rows — flat label/value grid, no card wrapper */}
+                <div style={{ paddingTop:20, paddingBottom:20, borderBottom:"1px dashed var(--line)", display:"grid", gridTemplateColumns:"140px 1fr", gap:"16px 18px", alignItems:"start" }}>
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.6px", textTransform:"uppercase", paddingTop:6 }}>Expression</span>
+                  <pre style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", margin:0, padding:"10px 13px", background:"var(--panel)", borderRadius:7, border:"1px solid var(--line)", whiteSpace:"pre-wrap", lineHeight:1.55 }}>{buildExpression()}</pre>
+
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.6px", textTransform:"uppercase" }}>Scope</span>
+                  <span style={{ color:"var(--ink)", fontSize:13 }}>{scopeMode === "all" ? "All " + node.label + " records" : "Filtered: " + scopeFilter}</span>
+
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.6px", textTransform:"uppercase" }}>Trigger</span>
+                  <span style={{ color:"var(--ink)", fontSize:13 }}>{trigger === "on_write" ? "On write" : trigger === "on_read" ? "On read" : "Scheduled · " + schedule}</span>
+
+                  {(formId === "validate" || formId === "slo" || formId === "access") && (
+                    <>
+                      <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.6px", textTransform:"uppercase" }}>Severity</span>
+                      <span style={{ color: severity === "ERROR" ? "var(--coral)" : severity === "WARN" ? "var(--gold)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontWeight:700, fontSize:12, letterSpacing:"0.5px" }}>{severity}</span>
+                    </>
+                  )}
+
+                  <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.6px", textTransform:"uppercase" }}>Actions</span>
+                  <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>{onViolation.map(function(a){ return <span key={a} style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"3px 9px", borderRadius:5, background:"var(--chip)", color:"var(--ink-2)" }}>{a}</span>; })}</div>
+                </div>
+                {/* Approvers — flat list, no card wrapper */}
+                <div style={{ paddingTop:20, paddingBottom:20, borderBottom:"1px dashed var(--line)" }}>
+                  <div style={lbl}>Approvers</div>
+                  <div style={{ display:"flex", flexDirection:"column" }}>
                     {[{ who:"data-platform owner", status:"required", sev:"var(--coral)" },{ who:"security@", status: formId === "access" ? "required" : "advisory", sev: formId === "access" ? "var(--coral)" : "var(--ink-3)" },{ who:"node steward (you)", status:"auto-approved", sev:"var(--green)" }].map(function(a, i){
-                      return <div key={i} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"5px 0", borderBottom: i < 2 ? "1px dashed var(--line-2)" : "none" }}>
-                        <span style={{ color:"var(--ink-2)" }}>{a.who}</span>
-                        <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:a.sev, fontWeight:600 }}>{a.status}</span>
+                      return <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", fontSize:13, padding:"10px 0", borderBottom: i < 2 ? "1px dashed var(--line-2)" : "none" }}>
+                        <span style={{ color:"var(--ink)" }}>{a.who}</span>
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:a.sev, fontWeight:700, letterSpacing:"0.4px" }}>{a.status}</span>
                       </div>;
                     })}
                   </div>
                 </div>
-                <div>
-                  <label style={lbl}>ON SAVE</label>
-                  <div style={{ display:"flex", gap:6 }}>
+                {/* On save — flat pills */}
+                <div style={{ paddingTop:20 }}>
+                  <label style={lbl}>On save</label>
+                  <div style={{ display:"flex", gap:8 }}>
                     {[{ id:true, l:"Activate immediately" },{ id:false, l:"Save as draft" }].map(function(o){
                       var isOn = activate === o.id;
-                      return <button key={String(o.id)} onClick={function(){ setActivate(o.id); }} style={{ padding:"8px 14px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:7, background: isOn ? "var(--ink)" : "var(--bg-canvas)", color: isOn ? "var(--bg-canvas)" : "var(--ink-2)", fontSize:12.5, fontFamily:"inherit", cursor:"pointer" }}>{o.l}</button>;
+                      return <button key={String(o.id)} onClick={function(){ setActivate(o.id); }} style={{ padding:"10px 16px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:8, background: isOn ? "var(--ink)" : "var(--panel)", color: isOn ? "var(--panel)" : "var(--ink-2)", fontSize:13, fontFamily:"inherit", fontWeight: isOn ? 600 : 400, cursor:"pointer", transition:"border-color 100ms, background 100ms" }}>{o.l}</button>;
                     })}
                   </div>
                 </div>
@@ -7166,7 +7915,7 @@ function NewRuleFlow({ node, onClose }) {
             <button className="btn-ghost" onClick={onClose}>Cancel</button>
             {step < 5
               ? <button className="btn-dark" disabled={!canContinue()} onClick={function(){ setStep(function(s){ return s + 1; }); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Continue →</button>
-              : <button className="btn-dark" onClick={onClose}>{activate ? "Publish rule ↵" : "Save draft ↵"}</button>
+              : <button className="btn-dark" onClick={onClose}>{isEdit ? "Save changes ↵" : (activate ? "Publish rule ↵" : "Save draft ↵")}</button>
             }
           </div>
         </div>
@@ -7181,10 +7930,9 @@ function NewRuleFlow({ node, onClose }) {
 // RULES PANE — unified table with filter chips, inline expand, search
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function RulesPane({ rules, node, onViolationClick, onMatchClick, onSurvClick, onNewRule }) {
+function RulesPane({ rules, node, onViolationClick, onMatchClick, onSurvClick, onNewRule, onEditRule }) {
   const [filter, setFilter]   = useState("all");
   const [search, setSearch]   = useState("");
-  const [expanded, setExpanded] = useState(null);
 
   const qRules = (rules.quality || []).map(function(r){ return Object.assign({}, r, { _bucket:"quality" }); });
   const mRules = (rules.match || []).map(function(r){ return Object.assign({}, r, { _bucket:"match", kind:"MATCH" }); });
@@ -7278,8 +8026,8 @@ function RulesPane({ rules, node, onViolationClick, onMatchClick, onSurvClick, o
         </div>
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:"86px 1fr 240px 130px 76px 42px 14px", gap:14, padding:"10px 18px", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", alignItems:"center" }}>
-        <div>Kind</div><div>Title / expression</div><div>Status</div><div style={{ textAlign:"right" }}>Last activity</div><div style={{ textAlign:"center" }}>Sev</div><div style={{ textAlign:"center" }}>On</div><div></div>
+      <div style={{ display:"grid", gridTemplateColumns:"86px 1fr 240px 130px 76px 42px", gap:14, padding:"10px 18px", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", alignItems:"center" }}>
+        <div>Kind</div><div>Title / expression</div><div>Status</div><div style={{ textAlign:"right" }}>Last activity</div><div style={{ textAlign:"center" }}>Sev</div><div style={{ textAlign:"center" }}>On</div>
       </div>
 
       {visible.length === 0 && (
@@ -7291,11 +8039,12 @@ function RulesPane({ rules, node, onViolationClick, onMatchClick, onSurvClick, o
         var m = meta(r.kind);
         var s = sevStyle(r.severity || "INFO");
         var metric = metricFor(r);
-        var isOpen = expanded === (r._bucket + "_" + r.id);
         return (
           <div key={r._bucket + "_" + r.id} style={{ borderBottom: i < visible.length-1 ? "1px solid var(--line-2)" : "none" }}>
-            <div onClick={function(){ setExpanded(isOpen ? null : (r._bucket + "_" + r.id)); }}
-              style={{ display:"grid", gridTemplateColumns:"86px 1fr 240px 130px 76px 42px 14px", gap:14, padding:"13px 18px", alignItems:"center", cursor:"pointer" }}>
+            <div onClick={function(){ if (onEditRule) onEditRule(r); }}
+              style={{ display:"grid", gridTemplateColumns:"86px 1fr 240px 130px 76px 42px", gap:14, padding:"13px 18px", alignItems:"center", cursor:"pointer", transition:"background 100ms" }}
+              onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
+              onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
               <div style={{ display:"flex", alignItems:"center", gap:7 }}>
                 <span style={{ width:22, height:22, borderRadius:5, background:m.fill, color:m.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, flexShrink:0 }}>{m.icon}</span>
                 <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, color:m.color, letterSpacing:"0.5px" }}>{m.code}</span>
@@ -7342,63 +8091,7 @@ function RulesPane({ rules, node, onViolationClick, onMatchClick, onSurvClick, o
               <div style={{ display:"flex", justifyContent:"center" }} onClick={function(e){ e.stopPropagation(); }}>
                 <label className="switch"><input type="checkbox" defaultChecked={r.on !== false} /><span className="switch-track" /></label>
               </div>
-
-              <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)" }}>{isOpen ? "▴" : "▾"}</span>
             </div>
-
-            {isOpen && (
-              <div style={{ padding:"14px 18px 18px 18px", background:"var(--panel-2)", borderTop:"1px dashed var(--line-2)" }}>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:18 }}>
-                  <div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>EXPRESSION</div>
-                    <pre style={{ fontFamily:"JetBrains Mono", fontSize:11, color: m.color, margin:0, padding:"10px 12px", background:"var(--bg-canvas)", border:"1px solid var(--line-2)", borderRadius:6, whiteSpace:"pre-wrap" }}>
-                      {r.expr
-                        || (r._bucket === "match" ? "score =\n  " + r.signals.map(function(sg){ return sg.strategy + "(" + sg.field + ") × " + sg.weight; }).join("\n  ") + "\nauto_merge ≥ " + r.threshold_auto + "\nreview band " + r.threshold_review + "–" + r.threshold_auto : "")
-                        || (r._bucket === "surv"  ? r.property + " ←\n  strategy: " + (r.strategy || "—") + (r.sources && r.sources.length ? "\n  ranking: " + r.sources.join(" > ") : "") : "")
-                        || "—"}
-                    </pre>
-                    <div style={{ marginTop:10, display:"grid", gridTemplateColumns:"110px 1fr", gap:"6px 12px", fontSize:11.5 }}>
-                      <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>ID</span>
-                      <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{r.id}</code>
-                      <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>NODE</span>
-                      <span style={{ color:"var(--ink-2)" }}>{node.label}</span>
-                      <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>CATEGORY</span>
-                      <span style={{ color:m.color, fontFamily:"JetBrains Mono", fontWeight:600 }}>{m.long.toUpperCase()}</span>
-                      {r._bucket === "quality" && r.evaluated !== undefined && (
-                        <>
-                          <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10 }}>EVALUATED</span>
-                          <span style={{ color:"var(--ink-2)", fontFamily:"JetBrains Mono" }}>{(r.evaluated || 0).toLocaleString() + " over 24h"}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>RECENT ACTIVITY</div>
-                    <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-                      {[
-                        { t:"now",     who:"runtime",  what:"evaluating on every write", dot:"var(--green)" },
-                        { t:"2m ago",  who:"runtime",  what: r._bucket === "quality" ? ((r.violations||0) > 0 ? r.violations + " violations triggered" : "no violations") : r._bucket === "match" ? ((r.candidates||0) > 0 ? r.candidates + " new candidates queued" : "0 new candidates") : ((r.conflicts||0) > 0 ? r.conflicts + " conflicts queued" : "0 new conflicts"), dot: metric.color },
-                        { t:"4h ago",  who:"morgan.k", what:"reviewed config", dot:"var(--blue)" },
-                        { t:"2d ago",  who:"schema-bot",what:"baseline set from sample of 10,000", dot:"var(--ink-4)" }
-                      ].map(function(a, j){
-                        return <div key={j} style={{ display:"grid", gridTemplateColumns:"56px 12px 1fr auto", gap:8, fontSize:11, padding:"4px 0", borderBottom: j < 3 ? "1px dashed var(--line-2)" : "none", alignItems:"center" }}>
-                          <span style={{ fontFamily:"JetBrains Mono", color:"var(--ink-4)" }}>{a.t}</span>
-                          <span style={{ width:6, height:6, borderRadius:"50%", background:a.dot, justifySelf:"center" }} />
-                          <span style={{ color:"var(--ink-2)" }}>{a.what}</span>
-                          <span style={{ fontFamily:"JetBrains Mono", color:"var(--ink-3)" }}>{a.who}</span>
-                        </div>;
-                      })}
-                    </div>
-                    <div style={{ display:"flex", gap:6, marginTop:14, justifyContent:"flex-end" }}>
-                      {metric.click && <button className="btn-ghost" onClick={metric.click} style={{ fontSize:11.5 }}>{r._bucket === "quality" ? "Investigate →" : r._bucket === "match" ? "Review candidates →" : "Resolve conflicts →"}</button>}
-                      <button className="btn-ghost" style={{ fontSize:11.5 }}>View history</button>
-                      <button className="btn-ghost" style={{ fontSize:11.5 }}>Edit rule</button>
-                      <button className="btn-ghost" style={{ fontSize:11.5, color:"var(--coral)" }}>Disable…</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         );
       })}
@@ -14561,7 +15254,7 @@ function GraphLandingView({ onOpenGraph }) {
       {/* HEADER BAR — like a workspace picker */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:14, padding:"22px 32px 14px", background:"var(--bg)", borderBottom:"1px solid var(--line-2)" }}>
         <div style={{ display:"flex", alignItems:"baseline", gap:14 }}>
-          <span style={{ fontFamily:"Instrument Serif", fontSize:30, color:"var(--ink)", lineHeight:1, letterSpacing:"-0.3px" }}>Context Graphs</span>
+          <span style={{ fontFamily:"Instrument Serif", fontSize:30, color:"var(--ink)", lineHeight:1, letterSpacing:"-0.3px" }}>Enterprise Context Graph</span>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <div style={{ position:"relative" }}>
@@ -14644,16 +15337,21 @@ function GraphLandingView({ onOpenGraph }) {
               for (var i = 0; i < n; i++){ s = (s * 1664525 + 1013904223) | 0; out.push((Math.abs(s) % 1000) / 1000); }
               return out;
             }
-            function buildComposition(seed){
-              // 4 segments with a deterministic shape: weighted toward "Entities" then "Relations"
-              var r = seedRand(seed, 4);
-              var weights = [r[0]*0.9 + 0.3, r[1]*0.7 + 0.2, r[2]*0.55 + 0.15, r[3]*0.4 + 0.1];
-              var sum = weights[0]+weights[1]+weights[2]+weights[3];
-              var pcts = weights.map(function(w){ return Math.max(1, Math.round(w/sum*100)); });
-              var diff = 100 - (pcts[0]+pcts[1]+pcts[2]+pcts[3]);
-              pcts[0] += diff;
-              return pcts;
-            }
+
+            // Per-graph source mix — share of records contributed by each upstream system.
+            // Far more meaningful than abstract "composition": it answers "where does this graph's data come from?"
+            // Each entry: [source name, % share]. Last entry can be an "Other (n)" rollup for long-tail sources.
+            var SOURCE_MIX = {
+              ecg:       [["Salesforce", 24], ["NetSuite", 19], ["Workday", 14], ["Other (9)", 43]],
+              support:   [["Zendesk", 46], ["Intercom", 24], ["Jira Service", 18], ["Slack Connect", 12]],
+              customer:  [["Salesforce", 38], ["HubSpot", 22], ["Stripe", 22], ["Segment", 18]],
+              sales:     [["Salesforce", 48], ["HubSpot", 20], ["Outreach", 18], ["LinkedIn SN", 14]],
+              finance:   [["NetSuite", 42], ["Stripe", 22], ["Coupa", 18], ["Other (4)", 18]],
+              product:   [["Productboard", 32], ["Jira", 28], ["Linear", 22], ["GitHub", 18]],
+              security:  [["Okta", 30], ["CrowdStrike", 26], ["Vault", 20], ["Other (5)", 24]],
+              workforce: [["Workday", 52], ["BambooHR", 30], ["Greenhouse", 18]],
+              risk:      [["Vanta", 38], ["AuditBoard", 26], ["OneTrust", 22], ["Other (3)", 14]]
+            };
             function buildSpark(seed){
               // smooth-ish 30-day curve trending up
               var r = seedRand(seed + 7, 30);
@@ -14666,15 +15364,14 @@ function GraphLandingView({ onOpenGraph }) {
               return out;
             }
 
-            var COMP_LABELS = ["Entities","Relations","Attributes","Lineage"];
-            var COMP_COLORS = ["var(--blue)","var(--green)","var(--gold)","var(--ink-3)"];
+            var SOURCE_COLORS = ["var(--blue)","var(--green)","var(--gold)","var(--ink-3)"];
 
             return (
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(2, minmax(0, 1fr))", gap:20 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(3, minmax(0, 1fr))", gap:20 }}>
                 {ordered.map(function(g){
                   var hColor = healthColor(g.health);
                   var seed = g.id.charCodeAt(0) * 977 + g.id.length * 31;
-                  var comp = buildComposition(seed);
+                  var sourceMix = SOURCE_MIX[g.id] || [["Source A", 40], ["Source B", 35], ["Other", 25]];
                   var spark = buildSpark(seed);
                   var sparkMax = Math.max.apply(null, spark);
                   var sparkMin = Math.min.apply(null, spark);
@@ -14729,20 +15426,23 @@ function GraphLandingView({ onOpenGraph }) {
                         })}
                       </div>
 
-                      {/* COMPOSITION — stacked bar with legend */}
+                      {/* BY SOURCE — share of records contributed per upstream system */}
                       <div style={{ marginTop:14 }}>
-                        <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>Composition</div>
+                        <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:8 }}>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase" }}>By source</span>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.4px", color:"var(--ink-4)", textTransform:"uppercase" }}>share of records</span>
+                        </div>
                         <div style={{ display:"flex", height:8, borderRadius:4, overflow:"hidden", border:"1px solid var(--line-2)" }}>
-                          {comp.map(function(p, i){
-                            return <div key={i} style={{ flex: p, background: COMP_COLORS[i] }} />;
+                          {sourceMix.map(function(s, i){
+                            return <div key={i} style={{ flex: s[1], background: SOURCE_COLORS[i % SOURCE_COLORS.length] }} />;
                           })}
                         </div>
                         <div style={{ display:"flex", flexWrap:"wrap", gap:"6px 14px", marginTop:9 }}>
-                          {comp.map(function(p, i){
+                          {sourceMix.map(function(s, i){
                             return <span key={i} style={{ display:"flex", alignItems:"center", gap:6, fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-2)" }}>
-                              <span style={{ width:7, height:7, borderRadius:2, background: COMP_COLORS[i] }} />
-                              <span>{COMP_LABELS[i]}</span>
-                              <span style={{ color:"var(--ink-3)" }}>{p + "%"}</span>
+                              <span style={{ width:7, height:7, borderRadius:2, background: SOURCE_COLORS[i % SOURCE_COLORS.length] }} />
+                              <span>{s[0]}</span>
+                              <span style={{ color:"var(--ink-3)" }}>{s[1] + "%"}</span>
                             </span>;
                           })}
                         </div>
