@@ -14595,7 +14595,7 @@ function NewGraphFlow({ onClose, onCreate }) {
   return (
     <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
       onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width:"92vw", maxWidth:880, maxHeight:"94vh", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
+      <div style={{ width:"92vw", maxWidth:880, height:"min(86vh, 760px)", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
 
         {/* HEADER */}
         <div style={{ flexShrink:0, padding:"18px 22px 16px", borderBottom:"1px solid var(--line)", display:"flex", alignItems:"flex-start", justifyContent:"space-between", background:"var(--panel)" }}>
