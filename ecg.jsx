@@ -14710,8 +14710,11 @@ function NewGraphFlow({ onClose, onCreate }) {
               ) : visibleSuggestions.map(function(sp){
                 var isOn = startId === sp.id;
                 return (
+                  // position:relative so the selected-state ✓ can be absolutely positioned
+                  // — that way toggling selection doesn't take any layout width away from
+                  // the entity chip strip and the card height stays constant.
                   <div key={sp.id} onClick={function(){ pickStart(sp.id); }}
-                    style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"14px 16px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:10, background: isOn ? "var(--bg-canvas)" : "var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", cursor:"pointer" }}>
+                    style={{ position:"relative", display:"flex", alignItems:"flex-start", gap:14, padding:"14px 16px", paddingRight:36, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:10, background:"var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", cursor:"pointer" }}>
                     <span style={{ width:38, height:38, borderRadius:8, background:sp.accent, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
                       <FunctionIcon id={(sp.fn && sp.fn[0]) || "enterprise"} size={20} />
                     </span>
@@ -14745,7 +14748,7 @@ function NewGraphFlow({ onClose, onCreate }) {
                         );
                       })()}
                     </div>
-                    {isOn && <span style={{ color:"var(--green)", fontWeight:700, fontSize:14 }}>✓</span>}
+                    {isOn && <span style={{ position:"absolute", top:14, right:14, color:"var(--green)", fontWeight:700, fontSize:14, lineHeight:1, pointerEvents:"none" }}>✓</span>}
                   </div>
                 );
               })}
