@@ -3296,13 +3296,15 @@ function PropertiesPane({ node, properties }) {
           </div>
         </div>
         <div className="props-table">
-          {/* Redesigned head — sort buttons remain; alignment matches data (numeric headers right-aligned). */}
-          <div className="props-head" style={{ gridTemplateColumns:"2fr 1.1fr 1.4fr 130px 140px 200px 32px" }}>
+          {/* Columns: Name | Key | Type | Fill | Conformance | Flags | chevron.
+              All headers are left-aligned (including the numeric Fill / Conformance),
+              so the column label sits flush with where the data starts reading. */}
+          <div className="props-head" style={{ gridTemplateColumns:"1.5fr 1.2fr 1fr 150px 170px 130px 32px" }}>
             <button className="props-th" onClick={() => onSort("name")}>Name{sortIcon("name")}</button>
+            <button className="props-th" onClick={() => onSort("name")}>Key{sortIcon("name")}</button>
             <button className="props-th" onClick={() => onSort("type")}>Type{sortIcon("type")}</button>
-            <div className="props-th">Source</div>
-            <button className="props-th" onClick={() => onSort("fill")} style={{ textAlign:"right" }}>Fill{sortIcon("fill")}</button>
-            <button className="props-th" onClick={() => onSort("conf")} style={{ textAlign:"right" }}>Conformance{sortIcon("conf")}</button>
+            <button className="props-th" onClick={() => onSort("fill")} style={{ textAlign:"left" }}>Fill{sortIcon("fill")}</button>
+            <button className="props-th" onClick={() => onSort("conf")} style={{ textAlign:"left" }}>Conformance{sortIcon("conf")}</button>
             <div className="props-th">Flags</div>
             <div className="props-th props-th-action"></div>
           </div>
@@ -3312,21 +3314,35 @@ function PropertiesPane({ node, properties }) {
             var tg = TYPE_GLYPH[p.type] || TYPE_GLYPH.string;
             var fillC = metricColor(p.fill);
             var confC = metricColor(p.conf);
-            // Source presentation — small color dot per source system + name. Computed properties get
-            // a distinct treatment ("Computed · fx(…)") with the green FX badge so they stand out.
-            var srcColor = p.source && /Salesforce/i.test(p.source) ? "var(--blue)"
-                         : p.source && /NetSuite/i.test(p.source)   ? "var(--gold)"
-                         : p.source && /HubSpot/i.test(p.source)    ? "var(--coral)"
-                         : p.source && /Okta/i.test(p.source)       ? "var(--ink-2)"
-                         : p.source && /Manual/i.test(p.source)     ? "var(--ink-3)"
-                         : "var(--ink-3)";
+            // Humanise the snake_case key for the display Name column.
+            var displayName = p.name.replace(/_/g, " ").replace(/\b\w/g, function(m){ return m.toUpperCase(); }).replace(/\bId\b/g, "ID").replace(/\bUrl\b/g, "URL");
+            // Flag pill — small 18px square with a stroke icon + a coloured tinted background.
+            // Replaces the text "req / idx / PII" so the column reads as visual tokens.
+            function FlagPill({ tone, title, icon }) {
+              return (
+                <span title={title} style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:20, height:20, borderRadius:5, background:tone.bg, color:tone.fg, flexShrink:0 }}>
+                  {icon}
+                </span>
+              );
+            }
+            var REQ_ICON = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="13"/><circle cx="12" cy="18" r="0.8" fill="currentColor" stroke="none"/></svg>;
+            var IDX_ICON = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="13 2 4 14 12 14 11 22 20 10 12 10 13 2"/></svg>;
+            var PII_ICON = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>;
+            var UNQ_ICON = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="7" cy="14" r="3"/><path d="M10 12l9-9 2 2-9 9"/><path d="M16 6l3 3"/></svg>;
             return (
-              <div key={p.name} className="props-row" style={{ gridTemplateColumns:"2fr 1.1fr 1.4fr 130px 140px 200px 32px" }}
+              <div key={p.name} className="props-row" style={{ gridTemplateColumns:"1.5fr 1.2fr 1fr 150px 170px 130px 32px" }}
                 onClick={() => { setPropEditRow(p); setPropFlowMode("manual"); setPropFlowOpen(true); }}>
+                {/* NAME — display label (humanised). Computed properties carry an inline FX pill. */}
                 <div className="props-cell props-name-cell">
                   {p.pk && <span className="snap-tag snap-pk">PK</span>}
-                  {p.computed && <span style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", minWidth:22, height:17, padding:"0 5px", borderRadius:4, background:"var(--green-fill)", color:"var(--green)", fontFamily:"JetBrains Mono", fontSize:9, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>FX</span>}
-                  <span className="snap-n">{p.name}</span>
+                  {p.computed && <span title="Computed" style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"2px 5px 2px 4px", borderRadius:4, background:"var(--gold-fill)", color:"var(--gold)", fontFamily:"JetBrains Mono", fontSize:9, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>
+                    <span style={{ fontStyle:"italic" }}>fx</span><span>COMPUTED</span>
+                  </span>}
+                  <span style={{ fontSize:13, color:"var(--ink)", fontWeight:500 }}>{displayName}</span>
+                </div>
+                {/* KEY — the snake_case identifier, in mono so it reads as code */}
+                <div className="props-cell">
+                  <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-2)", background:"var(--chip)", padding:"2px 7px", borderRadius:4 }}>{p.name}</code>
                 </div>
                 <div className="props-cell prop-type">
                   <span style={{ display:"inline-flex", alignItems:"center", gap:7 }}>
@@ -3334,35 +3350,27 @@ function PropertiesPane({ node, properties }) {
                     <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-2)" }}>{p.type}</span>
                   </span>
                 </div>
-                <div className="props-cell prop-src">
-                  {p.computed ? (
-                    <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}>
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 6px", borderRadius:4, background:"var(--green-fill)", color:"var(--green)", fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>FX</span>
-                      <code style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.computed}</code>
-                    </span>
-                  ) : (
-                    <span style={{ display:"inline-flex", alignItems:"center", gap:7 }}>
-                      <span style={{ width:6, height:6, borderRadius:"50%", background:srcColor, flexShrink:0 }} />
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.source}</span>
-                    </span>
-                  )}
-                </div>
-                <div className="props-cell" style={{ textAlign:"right" }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8, justifyContent:"flex-end" }}>
+                {/* FILL — bar + percent, left-aligned to match header */}
+                <div className="props-cell">
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                     <div style={{ position:"relative", flex:"1 1 70px", maxWidth:80, height:6, background:"var(--line)", borderRadius:3, overflow:"hidden" }}><div style={{ position:"absolute", left:0, top:0, bottom:0, width: p.fill + "%", background: fillC, borderRadius:3 }} /></div>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color: fillC, fontWeight:600, minWidth:36, textAlign:"right" }}>{p.fill}%</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color: fillC, fontWeight:600, minWidth:36 }}>{p.fill}%</span>
                   </div>
                 </div>
-                <div className="props-cell" style={{ textAlign:"right" }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8, justifyContent:"flex-end" }}>
+                {/* CONFORMANCE — bar + percent, left-aligned */}
+                <div className="props-cell">
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                     <div style={{ position:"relative", flex:"1 1 70px", maxWidth:80, height:6, background:"var(--line)", borderRadius:3, overflow:"hidden" }}><div style={{ position:"absolute", left:0, top:0, bottom:0, width: p.conf + "%", background: confC, borderRadius:3 }} /></div>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color: confC, fontWeight:600, minWidth:36, textAlign:"right" }}>{p.conf}%</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color: confC, fontWeight:600, minWidth:36 }}>{p.conf}%</span>
                   </div>
                 </div>
-                <div className="props-cell props-flags-cell">
-                  {p.required && <span className="snap-tag">req</span>}
-                  {p.indexed  && <span className="snap-tag snap-idx">idx</span>}
-                  {p.pii      && <span className="snap-tag snap-pii">PII</span>}
+                {/* FLAGS — icon-only pills so the column reads as visual tokens at a glance */}
+                <div className="props-cell" style={{ display:"flex", alignItems:"center", gap:5 }}>
+                  {p.required && <FlagPill title="Required"   tone={{ bg:"var(--coral-fill)", fg:"var(--coral)"  }} icon={REQ_ICON} />}
+                  {p.indexed  && <FlagPill title="Indexed"    tone={{ bg:"var(--blue-fill)",  fg:"var(--blue)"   }} icon={IDX_ICON} />}
+                  {p.unique   && <FlagPill title="Unique"     tone={{ bg:"var(--purple-fill)",fg:"var(--purple)" }} icon={UNQ_ICON} />}
+                  {p.pii      && <FlagPill title="PII"        tone={{ bg:"var(--chip)",       fg:"var(--ink-2)"  }} icon={PII_ICON} />}
+                  {!p.required && !p.indexed && !p.unique && !p.pii && <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>—</span>}
                 </div>
                 <div className="props-cell props-chevron">›</div>
               </div>
