@@ -4105,7 +4105,7 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
               placeholder="e.g. ARR (USD)"
               style={inp} />
             {pHelpOpen && (
-              <div style={{ marginTop:10 }}>
+              <div style={{ marginTop:22 }}>
                 <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:8 }}>
                   <label style={Object.assign({}, lbl, { marginBottom:0 })}>Help text</label>
                   <button onClick={function(){ setPHelpOpen(false); setPHelpText(""); }}
@@ -4513,22 +4513,42 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
                   System cards are inline (always visible) so the warehouse choice is obvious.
                   Connection list is filtered by system. */}
               {pComputeKind === "sql" && (function(){
-                // Each system gets a brand colour + 2-3 char glyph that doubles as a logo tile.
+                // Each system gets a brand-colored tile with a recognizable mark. Marks are simple
+                // abstractions of each brand (stacked layers for the lakehouse, a snowflake for
+                // Snowflake, four squares for SQL Server, etc) drawn as inline SVG.
+                var ICON_STROKE = "#fff";
+                function ico(children, viewBox){
+                  return <svg width="16" height="16" viewBox={viewBox || "0 0 16 16"} fill="none">{children}</svg>;
+                }
                 var SQL_SYSTEMS = [
-                  { id:"databricks", l:"Databricks",    glyph:"DBX", color:"#FF3621", d:"Lakehouse · SQL warehouse + notebooks" },
-                  { id:"snowflake",  l:"Snowflake",     glyph:"SNW", color:"#29B5E8", d:"Cloud data warehouse · ANSI SQL" },
-                  { id:"bigquery",   l:"BigQuery",      glyph:"BQ",  color:"#4285F4", d:"Google Cloud · serverless warehouse" },
-                  { id:"redshift",   l:"Redshift",      glyph:"RS",  color:"#C42637", d:"AWS · columnar warehouse" },
-                  { id:"postgres",   l:"PostgreSQL",    glyph:"PG",  color:"#336791", d:"Open-source relational database" },
-                  { id:"mysql",      l:"MySQL",         glyph:"SQL", color:"#00758F", d:"Open-source relational database" },
-                  { id:"mssql",      l:"SQL Server",    glyph:"MS",  color:"#A91D22", d:"Microsoft · enterprise SQL" },
-                  { id:"oracle",     l:"Oracle",        glyph:"OR",  color:"#F80000", d:"Enterprise relational database" },
-                  { id:"clickhouse", l:"ClickHouse",    glyph:"CH",  color:"#FFCC01", d:"Columnar OLAP · sub-second analytics" },
-                  { id:"duckdb",     l:"DuckDB",        glyph:"DK",  color:"#FFF000", d:"Embedded analytical SQL" },
-                  { id:"trino",      l:"Trino",         glyph:"TR",  color:"#DD00A1", d:"Federated query engine (formerly Presto)" },
-                  { id:"presto",     l:"Presto",        glyph:"PR",  color:"#5890FF", d:"Distributed SQL query engine" },
-                  { id:"mongo",      l:"MongoDB",       glyph:"DB",  color:"#47A248", d:"Document database · Atlas SQL" },
-                  { id:"graph",      l:"Graph (Cypher)", glyph:"GR", color:"#018BFF", d:"Neo4j / Memgraph · Cypher query language" }
+                  { id:"databricks", l:"Databricks",    color:"#FF3621", d:"Lakehouse · SQL warehouse + notebooks",
+                    icon: ico(<g fill="#fff"><path d="M2 11.5l6 3 6-3v-1.5l-6 3-6-3z" opacity="0.55"/><path d="M2 8l6 3 6-3v-1.5l-6 3-6-3z" opacity="0.75"/><path d="M2 4.5l6 3 6-3-6-3z"/></g>) },
+                  { id:"snowflake",  l:"Snowflake",     color:"#29B5E8", d:"Cloud data warehouse · ANSI SQL",
+                    icon: ico(<g stroke="#fff" strokeWidth="1.3" strokeLinecap="round"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/><line x1="3.6" y1="3.6" x2="12.4" y2="12.4"/><line x1="12.4" y1="3.6" x2="3.6" y2="12.4"/><polyline points="6.5,3 8,1.5 9.5,3" fill="none"/><polyline points="6.5,13 8,14.5 9.5,13" fill="none"/><polyline points="3,6.5 1.5,8 3,9.5" fill="none"/><polyline points="13,6.5 14.5,8 13,9.5" fill="none"/></g>) },
+                  { id:"bigquery",   l:"BigQuery",      color:"#4285F4", d:"Google Cloud · serverless warehouse",
+                    icon: ico(<g><circle cx="7.5" cy="7.5" r="4.5" fill="none" stroke="#fff" strokeWidth="1.5"/><line x1="10.8" y1="10.8" x2="13.5" y2="13.5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round"/><line x1="6" y1="7.5" x2="9" y2="7.5" stroke="#fff" strokeWidth="1.3" strokeLinecap="round"/><line x1="7.5" y1="6" x2="7.5" y2="9" stroke="#fff" strokeWidth="1.3" strokeLinecap="round"/></g>) },
+                  { id:"redshift",   l:"Redshift",      color:"#C42637", d:"AWS · columnar warehouse",
+                    icon: ico(<g fill="#fff"><rect x="2" y="9" width="2.2" height="5" rx="0.4"/><rect x="5.2" y="6" width="2.2" height="8" rx="0.4"/><rect x="8.4" y="3.5" width="2.2" height="10.5" rx="0.4"/><rect x="11.6" y="7" width="2.2" height="7" rx="0.4"/></g>) },
+                  { id:"postgres",   l:"PostgreSQL",    color:"#336791", d:"Open-source relational database",
+                    icon: ico(<g><ellipse cx="8" cy="3.6" rx="5.4" ry="1.7" fill="none" stroke="#fff" strokeWidth="1.2"/><path d="M2.6 3.6v8.8c0 0.9 2.4 1.7 5.4 1.7s5.4-0.8 5.4-1.7V3.6" fill="none" stroke="#fff" strokeWidth="1.2"/><path d="M2.6 7.6c0 0.9 2.4 1.7 5.4 1.7s5.4-0.8 5.4-1.7" fill="none" stroke="#fff" strokeWidth="1.2"/></g>) },
+                  { id:"mysql",      l:"MySQL",         color:"#00758F", d:"Open-source relational database",
+                    icon: ico(<g><path d="M2 11.5c2-1.5 4-1 5 0c0.8 0.8 1 1.5 1 2" fill="none" stroke="#fff" strokeWidth="1.4" strokeLinecap="round"/><path d="M3.5 8.5c1.5-1.5 3.5-1.5 5.5 0c1.5 1.2 2 2.5 2 3.5" fill="none" stroke="#fff" strokeWidth="1.4" strokeLinecap="round"/><path d="M5 5c2-1 5-0.5 6.5 1c1.5 1.5 2 3.5 2 5" fill="none" stroke="#fff" strokeWidth="1.4" strokeLinecap="round"/><circle cx="13.6" cy="11.5" r="0.6" fill="#fff"/></g>) },
+                  { id:"mssql",      l:"SQL Server",    color:"#A91D22", d:"Microsoft · enterprise SQL",
+                    icon: ico(<g fill="#fff"><rect x="2" y="2" width="5.4" height="5.4"/><rect x="8.6" y="2" width="5.4" height="5.4"/><rect x="2" y="8.6" width="5.4" height="5.4"/><rect x="8.6" y="8.6" width="5.4" height="5.4"/></g>) },
+                  { id:"oracle",     l:"Oracle",        color:"#F80000", d:"Enterprise relational database",
+                    icon: ico(<ellipse cx="8" cy="8" rx="5.6" ry="3.4" fill="none" stroke="#fff" strokeWidth="2"/>) },
+                  { id:"clickhouse", l:"ClickHouse",    color:"#FFCC01", d:"Columnar OLAP · sub-second analytics",
+                    icon: ico(<g fill="#1f1300"><rect x="2"   y="2" width="2"   height="12"/><rect x="5"   y="2" width="2"   height="12"/><rect x="8"   y="2" width="2"   height="12"/><rect x="11"  y="2" width="2"   height="12"/><rect x="11"  y="7" width="2"   height="2"/></g>) },
+                  { id:"duckdb",     l:"DuckDB",        color:"#FFF000", d:"Embedded analytical SQL",
+                    icon: ico(<g><circle cx="6.5" cy="7" r="3.5" fill="#1f1300"/><circle cx="7.5" cy="6.3" r="0.6" fill="#FFF000"/><path d="M9.5 7c0.8-0.6 2-0.7 3-0.3l-0.5 1.2c-0.6-0.2-1.4-0.1-2 0.3" fill="#1f1300"/><path d="M3 11c1 1.5 4 2 6.5 1.4c1.5-0.4 2.6-1.2 3-2" fill="none" stroke="#1f1300" strokeWidth="1.2" strokeLinecap="round"/></g>) },
+                  { id:"trino",      l:"Trino",         color:"#DD00A1", d:"Federated query engine (formerly Presto)",
+                    icon: ico(<g stroke="#fff" strokeWidth="1.4" strokeLinecap="round" fill="none"><circle cx="8" cy="8" r="2.2"/><line x1="8" y1="1.5" x2="8" y2="3.5"/><line x1="8" y1="12.5" x2="8" y2="14.5"/><line x1="1.5" y1="8" x2="3.5" y2="8"/><line x1="12.5" y1="8" x2="14.5" y2="8"/><line x1="3.5" y1="3.5" x2="4.9" y2="4.9"/><line x1="11.1" y1="11.1" x2="12.5" y2="12.5"/><line x1="12.5" y1="3.5" x2="11.1" y2="4.9"/><line x1="4.9" y1="11.1" x2="3.5" y2="12.5"/></g>) },
+                  { id:"presto",     l:"Presto",        color:"#5890FF", d:"Distributed SQL query engine",
+                    icon: ico(<g stroke="#fff" strokeWidth="1.4" strokeLinecap="round" fill="none"><circle cx="8" cy="8" r="2"/><line x1="8" y1="2" x2="8" y2="4"/><line x1="8" y1="12" x2="8" y2="14"/><line x1="2" y1="8" x2="4" y2="8"/><line x1="12" y1="8" x2="14" y2="8"/></g>) },
+                  { id:"mongo",      l:"MongoDB",       color:"#47A248", d:"Document database · Atlas SQL",
+                    icon: ico(<g><path d="M8 1.5C8 4 12 6 12 9.5C12 12 10 14 8 14.5C6 14 4 12 4 9.5C4 6 8 4 8 1.5z" fill="#fff"/><line x1="8" y1="1.5" x2="8" y2="14.5" stroke="#47A248" strokeWidth="0.6"/></g>) },
+                  { id:"graph",      l:"Graph (Cypher)", color:"#018BFF", d:"Neo4j / Memgraph · Cypher query language",
+                    icon: ico(<g stroke="#fff" strokeWidth="1.3"><circle cx="4" cy="4" r="1.6" fill="#fff"/><circle cx="12" cy="4.5" r="1.6" fill="#fff"/><circle cx="8" cy="12" r="1.6" fill="#fff"/><line x1="5.3" y1="4.5" x2="10.7" y2="4.6" strokeLinecap="round"/><line x1="4.4" y1="5.3" x2="7.2" y2="10.6" strokeLinecap="round"/><line x1="11.5" y1="5.7" x2="8.8" y2="10.7" strokeLinecap="round"/></g>) }
                 ];
                 var selectedSystem = SQL_SYSTEMS.find(function(s){ return s.id === pSqlSystem; });
                 var CONNECTIONS_BY_SYSTEM = {
@@ -10278,7 +10298,7 @@ function HistoryPane({ node }) {
 function SamplePane({ node, properties }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-  const PAGE_SIZE = 8;
+  const PAGE_SIZE = 20;
 
   // Generate deterministic sample rows
   const seed = node.id.charCodeAt(0) + node.id.length;
