@@ -14595,7 +14595,10 @@ function NewGraphFlow({ onClose, onCreate }) {
   return (
     <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
       onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width:"92vw", maxWidth:880, height:"min(86vh, 760px)", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
+      {/* Modal sizing: the form view auto-sizes to its content (so the initial state doesn't
+          look stranded inside an oversized frame) while the template view locks to a fixed
+          height — that way filtering / search results don't reflow the modal under the cursor. */}
+      <div style={{ width:"92vw", maxWidth: view === "template" ? 880 : 720, height: view === "template" ? "min(86vh, 760px)" : "auto", maxHeight:"94vh", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
 
         {/* HEADER */}
         <div style={{ flexShrink:0, padding:"18px 22px 16px", borderBottom:"1px solid var(--line)", display:"flex", alignItems:"flex-start", justifyContent:"space-between", background:"var(--panel)" }}>
@@ -14631,22 +14634,34 @@ function NewGraphFlow({ onClose, onCreate }) {
                 </div>
               </div>
 
-              {/* STARTING POINT — segmented toggle with icons */}
+              {/* STARTING POINT — taller cards with a coloured icon banner up top and a footer
+                  meta line. Makes the choice feel like a real design surface rather than two
+                  squashed buttons. */}
               <div style={{ marginBottom:6 }}>
                 <label style={lbl}>Starting point</label>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
                   {[
                     {
                       id:"blank",
                       title:"Start blank",
-                      desc:"Empty canvas — add entities and edges manually.",
-                      tone: { bg:"var(--chip)", fg:"var(--ink-2)" },
+                      desc:"Empty canvas — add entities and edges as you go.",
+                      tone: { bg:"var(--chip)", fg:"var(--ink-2)", banner:"linear-gradient(135deg, color-mix(in oklab, var(--ink-3) 8%, var(--panel-2)), var(--panel-2))" },
+                      meta: "Full control · no preset entities",
                       icon: (
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
                           <polyline points="14 3 14 8 19 8"/>
                           <line x1="12" y1="13" x2="12" y2="17"/>
                           <line x1="10" y1="15" x2="14" y2="15"/>
+                        </svg>
+                      ),
+                      decor: (
+                        <svg width="64" height="48" viewBox="0 0 64 48" style={{ position:"absolute", right:14, top:14, opacity:0.18 }}>
+                          <circle cx="14" cy="20" r="4" fill="var(--ink-3)" />
+                          <circle cx="46" cy="14" r="3" fill="var(--ink-4)" />
+                          <circle cx="34" cy="34" r="3.5" fill="var(--ink-3)" />
+                          <line x1="14" y1="20" x2="34" y2="34" stroke="var(--ink-4)" strokeDasharray="2 3" strokeWidth="1.2" />
+                          <line x1="46" y1="14" x2="34" y2="34" stroke="var(--ink-4)" strokeDasharray="2 3" strokeWidth="1.2" />
                         </svg>
                       )
                     },
@@ -14654,13 +14669,24 @@ function NewGraphFlow({ onClose, onCreate }) {
                       id:"template",
                       title:"Choose from template",
                       desc:"Begin from a curated blueprint and customise it.",
-                      tone: { bg:"var(--blue-fill)", fg:"var(--blue)" },
+                      tone: { bg:"var(--blue-fill)", fg:"var(--blue)", banner:"linear-gradient(135deg, color-mix(in oklab, var(--blue) 14%, var(--panel)), var(--panel-2))" },
+                      meta: (GRAPH_STARTING_POINTS.length || 14) + " ready-made templates",
                       icon: (
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                           <rect x="3" y="3" width="7" height="7" rx="1"/>
                           <rect x="14" y="3" width="7" height="7" rx="1"/>
                           <rect x="3" y="14" width="7" height="7" rx="1"/>
                           <rect x="14" y="14" width="7" height="7" rx="1"/>
+                        </svg>
+                      ),
+                      decor: (
+                        <svg width="64" height="48" viewBox="0 0 64 48" style={{ position:"absolute", right:14, top:14, opacity:0.28 }}>
+                          <circle cx="14" cy="20" r="5" fill="var(--blue)" />
+                          <circle cx="46" cy="14" r="4" fill="var(--gold)" />
+                          <circle cx="34" cy="34" r="4" fill="var(--green)" />
+                          <line x1="14" y1="20" x2="34" y2="34" stroke="var(--ink-3)" strokeWidth="1.2" />
+                          <line x1="46" y1="14" x2="34" y2="34" stroke="var(--ink-3)" strokeWidth="1.2" />
+                          <line x1="14" y1="20" x2="46" y2="14" stroke="var(--ink-4)" strokeWidth="1" strokeDasharray="2 3" />
                         </svg>
                       )
                     }
@@ -14668,11 +14694,22 @@ function NewGraphFlow({ onClose, onCreate }) {
                     var isOn = startMode === opt.id;
                     return (
                       <button key={opt.id} onClick={function(){ chooseStartMode(opt.id); }}
-                        style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"22px 18px", minHeight:108, borderRadius:10, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--bg-canvas)" : "var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
-                        <span style={{ width:40, height:40, borderRadius:8, background: opt.tone.bg, color: opt.tone.fg, display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{opt.icon}</span>
-                        <div style={{ flex:1, minWidth:0 }}>
+                        style={{ display:"flex", flexDirection:"column", padding:0, borderRadius:11, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background:"var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent), 0 1px 0 var(--line-2)" : "0 1px 0 var(--line-2)", textAlign:"left", cursor:"pointer", fontFamily:"inherit", overflow:"hidden" }}>
+                        {/* Banner */}
+                        <div style={{ position:"relative", padding:"18px 18px 14px", background: opt.tone.banner, borderBottom:"1px solid var(--line-2)" }}>
+                          <span style={{ width:44, height:44, borderRadius:10, background:"var(--panel)", border:"1px solid var(--line-2)", color: opt.tone.fg, display:"inline-flex", alignItems:"center", justifyContent:"center", boxShadow:"0 1px 0 var(--line-2)" }}>{opt.icon}</span>
+                          {opt.decor}
+                          {isOn && (
+                            <span style={{ position:"absolute", right:14, bottom:12, width:18, height:18, borderRadius:"50%", background:"var(--ink)", color:"var(--bg-canvas)", display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
+                              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg>
+                            </span>
+                          )}
+                        </div>
+                        {/* Text + meta */}
+                        <div style={{ padding:"14px 18px 16px", display:"flex", flexDirection:"column", gap:6, flex:1 }}>
                           <div style={{ fontSize:15, fontWeight:600, color:"var(--ink)" }}>{opt.title}</div>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", marginTop:6, lineHeight:1.5 }}>{opt.desc}</div>
+                          <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5 }}>{opt.desc}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px", color:"var(--ink-4)", marginTop:6, textTransform:"uppercase" }}>{opt.meta}</div>
                         </div>
                       </button>
                     );
