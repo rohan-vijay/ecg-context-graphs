@@ -3332,13 +3332,14 @@ function PropertiesPane({ node, properties }) {
             return (
               <div key={p.name} className="props-row" style={{ gridTemplateColumns:"1.5fr 1.2fr 1fr 150px 170px 130px 32px" }}
                 onClick={() => { setPropEditRow(p); setPropFlowMode("manual"); setPropFlowOpen(true); }}>
-                {/* NAME — display label (humanised). Computed properties carry an inline FX pill. */}
+                {/* NAME — display label (humanised). PK and FX COMPUTED badges sit AFTER the name
+                    so the eye reads "Account ID · PK" rather than "PK · Account ID". */}
                 <div className="props-cell props-name-cell">
+                  <span style={{ fontSize:13, color:"var(--ink)", fontWeight:500 }}>{displayName}</span>
                   {p.pk && <span className="snap-tag snap-pk">PK</span>}
                   {p.computed && <span title="Computed" style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"2px 5px 2px 4px", borderRadius:4, background:"var(--gold-fill)", color:"var(--gold)", fontFamily:"JetBrains Mono", fontSize:9, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>
                     <span style={{ fontStyle:"italic" }}>fx</span><span>COMPUTED</span>
                   </span>}
-                  <span style={{ fontSize:13, color:"var(--ink)", fontWeight:500 }}>{displayName}</span>
                 </div>
                 {/* KEY — the snake_case identifier, in mono so it reads as code */}
                 <div className="props-cell">
