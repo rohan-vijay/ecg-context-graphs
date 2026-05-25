@@ -14353,7 +14353,9 @@ function NewGraphFlow({ onClose, onCreate }) {
   var [permsWrite, setPermsWrite]     = useState([{ kind:"group", id:"data-platform",  label:"data-platform team" }]);
   var [permsAdmin, setPermsAdmin]     = useState([{ kind:"user",  id:"morgan.lee",     label:"Morgan Lee (you)" }]);
 
-  var stepNames = ["Industry Department", "Template & Context", "Entities", "Governance", "Review"];
+  // Slimmed to 3 steps. Entity trimming + access control happen post-create from
+  // the graph's settings — they don't belong in the spin-up flow.
+  var stepNames = ["Industry Department", "Template & Context", "Review"];
 
   // Industry is the HARD filter when picked (Healthcare must never see Retail-only
   // blueprints). When only a function is picked, function is the hard filter.
@@ -14377,8 +14379,8 @@ function NewGraphFlow({ onClose, onCreate }) {
   function canContinue() {
     if (step === 1) return !!industry || !!func;
     if (step === 2) return !!startId;
-    if (step === 3) return entitiesToInclude.length > 0 || startId === "__blank";
-    if (step === 4) return graphName.trim().length >= 2;
+    // Step 3 = Review. Graph needs at least a name to activate.
+    if (step === 3) return graphName.trim().length >= 2;
     return true;
   }
 
@@ -14549,9 +14551,7 @@ function NewGraphFlow({ onClose, onCreate }) {
               var funcLabel = (GRAPH_FUNCTIONS.find(function(x){ return x.id === func; }) || {}).label;
               var sub = n === 1 ? (industry || func ? [indLabel, funcLabel].filter(Boolean).join(" · ") : "Industry & department")
                       : n === 2 ? (startId === "__blank" ? "Blank canvas" : picked ? picked.name : "Pick a starting point")
-                      : n === 3 ? (entitiesToInclude.length === 0 ? "Add entities" : entitiesToInclude.length + " entities" + (customEntities.length ? " (" + customEntities.length + " custom)" : ""))
-                      : n === 4 ? "Identity and Access"
-                      : "Activate";
+                      : (graphName ? graphName : "Activate");
               return (
                 <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
                   style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", alignItems:"center" }}>
@@ -14568,14 +14568,12 @@ function NewGraphFlow({ onClose, onCreate }) {
           {/* CENTER */}
           <div style={{ padding:"24px 32px 28px", overflowY:"auto" }}>
             <div style={{ marginBottom:20 }}>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / 5"}</div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / 3"}</div>
               <div style={{ fontFamily:"Instrument Serif", fontSize:28, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>{stepNames[step-1]}</div>
               <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:680 }}>
                 {step === 1 && "Tell us a bit about what you're modelling. We'll use this to suggest a smart starting point — or you can skip and start from scratch."}
                 {step === 2 && "Add your context first, then pick a template — we'll tailor the entities, fields, and edges to your business. Each template ships a sensible default set you can edit."}
-                {step === 3 && "Trim the suggested entities to just what you need. You can rename them later from the catalog."}
-                {step === 4 && "Name the graph, pick the environment, and decide who can read, write, and administer it."}
-                {step === 5 && "Last look. Activating drops the graph into the workspace landing page."}
+                {step === 3 && "Name the graph and confirm. Entities and access can be refined from the graph's settings after activation."}
               </div>
             </div>
 
@@ -14741,168 +14739,21 @@ function NewGraphFlow({ onClose, onCreate }) {
             )}
 
             {/* STEP 3 */}
+            {/* STEP 3 — Review (name + summary). Entities and access live in graph settings post-create. */}
             {step === 3 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-                {/* Summary strip */}
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", background:"var(--panel-2)", border:"1px solid var(--line-2)", borderRadius:8 }}>
-                  <div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase" }}>Working from</div>
-                    <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:3 }}>
-                      <span style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{picked ? picked.name : "Blank canvas"}</span>
-                      {picked && picked.cdm && (
-                        <a href={cdmLink(picked.cdm)} target="_blank" rel="noopener noreferrer"
-                          title={"View Microsoft CDM — " + picked.cdm + " (opens GitHub)"}
-                          style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 7px 1.5px 6px", borderRadius:3, background:"transparent", color:"var(--ink-3)", border:"1px solid var(--line-2)", fontWeight:600, letterSpacing:"0.4px", textDecoration:"none", cursor:"pointer", transition:"color 100ms, border-color 100ms" }}
-                          onMouseEnter={function(e){ e.currentTarget.style.color = "var(--ink)"; e.currentTarget.style.borderColor = "var(--ink-3)"; }}
-                          onMouseLeave={function(e){ e.currentTarget.style.color = "var(--ink-3)"; e.currentTarget.style.borderColor = "var(--line-2)"; }}>
-                          <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor" style={{ opacity:0.7 }}><rect x="0" y="0" width="4" height="4"/><rect x="6" y="0" width="4" height="4"/><rect x="0" y="6" width="4" height="4"/><rect x="6" y="6" width="4" height="4"/></svg>
-                          {"CDM · " + picked.cdm}
-                          <svg width="7" height="7" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" style={{ opacity:0.5, marginLeft:1 }}><path d="M3 1 H9 V7 M9 1 L1 9"/></svg>
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ display:"flex", gap:24, fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>
-                    <div><span style={{ color:"var(--ink-3)" }}>FROM BLUEPRINT</span> &nbsp;<b>{includedFromBlueprint.length}</b>{picked ? " / " + picked.entities.length : ""}</div>
-                    <div><span style={{ color:"var(--ink-3)" }}>CUSTOM ADDED</span> &nbsp;<b>{customEntities.length}</b></div>
-                    <div><span style={{ color:"var(--ink-3)" }}>TOTAL</span> &nbsp;<b style={{ color:"var(--ink)" }}>{entitiesToInclude.length}</b></div>
-                  </div>
-                </div>
-
-                {/* Blueprint entities — one card per row, properties only */}
-                {picked && (
-                  <div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:8 }}>Entities from "{picked.name}"</div>
-                    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                      {picked.entities.map(function(e){
-                        var on = included[e] !== false;
-                        var m = entityMeta(e);
-                        return (
-                          <div key={e}
-                            style={{ border:"1px solid " + (on ? "var(--line)" : "var(--line-2)"), borderRadius:9, background: on ? "var(--panel)" : "var(--panel-2)", padding:"14px 18px", opacity: on ? 1 : 0.55, display:"grid", gridTemplateColumns:"minmax(220px, 280px) 1fr auto", gap:20, alignItems:"center" }}>
-                            <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0 }}>
-                              <span style={{ width:30, height:30, borderRadius:6, background:picked.accent, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0 }}>{e.split(" ").map(function(w){ return w[0]; }).join("").slice(0,2).toUpperCase()}</span>
-                              <div style={{ minWidth:0 }}>
-                                <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{e}</div>
-                                <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.4, marginTop:3 }}>{m.desc}</div>
-                              </div>
-                            </div>
-                            <div style={{ display:"flex", flexWrap:"wrap", gap:4, alignItems:"center" }}>
-                              {m.props.length > 0 ? m.props.map(function(p){
-                                return <span key={p} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"3px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{p}</span>;
-                              }) : <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", fontStyle:"italic" }}>add properties after create</span>}
-                            </div>
-                            {on ? (
-                              <button onClick={function(){ setIncluded(function(o){ var n = Object.assign({}, o); n[e] = false; return n; }); }} title="Remove from graph"
-                                style={{ width:28, height:28, borderRadius:6, border:"1px solid var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:15, lineHeight:1, padding:0 }}>×</button>
-                            ) : (
-                              <button onClick={function(){ setIncluded(function(o){ var n = Object.assign({}, o); n[e] = true; return n; }); }}
-                                style={{ padding:"5px 10px", borderRadius:6, border:"1px dashed var(--line)", background:"transparent", color:"var(--ink-3)", cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>+ Re-add</button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Custom entities — one card per row */}
-                {customEntities.length > 0 && (
-                  <div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:8 }}>Custom entities you've added</div>
-                    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                      {customEntities.map(function(c, i){
-                        return (
-                          <div key={i} style={{ border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", padding:"14px 18px", display:"grid", gridTemplateColumns:"minmax(220px, 280px) 1fr auto", gap:20, alignItems:"center" }}>
-                            <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0 }}>
-                              <span style={{ width:30, height:30, borderRadius:6, background:"var(--ink-2)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0 }}>{c.name.split(" ").map(function(w){ return w[0]; }).join("").slice(0,2).toUpperCase()}</span>
-                              <div style={{ minWidth:0 }}>
-                                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                                  <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{c.name}</span>
-                                  <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700, letterSpacing:"0.5px" }}>CUSTOM</span>
-                                </div>
-                                <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.4, marginTop:3 }}>{c.desc}</div>
-                              </div>
-                            </div>
-                            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", fontStyle:"italic" }}>add properties after create</div>
-                            <button onClick={function(){ setCustomEntities(function(arr){ return arr.filter(function(_, idx){ return idx !== i; }); }); }}
-                              style={{ background:"none", border:"none", color:"var(--ink-3)", cursor:"pointer", fontSize:16, padding:"0 6px" }}>×</button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Add custom entity */}
-                <div style={{ border: addingEntity ? "1px solid var(--ink)" : "1px dashed var(--line)", borderRadius:9, background: addingEntity ? "var(--panel)" : "transparent", padding: addingEntity ? "14px 16px" : "0" }}>
-                  {!addingEntity ? (
-                    <button onClick={function(){ setAddingEntity(true); }}
-                      style={{ width:"100%", padding:"14px 16px", background:"transparent", border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, fontFamily:"inherit", fontSize:13, color:"var(--ink-2)", fontWeight:500 }}>
-                      <span style={{ width:20, height:20, borderRadius:5, background:"var(--ink)", color:"var(--bg-canvas)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, lineHeight:1, fontWeight:300 }}>+</span>
-                      Add a custom entity to this graph
-                    </button>
-                  ) : (
-                    <div>
-                      <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.6px", textTransform:"uppercase", marginBottom:10 }}>Add custom entity</div>
-                      <div style={{ display:"grid", gridTemplateColumns:"1fr 2fr", gap:10 }}>
-                        <input value={newEntityName} onChange={function(e){ setNewEntityName(e.target.value); }} placeholder="Entity name (e.g. Booking)" style={inp} autoFocus />
-                        <input value={newEntityDesc} onChange={function(e){ setNewEntityDesc(e.target.value); }} placeholder="Short description — what it represents" style={inp} />
-                      </div>
-                      <div style={{ display:"flex", gap:8, marginTop:10, justifyContent:"flex-end" }}>
-                        <button onClick={function(){ setAddingEntity(false); setNewEntityName(""); setNewEntityDesc(""); }} className="btn-ghost">Cancel</button>
-                        <button onClick={commitNewEntity} className="btn-dark" disabled={!newEntityName.trim()} style={{ opacity: newEntityName.trim() ? 1 : 0.45 }}>Add entity</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* STEP 4 */}
-            {step === 4 && (
               <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
-                <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:14 }}>
+
+                {/* Inline NAME + DESCRIPTION editor — minimum to activate. */}
+                <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:14 }}>
                   <div>
                     <label style={lbl}>GRAPH NAME</label>
                     <input value={graphName} onChange={function(e){ setGraphName(e.target.value); }} placeholder="e.g. Customer 360 Graph" style={inp} />
                   </div>
                   <div>
-                    <label style={lbl}>ENVIRONMENT</label>
-                    <select value={environment} onChange={function(e){ setEnvironment(e.target.value); }} style={inp}>
-                      <option value="production">Production</option>
-                      <option value="staging">Staging</option>
-                      <option value="development">Development</option>
-                      <option value="sandbox">Sandbox</option>
-                    </select>
+                    <label style={lbl}>DESCRIPTION</label>
+                    <textarea value={graphDesc} onChange={function(e){ setGraphDesc(e.target.value); }} rows={3} placeholder="A one-line summary that will appear on the graph card" style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.55 })} />
                   </div>
                 </div>
-                <div>
-                  <label style={lbl}>DESCRIPTION</label>
-                  <textarea value={graphDesc} onChange={function(e){ setGraphDesc(e.target.value); }} rows={4} placeholder="A one-line summary that will appear on the graph card" style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.55 })} />
-                </div>
-                <div>
-                  <label style={lbl}>OWNER</label>
-                  <select value={owner} onChange={function(e){ setOwner(e.target.value); }} style={Object.assign({}, inp, { maxWidth:360 })}>
-                    <option value="morgan.lee">Morgan Lee (you · data-platform)</option>
-                    <option value="ramin.k">Ramin K · data-platform</option>
-                    <option value="jordan.s">Jordan S · customer-ops</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={lbl}>WHO CAN ACCESS THIS GRAPH?</label>
-                  <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
-                    <PermRow k="read"  label="Read"  list={permsRead}  setList={setPermsRead}  tone={{ bg:"var(--blue-fill)",  fg:"var(--blue)"  }} desc="Can browse this graph and run queries against it." />
-                    <PermRow k="write" label="Write" list={permsWrite} setList={setPermsWrite} tone={{ bg:"var(--green-fill)", fg:"var(--green)" }} desc="Can add/edit records and modify schemas." />
-                    <PermRow k="admin" label="Admin" list={permsAdmin} setList={setPermsAdmin} tone={{ bg:"var(--coral-fill)", fg:"var(--coral)" }} desc="Can manage rules, sources, and access policies." />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* STEP 5 — comprehensive */}
-            {step === 5 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
 
                 <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
                   <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
@@ -14911,14 +14762,10 @@ function NewGraphFlow({ onClose, onCreate }) {
                   </div>
                   <div>
                     {[
-                      { k:"NAME",         v: graphName || <span style={{ color:"var(--coral)" }}>not set</span> },
-                      { k:"DESCRIPTION",  v: graphDesc || <span style={{ color:"var(--ink-4)" }}>—</span> },
-                      { k:"ENVIRONMENT",  v: environment },
-                      { k:"CONTEXT",      v: industry || func ? ((GRAPH_INDUSTRIES.find(function(x){ return x.id === industry; }) || {}).label || "—") + (func ? " · " + (GRAPH_FUNCTIONS.find(function(x){ return x.id === func; }) || {}).label : "") : "Built from scratch" },
+                      { k:"CONTEXT",        v: industry || func ? ((GRAPH_INDUSTRIES.find(function(x){ return x.id === industry; }) || {}).label || "—") + (func ? " · " + (GRAPH_FUNCTIONS.find(function(x){ return x.id === func; }) || {}).label : "") : "Built from scratch" },
                       { k:"STARTING POINT", v: picked ? picked.name : "Blank canvas" },
                       { k:"AI CONTEXT",     v: userPrompt.trim() ? userPrompt.trim() : <span style={{ color:"var(--ink-4)" }}>—</span> },
-                      { k:"ENTITIES",     v: entitiesToInclude.length ? <span style={{ display:"inline-flex", flexWrap:"wrap", gap:"6px 4px", justifyContent:"flex-end" }}>{entitiesToInclude.map(function(e){ return <span key={e} style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{e}</span>; })}</span> : <span style={{ color:"var(--ink-4)" }}>none</span> },
-                      { k:"OWNER",        v: owner }
+                      { k:"ENTITIES",       v: entitiesToInclude.length ? <span style={{ display:"inline-flex", flexWrap:"wrap", gap:"6px 4px", justifyContent:"flex-end" }}>{entitiesToInclude.map(function(e){ return <span key={e} style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{e}</span>; })}</span> : <span style={{ color:"var(--ink-4)" }}>none</span> }
                     ].map(function(row, i, arr){
                       return (
                         <div key={i} style={{ display:"grid", gridTemplateColumns:"170px 1fr", gap:14, padding:"10px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"baseline" }}>
@@ -14930,30 +14777,8 @@ function NewGraphFlow({ onClose, onCreate }) {
                   </div>
                 </div>
 
-                <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
-                  <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
-                    <span style={{ fontSize:14, fontWeight:600 }}>Access</span>
-                    <span className="card-head-sub">{"read " + permsRead.length + " · write " + permsWrite.length + " · admin " + permsAdmin.length}</span>
-                  </div>
-                  <div>
-                    {[{ k:"READ", list:permsRead, tone:{ bg:"var(--blue-fill)", fg:"var(--blue)" } },{ k:"WRITE", list:permsWrite, tone:{ bg:"var(--green-fill)", fg:"var(--green)" } },{ k:"ADMIN", list:permsAdmin, tone:{ bg:"var(--coral-fill)", fg:"var(--coral)" } }].map(function(row, i, arr){
-                      return (
-                        <div key={i} style={{ display:"grid", gridTemplateColumns:"100px 1fr", gap:14, padding:"12px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"center" }}>
-                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:row.tone.bg, color:row.tone.fg, fontWeight:700, letterSpacing:"0.5px", justifySelf:"start" }}>{row.k}</span>
-                          <div style={{ display:"flex", flexWrap:"wrap", gap:5, justifyContent:"flex-end" }}>
-                            {row.list.length === 0 ? <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)", fontStyle:"italic" }}>nobody</span> : row.list.map(function(e, j){
-                              return (
-                                <span key={j} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 7px", borderRadius:5, background:"var(--chip)", border:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>
-                                  <span style={{ width:12, height:12, borderRadius: e.kind === "user" ? "50%" : 3, background: e.kind === "user" ? "var(--ink-2)" : "var(--ink-3)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:7.5, fontWeight:700, flexShrink:0 }}>{e.kind === "user" ? e.label.split(" ").map(function(s){ return s[0]; }).join("").slice(0,2) : "G"}</span>
-                                  {e.label}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", lineHeight:1.5 }}>
+                  Trim entities and configure access from the graph's settings after activation.
                 </div>
               </div>
             )}
@@ -14965,10 +14790,10 @@ function NewGraphFlow({ onClose, onCreate }) {
         {/* FOOTER */}
         <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
           <button className="btn-ghost" onClick={function(){ if (step > 1) setStep(function(s){ return s - 1; }); }} disabled={step === 1} style={{ opacity: step === 1 ? 0.4 : 1 }}>← Back</button>
-          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of 5 · " + stepNames[step-1]}</span>
+          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of 3 · " + stepNames[step-1]}</span>
           <div style={{ display:"flex", gap:8 }}>
             <button className="btn-ghost" onClick={onClose}>Cancel</button>
-            {step < 5
+            {step < 3
               ? <button className="btn-dark" disabled={!canContinue()} onClick={function(){ setStep(function(s){ return s + 1; }); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Continue →</button>
               : <button className="btn-dark" disabled={!canContinue()} onClick={function(){ if (onCreate) onCreate({ name: graphName }); onClose(); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Create graph ↵</button>
             }
