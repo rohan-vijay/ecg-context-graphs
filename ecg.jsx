@@ -3685,6 +3685,7 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
   const [pSqlSystem, setPSqlSystem]             = useState("");
   const [pSqlSystemOpen, setPSqlSystemOpen]     = useState(false);
   const [pSqlConnection, setPSqlConnection]     = useState("");
+  const [pSqlConnectionOpen, setPSqlConnectionOpen] = useState(false);
   const [pSqlRunState, setPSqlRunState]         = useState(null); // null | "running" | "ok" | "error"
   // Automation computation — single rich-card dropdown listing all automations across providers.
   const [pAutomation, setPAutomation]           = useState(""); // selected automation id
@@ -4395,6 +4396,16 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
               { id:"agent",      l:"Agent",      d:"Invoke a pre-built agent that scores or classifies this record.", icon:<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="6" r="3"/><path d="M4 14c0-2.5 1.5-4 4-4s4 1.5 4 4"/><line x1="8" y1="2" x2="8" y2="1.5"/><line x1="11.5" y1="3.5" x2="11.8" y2="3.2"/><line x1="4.5" y1="3.5" x2="4.2" y2="3.2"/></svg>, color:"var(--green)"  }
             ];
             var selectedType = COMPUTE_TYPES.find(function(t){ return t.id === pComputeKind; });
+            // Progressive disclosure: only reveal Recompute / Backfill / On-failure / Test once the
+            // computation source itself is configured. Formula is always considered ready (it's just
+            // a textarea); SQL needs system + connection; Automation needs an automation picked;
+            // Agent needs an agent picked.
+            var pCompPrereqMet = (
+              pComputeKind === "formula" ||
+              (pComputeKind === "sql" && pSqlSystem && pSqlConnection) ||
+              (pComputeKind === "automation" && pAutomation) ||
+              (pComputeKind === "agent" && pAgent)
+            );
             function renderPropPick(value, onChange, open, setOpen, options, placeholder){
               var sel = options.find(function(o){ return o.id === value; });
               return (
@@ -4627,23 +4638,67 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
                     </div>
                     <div>
                       <label style={lbl}>Connection</label>
-                      {pSqlSystem ? (
-                        <RichSelect
-                          value={pSqlConnection}
-                          onChange={function(v){ setPSqlConnection(v); setPSqlRunState(null); }}
-                          options={systemConnections.map(function(c){ return { value:c.id, label:c.l, sub:c.sub }; })}
-                          placeholder={"Pick a " + (SQL_SYSTEMS.find(function(s){ return s.id === pSqlSystem; }) || {}).l + " connection"}
-                          mono
-                        />
-                      ) : (
-                        // Disabled placeholder so the grid keeps its 50/50 shape before a system is picked.
-                        <div style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"10px 12px", border:"1px dashed var(--line)", borderRadius:7, background:"var(--panel-2)", fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-4)", minHeight:34, boxSizing:"border-box" }}>
-                          <span style={{ width:6, height:6, borderRadius:"50%", background:"var(--ink-4)" }} />
-                          <span>Pick a system first</span>
+                      {pSqlSystem ? (() => {
+                        var selectedConn = systemConnections.find(function(c){ return c.id === pSqlConnection; });
+                        return (
+                        <div style={{ position:"relative" }}>
+                          <button onClick={function(){ setPSqlConnectionOpen(function(o){ return !o; }); }}
+                            style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+                            {selectedConn ? (
+                              <>
+                                <span style={{ width:32, height:32, borderRadius:6, background:selectedSystem ? selectedSystem.color : "var(--chip)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{selectedSystem ? selectedSystem.glyph : "·"}</span>
+                                <div style={{ flex:1, minWidth:0 }}>
+                                  <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:600, color:"var(--ink)" }}>{selectedConn.l}</div>
+                                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selectedConn.sub}</div>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <span style={{ width:32, height:32, borderRadius:6, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>+</span>
+                                <div style={{ flex:1, minWidth:0 }}>
+                                  <div style={{ fontSize:14, color:"var(--ink-3)" }}>{"Pick a " + (selectedSystem ? selectedSystem.l : "") + " connection"}</div>
+                                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>{systemConnections.length + " available"}</div>
+                                </div>
+                              </>
+                            )}
+                            <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>{pSqlConnectionOpen ? "▴" : "▾"}</span>
+                          </button>
+                          {pSqlConnectionOpen && (
+                            <>
+                              <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPSqlConnectionOpen(false); }} />
+                              <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:360, overflowY:"auto" }}>
+                                {systemConnections.length === 0 ? (
+                                  <div style={{ padding:"12px 14px", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)" }}>No connections configured. Add one in <code style={{ color:"var(--ink-2)" }}>Sources →</code> first.</div>
+                                ) : systemConnections.map(function(c, i){
+                                  var isSel = pSqlConnection === c.id;
+                                  return (
+                                    <button key={c.id} onClick={function(){ setPSqlConnection(c.id); setPSqlRunState(null); setPSqlConnectionOpen(false); }}
+                                      style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"9px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < systemConnections.length-1 ? 2 : 0 }}
+                                      onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                                      onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+                                      <span style={{ width:28, height:28, borderRadius:6, background:selectedSystem ? selectedSystem.color : "var(--chip)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, flexShrink:0 }}>{selectedSystem ? selectedSystem.glyph : "·"}</span>
+                                      <div style={{ flex:1, minWidth:0 }}>
+                                        <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:600, color:"var(--ink)" }}>{c.l}</div>
+                                        <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2 }}>{c.sub}</div>
+                                      </div>
+                                      {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </>
+                          )}
                         </div>
-                      )}
-                      {pSqlSystem && systemConnections.length === 0 && (
-                        <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>No connections configured for this system yet. Add one in <code style={{ color:"var(--ink-2)" }}>Sources →</code> first.</div>
+                        );
+                      })() : (
+                        // Disabled placeholder — matches the System trigger height so the grid stays balanced.
+                        <div style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px dashed var(--line)", borderRadius:9, background:"var(--panel-2)", boxSizing:"border-box" }}>
+                          <span style={{ width:32, height:32, borderRadius:6, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>·</span>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:14, color:"var(--ink-3)" }}>Pick a system first</div>
+                            <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>Connections appear once a system is chosen</div>
+                          </div>
+                        </div>
                       )}
                     </div>
                     </div>
@@ -4838,6 +4893,8 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
 
               {/* renderPropPick: builds the Type-picker style trigger + popover for a single-value dropdown */}
 
+              {/* Gated block — Recompute / Backfill / On-failure / Test only render once the source is set. */}
+              {pCompPrereqMet && (<>
               {/* RECOMPUTE WHEN — card-style picker */}
               <div>
                 <label style={lbl}>RECOMPUTE WHEN</label>
@@ -4931,6 +4988,7 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
                   </div>
                 )}
               </div>
+              </>)}
               </>)}
             </div>
             );
