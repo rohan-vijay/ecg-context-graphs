@@ -4674,92 +4674,135 @@ function AddPropertyFlowModal({ node, mode, initialProperty, onClose }) {
                 };
                 var systemConnections = CONNECTIONS_BY_SYSTEM[pSqlSystem] || [];
                 var selectedConn = systemConnections.find(function(c){ return c.id === pSqlConnection; });
-                // Total connection count across all systems (for the empty-state sub-label).
-                var totalConnectionsCount = SQL_SYSTEMS.reduce(function(acc, sys){ return acc + ((CONNECTIONS_BY_SYSTEM[sys.id] || []).length); }, 0);
+                // Inner segment styling — each half is borderless on its own; the outer
+                // shell provides the single connected border so the two halves read as
+                // one composable unit.
+                var segBtn = { display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxSizing:"border-box" };
+                var segLabel = { fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:4, fontWeight:600 };
                 return (
                   <div>
                     <label style={lbl}>Source</label>
-                    {/* Single source picker — merges system + connection into one rich trigger.
-                        Popover groups every connection under its system, so the icon is only shown once
-                        and one click sets both pSqlSystem and pSqlConnection atomically. */}
-                    <div style={{ position:"relative" }}>
-                      <button onClick={function(){ setPSqlSourceOpen(function(o){ return !o; }); }}
-                        style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
-                        {selectedSystem && selectedConn ? (
+                    {/* ONE connected component — single bordered shell with two segments inside.
+                        Left: System picker. Right: Connection picker. They share the same border so
+                        they read as a composable unit, but each half is independently clickable and
+                        opens its own popover. The system icon appears once (left half) — the right
+                        half stays clean since "the system" context is established to its left. */}
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)", overflow:"visible", position:"relative" }}>
+                      {/* ── LEFT SEGMENT — SYSTEM ── */}
+                      <div style={{ position:"relative", borderRight:"1px solid var(--line-2)" }}>
+                        <div style={Object.assign({}, segBtn, { padding:"8px 14px 4px", cursor:"default", paddingBottom:0 })}>
+                          <div style={segLabel}>System</div>
+                        </div>
+                        <button onClick={function(){ setPSqlSystemOpen(function(o){ return !o; }); setPSqlConnectionOpen(false); }}
+                          style={Object.assign({}, segBtn, { paddingTop:4 })}>
+                          {selectedSystem ? (
+                            <>
+                              <span style={{ width:32, height:32, borderRadius:6, background:selectedSystem.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{selectedSystem.icon}</span>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{selectedSystem.l}</div>
+                                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selectedSystem.d}</div>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <span style={{ width:32, height:32, borderRadius:6, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>+</span>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontSize:14, color:"var(--ink-3)" }}>Pick a system</div>
+                                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>{SQL_SYSTEMS.length + " available"}</div>
+                              </div>
+                            </>
+                          )}
+                          <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>{pSqlSystemOpen ? "▴" : "▾"}</span>
+                        </button>
+                        {pSqlSystemOpen && (
                           <>
-                            <span style={{ width:32, height:32, borderRadius:6, background:selectedSystem.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{selectedSystem.icon}</span>
-                            <div style={{ flex:1, minWidth:0 }}>
-                              <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:600, color:"var(--ink)" }}>{selectedConn.l}</div>
-                              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selectedSystem.l + " · " + selectedConn.sub}</div>
-                            </div>
-                          </>
-                        ) : selectedSystem ? (
-                          <>
-                            <span style={{ width:32, height:32, borderRadius:6, background:selectedSystem.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{selectedSystem.icon}</span>
-                            <div style={{ flex:1, minWidth:0 }}>
-                              <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{selectedSystem.l}</div>
-                              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--gold)", marginTop:2 }}>{"Pick a connection · " + systemConnections.length + " available"}</div>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <span style={{ width:32, height:32, borderRadius:6, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>+</span>
-                            <div style={{ flex:1, minWidth:0 }}>
-                              <div style={{ fontSize:14, color:"var(--ink-3)" }}>Pick a source</div>
-                              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>{SQL_SYSTEMS.length + " systems · " + totalConnectionsCount + " connections"}</div>
+                            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPSqlSystemOpen(false); }} />
+                            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:400, overflowY:"auto" }}>
+                              {SQL_SYSTEMS.map(function(sys, i){
+                                var isSel = pSqlSystem === sys.id;
+                                return (
+                                  <button key={sys.id} onClick={function(){ setPSqlSystem(sys.id); setPSqlConnection(""); setPSqlRunState(null); setPSqlSystemOpen(false); }}
+                                    style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"9px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < SQL_SYSTEMS.length-1 ? 2 : 0 }}
+                                    onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                                    onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+                                    <span style={{ width:30, height:30, borderRadius:6, background:sys.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{sys.icon}</span>
+                                    <div style={{ flex:1, minWidth:0 }}>
+                                      <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{sys.l}</div>
+                                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, lineHeight:1.4 }}>{sys.d}</div>
+                                    </div>
+                                    {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
+                                  </button>
+                                );
+                              })}
                             </div>
                           </>
                         )}
-                        <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>{pSqlSourceOpen ? "▴" : "▾"}</span>
-                      </button>
-                      {pSqlSourceOpen && (
-                        <>
-                          <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPSqlSourceOpen(false); }} />
-                          <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:460, overflowY:"auto" }}>
-                            {SQL_SYSTEMS.map(function(sys, i){
-                              var conns = CONNECTIONS_BY_SYSTEM[sys.id] || [];
-                              return (
-                                <div key={sys.id} style={{ marginBottom: i < SQL_SYSTEMS.length-1 ? 4 : 0 }}>
-                                  {/* System header row — brand-coloured tile + label + connection count */}
-                                  <div style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 10px 5px", borderRadius:6 }}>
-                                    <span style={{ width:22, height:22, borderRadius:5, background:sys.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{sys.icon}</span>
-                                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)", fontWeight:700, letterSpacing:"0.3px", textTransform:"uppercase" }}>{sys.l}</span>
-                                    <span style={{ flex:1, height:1, background:"var(--line-2)" }} />
-                                    <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)" }}>{conns.length + (conns.length === 1 ? " conn" : " conns")}</span>
+                      </div>
+
+                      {/* ── RIGHT SEGMENT — CONNECTION ── */}
+                      <div style={{ position:"relative" }}>
+                        <div style={Object.assign({}, segBtn, { padding:"8px 14px 4px", cursor:"default", paddingBottom:0 })}>
+                          <div style={segLabel}>Connection</div>
+                        </div>
+                        {pSqlSystem ? (
+                          <>
+                            <button onClick={function(){ setPSqlConnectionOpen(function(o){ return !o; }); setPSqlSystemOpen(false); }}
+                              style={Object.assign({}, segBtn, { paddingTop:4 })}>
+                              {selectedConn ? (
+                                <>
+                                  <div style={{ flex:1, minWidth:0 }}>
+                                    <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:600, color:"var(--ink)" }}>{selectedConn.l}</div>
+                                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selectedConn.sub}</div>
                                   </div>
-                                  {/* Connection rows under this system */}
-                                  {conns.length === 0 ? (
-                                    <div style={{ padding:"5px 14px 9px 42px", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", fontStyle:"italic" }}>No connections — add one in Sources →</div>
-                                  ) : conns.map(function(c, j){
-                                    var isSel = pSqlSystem === sys.id && pSqlConnection === c.id;
+                                </>
+                              ) : (
+                                <>
+                                  <div style={{ flex:1, minWidth:0 }}>
+                                    <div style={{ fontSize:14, color:"var(--gold)" }}>Pick a connection</div>
+                                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>{systemConnections.length + " available"}</div>
+                                  </div>
+                                </>
+                              )}
+                              <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>{pSqlConnectionOpen ? "▴" : "▾"}</span>
+                            </button>
+                            {pSqlConnectionOpen && (
+                              <>
+                                <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPSqlConnectionOpen(false); }} />
+                                <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:360, overflowY:"auto" }}>
+                                  {systemConnections.length === 0 ? (
+                                    <div style={{ padding:"12px 14px", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)" }}>No connections configured. Add one in <code style={{ color:"var(--ink-2)" }}>Sources →</code> first.</div>
+                                  ) : systemConnections.map(function(c, i){
+                                    var isSel = pSqlConnection === c.id;
                                     return (
-                                      <button key={c.id} onClick={function(){
-                                        setPSqlSystem(sys.id);
-                                        setPSqlConnection(c.id);
-                                        setPSqlRunState(null);
-                                        setPSqlSourceOpen(false);
-                                      }}
-                                        style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"7px 10px 7px 14px", borderRadius:6, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: j < conns.length-1 ? 1 : 2 }}
+                                      <button key={c.id} onClick={function(){ setPSqlConnection(c.id); setPSqlRunState(null); setPSqlConnectionOpen(false); }}
+                                        style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"9px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < systemConnections.length-1 ? 2 : 0 }}
                                         onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
                                         onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
-                                        {/* Tiny connector dot — uses the system's brand colour but shown small to avoid duplicating the system icon already on the header */}
-                                        <span style={{ width:18, height:18, marginLeft:4, borderRadius:4, background:sys.color, opacity:0.18, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                                          <span style={{ width:6, height:6, borderRadius:"50%", background:sys.color }} />
-                                        </span>
+                                        {/* Small brand-coloured chip — no system icon here since the left segment already shows it */}
+                                        <span style={{ width:10, height:10, borderRadius:"50%", background:selectedSystem ? selectedSystem.color : "var(--ink-4)", flexShrink:0 }} />
                                         <div style={{ flex:1, minWidth:0 }}>
-                                          <div style={{ fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink)", fontWeight:600 }}>{c.l}</div>
-                                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:1 }}>{c.sub}</div>
+                                          <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:600, color:"var(--ink)" }}>{c.l}</div>
+                                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2 }}>{c.sub}</div>
                                         </div>
                                         {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
                                       </button>
                                     );
                                   })}
                                 </div>
-                              );
-                            })}
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          // Disabled placeholder — same height as the active version
+                          <div style={Object.assign({}, segBtn, { paddingTop:4, cursor:"not-allowed" })}>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontSize:14, color:"var(--ink-4)" }}>Pick a system first</div>
+                              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>Connections appear once a system is chosen</div>
+                            </div>
+                            <span style={{ color:"var(--ink-4)", fontSize:11, fontFamily:"JetBrains Mono" }}>▾</span>
                           </div>
-                        </>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
