@@ -4614,7 +4614,7 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
                           style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
                           {selectedSystem ? (
                             <>
-                              <span style={{ width:32, height:32, borderRadius:6, background:selectedSystem.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{selectedSystem.glyph}</span>
+                              <span style={{ width:32, height:32, borderRadius:6, background:selectedSystem.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{selectedSystem.icon}</span>
                               <div style={{ flex:1, minWidth:0 }}>
                                 <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{selectedSystem.l}</div>
                                 <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selectedSystem.d}</div>
@@ -4642,7 +4642,7 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
                                     style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"9px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < SQL_SYSTEMS.length-1 ? 2 : 0 }}
                                     onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
                                     onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
-                                    <span style={{ width:30, height:30, borderRadius:6, background:sys.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{sys.glyph}</span>
+                                    <span style={{ width:30, height:30, borderRadius:6, background:sys.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{sys.icon}</span>
                                     <div style={{ flex:1, minWidth:0 }}>
                                       <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{sys.l}</div>
                                       <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, lineHeight:1.4 }}>{sys.d}</div>
@@ -4666,7 +4666,7 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
                             style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
                             {selectedConn ? (
                               <>
-                                <span style={{ width:32, height:32, borderRadius:6, background:selectedSystem ? selectedSystem.color : "var(--chip)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{selectedSystem ? selectedSystem.glyph : "·"}</span>
+                                <span style={{ width:32, height:32, borderRadius:6, background:selectedSystem ? selectedSystem.color : "var(--chip)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{selectedSystem ? selectedSystem.icon : "·"}</span>
                                 <div style={{ flex:1, minWidth:0 }}>
                                   <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:600, color:"var(--ink)" }}>{selectedConn.l}</div>
                                   <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selectedConn.sub}</div>
@@ -4696,7 +4696,7 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
                                       style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"9px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < systemConnections.length-1 ? 2 : 0 }}
                                       onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
                                       onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
-                                      <span style={{ width:28, height:28, borderRadius:6, background:selectedSystem ? selectedSystem.color : "var(--chip)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, flexShrink:0 }}>{selectedSystem ? selectedSystem.glyph : "·"}</span>
+                                      <span style={{ width:28, height:28, borderRadius:6, background:selectedSystem ? selectedSystem.color : "var(--chip)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, flexShrink:0 }}>{selectedSystem ? selectedSystem.icon : "·"}</span>
                                       <div style={{ flex:1, minWidth:0 }}>
                                         <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:600, color:"var(--ink)" }}>{c.l}</div>
                                         <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2 }}>{c.sub}</div>
