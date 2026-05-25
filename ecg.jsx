@@ -4572,6 +4572,9 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
                 var systemConnections = CONNECTIONS_BY_SYSTEM[pSqlSystem] || [];
                 return (
                   <>
+                    {/* System + Connection side-by-side, 50/50 split. Connection appears once a system is picked
+                        (placeholder shown disabled until then) so the layout doesn't reflow. */}
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
                     <div>
                       <label style={lbl}>System</label>
                       {/* Rich picker — each option has a brand-colored logo tile, label, and short description */}
@@ -4622,9 +4625,9 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
                         )}
                       </div>
                     </div>
-                    {pSqlSystem && (
-                      <div>
-                        <label style={lbl}>Connection</label>
+                    <div>
+                      <label style={lbl}>Connection</label>
+                      {pSqlSystem ? (
                         <RichSelect
                           value={pSqlConnection}
                           onChange={function(v){ setPSqlConnection(v); setPSqlRunState(null); }}
@@ -4632,11 +4635,18 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
                           placeholder={"Pick a " + (SQL_SYSTEMS.find(function(s){ return s.id === pSqlSystem; }) || {}).l + " connection"}
                           mono
                         />
-                        {systemConnections.length === 0 && (
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>No connections configured for this system yet. Add one in <code style={{ color:"var(--ink-2)" }}>Sources →</code> first.</div>
-                        )}
-                      </div>
-                    )}
+                      ) : (
+                        // Disabled placeholder so the grid keeps its 50/50 shape before a system is picked.
+                        <div style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"10px 12px", border:"1px dashed var(--line)", borderRadius:7, background:"var(--panel-2)", fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-4)", minHeight:34, boxSizing:"border-box" }}>
+                          <span style={{ width:6, height:6, borderRadius:"50%", background:"var(--ink-4)" }} />
+                          <span>Pick a system first</span>
+                        </div>
+                      )}
+                      {pSqlSystem && systemConnections.length === 0 && (
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>No connections configured for this system yet. Add one in <code style={{ color:"var(--ink-2)" }}>Sources →</code> first.</div>
+                      )}
+                    </div>
+                    </div>
                   </>
                 );
               })()}
@@ -4693,8 +4703,9 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
 
               {/* EXPRESSION — formula / sql only (automation and agent have their own blocks above).
                   For Formula, subtle "+ Insert property" and "+ Insert function" dropdowns sit next to the
-                  label so the textarea stays the hero. */}
-              {pComputeKind !== "automation" && pComputeKind !== "agent" && (function(){
+                  label so the textarea stays the hero. For SQL, the query field only appears once both
+                  System AND Connection are picked (progressive disclosure). */}
+              {pComputeKind !== "automation" && pComputeKind !== "agent" && (pComputeKind !== "sql" || (pSqlSystem && pSqlConnection)) && (function(){
                 var FORMULA_FUNCTIONS = [
                   { id:"bucket",   l:"bucket()",   d:"Map a number into named tiers", insert:"bucket(field, [thr1, thr2], ['low', 'mid', 'high'])" },
                   { id:"if",       l:"if()",       d:"Return one value or another based on a condition", insert:"if(condition, then, else)" },
