@@ -3682,9 +3682,10 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
   const [pComputeOnFail, setPComputeOnFail] = useState(""); // raise | default | null | quarantine
   const [pComputeCostCap, setPComputeCostCap] = useState("100"); // monthly USD cap for agent calls
   // SQL/Cypher computation — picks the warehouse system and a specific connection before the query runs.
-  const [pSqlSystem, setPSqlSystem]         = useState("");
-  const [pSqlConnection, setPSqlConnection] = useState("");
-  const [pSqlRunState, setPSqlRunState]     = useState(null); // null | "running" | "ok" | "error"
+  const [pSqlSystem, setPSqlSystem]             = useState("");
+  const [pSqlSystemOpen, setPSqlSystemOpen]     = useState(false);
+  const [pSqlConnection, setPSqlConnection]     = useState("");
+  const [pSqlRunState, setPSqlRunState]         = useState(null); // null | "running" | "ok" | "error"
   // Automation computation — single rich-card dropdown listing all automations across providers.
   const [pAutomation, setPAutomation]           = useState(""); // selected automation id
   const [pAutomationOpen, setPAutomationOpen]   = useState(false);
@@ -4501,15 +4502,24 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
                   System cards are inline (always visible) so the warehouse choice is obvious.
                   Connection list is filtered by system. */}
               {pComputeKind === "sql" && (function(){
+                // Each system gets a brand colour + 2-3 char glyph that doubles as a logo tile.
                 var SQL_SYSTEMS = [
-                  { id:"databricks", l:"Databricks",  glyph:"DBX", color:"var(--coral)" },
-                  { id:"snowflake",  l:"Snowflake",   glyph:"SNW", color:"var(--blue)"  },
-                  { id:"bigquery",   l:"BigQuery",    glyph:"BQ",  color:"var(--gold)"  },
-                  { id:"redshift",   l:"Redshift",    glyph:"RS",  color:"var(--coral)" },
-                  { id:"postgres",   l:"Postgres",    glyph:"PG",  color:"var(--blue)"  },
-                  { id:"trino",      l:"Trino",       glyph:"TR",  color:"var(--purple)"},
-                  { id:"graph",      l:"Graph (Cypher)", glyph:"GR", color:"var(--green)" }
+                  { id:"databricks", l:"Databricks",    glyph:"DBX", color:"#FF3621", d:"Lakehouse · SQL warehouse + notebooks" },
+                  { id:"snowflake",  l:"Snowflake",     glyph:"SNW", color:"#29B5E8", d:"Cloud data warehouse · ANSI SQL" },
+                  { id:"bigquery",   l:"BigQuery",      glyph:"BQ",  color:"#4285F4", d:"Google Cloud · serverless warehouse" },
+                  { id:"redshift",   l:"Redshift",      glyph:"RS",  color:"#C42637", d:"AWS · columnar warehouse" },
+                  { id:"postgres",   l:"PostgreSQL",    glyph:"PG",  color:"#336791", d:"Open-source relational database" },
+                  { id:"mysql",      l:"MySQL",         glyph:"SQL", color:"#00758F", d:"Open-source relational database" },
+                  { id:"mssql",      l:"SQL Server",    glyph:"MS",  color:"#A91D22", d:"Microsoft · enterprise SQL" },
+                  { id:"oracle",     l:"Oracle",        glyph:"OR",  color:"#F80000", d:"Enterprise relational database" },
+                  { id:"clickhouse", l:"ClickHouse",    glyph:"CH",  color:"#FFCC01", d:"Columnar OLAP · sub-second analytics" },
+                  { id:"duckdb",     l:"DuckDB",        glyph:"DK",  color:"#FFF000", d:"Embedded analytical SQL" },
+                  { id:"trino",      l:"Trino",         glyph:"TR",  color:"#DD00A1", d:"Federated query engine (formerly Presto)" },
+                  { id:"presto",     l:"Presto",        glyph:"PR",  color:"#5890FF", d:"Distributed SQL query engine" },
+                  { id:"mongo",      l:"MongoDB",       glyph:"DB",  color:"#47A248", d:"Document database · Atlas SQL" },
+                  { id:"graph",      l:"Graph (Cypher)", glyph:"GR", color:"#018BFF", d:"Neo4j / Memgraph · Cypher query language" }
                 ];
+                var selectedSystem = SQL_SYSTEMS.find(function(s){ return s.id === pSqlSystem; });
                 var CONNECTIONS_BY_SYSTEM = {
                   databricks: [
                     { id:"dbx-prod",   l:"analytics-warehouse", sub:"prod · us-east-1" },
@@ -4530,8 +4540,30 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
                     { id:"pg-billing", l:"billing-readonly",   sub:"prod" },
                     { id:"pg-ops",     l:"ops-readonly",       sub:"prod" }
                   ],
+                  mysql: [
+                    { id:"mysql-app",  l:"app-readonly",       sub:"prod · multi-AZ" },
+                    { id:"mysql-bi",   l:"bi-replica",         sub:"reporting · read-only" }
+                  ],
+                  mssql: [
+                    { id:"mssql-erp",  l:"erp-readonly",       sub:"prod" }
+                  ],
+                  oracle: [
+                    { id:"ora-fin",    l:"finance-readonly",   sub:"prod" }
+                  ],
+                  clickhouse: [
+                    { id:"ch-events",  l:"events-prod",        sub:"clickhouse-cloud" }
+                  ],
+                  duckdb: [
+                    { id:"duck-local", l:"local-cache",        sub:"motherduck" }
+                  ],
                   trino: [
                     { id:"trino-fed",  l:"federated-prod",     sub:"data-platform" }
+                  ],
+                  presto: [
+                    { id:"presto-fed", l:"presto-warehouse",   sub:"legacy" }
+                  ],
+                  mongo: [
+                    { id:"mongo-app",  l:"app-cluster",        sub:"atlas · M40" }
                   ],
                   graph: [
                     { id:"graph-main", l:"main-graph",         sub:"production · neo4j-aura" }
@@ -4542,12 +4574,53 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
                   <>
                     <div>
                       <label style={lbl}>System</label>
-                      <RichSelect
-                        value={pSqlSystem}
-                        onChange={function(v){ setPSqlSystem(v); setPSqlConnection(""); setPSqlRunState(null); }}
-                        options={SQL_SYSTEMS.map(function(sys){ return { value:sys.id, label:sys.l, sub:sys.glyph }; })}
-                        placeholder="Pick a system"
-                      />
+                      {/* Rich picker — each option has a brand-colored logo tile, label, and short description */}
+                      <div style={{ position:"relative" }}>
+                        <button onClick={function(){ setPSqlSystemOpen(function(o){ return !o; }); }}
+                          style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+                          {selectedSystem ? (
+                            <>
+                              <span style={{ width:32, height:32, borderRadius:6, background:selectedSystem.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{selectedSystem.glyph}</span>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{selectedSystem.l}</div>
+                                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selectedSystem.d}</div>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <span style={{ width:32, height:32, borderRadius:6, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>+</span>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontSize:14, color:"var(--ink-3)" }}>Pick a system</div>
+                                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>Click to choose</div>
+                              </div>
+                            </>
+                          )}
+                          <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>{pSqlSystemOpen ? "▴" : "▾"}</span>
+                        </button>
+                        {pSqlSystemOpen && (
+                          <>
+                            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPSqlSystemOpen(false); }} />
+                            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:400, overflowY:"auto" }}>
+                              {SQL_SYSTEMS.map(function(sys, i){
+                                var isSel = pSqlSystem === sys.id;
+                                return (
+                                  <button key={sys.id} onClick={function(){ setPSqlSystem(sys.id); setPSqlConnection(""); setPSqlRunState(null); setPSqlSystemOpen(false); }}
+                                    style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"9px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < SQL_SYSTEMS.length-1 ? 2 : 0 }}
+                                    onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                                    onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+                                    <span style={{ width:30, height:30, borderRadius:6, background:sys.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{sys.glyph}</span>
+                                    <div style={{ flex:1, minWidth:0 }}>
+                                      <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{sys.l}</div>
+                                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, lineHeight:1.4 }}>{sys.d}</div>
+                                    </div>
+                                    {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
                     {pSqlSystem && (
                       <div>
@@ -5106,8 +5179,8 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
             var RECOMPUTE_LABELS = { on_change:"On input change", on_read:"On read (lazy)", daily:"Daily batch", schedule:"Custom schedule", manual:"Manual trigger" };
             var BACKFILL_LABELS  = { all:"All existing", forward:"Forward only", batched:"In batches" };
             var ONFAIL_LABELS    = { raise:"Raise — block the write", "default":"Use default value", "null":"Leave null — skip silently", quarantine:"Route to steward queue" };
-            var SQL_SYS_LABELS   = { databricks:"Databricks", snowflake:"Snowflake", bigquery:"BigQuery", redshift:"Redshift", postgres:"Postgres", trino:"Trino", graph:"Graph (Cypher)" };
-            var CONN_LABELS      = { "dbx-prod":"analytics-warehouse · prod", "dbx-dev":"dev-cluster · dev", "snw-prod":"ANALYTICS_PROD · US-WEST-2", "snw-raw":"RAW_INGEST · US-EAST-1", "bq-metrics":"metrics-prod (data-platform)", "bq-logs":"logs (raw)", "rs-prod":"warehouse-prod · us-east-1", "pg-billing":"billing-readonly · prod", "pg-ops":"ops-readonly · prod", "trino-fed":"federated-prod", "graph-main":"main-graph · neo4j-aura" };
+            var SQL_SYS_LABELS   = { databricks:"Databricks", snowflake:"Snowflake", bigquery:"BigQuery", redshift:"Redshift", postgres:"PostgreSQL", mysql:"MySQL", mssql:"SQL Server", oracle:"Oracle", clickhouse:"ClickHouse", duckdb:"DuckDB", trino:"Trino", presto:"Presto", mongo:"MongoDB", graph:"Graph (Cypher)" };
+            var CONN_LABELS      = { "dbx-prod":"analytics-warehouse · prod", "dbx-dev":"dev-cluster · dev", "snw-prod":"ANALYTICS_PROD · US-WEST-2", "snw-raw":"RAW_INGEST · US-EAST-1", "bq-metrics":"metrics-prod (data-platform)", "bq-logs":"logs (raw)", "rs-prod":"warehouse-prod · us-east-1", "pg-billing":"billing-readonly · prod", "pg-ops":"ops-readonly · prod", "mysql-app":"app-readonly · prod", "mysql-bi":"bi-replica · reporting", "mssql-erp":"erp-readonly · prod", "ora-fin":"finance-readonly · prod", "ch-events":"events-prod · clickhouse-cloud", "duck-local":"local-cache · motherduck", "trino-fed":"federated-prod", "presto-fed":"presto-warehouse · legacy", "mongo-app":"app-cluster · atlas M40", "graph-main":"main-graph · neo4j-aura" };
             var AUTO_LABELS      = { "wf-customer-tier":"compute_customer_tier (Internal · weekly)", "wf-health-score":"refresh_health_score (Internal · hourly)", "wf-onboard-status":"onboard_status_check (Internal · on-event)", "wk-arr-rollup":"ARR Rollup → Account (Workato · daily)", "wk-renewal-stage":"Renewal Stage Sync (Workato · hourly)", "zp-form-intake":"Form Intake → Ticket (Zapier)", "zp-notion-sync":"Notion ↔ CRM (Zapier)", "tr-enrichment-pipe":"Enrichment Pipeline (Tray.io)", "n8-anomaly-detect":"Anomaly Detection (n8n)", "af-customer-360":"customer_360_dag (Airflow · daily 02:00 UTC)", "af-billing-sync":"billing_sync_dag (Airflow · hourly)", "wh-custom-1":"POST /compute/property (webhook)" };
             var COMPUTE_KIND_LABEL = { formula:"Formula", sql:"SQL/Cypher", automation:"Automation", agent:"Agent" };
             // Build a flat row list for the Summary card
