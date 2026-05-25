@@ -14671,7 +14671,7 @@ function NewGraphFlow({ onClose, onCreate }) {
                     var isOn = startMode === opt.id;
                     return (
                       <button key={opt.id} onClick={function(){ chooseStartMode(opt.id); }}
-                        style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"16px 18px", borderRadius:9, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--bg-canvas)" : "var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
+                        style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"16px 18px", borderRadius:9, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background:"var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
                         <span style={{ width:36, height:36, borderRadius:8, background: opt.tone.bg, color: opt.tone.fg, display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{opt.icon}</span>
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontSize:14.5, fontWeight:600, color:"var(--ink)" }}>{opt.title}</div>
