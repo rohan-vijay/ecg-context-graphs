@@ -3688,6 +3688,9 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
   // Automation computation — single rich-card dropdown listing all automations across providers.
   const [pAutomation, setPAutomation]           = useState(""); // selected automation id
   const [pAutomationOpen, setPAutomationOpen]   = useState(false);
+  // Agent computation — single dropdown listing pre-created agents.
+  const [pAgent, setPAgent]                     = useState("");
+  const [pAgentOpen, setPAgentOpen]             = useState(false);
   // Formula builder — the editor is a contentEditable div for Formula mode (renders inline property
   // pills) and a plain textarea for SQL/Agent. Both use the same ref + insertion helper.
   const pFormulaTextareaRef = React.useRef(null);
@@ -4590,10 +4593,35 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
                 );
               })()}
 
-              {/* EXPRESSION — formula / sql / agent only (automation has its own block above).
+              {/* AGENT — single rich-card dropdown of pre-created agents.
+                  Same renderPropPick treatment as Automation and Recompute When. */}
+              {pComputeKind === "agent" && (function(){
+                var AGENTS = [
+                  { id:"cust_health_scorer",     l:"cust_health.score",          d:"Customer Health Scorer · 0–1 confidence" },
+                  { id:"churn_risk_predictor",   l:"churn_risk.predict",         d:"Churn Risk Predictor · 90-day window" },
+                  { id:"support_intent",         l:"support_intent.classify",    d:"Support Intent Classifier · 12 intents" },
+                  { id:"fraud_detector",         l:"fraud.detect",               d:"Fraud Detector · transaction-level signal" },
+                  { id:"next_best_action",       l:"next_best_action.recommend", d:"Next Best Action · ranked recommendation" },
+                  { id:"sentiment_analyzer",     l:"sentiment.analyze",          d:"Sentiment Analyzer · 5-band score" },
+                  { id:"price_optimizer",        l:"price.optimize",             d:"Price Optimizer · margin-aware suggestion" },
+                  { id:"product_recommender",    l:"product.recommend",          d:"Product Recommender · top-5 SKUs" },
+                  { id:"doc_summarizer",         l:"doc.summarize",              d:"Document Summarizer · 1-paragraph TL;DR" },
+                  { id:"pii_redactor",           l:"pii.redact",                 d:"PII Redactor · regex + LLM hybrid" },
+                  { id:"intent_router",          l:"intent.route",               d:"Intent Router · sends to the right queue" },
+                  { id:"language_detector",      l:"language.detect",            d:"Language Detector · ISO-639-1 code" }
+                ];
+                return (
+                  <div>
+                    <label style={lbl}>Select agent</label>
+                    {renderPropPick(pAgent, setPAgent, pAgentOpen, setPAgentOpen, AGENTS, "Select an existing agent")}
+                  </div>
+                );
+              })()}
+
+              {/* EXPRESSION — formula / sql only (automation and agent have their own blocks above).
                   For Formula, subtle "+ Insert property" and "+ Insert function" dropdowns sit next to the
                   label so the textarea stays the hero. */}
-              {pComputeKind !== "automation" && (function(){
+              {pComputeKind !== "automation" && pComputeKind !== "agent" && (function(){
                 var FORMULA_FUNCTIONS = [
                   { id:"bucket",   l:"bucket()",   d:"Map a number into named tiers", insert:"bucket(field, [thr1, thr2], ['low', 'mid', 'high'])" },
                   { id:"if",       l:"if()",       d:"Return one value or another based on a condition", insert:"if(condition, then, else)" },
@@ -5125,7 +5153,8 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
               } else if (pComputeKind === "automation"){
                 compRows.push({ k:"AUTOMATION", v: AUTO_LABELS[pAutomation] || <span style={{ color:"var(--ink-4)" }}>(not picked)</span> });
               } else if (pComputeKind === "agent"){
-                compRows.push({ k:"AGENT", v: pFormula ? <code style={{ fontFamily:"JetBrains Mono" }}>{pFormula}</code> : <span style={{ color:"var(--ink-4)" }}>(not picked)</span> });
+                var AGENT_LABELS = { cust_health_scorer:"cust_health.score (Customer Health Scorer)", churn_risk_predictor:"churn_risk.predict (Churn Risk Predictor)", support_intent:"support_intent.classify (Support Intent Classifier)", fraud_detector:"fraud.detect (Fraud Detector)", next_best_action:"next_best_action.recommend", sentiment_analyzer:"sentiment.analyze", price_optimizer:"price.optimize", product_recommender:"product.recommend", doc_summarizer:"doc.summarize", pii_redactor:"pii.redact", intent_router:"intent.route", language_detector:"language.detect" };
+                compRows.push({ k:"AGENT", v: AGENT_LABELS[pAgent] ? <code style={{ fontFamily:"JetBrains Mono" }}>{AGENT_LABELS[pAgent]}</code> : <span style={{ color:"var(--ink-4)" }}>(not picked)</span> });
               }
               compRows.push({ k:"RECOMPUTE", v: RECOMPUTE_LABELS[pComputeMode] || <span style={{ color:"var(--ink-4)" }}>(not picked)</span> });
               if (pComputeMode === "schedule") compRows.push({ k:"CRON SCHEDULE", v: <code style={{ fontFamily:"JetBrains Mono" }}>{pComputeSchedule}</code> });
