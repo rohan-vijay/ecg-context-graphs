@@ -14668,11 +14668,11 @@ function NewGraphFlow({ onClose, onCreate }) {
                     var isOn = startMode === opt.id;
                     return (
                       <button key={opt.id} onClick={function(){ chooseStartMode(opt.id); }}
-                        style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"14px 16px", borderRadius:9, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--bg-canvas)" : "var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
-                        <span style={{ width:34, height:34, borderRadius:7, background: opt.tone.bg, color: opt.tone.fg, display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{opt.icon}</span>
+                        style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"22px 18px", minHeight:108, borderRadius:10, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--bg-canvas)" : "var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
+                        <span style={{ width:40, height:40, borderRadius:8, background: opt.tone.bg, color: opt.tone.fg, display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{opt.icon}</span>
                         <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{opt.title}</div>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4, lineHeight:1.45 }}>{opt.desc}</div>
+                          <div style={{ fontSize:15, fontWeight:600, color:"var(--ink)" }}>{opt.title}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", marginTop:6, lineHeight:1.5 }}>{opt.desc}</div>
                         </div>
                       </button>
                     );
