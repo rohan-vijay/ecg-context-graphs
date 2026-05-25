@@ -14527,6 +14527,8 @@ function NewGraphFlow({ onClose, onCreate }) {
   // the template list.
   var [startMode, setStartMode] = useState("template"); // "blank" | "template"
   var [templateQuery, setTemplateQuery] = useState("");
+  // Two-view modal: "form" (name/desc/starting-point) and "template" (picker).
+  var [view, setView] = useState("form");
 
   // Template list — apply text search on top of the industry / function filter
   // already computed in `suggestions`.
@@ -14595,50 +14597,91 @@ function NewGraphFlow({ onClose, onCreate }) {
 
         {/* HEADER */}
         <div style={{ flexShrink:0, padding:"18px 22px 16px", borderBottom:"1px solid var(--line)", display:"flex", alignItems:"flex-start", justifyContent:"space-between", background:"var(--panel)" }}>
-          <div>
-            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:4 }}>New context graph</div>
-            <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1 }}>{graphName || "Untitled graph"}</div>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            {view === "template" && (
+              <button onClick={function(){ setView("form"); }} title="Back to details" className="btn-ghost"
+                style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"var(--panel)", display:"inline-flex", alignItems:"center", justifyContent:"center", padding:0, cursor:"pointer", color:"var(--ink-2)" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+            )}
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:4 }}>{view === "template" ? "Choose a template" : "New context graph"}</div>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1 }}>{graphName || "Untitled graph"}</div>
+            </div>
           </div>
           <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", flexShrink:0 }}>✕</button>
         </div>
 
-        {/* BODY — single column, scrollable */}
+        {/* BODY — single column, scrollable. Renders either the form view or the template view. */}
         <div style={{ flex:1, overflowY:"auto", padding:"22px 28px 28px" }}>
 
-          {/* NAME + DESCRIPTION */}
-          <div style={{ display:"flex", flexDirection:"column", gap:16, marginBottom:24 }}>
-            <div>
-              <label style={lbl}>Graph name</label>
-              <input value={graphName} onChange={function(e){ setGraphName(e.target.value); }} placeholder="e.g. Customer 360 Graph" style={inp} autoFocus />
-            </div>
-            <div>
-              <label style={lbl}>Description</label>
-              <textarea value={graphDesc} onChange={function(e){ setGraphDesc(e.target.value); }} rows={2} placeholder="A one-line summary that will appear on the graph card" style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.55 })} />
-            </div>
-          </div>
+          {view === "form" && (
+            <>
+              {/* NAME + DESCRIPTION */}
+              <div style={{ display:"flex", flexDirection:"column", gap:16, marginBottom:24 }}>
+                <div>
+                  <label style={lbl}>Graph name</label>
+                  <input value={graphName} onChange={function(e){ setGraphName(e.target.value); }} placeholder="e.g. Customer 360 Graph" style={inp} autoFocus />
+                </div>
+                <div>
+                  <label style={lbl}>Description</label>
+                  <textarea value={graphDesc} onChange={function(e){ setGraphDesc(e.target.value); }} rows={2} placeholder="A one-line summary that will appear on the graph card" style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.55 })} />
+                </div>
+              </div>
 
-          {/* STARTING POINT — segmented toggle */}
-          <div style={{ marginBottom:18 }}>
-            <label style={lbl}>Starting point</label>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-              {[
-                { id:"blank",    title:"Start blank",         desc:"Empty canvas — add entities and edges manually." },
-                { id:"template", title:"Choose from template", desc:"Begin from a curated blueprint and customise it." }
-              ].map(function(opt){
-                var isOn = startMode === opt.id;
-                return (
-                  <button key={opt.id} onClick={function(){ chooseStartMode(opt.id); }}
-                    style={{ padding:"14px 16px", borderRadius:9, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--bg-canvas)" : "var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
-                    <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{opt.title}</div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4, lineHeight:1.45 }}>{opt.desc}</div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+              {/* STARTING POINT — segmented toggle with icons */}
+              <div style={{ marginBottom:6 }}>
+                <label style={lbl}>Starting point</label>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  {[
+                    {
+                      id:"blank",
+                      title:"Start blank",
+                      desc:"Empty canvas — add entities and edges manually.",
+                      tone: { bg:"var(--chip)", fg:"var(--ink-2)" },
+                      icon: (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+                          <polyline points="14 3 14 8 19 8"/>
+                          <line x1="12" y1="13" x2="12" y2="17"/>
+                          <line x1="10" y1="15" x2="14" y2="15"/>
+                        </svg>
+                      )
+                    },
+                    {
+                      id:"template",
+                      title:"Choose from template",
+                      desc:"Begin from a curated blueprint and customise it.",
+                      tone: { bg:"var(--blue-fill)", fg:"var(--blue)" },
+                      icon: (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="3" width="7" height="7" rx="1"/>
+                          <rect x="14" y="3" width="7" height="7" rx="1"/>
+                          <rect x="3" y="14" width="7" height="7" rx="1"/>
+                          <rect x="14" y="14" width="7" height="7" rx="1"/>
+                        </svg>
+                      )
+                    }
+                  ].map(function(opt){
+                    var isOn = startMode === opt.id;
+                    return (
+                      <button key={opt.id} onClick={function(){ chooseStartMode(opt.id); }}
+                        style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"14px 16px", borderRadius:9, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--bg-canvas)" : "var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
+                        <span style={{ width:34, height:34, borderRadius:7, background: opt.tone.bg, color: opt.tone.fg, display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{opt.icon}</span>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{opt.title}</div>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4, lineHeight:1.45 }}>{opt.desc}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
 
-          {/* TEMPLATE PICKER — only when "Choose from template" is active */}
-          {startMode === "template" && (
+          {/* TEMPLATE VIEW — search + filters + template list */}
+          {view === "template" && (
             <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
 
               {/* Search + industry + function — one row */}
@@ -14648,7 +14691,7 @@ function NewGraphFlow({ onClose, onCreate }) {
                     <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6"/>
                     <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
                   </svg>
-                  <input value={templateQuery} onChange={function(e){ setTemplateQuery(e.target.value); }} placeholder="Search templates" style={Object.assign({}, inp, { paddingLeft:32 })} />
+                  <input value={templateQuery} onChange={function(e){ setTemplateQuery(e.target.value); }} placeholder="Search templates" style={Object.assign({}, inp, { paddingLeft:32 })} autoFocus />
                 </div>
                 <FilterDropdown value={industry} onChange={setIndustry} options={GRAPH_INDUSTRIES} placeholder="Any industry" />
                 <FilterDropdown value={func}     onChange={setFunc}     options={GRAPH_FUNCTIONS}  placeholder="Any function" />
@@ -14657,7 +14700,7 @@ function NewGraphFlow({ onClose, onCreate }) {
               {/* Templates */}
               {visibleSuggestions.length === 0 ? (
                 <div style={{ padding:"24px 20px", border:"1px dashed var(--line)", borderRadius:10, background:"var(--panel-2)", color:"var(--ink-3)", fontSize:12.5, lineHeight:1.55 }}>
-                  No templates match these filters. Clear them or pick <b>Start blank</b> to build from scratch.
+                  No templates match these filters. Clear them, or go back and pick <b>Start blank</b>.
                 </div>
               ) : visibleSuggestions.map(function(sp){
                 var isOn = startId === sp.id;
@@ -14701,13 +14744,6 @@ function NewGraphFlow({ onClose, onCreate }) {
                   </div>
                 );
               })}
-            </div>
-          )}
-
-          {/* When blank mode is active, surface a small reassurance */}
-          {startMode === "blank" && (
-            <div style={{ padding:"14px 16px", border:"1px dashed var(--line)", borderRadius:9, background:"var(--panel-2)", color:"var(--ink-3)", fontSize:12.5, lineHeight:1.55 }}>
-              You'll land on an empty canvas. Add entities, edges and sources from the toolbar after the graph activates.
             </div>
           )}
 
@@ -14851,10 +14887,17 @@ function NewGraphFlow({ onClose, onCreate }) {
         </div>
         {/* ↑ closes body wrapper */}
 
-        {/* FOOTER */}
+        {/* FOOTER — CTA changes by view + start mode:
+             form view, blank mode    → "Create graph"     (creates immediately)
+             form view, template mode → "Choose template"  (advances to template view)
+             template view            → "Create graph"     (creates once a template is picked) */}
         <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"flex-end", gap:8, background:"var(--panel)" }}>
           <button className="btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn-dark" disabled={!canActivate} onClick={function(){ if (onCreate) onCreate({ name: graphName }); onClose(); }} style={{ opacity: canActivate ? 1 : 0.45 }}>Create graph ↵</button>
+          {view === "form" && startMode === "template" ? (
+            <button className="btn-dark" disabled={graphName.trim().length < 2} onClick={function(){ setView("template"); }} style={{ opacity: graphName.trim().length >= 2 ? 1 : 0.45 }}>Choose template →</button>
+          ) : (
+            <button className="btn-dark" disabled={!canActivate} onClick={function(){ if (onCreate) onCreate({ name: graphName }); onClose(); }} style={{ opacity: canActivate ? 1 : 0.45 }}>Create graph ↵</button>
+          )}
         </div>
 
       </div>
