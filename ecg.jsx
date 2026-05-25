@@ -3194,6 +3194,7 @@ function PropertiesPane({ node, properties }) {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState({ col: "name", dir: "asc" });
   const [selectedProp, setSelectedProp] = useState(null);
+  const [propEditRow, setPropEditRow]   = useState(null); // when set, AddPropertyFlow opens in edit mode pre-filled
   const AddPropertyFlow = AddPropertyFlowModal;
 
   const FILTERS = [
@@ -3295,12 +3296,13 @@ function PropertiesPane({ node, properties }) {
           </div>
         </div>
         <div className="props-table">
-          <div className="props-head">
+          {/* Redesigned head — sort buttons remain; alignment matches data (numeric headers right-aligned). */}
+          <div className="props-head" style={{ gridTemplateColumns:"2fr 1.1fr 1.4fr 130px 140px 200px 32px" }}>
             <button className="props-th" onClick={() => onSort("name")}>Name{sortIcon("name")}</button>
             <button className="props-th" onClick={() => onSort("type")}>Type{sortIcon("type")}</button>
             <div className="props-th">Source</div>
-            <button className="props-th props-num" onClick={() => onSort("fill")}>Fill{sortIcon("fill")}</button>
-            <button className="props-th props-num" onClick={() => onSort("conf")}>Conformance{sortIcon("conf")}</button>
+            <button className="props-th" onClick={() => onSort("fill")} style={{ textAlign:"right" }}>Fill{sortIcon("fill")}</button>
+            <button className="props-th" onClick={() => onSort("conf")} style={{ textAlign:"right" }}>Conformance{sortIcon("conf")}</button>
             <div className="props-th">Flags</div>
             <div className="props-th props-th-action"></div>
           </div>
@@ -3310,10 +3312,20 @@ function PropertiesPane({ node, properties }) {
             var tg = TYPE_GLYPH[p.type] || TYPE_GLYPH.string;
             var fillC = metricColor(p.fill);
             var confC = metricColor(p.conf);
+            // Source presentation — small color dot per source system + name. Computed properties get
+            // a distinct treatment ("Computed · fx(…)") with the green FX badge so they stand out.
+            var srcColor = p.source && /Salesforce/i.test(p.source) ? "var(--blue)"
+                         : p.source && /NetSuite/i.test(p.source)   ? "var(--gold)"
+                         : p.source && /HubSpot/i.test(p.source)    ? "var(--coral)"
+                         : p.source && /Okta/i.test(p.source)       ? "var(--ink-2)"
+                         : p.source && /Manual/i.test(p.source)     ? "var(--ink-3)"
+                         : "var(--ink-3)";
             return (
-              <div key={p.name} className="props-row" onClick={() => setSelectedProp(p.name)}>
+              <div key={p.name} className="props-row" style={{ gridTemplateColumns:"2fr 1.1fr 1.4fr 130px 140px 200px 32px" }}
+                onClick={() => { setPropEditRow(p); setPropFlowMode("manual"); setPropFlowOpen(true); }}>
                 <div className="props-cell props-name-cell">
                   {p.pk && <span className="snap-tag snap-pk">PK</span>}
+                  {p.computed && <span style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", minWidth:22, height:17, padding:"0 5px", borderRadius:4, background:"var(--green-fill)", color:"var(--green)", fontFamily:"JetBrains Mono", fontSize:9, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>FX</span>}
                   <span className="snap-n">{p.name}</span>
                 </div>
                 <div className="props-cell prop-type">
@@ -3322,16 +3334,28 @@ function PropertiesPane({ node, properties }) {
                     <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-2)" }}>{p.type}</span>
                   </span>
                 </div>
-                <div className="props-cell prop-src">{p.computed ? <span className="prop-comp">fx · {p.computed}</span> : p.source}</div>
-                <div className="props-cell props-num">
+                <div className="props-cell prop-src">
+                  {p.computed ? (
+                    <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 6px", borderRadius:4, background:"var(--green-fill)", color:"var(--green)", fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>FX</span>
+                      <code style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.computed}</code>
+                    </span>
+                  ) : (
+                    <span style={{ display:"inline-flex", alignItems:"center", gap:7 }}>
+                      <span style={{ width:6, height:6, borderRadius:"50%", background:srcColor, flexShrink:0 }} />
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.source}</span>
+                    </span>
+                  )}
+                </div>
+                <div className="props-cell" style={{ textAlign:"right" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8, justifyContent:"flex-end" }}>
-                    <div style={{ position:"relative", flex:"1 1 80px", maxWidth:100, height:6, background:"var(--line)", borderRadius:3, overflow:"hidden" }}><div style={{ position:"absolute", left:0, top:0, bottom:0, width: p.fill + "%", background: fillC, borderRadius:3 }} /></div>
+                    <div style={{ position:"relative", flex:"1 1 70px", maxWidth:80, height:6, background:"var(--line)", borderRadius:3, overflow:"hidden" }}><div style={{ position:"absolute", left:0, top:0, bottom:0, width: p.fill + "%", background: fillC, borderRadius:3 }} /></div>
                     <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color: fillC, fontWeight:600, minWidth:36, textAlign:"right" }}>{p.fill}%</span>
                   </div>
                 </div>
-                <div className="props-cell props-num">
+                <div className="props-cell" style={{ textAlign:"right" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8, justifyContent:"flex-end" }}>
-                    <div style={{ position:"relative", flex:"1 1 80px", maxWidth:100, height:6, background:"var(--line)", borderRadius:3, overflow:"hidden" }}><div style={{ position:"absolute", left:0, top:0, bottom:0, width: p.conf + "%", background: confC, borderRadius:3 }} /></div>
+                    <div style={{ position:"relative", flex:"1 1 70px", maxWidth:80, height:6, background:"var(--line)", borderRadius:3, overflow:"hidden" }}><div style={{ position:"absolute", left:0, top:0, bottom:0, width: p.conf + "%", background: confC, borderRadius:3 }} /></div>
                     <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color: confC, fontWeight:600, minWidth:36, textAlign:"right" }}>{p.conf}%</span>
                   </div>
                 </div>
@@ -3339,7 +3363,6 @@ function PropertiesPane({ node, properties }) {
                   {p.required && <span className="snap-tag">req</span>}
                   {p.indexed  && <span className="snap-tag snap-idx">idx</span>}
                   {p.pii      && <span className="snap-tag snap-pii">PII</span>}
-                  {p.computed && <span className="snap-tag snap-comp">fx</span>}
                 </div>
                 <div className="props-cell props-chevron">›</div>
               </div>
@@ -3354,7 +3377,7 @@ function PropertiesPane({ node, properties }) {
         )}
       </div>
 
-      {propFlowOpen && AddPropertyFlow && <AddPropertyFlow node={node} mode={propFlowMode || "manual"} onClose={() => { setPropFlowOpen(false); setPropFlowMode(null); }} />}
+      {propFlowOpen && AddPropertyFlow && <AddPropertyFlow node={node} mode={propFlowMode || "manual"} initialProperty={propEditRow} onClose={() => { setPropFlowOpen(false); setPropFlowMode(null); setPropEditRow(null); }} />}
 
       {/* Property detail drawer — full creation context surfaced in one pane */}
       {drawerProp && (function(){
@@ -3635,11 +3658,13 @@ function FormulaEditor({ editorRef, value, onChange, rePill, propNames, toHtml, 
   );
 }
 
-function AddPropertyFlowModal({ node, mode, onClose }) {
+function AddPropertyFlowModal({ node, mode, initialProperty, onClose }) {
   mode = mode || "manual";
+  // ── Edit mode: pre-fill the form state from an existing property row ──
+  var isEditProp = !!initialProperty;
   const [step, setStep]           = useState(1); // manual: 1=basics, 2=behaviour, 3=governance, 4=review
-  const [pName, setPName]         = useState("");
-  const [pType, setPType]         = useState("");
+  const [pName, setPName]         = useState(isEditProp ? (initialProperty.name || "") : "");
+  const [pType, setPType]         = useState(isEditProp ? (initialProperty.type || "") : "");
   const [pTypeOpen, setPTypeOpen] = useState(false);
   // Type popover positioning — we use fixed positioning calculated from the trigger's
   // bounding rect so the popover escapes the modal's overflow:hidden clip.
@@ -3662,14 +3687,14 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
     setPTypeOpen(true);
   }
   const [pDesc, setPDesc]         = useState("");
-  const [pRequired, setPRequired] = useState(false);
-  const [pIndexed, setPIndexed]   = useState(false);
-  const [pPII, setPPII]           = useState(false);
-  const [pUnique, setPUnique]     = useState(false);
-  const [pComputed, setPComputed] = useState(false);
+  const [pRequired, setPRequired] = useState(isEditProp ? !!initialProperty.required : false);
+  const [pIndexed, setPIndexed]   = useState(isEditProp ? !!initialProperty.indexed  : false);
+  const [pPII, setPPII]           = useState(isEditProp ? !!initialProperty.pii      : false);
+  const [pUnique, setPUnique]     = useState(isEditProp ? !!initialProperty.unique   : false);
+  const [pComputed, setPComputed] = useState(isEditProp ? !!initialProperty.computed : false);
   const [pDefault, setPDefault]   = useState("");
   const [pFormula, setPFormula]   = useState("");
-  const [pSource, setPSource]     = useState("Salesforce CRM");
+  const [pSource, setPSource]     = useState(isEditProp && initialProperty.source ? initialProperty.source : "Salesforce CRM");
   const [pKind, setPKind]         = useState("upstream"); // upstream | computed
   const [pComputeMode, setPComputeMode] = useState(""); // on_change | daily | manual | schedule | on_read
   const [pComputeKind, setPComputeKind] = useState(""); // formula | agent | sql | lookup
@@ -3766,7 +3791,7 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
   const [pDisplayName, setPDisplayName]   = useState(""); // human-readable label, e.g. "ARR (USD)"
   const [pHelpOpen, setPHelpOpen]         = useState(false); // help text textarea expanded
   const [pHelpText, setPHelpText]         = useState("");
-  const [pIsPrimary, setPIsPrimary]       = useState(false); // primary key checkbox — implies required + unique + indexed
+  const [pIsPrimary, setPIsPrimary]       = useState(isEditProp ? !!initialProperty.pk : false); // primary key checkbox — implies required + unique + indexed
   // Single / multi select option list (used when pType is "single_select" or "multi_select")
   const [pSelectOptions, setPSelectOptions] = useState(["Option 1", "Option 2"]);
   // Bulk-add options via file upload — opened from a subtle CTA next to the Options label.
@@ -4032,7 +4057,7 @@ function AddPropertyFlowModal({ node, mode, onClose }) {
         {/* HEADER */}
         <div style={{ flexShrink:0, height:56, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 22px", background:"var(--panel)" }}>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <span style={{ fontFamily:"Instrument Serif", fontSize:18, color:"var(--ink)" }}>{MODE_LABEL[mode]}</span>
+            <span style={{ fontFamily:"Instrument Serif", fontSize:18, color:"var(--ink)" }}>{isEditProp ? ("Edit property · " + (initialProperty.name || "")) : MODE_LABEL[mode]}</span>
             <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", padding:"2px 7px", borderRadius:4, background:"var(--chip)", letterSpacing:"0.4px" }}>{node.label.toUpperCase()}</span>
           </div>
           <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
