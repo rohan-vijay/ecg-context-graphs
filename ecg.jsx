@@ -3708,8 +3708,11 @@ function AddPropertyFlowModal({ node, mode, initialProperty, onClose }) {
   const [pComputeCostCap, setPComputeCostCap] = useState("100"); // monthly USD cap for agent calls
   // SQL/Cypher computation — picks the warehouse system and a specific connection before the query runs.
   const [pSqlSystem, setPSqlSystem]             = useState("");
-  const [pSqlSystemOpen, setPSqlSystemOpen]     = useState(false);
   const [pSqlConnection, setPSqlConnection]     = useState("");
+  // Source picker combines system + connection in a single trigger and a grouped popover.
+  const [pSqlSourceOpen, setPSqlSourceOpen]     = useState(false);
+  // Keep deprecated open states so any lingering references compile cleanly.
+  const [pSqlSystemOpen, setPSqlSystemOpen]     = useState(false);
   const [pSqlConnectionOpen, setPSqlConnectionOpen] = useState(false);
   const [pSqlRunState, setPSqlRunState]         = useState(null); // null | "running" | "ok" | "error"
   // Automation computation — single rich-card dropdown listing all automations across providers.
@@ -4003,6 +4006,50 @@ function AddPropertyFlowModal({ node, mode, initialProperty, onClose }) {
 
   function updateBulkRow(idx, patch) {
     setBulkRows(function(arr){ return arr.map(function(r, i){ return i === idx ? Object.assign({}, r, patch) : r; }); });
+  }
+  function addBulkRow() {
+    setBulkRows(function(arr){ return arr.concat([{ name:"new_field", type:"string", include:true }]); });
+  }
+  function removeBulkRow(idx) {
+    setBulkRows(function(arr){ return arr.filter(function(_, i){ return i !== idx; }); });
+  }
+
+  // Inline type picker for the bulk Review & edit fields table — mirrors the
+  // TypePicker in AddNodeFlow so the two flows feel like the same component.
+  function BulkTypePicker({ value, onChange }) {
+    var [open, setOpen] = useState(false);
+    var meta = TYPE_META_LOCAL[value] || TYPE_META_LOCAL.string;
+    return (
+      <div style={{ position:"relative" }}>
+        <button onClick={function(){ setOpen(function(o){ return !o; }); }}
+          style={{ display:"flex", alignItems:"center", gap:7, width:"100%", padding:"5px 8px", border:"1px solid var(--line)", borderRadius:6, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.5)" }}>
+          <span style={{ minWidth:22, height:18, padding:"0 5px", borderRadius:4, background:meta.color, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{meta.glyph}</span>
+          <span style={{ flex:1, fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)" }}>{value}</span>
+          <span style={{ color:"var(--ink-3)", fontSize:9, fontFamily:"JetBrains Mono" }}>▾</span>
+        </button>
+        {open && (
+          <>
+            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setOpen(false); }} />
+            <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:8, boxShadow:"0 10px 28px rgba(0,0,0,0.14)", padding:4, minWidth:170, maxHeight:280, overflowY:"auto" }}>
+              {TYPE_LIST.map(function(t){
+                var m = TYPE_META_LOCAL[t.id] || TYPE_META_LOCAL.string;
+                var isSel = value === t.id;
+                return (
+                  <button key={t.id} onClick={function(){ onChange(t.id); setOpen(false); }}
+                    style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"5px 8px", borderRadius:5, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
+                    onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                    onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+                    <span style={{ minWidth:24, height:18, padding:"0 5px", borderRadius:4, background:m.color, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, flexShrink:0 }}>{m.glyph}</span>
+                    <span style={{ flex:1, fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)" }}>{t.id}</span>
+                    {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:11 }}>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    );
   }
 
   // Footer state
@@ -4626,128 +4673,95 @@ function AddPropertyFlowModal({ node, mode, initialProperty, onClose }) {
                   ]
                 };
                 var systemConnections = CONNECTIONS_BY_SYSTEM[pSqlSystem] || [];
+                var selectedConn = systemConnections.find(function(c){ return c.id === pSqlConnection; });
+                // Total connection count across all systems (for the empty-state sub-label).
+                var totalConnectionsCount = SQL_SYSTEMS.reduce(function(acc, sys){ return acc + ((CONNECTIONS_BY_SYSTEM[sys.id] || []).length); }, 0);
                 return (
-                  <>
-                    {/* System + Connection side-by-side, 50/50 split. Connection appears once a system is picked
-                        (placeholder shown disabled until then) so the layout doesn't reflow. */}
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-                    <div>
-                      <label style={lbl}>System</label>
-                      {/* Rich picker — each option has a brand-colored logo tile, label, and short description */}
-                      <div style={{ position:"relative" }}>
-                        <button onClick={function(){ setPSqlSystemOpen(function(o){ return !o; }); }}
-                          style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
-                          {selectedSystem ? (
-                            <>
-                              <span style={{ width:32, height:32, borderRadius:6, background:selectedSystem.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{selectedSystem.icon}</span>
-                              <div style={{ flex:1, minWidth:0 }}>
-                                <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{selectedSystem.l}</div>
-                                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selectedSystem.d}</div>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <span style={{ width:32, height:32, borderRadius:6, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>+</span>
-                              <div style={{ flex:1, minWidth:0 }}>
-                                <div style={{ fontSize:14, color:"var(--ink-3)" }}>Pick a system</div>
-                                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>Click to choose</div>
-                              </div>
-                            </>
-                          )}
-                          <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>{pSqlSystemOpen ? "▴" : "▾"}</span>
-                        </button>
-                        {pSqlSystemOpen && (
+                  <div>
+                    <label style={lbl}>Source</label>
+                    {/* Single source picker — merges system + connection into one rich trigger.
+                        Popover groups every connection under its system, so the icon is only shown once
+                        and one click sets both pSqlSystem and pSqlConnection atomically. */}
+                    <div style={{ position:"relative" }}>
+                      <button onClick={function(){ setPSqlSourceOpen(function(o){ return !o; }); }}
+                        style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+                        {selectedSystem && selectedConn ? (
                           <>
-                            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPSqlSystemOpen(false); }} />
-                            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:400, overflowY:"auto" }}>
-                              {SQL_SYSTEMS.map(function(sys, i){
-                                var isSel = pSqlSystem === sys.id;
-                                return (
-                                  <button key={sys.id} onClick={function(){ setPSqlSystem(sys.id); setPSqlConnection(""); setPSqlRunState(null); setPSqlSystemOpen(false); }}
-                                    style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"9px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < SQL_SYSTEMS.length-1 ? 2 : 0 }}
-                                    onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
-                                    onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
-                                    <span style={{ width:30, height:30, borderRadius:6, background:sys.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{sys.icon}</span>
-                                    <div style={{ flex:1, minWidth:0 }}>
-                                      <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{sys.l}</div>
-                                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, lineHeight:1.4 }}>{sys.d}</div>
-                                    </div>
-                                    {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
-                                  </button>
-                                );
-                              })}
+                            <span style={{ width:32, height:32, borderRadius:6, background:selectedSystem.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{selectedSystem.icon}</span>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:600, color:"var(--ink)" }}>{selectedConn.l}</div>
+                              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selectedSystem.l + " · " + selectedConn.sub}</div>
+                            </div>
+                          </>
+                        ) : selectedSystem ? (
+                          <>
+                            <span style={{ width:32, height:32, borderRadius:6, background:selectedSystem.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{selectedSystem.icon}</span>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{selectedSystem.l}</div>
+                              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--gold)", marginTop:2 }}>{"Pick a connection · " + systemConnections.length + " available"}</div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ width:32, height:32, borderRadius:6, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>+</span>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontSize:14, color:"var(--ink-3)" }}>Pick a source</div>
+                              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>{SQL_SYSTEMS.length + " systems · " + totalConnectionsCount + " connections"}</div>
                             </div>
                           </>
                         )}
-                      </div>
-                    </div>
-                    <div>
-                      <label style={lbl}>Connection</label>
-                      {pSqlSystem ? (() => {
-                        var selectedConn = systemConnections.find(function(c){ return c.id === pSqlConnection; });
-                        return (
-                        <div style={{ position:"relative" }}>
-                          <button onClick={function(){ setPSqlConnectionOpen(function(o){ return !o; }); }}
-                            style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
-                            {selectedConn ? (
-                              <>
-                                <span style={{ width:32, height:32, borderRadius:6, background:selectedSystem ? selectedSystem.color : "var(--chip)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{selectedSystem ? selectedSystem.icon : "·"}</span>
-                                <div style={{ flex:1, minWidth:0 }}>
-                                  <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:600, color:"var(--ink)" }}>{selectedConn.l}</div>
-                                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selectedConn.sub}</div>
+                        <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>{pSqlSourceOpen ? "▴" : "▾"}</span>
+                      </button>
+                      {pSqlSourceOpen && (
+                        <>
+                          <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPSqlSourceOpen(false); }} />
+                          <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:460, overflowY:"auto" }}>
+                            {SQL_SYSTEMS.map(function(sys, i){
+                              var conns = CONNECTIONS_BY_SYSTEM[sys.id] || [];
+                              return (
+                                <div key={sys.id} style={{ marginBottom: i < SQL_SYSTEMS.length-1 ? 4 : 0 }}>
+                                  {/* System header row — brand-coloured tile + label + connection count */}
+                                  <div style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 10px 5px", borderRadius:6 }}>
+                                    <span style={{ width:22, height:22, borderRadius:5, background:sys.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{sys.icon}</span>
+                                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)", fontWeight:700, letterSpacing:"0.3px", textTransform:"uppercase" }}>{sys.l}</span>
+                                    <span style={{ flex:1, height:1, background:"var(--line-2)" }} />
+                                    <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)" }}>{conns.length + (conns.length === 1 ? " conn" : " conns")}</span>
+                                  </div>
+                                  {/* Connection rows under this system */}
+                                  {conns.length === 0 ? (
+                                    <div style={{ padding:"5px 14px 9px 42px", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", fontStyle:"italic" }}>No connections — add one in Sources →</div>
+                                  ) : conns.map(function(c, j){
+                                    var isSel = pSqlSystem === sys.id && pSqlConnection === c.id;
+                                    return (
+                                      <button key={c.id} onClick={function(){
+                                        setPSqlSystem(sys.id);
+                                        setPSqlConnection(c.id);
+                                        setPSqlRunState(null);
+                                        setPSqlSourceOpen(false);
+                                      }}
+                                        style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"7px 10px 7px 14px", borderRadius:6, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: j < conns.length-1 ? 1 : 2 }}
+                                        onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                                        onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+                                        {/* Tiny connector dot — uses the system's brand colour but shown small to avoid duplicating the system icon already on the header */}
+                                        <span style={{ width:18, height:18, marginLeft:4, borderRadius:4, background:sys.color, opacity:0.18, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                                          <span style={{ width:6, height:6, borderRadius:"50%", background:sys.color }} />
+                                        </span>
+                                        <div style={{ flex:1, minWidth:0 }}>
+                                          <div style={{ fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink)", fontWeight:600 }}>{c.l}</div>
+                                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:1 }}>{c.sub}</div>
+                                        </div>
+                                        {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
+                                      </button>
+                                    );
+                                  })}
                                 </div>
-                              </>
-                            ) : (
-                              <>
-                                <span style={{ width:32, height:32, borderRadius:6, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>+</span>
-                                <div style={{ flex:1, minWidth:0 }}>
-                                  <div style={{ fontSize:14, color:"var(--ink-3)" }}>{"Pick a " + (selectedSystem ? selectedSystem.l : "") + " connection"}</div>
-                                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>{systemConnections.length + " available"}</div>
-                                </div>
-                              </>
-                            )}
-                            <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>{pSqlConnectionOpen ? "▴" : "▾"}</span>
-                          </button>
-                          {pSqlConnectionOpen && (
-                            <>
-                              <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPSqlConnectionOpen(false); }} />
-                              <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:360, overflowY:"auto" }}>
-                                {systemConnections.length === 0 ? (
-                                  <div style={{ padding:"12px 14px", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)" }}>No connections configured. Add one in <code style={{ color:"var(--ink-2)" }}>Sources →</code> first.</div>
-                                ) : systemConnections.map(function(c, i){
-                                  var isSel = pSqlConnection === c.id;
-                                  return (
-                                    <button key={c.id} onClick={function(){ setPSqlConnection(c.id); setPSqlRunState(null); setPSqlConnectionOpen(false); }}
-                                      style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"9px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < systemConnections.length-1 ? 2 : 0 }}
-                                      onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
-                                      onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
-                                      <span style={{ width:28, height:28, borderRadius:6, background:selectedSystem ? selectedSystem.color : "var(--chip)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, flexShrink:0 }}>{selectedSystem ? selectedSystem.icon : "·"}</span>
-                                      <div style={{ flex:1, minWidth:0 }}>
-                                        <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:600, color:"var(--ink)" }}>{c.l}</div>
-                                        <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2 }}>{c.sub}</div>
-                                      </div>
-                                      {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                        );
-                      })() : (
-                        // Disabled placeholder — matches the System trigger height so the grid stays balanced.
-                        <div style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px dashed var(--line)", borderRadius:9, background:"var(--panel-2)", boxSizing:"border-box" }}>
-                          <span style={{ width:32, height:32, borderRadius:6, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>·</span>
-                          <div style={{ flex:1, minWidth:0 }}>
-                            <div style={{ fontSize:14, color:"var(--ink-3)" }}>Pick a system first</div>
-                            <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>Connections appear once a system is chosen</div>
+                              );
+                            })}
                           </div>
-                        </div>
+                        </>
                       )}
                     </div>
-                    </div>
-                  </>
+                  </div>
                 );
               })()}
 
@@ -5436,7 +5450,7 @@ function AddPropertyFlowModal({ node, mode, initialProperty, onClose }) {
             </div>
           )}
 
-          {/* BULK · STEP 2 — Review detected/template fields */}
+          {/* BULK · STEP 2 — Review & edit fields (mirrors AddNodeFlow Step 2 table) */}
           {(mode === "spreadsheet" || mode === "document" || mode === "template") && bulkStep === 2 && (
             <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
@@ -5445,24 +5459,50 @@ function AddPropertyFlowModal({ node, mode, initialProperty, onClose }) {
                 </div>
                 <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{includedCount} of {bulkRows.length} included</div>
               </div>
-              <div style={{ border:"1px solid var(--line)", borderRadius:9, overflow:"hidden", background:"var(--panel)" }}>
-                <div style={{ display:"grid", gridTemplateColumns:"32px 1.4fr 120px", gap:8, padding:"9px 14px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.5px", textTransform:"uppercase" }}>
-                  <div/><div>Name</div><div>Type</div>
+
+              {/* SHARED PROPERTIES TABLE — matches Create Node "Review & edit fields" */}
+              <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 18px", borderBottom:"1px solid var(--line-2)", background:"var(--panel-2)" }}>
+                  <div>
+                    <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>Review & edit fields</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3 }}>{bulkRows.length + " " + (bulkRows.length === 1 ? "field" : "fields") + " · " + includedCount + " included"}</div>
+                  </div>
+                  <button onClick={addBulkRow} className="btn-ghost" style={{ fontSize:12 }}>+ Add field</button>
                 </div>
-                {bulkRows.map(function(r, i){
-                  var m = TYPE_META_LOCAL[r.type] || TYPE_META_LOCAL.string;
+                <div style={{ display:"grid", gridTemplateColumns:"32px 1.4fr 130px 1.2fr 40px 40px 40px 32px", gap:8, padding:"9px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
+                  <div title="Include this field" style={{ textAlign:"center" }}>✓</div>
+                  <div>Name</div>
+                  <div>Type</div>
+                  <div>Description</div>
+                  <div title="Required" style={{ textAlign:"center" }}>REQ</div>
+                  <div title="Indexed" style={{ textAlign:"center" }}>IDX</div>
+                  <div title="PII" style={{ textAlign:"center" }}>PII</div>
+                  <div/>
+                </div>
+                {bulkRows.length === 0 && (
+                  <div style={{ padding:"50px 18px", textAlign:"center", color:"var(--ink-3)", fontSize:13 }}>
+                    No fields yet. Click <b>+ Add field</b> to start.
+                  </div>
+                )}
+                {bulkRows.map(function(r, i, arr){
                   return (
-                    <div key={i} style={{ display:"grid", gridTemplateColumns:"32px 1.4fr 120px", gap:8, padding:"8px 14px", alignItems:"center", borderBottom: i < bulkRows.length - 1 ? "1px solid var(--line-2)" : "none", opacity: r.include ? 1 : 0.45 }}>
-                      <input type="checkbox" checked={r.include} onChange={function(e){ updateBulkRow(i, { include: e.target.checked }); }} style={{ accentColor:"var(--ink)", width:14, height:14, justifySelf:"center" }} />
-                      <input value={r.name} onChange={function(e){ updateBulkRow(i, { name: e.target.value }); }} style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12, fontFamily:"JetBrains Mono" })} />
-                      <select value={r.type} onChange={function(e){ updateBulkRow(i, { type: e.target.value }); }} style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12, fontFamily:"JetBrains Mono" })}>
-                        {TYPE_LIST.map(function(t){ return <option key={t.id} value={t.id}>{t.label}</option>; })}
-                      </select>
+                    <div key={i} style={{ display:"grid", gridTemplateColumns:"32px 1.4fr 130px 1.2fr 40px 40px 40px 32px", gap:8, padding:"8px 18px", alignItems:"center", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)", opacity: r.include === false ? 0.45 : 1 }}>
+                      <input type="checkbox" checked={r.include !== false} onChange={function(e){ updateBulkRow(i, { include: e.target.checked }); }} style={{ accentColor:"var(--ink)", width:16, height:16, justifySelf:"center" }} />
+                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        <input value={r.name} onChange={function(e){ updateBulkRow(i, { name: e.target.value }); }} style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12, fontFamily:"JetBrains Mono" })} />
+                        {r.confidence && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color: r.confidence >= 0.9 ? "var(--green)" : "var(--gold)", flexShrink:0, fontWeight:700 }} title={"LLM confidence " + r.confidence}>{Math.round(r.confidence * 100) + "%"}</span>}
+                      </div>
+                      <BulkTypePicker value={r.type} onChange={function(v){ updateBulkRow(i, { type: v }); }} />
+                      <input value={r.description || ""} onChange={function(e){ updateBulkRow(i, { description: e.target.value }); }} placeholder="optional" style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12 })} />
+                      <input type="checkbox" checked={r.required || false} onChange={function(e){ updateBulkRow(i, { required: e.target.checked }); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
+                      <input type="checkbox" checked={r.indexed || false} onChange={function(e){ updateBulkRow(i, { indexed: e.target.checked }); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
+                      <input type="checkbox" checked={r.pii || false} onChange={function(e){ updateBulkRow(i, { pii: e.target.checked }); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
+                      <button onClick={function(){ removeBulkRow(i); }} style={{ width:24, height:24, borderRadius:5, border:"1px solid var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", justifySelf:"center" }}>×</button>
                     </div>
                   );
                 })}
               </div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>Adjust names and types as needed, then add. You can edit governance per property afterwards from the table.</div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>Uncheck rows to skip them. Names, types, descriptions and flags can be edited here — or tweaked later from the properties table.</div>
             </div>
           )}
 
