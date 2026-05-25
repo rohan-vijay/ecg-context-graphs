@@ -14334,7 +14334,9 @@ function FunctionIcon({ id, size }) {
 }
 
 function NewGraphFlow({ onClose, onCreate }) {
-  var [step, setStep]        = useState(1);
+  // step / setStep / stepNames / canContinue were retained on the previous redesign
+  // to keep diffs small. They're not referenced anywhere live; the dead {false && ...}
+  // block in the body still mentions `step` but Babel strips that branch.
   var [industry, setIndustry] = useState(null);
   var [func, setFunc]         = useState(null);
   var [startId, setStartId]   = useState(null);
@@ -14353,9 +14355,7 @@ function NewGraphFlow({ onClose, onCreate }) {
   var [permsWrite, setPermsWrite]     = useState([{ kind:"group", id:"data-platform",  label:"data-platform team" }]);
   var [permsAdmin, setPermsAdmin]     = useState([{ kind:"user",  id:"morgan.lee",     label:"Morgan Lee (you)" }]);
 
-  // Slimmed to 3 steps. Entity trimming + access control happen post-create from
-  // the graph's settings — they don't belong in the spin-up flow.
-  var stepNames = ["Industry Department", "Template & Context", "Review"];
+  // (stepNames removed — single-modal redesign doesn't use a stepper.)
 
   // Industry is the HARD filter when picked (Healthcare must never see Retail-only
   // blueprints). When only a function is picked, function is the hard filter.
@@ -14376,13 +14376,7 @@ function NewGraphFlow({ onClose, onCreate }) {
   var includedFromBlueprint = picked ? picked.entities.filter(function(e){ return included[e] !== false; }) : [];
   var entitiesToInclude     = includedFromBlueprint.concat(customEntities.map(function(c){ return c.name; }));
 
-  function canContinue() {
-    if (step === 1) return !!industry || !!func;
-    if (step === 2) return !!startId;
-    // Step 3 = Review. Graph needs at least a name to activate.
-    if (step === 3) return graphName.trim().length >= 2;
-    return true;
-  }
+  // (canContinue removed — single-modal redesign uses `canActivate` defined below.)
 
   function pickStart(id) {
     setStartId(id);
@@ -14526,89 +14520,202 @@ function NewGraphFlow({ onClose, onCreate }) {
     );
   }
 
+  // ── Single-modal redesign ───────────────────────────────────────────────────
+  // Replaces the previous 3-step stepper. Everything that's needed to spin up
+  // a graph lives in one scrollable form: name, description, starting-point
+  // choice, and (when "from template" is picked) a search + filters row above
+  // the template list.
+  var [startMode, setStartMode] = useState("template"); // "blank" | "template"
+  var [templateQuery, setTemplateQuery] = useState("");
+
+  // Template list — apply text search on top of the industry / function filter
+  // already computed in `suggestions`.
+  var qLower = templateQuery.trim().toLowerCase();
+  var visibleSuggestions = !qLower ? suggestions : suggestions.filter(function(sp){
+    if (sp.name.toLowerCase().indexOf(qLower) >= 0) return true;
+    if (sp.desc && sp.desc.toLowerCase().indexOf(qLower) >= 0) return true;
+    if (sp.entities && sp.entities.some(function(e){ return e.toLowerCase().indexOf(qLower) >= 0; })) return true;
+    return false;
+  });
+
+  var canActivate = graphName.trim().length >= 2 && (startMode === "blank" || (startId && startId !== "__blank"));
+
+  // Helper — sync startId when toggling start mode so "Create graph" can rely on a
+  // single value downstream without re-implementing branch logic.
+  function chooseStartMode(m) {
+    setStartMode(m);
+    if (m === "blank") {
+      setStartId("__blank");
+      setIncluded({});
+    } else if (startId === "__blank") {
+      // Coming from blank → un-set so the user has to pick a template
+      setStartId(null);
+    }
+  }
+
+  // Inline dropdown styled like the rest of the form (used for industry + function).
+  function FilterDropdown({ value, onChange, options, placeholder, openState }) {
+    var [open, setOpen] = useState(false);
+    var sel = options.find(function(o){ return o.id === value; });
+    return (
+      <div style={{ position:"relative" }}>
+        <button onClick={function(){ setOpen(function(o){ return !o; }); }}
+          style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"9px 12px", border:"1px solid var(--line)", borderRadius:7, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxSizing:"border-box", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+          <span style={{ flex:1, fontSize:13, color: sel ? "var(--ink)" : "var(--ink-3)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{sel ? sel.label : placeholder}</span>
+          {sel && <button onClick={function(e){ e.stopPropagation(); onChange(null); }} style={{ background:"none", border:"none", padding:0, color:"var(--ink-3)", cursor:"pointer", fontSize:14, lineHeight:1, marginRight:2 }}>×</button>}
+          <span style={{ color:"var(--ink-3)", fontSize:10, fontFamily:"JetBrains Mono" }}>{open ? "▴" : "▾"}</span>
+        </button>
+        {open && (
+          <>
+            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setOpen(false); }} />
+            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:5, maxHeight:340, overflowY:"auto" }}>
+              {options.map(function(o){
+                var isSel = value === o.id;
+                return (
+                  <button key={o.id} onClick={function(){ onChange(o.id); setOpen(false); }}
+                    style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 10px", borderRadius:6, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
+                    onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                    onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+                    <span style={{ flex:1, fontSize:12.5, color:"var(--ink)" }}>{o.label}</span>
+                    {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:12 }}>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
       onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width:"92vw", maxWidth:1180, height:"94vh", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
+      <div style={{ width:"92vw", maxWidth:880, maxHeight:"94vh", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
 
         {/* HEADER */}
-        <div style={{ flexShrink:0, height:56, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 22px", background:"var(--panel)" }}>
+        <div style={{ flexShrink:0, padding:"18px 22px 16px", borderBottom:"1px solid var(--line)", display:"flex", alignItems:"flex-start", justifyContent:"space-between", background:"var(--panel)" }}>
           <div>
-            <div style={{ fontFamily:"Instrument Serif", fontSize:20, color:"var(--ink)" }}>{graphName || "Untitled graph"}</div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:4 }}>New context graph</div>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1 }}>{graphName || "Untitled graph"}</div>
           </div>
-          <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)" }}>✕</button>
+          <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", flexShrink:0 }}>✕</button>
         </div>
 
-        <div style={{ flex:1, display:"grid", gridTemplateColumns:"240px minmax(0, 1fr)", minHeight:0 }}>
+        {/* BODY — single column, scrollable */}
+        <div style={{ flex:1, overflowY:"auto", padding:"22px 28px 28px" }}>
 
-          {/* SIDEBAR */}
-          <div style={{ background:"var(--panel-2)", borderRight:"1px solid var(--line)", padding:"20px 14px", display:"flex", flexDirection:"column", gap:4, overflowY:"auto" }}>
-            {stepNames.map(function(nm, i){
-              var n = i + 1;
-              var isOn = step === n;
-              var isDone = step > n;
-              var indLabel  = (GRAPH_INDUSTRIES.find(function(x){ return x.id === industry; }) || {}).label;
-              var funcLabel = (GRAPH_FUNCTIONS.find(function(x){ return x.id === func; }) || {}).label;
-              var sub = n === 1 ? (industry || func ? [indLabel, funcLabel].filter(Boolean).join(" · ") : "Industry & department")
-                      : n === 2 ? (startId === "__blank" ? "Blank canvas" : picked ? picked.name : "Pick a starting point")
-                      : (graphName ? graphName : "Activate");
-              return (
-                <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
-                  style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", alignItems:"center" }}>
-                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize: 12, fontWeight:700, flexShrink:0, lineHeight:1 }}>{isDone ? <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg> : n}</span>
-                  <div style={{ minWidth:0 }}>
-                    <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400, lineHeight:1.2 }}>{nm}</div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{sub}</div>
-                  </div>
-                </button>
-              );
-            })}
+          {/* NAME + DESCRIPTION */}
+          <div style={{ display:"flex", flexDirection:"column", gap:16, marginBottom:24 }}>
+            <div>
+              <label style={lbl}>Graph name</label>
+              <input value={graphName} onChange={function(e){ setGraphName(e.target.value); }} placeholder="e.g. Customer 360 Graph" style={inp} autoFocus />
+            </div>
+            <div>
+              <label style={lbl}>Description</label>
+              <textarea value={graphDesc} onChange={function(e){ setGraphDesc(e.target.value); }} rows={2} placeholder="A one-line summary that will appear on the graph card" style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.55 })} />
+            </div>
           </div>
 
-          {/* CENTER */}
-          <div style={{ padding:"24px 32px 28px", overflowY:"auto" }}>
-            <div style={{ marginBottom:20 }}>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / 3"}</div>
-              <div style={{ fontFamily:"Instrument Serif", fontSize:28, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>{stepNames[step-1]}</div>
-              <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:680 }}>
-                {step === 1 && "Tell us a bit about what you're modelling. We'll use this to suggest a smart starting point — or you can skip and start from scratch."}
-                {step === 2 && "Add your context first, then pick a template — we'll tailor the entities, fields, and edges to your business. Each template ships a sensible default set you can edit."}
-                {step === 3 && "Name the graph and confirm. Entities and access can be refined from the graph's settings after activation."}
-              </div>
+          {/* STARTING POINT — segmented toggle */}
+          <div style={{ marginBottom:18 }}>
+            <label style={lbl}>Starting point</label>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              {[
+                { id:"blank",    title:"Start blank",         desc:"Empty canvas — add entities and edges manually." },
+                { id:"template", title:"Choose from template", desc:"Begin from a curated blueprint and customise it." }
+              ].map(function(opt){
+                var isOn = startMode === opt.id;
+                return (
+                  <button key={opt.id} onClick={function(){ chooseStartMode(opt.id); }}
+                    style={{ padding:"14px 16px", borderRadius:9, border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), background: isOn ? "var(--bg-canvas)" : "var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
+                    <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{opt.title}</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4, lineHeight:1.45 }}>{opt.desc}</div>
+                  </button>
+                );
+              })}
             </div>
+          </div>
 
-            {/* STEP 1 */}
-            {step === 1 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
-                <div>
-                  <label style={lbl}>INDUSTRY OR SECTOR</label>
-                  <RichDropdown
-                    value={industry}
-                    onChange={function(v){ setIndustry(v); }}
-                    options={GRAPH_INDUSTRIES}
-                    placeholder="Pick an industry"
-                    kind="industry"
-                  />
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:8, lineHeight:1.5 }}>The sector you're modelling for. Use "Any / cross-industry" for horizontal use cases.</div>
+          {/* TEMPLATE PICKER — only when "Choose from template" is active */}
+          {startMode === "template" && (
+            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+
+              {/* Search + industry + function — one row */}
+              <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 1fr", gap:10 }}>
+                <div style={{ position:"relative" }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ position:"absolute", left:11, top:"50%", transform:"translateY(-50%)", color:"var(--ink-3)", pointerEvents:"none" }}>
+                    <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6"/>
+                    <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                  </svg>
+                  <input value={templateQuery} onChange={function(e){ setTemplateQuery(e.target.value); }} placeholder="Search templates" style={Object.assign({}, inp, { paddingLeft:32 })} />
                 </div>
-
-                <div>
-                  <label style={lbl}>TEAM OR FUNCTION USING IT</label>
-                  <RichDropdown
-                    value={func}
-                    onChange={function(v){ setFunc(v); }}
-                    options={GRAPH_FUNCTIONS}
-                    placeholder="Pick a function"
-                    kind="function"
-                  />
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:8, lineHeight:1.5 }}>Who'll own and query this graph. Choose <b>Entire organisation</b> to spin up an enterprise-wide context graph that crosses team boundaries.</div>
-                </div>
-
+                <FilterDropdown value={industry} onChange={setIndustry} options={GRAPH_INDUSTRIES} placeholder="Any industry" />
+                <FilterDropdown value={func}     onChange={setFunc}     options={GRAPH_FUNCTIONS}  placeholder="Any function" />
               </div>
-            )}
 
-            {/* STEP 2 */}
-            {step === 2 && (
+              {/* Templates */}
+              {visibleSuggestions.length === 0 ? (
+                <div style={{ padding:"24px 20px", border:"1px dashed var(--line)", borderRadius:10, background:"var(--panel-2)", color:"var(--ink-3)", fontSize:12.5, lineHeight:1.55 }}>
+                  No templates match these filters. Clear them or pick <b>Start blank</b> to build from scratch.
+                </div>
+              ) : visibleSuggestions.map(function(sp){
+                var isOn = startId === sp.id;
+                return (
+                  <div key={sp.id} onClick={function(){ pickStart(sp.id); }}
+                    style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"14px 16px", border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"), borderRadius:10, background: isOn ? "var(--bg-canvas)" : "var(--panel)", boxShadow: isOn ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", cursor:"pointer" }}>
+                    <span style={{ width:38, height:38, borderRadius:8, background:sp.accent, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                      <FunctionIcon id={(sp.fn && sp.fn[0]) || "enterprise"} size={20} />
+                    </span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                        <span style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{sp.name}</span>
+                        {sp.cdm && (
+                          <a href={cdmLink(sp.cdm)} target="_blank" rel="noopener noreferrer"
+                            title={"View Microsoft CDM — " + sp.cdm + " (opens GitHub)"}
+                            onClick={function(e){ e.stopPropagation(); }}
+                            style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 7px 1.5px 6px", borderRadius:3, background:"transparent", color:"var(--ink-3)", border:"1px solid var(--line-2)", fontWeight:600, letterSpacing:"0.4px", textDecoration:"none" }}>
+                            <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor" style={{ opacity:0.7 }}><rect x="0" y="0" width="4" height="4"/><rect x="6" y="0" width="4" height="4"/><rect x="0" y="6" width="4" height="4"/><rect x="6" y="6" width="4" height="4"/></svg>
+                            {"CDM · " + sp.cdm}
+                          </a>
+                        )}
+                      </div>
+                      <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5, marginTop:4 }}>{sp.desc}</div>
+                      {(function(){
+                        var CAP = 10;
+                        var shown = sp.entities.slice(0, CAP);
+                        var overflow = sp.entities.length - shown.length;
+                        return (
+                          <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:8, alignItems:"center" }}>
+                            {shown.map(function(e){
+                              return <span key={e} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"3px 8px", borderRadius:4, background:"var(--chip)", border:"1px solid var(--line-2)", color:"var(--ink-2)" }}>{e}</span>;
+                            })}
+                            {overflow > 0 && (
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"3px 8px", borderRadius:4, background:"transparent", border:"1px dashed var(--line)", color:"var(--ink-3)", fontWeight:600 }}>{"+" + overflow + " more"}</span>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    {isOn && <span style={{ color:"var(--green)", fontWeight:700, fontSize:14 }}>✓</span>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* When blank mode is active, surface a small reassurance */}
+          {startMode === "blank" && (
+            <div style={{ padding:"14px 16px", border:"1px dashed var(--line)", borderRadius:9, background:"var(--panel-2)", color:"var(--ink-3)", fontSize:12.5, lineHeight:1.55 }}>
+              You'll land on an empty canvas. Add entities, edges and sources from the toolbar after the graph activates.
+            </div>
+          )}
+
+          {/* legacy step-2 block removed — its contents (industry / function pickers,
+              AI tailor textarea, template list) are merged inline above into the
+              single-modal redesign. The compile-only wrapper below is kept on the
+              `{false}` guard so any orphaned closing tokens still balance. */}
+          {false && (
               <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
                 {/* Prompt strip — slim composer; merge intent surfaces only when relevant */}
                 {(function(){
@@ -14738,66 +14845,16 @@ function NewGraphFlow({ onClose, onCreate }) {
               </div>
             )}
 
-            {/* STEP 3 */}
-            {/* STEP 3 — Review (name + summary). Entities and access live in graph settings post-create. */}
-            {step === 3 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
-
-                {/* Inline NAME + DESCRIPTION editor — minimum to activate. */}
-                <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:14 }}>
-                  <div>
-                    <label style={lbl}>GRAPH NAME</label>
-                    <input value={graphName} onChange={function(e){ setGraphName(e.target.value); }} placeholder="e.g. Customer 360 Graph" style={inp} />
-                  </div>
-                  <div>
-                    <label style={lbl}>DESCRIPTION</label>
-                    <textarea value={graphDesc} onChange={function(e){ setGraphDesc(e.target.value); }} rows={3} placeholder="A one-line summary that will appear on the graph card" style={Object.assign({}, inp, { resize:"vertical", lineHeight:1.55 })} />
-                  </div>
-                </div>
-
-                <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
-                  <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
-                    <span style={{ fontSize:14, fontWeight:600 }}>Summary</span>
-                    <span className="card-head-sub">{(picked ? picked.entities.length : 0) + " entities · " + (picked ? picked.edges.length : 0) + " edges"}</span>
-                  </div>
-                  <div>
-                    {[
-                      { k:"CONTEXT",        v: industry || func ? ((GRAPH_INDUSTRIES.find(function(x){ return x.id === industry; }) || {}).label || "—") + (func ? " · " + (GRAPH_FUNCTIONS.find(function(x){ return x.id === func; }) || {}).label : "") : "Built from scratch" },
-                      { k:"STARTING POINT", v: picked ? picked.name : "Blank canvas" },
-                      { k:"AI CONTEXT",     v: userPrompt.trim() ? userPrompt.trim() : <span style={{ color:"var(--ink-4)" }}>—</span> },
-                      { k:"ENTITIES",       v: entitiesToInclude.length ? <span style={{ display:"inline-flex", flexWrap:"wrap", gap:"6px 4px", justifyContent:"flex-end" }}>{entitiesToInclude.map(function(e){ return <span key={e} style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{e}</span>; })}</span> : <span style={{ color:"var(--ink-4)" }}>none</span> }
-                    ].map(function(row, i, arr){
-                      return (
-                        <div key={i} style={{ display:"grid", gridTemplateColumns:"170px 1fr", gap:14, padding:"10px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"baseline" }}>
-                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>{row.k}</span>
-                          <span style={{ fontSize:13, color:"var(--ink)", textAlign:"right" }}>{row.v}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", lineHeight:1.5 }}>
-                  Trim entities and configure access from the graph's settings after activation.
-                </div>
-              </div>
-            )}
-
-          </div>
+          {/* legacy step-3 block dropped — name + description are inline at the top of the
+              redesigned modal; no separate review step. */}
 
         </div>
+        {/* ↑ closes body wrapper */}
 
         {/* FOOTER */}
-        <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
-          <button className="btn-ghost" onClick={function(){ if (step > 1) setStep(function(s){ return s - 1; }); }} disabled={step === 1} style={{ opacity: step === 1 ? 0.4 : 1 }}>← Back</button>
-          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of 3 · " + stepNames[step-1]}</span>
-          <div style={{ display:"flex", gap:8 }}>
-            <button className="btn-ghost" onClick={onClose}>Cancel</button>
-            {step < 3
-              ? <button className="btn-dark" disabled={!canContinue()} onClick={function(){ setStep(function(s){ return s + 1; }); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Continue →</button>
-              : <button className="btn-dark" disabled={!canContinue()} onClick={function(){ if (onCreate) onCreate({ name: graphName }); onClose(); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Create graph ↵</button>
-            }
-          </div>
+        <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"flex-end", gap:8, background:"var(--panel)" }}>
+          <button className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn-dark" disabled={!canActivate} onClick={function(){ if (onCreate) onCreate({ name: graphName }); onClose(); }} style={{ opacity: canActivate ? 1 : 0.45 }}>Create graph ↵</button>
         </div>
 
       </div>
