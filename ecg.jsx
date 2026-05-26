@@ -16531,14 +16531,15 @@ function AddNodeFlow({ onClose, onCreate }) {
                         return (
                           <div style={{ position:"relative" }}>
                             <button type="button" onClick={function(){ setGlyphOpen(function(o){ return !o; }); }}
-                              style={{ width:48, height:48, alignSelf:"center", borderRadius:"50%", border:"1px solid " + (glyph ? "var(--ink-3)" : "var(--line)"), background: glyph ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", padding:0, boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)", outline:"none", transition:"background 140ms ease-out, border-color 140ms ease-out" }}
+                              style={{ width:48, height:48, alignSelf:"center", borderRadius:"50%", border:"1px solid var(--line)", background:"var(--panel)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", padding:0, boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)", outline:"none" }}
                               aria-label="Pick icon">
                               {glyphImage ? (
                                 <img src={glyphImage} alt="" style={{ width:28, height:28, objectFit:"contain", borderRadius:"50%" }} />
                               ) : gDef ? (
-                                // Bare glyph at full scale — the button itself is the circle, no inner disc.
+                                // Picked glyph renders at the same light ink-4 stroke as the
+                                // placeholder — the trigger is a quiet preview, not a badge.
                                 <svg width="32" height="32" viewBox="-5 -5 10 10">
-                                  {gDef.render({ fill: "none", stroke: "var(--ink-2)" })}
+                                  {gDef.render({ fill: "none", stroke: "var(--ink-4)" })}
                                 </svg>
                               ) : (
                                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ink-4)" strokeWidth="1.4" strokeLinecap="round">
