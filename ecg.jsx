@@ -1100,6 +1100,9 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
   const [drag, setDrag] = useState(null); // {kind:'node'|'pan'|'link', id?, startX, startY, origX, origY}
   const [linkCursor, setLinkCursor] = useState(null); // {x,y} in world coords while drawing a new edge
   const [linkTarget, setLinkTarget] = useState(null); // id of the node currently under cursor during a link drag
+  // Angle (radians) of the cursor relative to the hovered node centre — drives
+  // where the connector handle pops out. Default 0 = east.
+  const [hoverAngle, setHoverAngle] = useState(0);
   const [size, setSize] = useState({ w: 1200, h: 800 });
 
   useEffect(() => {
@@ -1152,13 +1155,14 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
   };
 
   // pointer handlers
-  const onPointerDown = (e, nodeId, linkHandle) => {
+  const onPointerDown = (e, nodeId, linkHandle, angle) => {
     const pt = svgRef.current.getBoundingClientRect();
     const sx = e.clientX - pt.left;
     const sy = e.clientY - pt.top;
     if (linkHandle && nodeId) {
-      // Drag from a node's connector handle → start linking
-      setDrag({ kind: "link", id: nodeId, startX: sx, startY: sy, moved: false });
+      // Drag from a node's connector handle → start linking. Capture the angle
+      // so the line originates from the side the user grabbed.
+      setDrag({ kind: "link", id: nodeId, startX: sx, startY: sy, moved: false, angle: angle != null ? angle : 0 });
       e.target.setPointerCapture?.(e.pointerId);
       return;
     }
@@ -1380,6 +1384,16 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
                 onPointerUp={(e) => { e.stopPropagation(); onPointerUp(e, n.id); }}
                 onMouseEnter={() => setHover(n.id)}
                 onMouseLeave={() => setHover(null)}
+                onMouseMove={editMode ? (e) => {
+                  // Track the cursor angle relative to this node so the handle
+                  // pops out on the side nearest to where the mouse is.
+                  const pt = svgRef.current.getBoundingClientRect();
+                  const sx = e.clientX - pt.left;
+                  const sy = e.clientY - pt.top;
+                  const [wx, wy] = toWorld(sx, sy);
+                  const dx = wx - n.x, dy = wy - n.y;
+                  if (dx * dx + dy * dy > 4) setHoverAngle(Math.atan2(dy, dx));
+                } : undefined}
                 opacity={lit ? 1 : (highlightId ? (vis ? 0.18 : 0.06) : (vis ? 1 : 0.22))}
               >
                 <NodeShape node={n} selected={isSel} highlighted={lit || isHov} dimmed={dim} />
@@ -1419,37 +1433,42 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
                   </text>
                 )}
                 {/* Edit-mode connector — premium feel.
-                    - Hugs the node's right edge (no empty gap to traverse)
-                    - Generous invisible hit ring (r=18) so the cursor doesn't lose it
-                    - Breathing halo while at rest (a quiet 1.8s pulse)
-                    - During a link drag the source handle stops pulsing and
-                      tightens — communicates "this is the live end".
-                    - Soft fade-in on appear so it doesn't snap in. */}
+                    Now position-aware: the handle pops out on whichever side
+                    of the node the cursor is closest to. Tracks `hoverAngle`
+                    updated by onMouseMove on the node g. While linking, the
+                    handle freezes at the angle it was grabbed from.
+                    Larger size + softer color (cream disc + ink-3 + glyph)
+                    so it reads as an inviting affordance, not a heavy badge. */}
                 {editMode && (isHov || (drag?.kind === "link" && drag.id === n.id)) && (function(){
                   var isLinking = drag?.kind === "link" && drag.id === n.id;
-                  var hx = n.size + 4; // handle centre x
+                  // While linking from this node, keep the handle where the
+                  // drag started (drag.angle). Otherwise follow the cursor.
+                  var angle = isLinking && drag.angle != null ? drag.angle : hoverAngle;
+                  var R = n.size + 8;
+                  var hx = Math.cos(angle) * R;
+                  var hy = Math.sin(angle) * R;
                   return (
-                    <g style={{ cursor: isLinking ? "crosshair" : "grab", animation:"ecgFadeIn 200ms cubic-bezier(0.34,1.56,0.64,1) both" }}>
+                    <g style={{ cursor: isLinking ? "crosshair" : "grab", animation:"ecgFadeIn 180ms ease-out both" }}>
                       {/* Generous invisible hit ring — keeps hover sticky as the
-                          user reaches across the gap between body and handle. */}
-                      <circle cx={hx} cy="0" r="18" fill="transparent" pointerEvents="all"
-                        onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, n.id, true); }} />
-                      {/* Breathing halo — only at rest, signals "grab me" */}
+                          user reaches the handle. */}
+                      <circle cx={hx} cy={hy} r="20" fill="transparent" pointerEvents="all"
+                        onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, n.id, true, angle); }} />
+                      {/* Breathing halo — only at rest, gentle attention pull */}
                       {!isLinking && (
-                        <circle cx={hx} cy="0" r="9" fill="none" stroke="var(--ink-3)" strokeWidth="0.55" opacity="0.45" style={{ pointerEvents:"none" }}>
-                          <animate attributeName="r" values="8.5;11.5;8.5" dur="1.8s" repeatCount="indefinite" />
-                          <animate attributeName="opacity" values="0.45;0.08;0.45" dur="1.8s" repeatCount="indefinite" />
+                        <circle cx={hx} cy={hy} r="11" fill="none" stroke="var(--ink-3)" strokeWidth="0.6" opacity="0.4" style={{ pointerEvents:"none" }}>
+                          <animate attributeName="r" values="10;13;10" dur="1.8s" repeatCount="indefinite" />
+                          <animate attributeName="opacity" values="0.4;0.08;0.4" dur="1.8s" repeatCount="indefinite" />
                         </circle>
                       )}
-                      {/* Inner ring backdrop — soft cream halo that always sits
-                          behind the dot to lift it off the canvas dots */}
-                      <circle cx={hx} cy="0" r="7.2" fill="var(--bg-canvas)" stroke="var(--line)" strokeWidth="0.5" style={{ pointerEvents:"none" }} />
-                      {/* The dot itself — filled accent in ink-2 so it reads as
-                          deliberate without being pure black */}
-                      <circle cx={hx} cy="0" r={isLinking ? 6 : 5} fill="var(--ink-2)" style={{ pointerEvents:"none", transition:"r 160ms cubic-bezier(0.34,1.56,0.64,1)" }} />
-                      {/* + glyph in cream — clean, no overshoot */}
-                      <line x1={hx - 2.6} y1="0" x2={hx + 2.6} y2="0" stroke="var(--bg-canvas)" strokeWidth="1.1" strokeLinecap="round" style={{ pointerEvents:"none" }} />
-                      <line x1={hx} y1="-2.6" x2={hx} y2="2.6" stroke="var(--bg-canvas)" strokeWidth="1.1" strokeLinecap="round" style={{ pointerEvents:"none" }} />
+                      {/* The dot — soft cream disc, slim border. Cream-on-cream
+                          with the + glyph carrying the affordance, not a hard
+                          dark badge. */}
+                      <circle cx={hx} cy={hy} r={isLinking ? 9 : 8}
+                        fill="var(--panel)" stroke="var(--ink-3)" strokeWidth="1"
+                        style={{ pointerEvents:"none", transition:"r 140ms cubic-bezier(0.34,1.56,0.64,1)" }} />
+                      {/* + glyph — ink-3 so it reads dark on cream without being pure black */}
+                      <line x1={hx - 3.8} y1={hy} x2={hx + 3.8} y2={hy} stroke="var(--ink-2)" strokeWidth="1.3" strokeLinecap="round" style={{ pointerEvents:"none" }} />
+                      <line x1={hx} y1={hy - 3.8} x2={hx} y2={hy + 3.8} stroke="var(--ink-2)" strokeWidth="1.3" strokeLinecap="round" style={{ pointerEvents:"none" }} />
                     </g>
                   );
                 })()}
@@ -1462,8 +1481,11 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
           {drag?.kind === "link" && linkCursor && (function(){
             var from = nodes.find(function(x){ return x.id === drag.id; });
             if (!from) return null;
-            var sx = from.x + (from.size || 22) + 3;
-            var sy = from.y;
+            // Origin matches the angle the user grabbed from, not always the right side.
+            var R = (from.size || 22) + 8;
+            var a = drag.angle != null ? drag.angle : 0;
+            var sx = from.x + Math.cos(a) * R;
+            var sy = from.y + Math.sin(a) * R;
             var ex = linkCursor.x;
             var ey = linkCursor.y;
             var dx = ex - sx, dy = ey - sy;
