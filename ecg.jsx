@@ -18443,7 +18443,7 @@ function NewGraphFlow({ onClose, onCreate }) {
 // come from. Four mutually-exclusive options keep it concrete (no Cypher).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function NewEdgeFlow({ onClose, onCreate, fromNode, toNode, initialLabel }) {
+function NewEdgeFlow({ onClose, onCreate, fromNode, toNode, initialLabel, nodes: liveNodes }) {
   var [step, setStep]                 = useState(1);
   var [label, setLabel]               = useState(initialLabel || "");
   var [desc, setDesc]                 = useState("");
@@ -18470,9 +18470,12 @@ function NewEdgeFlow({ onClose, onCreate, fromNode, toNode, initialLabel }) {
 
   var stepNames = ["Basics", "Properties", "Review"];
 
-  var nodeOptions   = NODES.filter(function(n){ return n.type === "entity"; });
-  var sourceOptions = NODES.filter(function(n){ return n.type === "source"; });
-  var agentOptions  = NODES.filter(function(n){ return n.type === "agent"; });
+  // Prefer the live nodes from App state — module-scope NODES wouldn't
+  // include nodes the user has just added on the canvas.
+  var _allNodes = (liveNodes && liveNodes.length) ? liveNodes : NODES;
+  var nodeOptions   = _allNodes.filter(function(n){ return n.type === "entity"; });
+  var sourceOptions = _allNodes.filter(function(n){ return n.type === "source"; });
+  var agentOptions  = _allNodes.filter(function(n){ return n.type === "agent"; });
   var fromN = nodeOptions.find(function(n){ return n.id === fromId; });
   var toN   = nodeOptions.find(function(n){ return n.id === toId; });
 
@@ -18674,7 +18677,7 @@ function NewEdgeFlow({ onClose, onCreate, fromNode, toNode, initialLabel }) {
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 60px 1fr", gap:12, alignItems:"end" }}>
                   <div>
                     <label style={lbl}>FROM <span style={{ color:"var(--coral)", marginLeft:4 }}>required</span></label>
-                    <NodePicker value={fromId} onChange={setFromId} placeholder="— pick the source node —" disabled={!!fromNode} />
+                    <NodePicker value={fromId} onChange={setFromId} placeholder="— pick the source node —" />
                   </div>
                   <div style={{ paddingBottom:10, textAlign:"center", fontFamily:"JetBrains Mono", fontSize:14, color:"var(--ink-3)" }}>—{cardinality}→</div>
                   <div>
@@ -19890,6 +19893,7 @@ function App() {
           existing one in place. */}
       {pendingEdgeFrom && (
         <NewEdgeFlow
+          nodes={nodes}
           fromNode={nodes.find(function(n){ return n.id === pendingEdgeFrom.fromId; })}
           toNode={nodes.find(function(n){ return n.id === pendingEdgeFrom.toId; })}
           initialLabel={pendingEdgeFrom.initialLabel || ""}
