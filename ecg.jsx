@@ -11431,6 +11431,7 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
   // Drag-to-pan state for the embedded graph (Figma-style canvas panning,
   // mirrors the main workspace canvas implementation).
   var [graphPan, setGraphPan] = React.useState({ x: 0, y: 0 });
+  var [graphZoom, setGraphZoom] = React.useState(1);
   var graphDrag = React.useRef(null); // { startX, startY, origX, origY, moved }
   var props = generateProps(node);
   var c = colorForNode(node);
@@ -11984,11 +11985,10 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                     </div>
 
                     {/* MINI KPIs */}
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", borderBottom:"1px solid var(--line-2)" }}>
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", borderBottom:"1px solid var(--line-2)" }}>
                       {[
                         { lbl:"PROPERTIES",   v: insp.propsList.length,        color:"var(--ink)" },
                         { lbl:"COMPLETENESS", v: insp.completeness + "%",      color: compColor },
-                        { lbl:"CONFIDENCE",   v: insp.confidence + "%",        color: confColor },
                         { lbl:"RELATED",      v: insp.relatedCount,            color:"var(--ink)" }
                       ].map(function(k, i, a){
                         return (
@@ -12085,12 +12085,12 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                     <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", marginTop:2 }}>Relationship graph</div>
                   </div>
                   <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{flat.length} direct · {hops.length} second-hop · drag to pan</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{flat.length} direct · {hops.length} second-hop · drag to pan · scroll to zoom</span>
                     <button onClick={function(){ setGraphFullscreen(false); }} className="btn-ghost" style={{ fontSize:11.5 }}>Close ✕</button>
                   </div>
                 </div>
-                {/* Drag-to-pan canvas — same interactions as the embedded graph.
-                    overflow:hidden, mouse-down/move/up drives graphPan, dbl-click recentres. */}
+                {/* Drag-to-pan + wheel-to-zoom canvas. Bottom-right mini-map shows
+                    the full graph extents with the current viewport highlighted. */}
                 <div
                   onMouseDown={function(e){
                     if (e.target.tagName === "circle") return;
@@ -12105,14 +12105,21 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                   }}
                   onMouseUp={function(e){ graphDrag.current = null; e.currentTarget.style.cursor = "grab"; }}
                   onMouseLeave={function(e){ graphDrag.current = null; e.currentTarget.style.cursor = "grab"; }}
-                  onDoubleClick={function(){ setGraphPan({ x:0, y:0 }); }}
-                  style={{ flex:1, background:"var(--bg-canvas)", overflow:"hidden", cursor:"grab", userSelect:"none" }}>
+                  onDoubleClick={function(){ setGraphPan({ x:0, y:0 }); setGraphZoom(1); }}
+                  onWheel={function(e){
+                    e.preventDefault();
+                    var factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+                    setGraphZoom(function(z){ return Math.max(0.3, Math.min(3, z * factor)); });
+                  }}
+                  style={{ flex:1, background:"var(--bg-canvas)", overflow:"hidden", cursor:"grab", userSelect:"none", position:"relative" }}>
                   <svg width="100%" height="100%" viewBox={"0 0 "+W+" "+H} preserveAspectRatio="xMidYMid meet" style={{ display:"block" }}>
                     <defs>
                       <marker id="fs-arrow"   viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-3)"/></marker>
                       <marker id="fs-arrow-2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-4)"/></marker>
                     </defs>
-                    <g transform={"translate(" + graphPan.x + "," + graphPan.y + ")"}>
+                    {/* Pan + zoom: translate first so the pan offset is in screen-space,
+                        then scale around the graph centre. */}
+                    <g transform={"translate(" + graphPan.x + "," + graphPan.y + ") translate(" + cx + "," + cy + ") scale(" + graphZoom + ") translate(" + (-cx) + "," + (-cy) + ")"}>
                     {hops.map(function(h, i) {
                       var px = h.parent.x, py = h.parent.y;
                       var dx = h.x - px, dy = h.y - py, len = Math.sqrt(dx*dx + dy*dy);
@@ -12177,6 +12184,50 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                     </g>
                     {/* ↑ pan transform group */}
                   </svg>
+
+                  {/* ── Zoom controls (bottom-left) ── */}
+                  <div style={{ position:"absolute", left:18, bottom:18, display:"flex", flexDirection:"column", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:8, boxShadow:"0 4px 14px rgba(40,40,20,0.10)", overflow:"hidden" }}
+                    onMouseDown={function(e){ e.stopPropagation(); }}
+                    onDoubleClick={function(e){ e.stopPropagation(); }}>
+                    <button onClick={function(){ setGraphZoom(function(z){ return Math.min(3, z * 1.2); }); }} title="Zoom in"
+                      style={{ width:34, height:32, border:"none", borderBottom:"1px solid var(--line-2)", background:"var(--panel)", cursor:"pointer", fontSize:16, color:"var(--ink-2)" }}>+</button>
+                    <div style={{ width:34, padding:"4px 0", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", textAlign:"center", borderBottom:"1px solid var(--line-2)" }}>{Math.round(graphZoom * 100) + "%"}</div>
+                    <button onClick={function(){ setGraphZoom(function(z){ return Math.max(0.3, z / 1.2); }); }} title="Zoom out"
+                      style={{ width:34, height:32, border:"none", borderBottom:"1px solid var(--line-2)", background:"var(--panel)", cursor:"pointer", fontSize:16, color:"var(--ink-2)" }}>−</button>
+                    <button onClick={function(){ setGraphZoom(1); setGraphPan({ x:0, y:0 }); }} title="Fit to screen"
+                      style={{ width:34, height:30, border:"none", background:"var(--panel)", cursor:"pointer", color:"var(--ink-2)", display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 14 4 20 10 20"/><polyline points="20 10 20 4 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                    </button>
+                  </div>
+
+                  {/* ── Viewport mini-map (bottom-right) ──
+                      Renders simplified circles for every node + a rectangle
+                      showing the visible region of the main canvas. */}
+                  {(function(){
+                    var mmW = 200, mmH = 130;
+                    // The main canvas viewBox is 0..W × 0..H. The visible region in
+                    // viewBox coordinates is W/zoom × H/zoom centred on (cx − panX/zoom,
+                    // cy − panY/zoom). Scale that to the mini-map dimensions.
+                    var sX = mmW / W, sY = mmH / H;
+                    var viewW = (W / graphZoom) * sX;
+                    var viewH = (H / graphZoom) * sY;
+                    var viewCX = (W/2 - graphPan.x / graphZoom) * sX;
+                    var viewCY = (H/2 - graphPan.y / graphZoom) * sY;
+                    return (
+                      <div style={{ position:"absolute", right:18, bottom:18, width:mmW, height:mmH, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:8, boxShadow:"0 4px 14px rgba(40,40,20,0.10)", overflow:"hidden" }}
+                        onMouseDown={function(e){ e.stopPropagation(); }}
+                        onDoubleClick={function(e){ e.stopPropagation(); }}>
+                        <svg width={mmW} height={mmH} viewBox={"0 0 "+W+" "+H} preserveAspectRatio="xMidYMid meet" style={{ display:"block", background:"var(--bg-canvas)" }}>
+                          {/* All nodes as tiny dots */}
+                          {hops.map(function(h, i){ var nObj = NODES.find(function(n){ return n.id === h.rr.nodeId; }); var col = colorForNode(nObj); return <circle key={"mm-h"+i} cx={h.x} cy={h.y} r="14" fill={col.fill} stroke={col.stroke} strokeWidth="3" opacity="0.85" />; })}
+                          {flat.map(function(f, i){ var col = colorForNode(NODES.find(function(n){ return n.id === f.rr.nodeId; })); return <circle key={"mm-f"+i} cx={f.x} cy={f.y} r="18" fill={col.fill} stroke={col.stroke} strokeWidth="3" />; })}
+                          <circle cx={cx} cy={cy} r="22" fill={c.fill} stroke="var(--ink)" strokeWidth="4" />
+                        </svg>
+                        {/* Viewport rectangle overlay */}
+                        <div style={{ position:"absolute", left: Math.max(0, viewCX - viewW/2), top: Math.max(0, viewCY - viewH/2), width: Math.min(mmW, viewW), height: Math.min(mmH, viewH), border:"1.5px solid var(--ink)", background:"rgba(0,0,0,0.06)", pointerEvents:"none" }} />
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
