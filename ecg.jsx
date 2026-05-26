@@ -1516,7 +1516,9 @@ function Minimap({ nodes, viewport, size }) {
   const ys = nodes.map(n => n.y);
   const minX = Math.min(...xs) - 60, maxX = Math.max(...xs) + 60;
   const minY = Math.min(...ys) - 60, maxY = Math.max(...ys) + 60;
-  const W = 132, H = 86;
+  // Height matched to the zoom column (4 × 34px buttons + borders = 138px outer;
+  // 6px padding above and below leaves 124px for the svg).
+  const W = 152, H = 124;
   const sx = W / (maxX - minX);
   const sy = H / (maxY - minY);
   const s = Math.min(sx, sy);
@@ -1556,7 +1558,6 @@ function Minimap({ nodes, viewport, size }) {
           strokeWidth="1.2"
         />
       </svg>
-      <div className="minimap-foot">Viewport · 1:{Math.max(1, Math.round(1 / viewport.zoom * 6)) / 10 + 1}</div>
     </div>
   );
 }
