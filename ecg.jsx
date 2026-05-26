@@ -16886,14 +16886,18 @@ function AddNodeFlow({ onClose, onCreate }) {
                       {properties.map(function(p, i, arr) {
                         return (
                           <div key={p.name} style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:12, padding:"9px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"center" }}>
-                            <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+                            {/* Left: name + type */}
+                            <div style={{ display:"flex", alignItems:"baseline", gap:10, minWidth:0 }}>
+                              <code style={{ fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{p.name}</code>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{p.type}</span>
+                            </div>
+                            {/* Right: pinned tags */}
+                            <div style={{ display:"flex", alignItems:"center", gap:5, justifySelf:"end" }}>
                               {p.name === pkField && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 5px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700 }}>PK</span>}
                               {p.required && p.name !== pkField && <span className="snap-tag" style={{ fontSize:9, padding:"1px 5px" }}>REQ</span>}
                               {p.indexed && <span className="snap-tag snap-idx" style={{ fontSize:9, padding:"1px 5px" }}>IDX</span>}
                               {p.pii && <span className="snap-tag snap-pii" style={{ fontSize:9, padding:"1px 5px" }}>PII</span>}
-                              <code style={{ fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink)" }}>{p.name}</code>
                             </div>
-                            <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{p.type}</span>
                           </div>
                         );
                       })}
