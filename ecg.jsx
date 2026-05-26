@@ -2840,7 +2840,12 @@ function ComputationsPane({ node, properties, rules }) {
       {inspected && <ComputationDetailModal comp={inspected} node={node} onClose={function(){ setInspected(null); }} />}
 
       {/* CREATE FLOW */}
-      {createOpen && <NewComputationFlow node={node} properties={properties} onClose={function(){ setCreateOpen(false); }} />}
+      {/* "+ New computation" reuses the property-creation modal with the Computed
+          toggle pre-set so users get the exact same interactions (computation type
+          dropdown, formula editor with property pills, SQL source picker, agent /
+          automation pickers, recompute trigger, backfill, on-failure) instead of a
+          parallel implementation. */}
+      {createOpen && <AddPropertyFlowModal node={node} mode="manual" seedComputed={true} onClose={function(){ setCreateOpen(false); }} />}
 
     </div>
   );
@@ -2974,304 +2979,6 @@ function ComputationDetailModal({ comp, node, onClose }) {
             <button className="btn-ghost" style={{ fontSize:11.5 }}>Backfill</button>
             <button className="btn-ghost" style={{ fontSize:11.5 }}>Test on 3 records</button>
             <button className="btn-dark" style={{ fontSize:11.5 }}>Edit computation</button>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────────────────
-// NEW COMPUTATION FLOW — 4-step modal that mirrors the AddPropertyFlow shape:
-// Output → Kind → Definition → Behaviour & review.
-// ───────────────────────────────────────────────────────────────────────────────
-function NewComputationFlow({ node, properties, onClose }) {
-  var [step, setStep] = useState(1);
-
-  // OUTPUT — new field or existing
-  var [outMode, setOutMode]       = useState("new");     // new | existing
-  var [outName, setOutName]       = useState("");
-  var [outType, setOutType]       = useState("string");
-  var [outExisting, setOutExist]  = useState(null);
-  // KIND
-  var [kind, setKind]             = useState(null);      // formula | sql | agent | automation
-  // DEFINITION
-  var [formulaBody, setFormulaBody]   = useState("");
-  var [sqlConn, setSqlConn]           = useState(null);
-  var [sqlQuery, setSqlQuery]         = useState("");
-  var [agentId, setAgentId]           = useState(null);
-  var [automationId, setAutomationId] = useState(null);
-  // BEHAVIOUR
-  var [trigger, setTrigger]       = useState("on_change");
-  var [schedule, setSchedule]     = useState("hourly");
-  var [backfill, setBackfill]     = useState("forward_only");
-  var [onFailure, setOnFailure]   = useState("retain_last");
-  var [owner, setOwner]           = useState("morgan.lee");
-
-  var TYPES = ["string","decimal","float","bool","timestamp","date","uuid","enum"];
-  var KIND_CARDS = [
-    { id:"formula",    title:"Formula",    desc:"Combine fields with simple operators and functions — sum, bucket, coalesce, if/then.",                  glyph:"fx",  color:"var(--gold)",   bg:"var(--gold-fill)"  },
-    { id:"sql",        title:"SQL / Cypher",desc:"Aggregate or roll up from another entity. Runs on a registered warehouse connection.",                glyph:"SQL", color:"var(--blue)",   bg:"var(--blue-fill)"  },
-    { id:"agent",      title:"Agent",      desc:"Call a pre-built scoring or classification agent — health score, churn risk, intent.",                   glyph:"A",   color:"var(--purple)", bg:"var(--purple-fill)"},
-    { id:"automation", title:"Automation", desc:"Materialise a value from a scheduled workflow — Airflow DAG, Workato recipe, custom webhook.",          glyph:"WF",  color:"var(--green)",  bg:"var(--green-fill)" }
-  ];
-  var AGENTS = [
-    { id:"cust_health",   label:"cust_health.score",         desc:"Customer Health Scorer · 0–1 confidence" },
-    { id:"churn_risk",    label:"churn_risk.predict",        desc:"Churn Risk Predictor · 90-day window" },
-    { id:"support_intent",label:"support_intent.classify",   desc:"Support Intent Classifier · 12 intents" },
-    { id:"fraud_detect",  label:"fraud.detect",              desc:"Fraud Detector · transaction-level signal" },
-    { id:"sentiment",     label:"sentiment.analyze",         desc:"Sentiment Analyzer · 5-band score" }
-  ];
-  var AUTOMATIONS = [
-    { id:"compute_tier",    label:"compute_customer_tier",  desc:"Bucket accounts into Bronze / Silver / Gold tiers from ARR and engagement signals." },
-    { id:"refresh_health",  label:"refresh_health_score",   desc:"Recalculate the customer health score from usage, support load and renewal posture." },
-    { id:"arr_rollup",      label:"ARR Rollup → Account",   desc:"Aggregate active subscription MRR into an account-level ARR figure." },
-    { id:"renewal_sync",    label:"Renewal Stage Sync",     desc:"Mirror the renewal-opportunity stage from the CRM onto the account record." }
-  ];
-  var SQL_CONNECTIONS = [
-    { id:"snow-prod",  system:"Snowflake",  label:"ANALYTICS_PROD",      sub:"data-platform · US-WEST-2" },
-    { id:"snow-raw",   system:"Snowflake",  label:"RAW_INGEST",          sub:"ingest · US-EAST-1" },
-    { id:"bq-metrics", system:"BigQuery",   label:"metrics-prod",        sub:"data-platform" },
-    { id:"databricks", system:"Databricks", label:"analytics-warehouse", sub:"prod · us-east-1" }
-  ];
-  var DIRECTORY = [
-    { id:"morgan.lee", label:"Morgan Lee · data-platform" },
-    { id:"ramin.k",    label:"Ramin K · data-platform" },
-    { id:"jordan.s",   label:"Jordan S · customer-ops" },
-    { id:"alex.r",     label:"Alex R · finance-ops" }
-  ];
-
-  var inp = { border:"1px solid var(--line)", borderRadius:7, padding:"10px 12px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", outline:"none", boxSizing:"border-box", width:"100%", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" };
-  var lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:6 };
-
-  function canContinue(s){
-    if (s === 1) return outMode === "existing" ? !!outExisting : outName.trim().length > 0;
-    if (s === 2) return !!kind;
-    if (s === 3) {
-      if (kind === "formula")    return formulaBody.trim().length > 0;
-      if (kind === "sql")        return !!sqlConn && sqlQuery.trim().length > 0;
-      if (kind === "agent")      return !!agentId;
-      if (kind === "automation") return !!automationId;
-    }
-    return true;
-  }
-  var disabled = !canContinue(step);
-
-  var outDisplay = outMode === "existing" ? outExisting : outName;
-
-  var steps = [
-    { label:"Output field",  sub: outDisplay || "Where the value lands",       desc:"Pick an existing field to write into, or create a new one. The computation writes its result here." },
-    { label:"Computation type", sub: kind || "Pick a kind",                   desc:"Choose how the value is derived." },
-    { label:"Definition",     sub: kind ? kind + " body" : "—",               desc:"Write the actual logic — formula, query, agent call, or automation reference." },
-    { label:"Behaviour",      sub: trigger + " · " + backfill,                desc:"When does the computation run, how should past records be filled, and what happens if it fails." }
-  ];
-
-  return (
-    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
-      onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width:"94vw", maxWidth:1080, height:"92vh", maxHeight:820, background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
-
-        {/* HEADER */}
-        <div style={{ flexShrink:0, height:58, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 22px", background:"var(--panel)" }}>
-          <div>
-            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>{node.label} · New computation</div>
-            <div style={{ fontFamily:"Instrument Serif", fontSize:20, color:"var(--ink)", marginTop:2 }}>{outDisplay ? "Computing " + outDisplay : "New computation"}</div>
-          </div>
-          <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)" }}>✕</button>
-        </div>
-
-        {/* BODY */}
-        <div style={{ flex:1, display:"grid", gridTemplateColumns:"240px 1fr", minHeight:0 }}>
-          <div style={{ background:"var(--panel-2)", borderRight:"1px solid var(--line)", padding:"20px 14px", display:"flex", flexDirection:"column", gap:4, overflowY:"auto" }}>
-            {steps.map(function(s, i){
-              var n = i + 1;
-              var isOn = step === n;
-              var isDone = step > n;
-              return (
-                <button key={n} onClick={function(){ if (n <= step) setStep(n); }}
-                  style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor: n <= step ? "pointer" : "default", fontFamily:"inherit", textAlign:"left", alignItems:"center" }}>
-                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:12, fontWeight:700, flexShrink:0 }}>{isDone ? <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg> : n}</span>
-                  <div style={{ minWidth:0 }}>
-                    <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400 }}>{s.label}</div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.sub}</div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          <div style={{ padding:"24px 32px 28px", overflowY:"auto" }}>
-            <div style={{ marginBottom:20 }}>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / " + steps.length}</div>
-              <div style={{ fontFamily:"Instrument Serif", fontSize:28, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>{steps[step-1].label}</div>
-              <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:680 }}>{steps[step-1].desc}</div>
-            </div>
-
-            {/* STEP 1: OUTPUT */}
-            {step === 1 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                  {[
-                    { id:"new",      title:"New field",      desc:"Create a fresh property on " + node.label + " to hold this value." },
-                    { id:"existing", title:"Existing field", desc:"Overwrite a property that's already on " + node.label + ". The computation becomes its source of truth." }
-                  ].map(function(opt){
-                    var on = outMode === opt.id;
-                    return <button key={opt.id} type="button" onClick={function(){ setOutMode(opt.id); }} style={{ padding:"14px 16px", borderRadius:9, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background:"var(--panel)", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
-                      <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{opt.title}</div>
-                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:5, lineHeight:1.5 }}>{opt.desc}</div>
-                    </button>;
-                  })}
-                </div>
-                {outMode === "new" ? (
-                  <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:14 }}>
-                    <div><label style={lbl}>Field key</label><input value={outName} onChange={function(e){ setOutName(e.target.value); }} placeholder="e.g. tier · churn_score · last_activity_at" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono" })} /></div>
-                    <div><label style={lbl}>Type</label><select value={outType} onChange={function(e){ setOutType(e.target.value); }} style={inp}>{TYPES.map(function(t){ return <option key={t} value={t}>{t}</option>; })}</select></div>
-                  </div>
-                ) : (
-                  <div>
-                    <label style={lbl}>Existing field</label>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                      {(properties || []).map(function(p){
-                        var on = outExisting === p.name;
-                        return <button key={p.name} type="button" onClick={function(){ setOutExist(p.name); }} style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"7px 11px", borderRadius:6, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "var(--panel)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11, cursor:"pointer" }}>
-                          <span>{p.name}</span>
-                          <span style={{ opacity:0.7, fontSize:10 }}>· {p.type}</span>
-                        </button>;
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* STEP 2: KIND */}
-            {step === 2 && (
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-                {KIND_CARDS.map(function(k){
-                  var on = kind === k.id;
-                  return <button key={k.id} type="button" onClick={function(){ setKind(k.id); }} style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"16px 18px", borderRadius:10, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background:"var(--panel)", boxShadow: on ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
-                    <span style={{ width:38, height:32, borderRadius:7, background: k.bg, color: k.color, display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:12, fontWeight:700, flexShrink:0 }}>{k.glyph}</span>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{k.title}</div>
-                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:5, lineHeight:1.5 }}>{k.desc}</div>
-                    </div>
-                  </button>;
-                })}
-              </div>
-            )}
-
-            {/* STEP 3: DEFINITION */}
-            {step === 3 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-                {kind === "formula" && (
-                  <div>
-                    <label style={lbl}>Formula</label>
-                    <textarea value={formulaBody} onChange={function(e){ setFormulaBody(e.target.value); }} rows={8} placeholder={"e.g. " + (outDisplay || "tier") + " := bucket(arr_usd, [1000, 10000, 100000], ['SMB','MM','ENT','STR'])"} style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", lineHeight:1.55, resize:"vertical" })} />
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>Available functions: <code>bucket · coalesce · if · sum · avg · min · max · days_between · concat · lower · upper · round · lookup</code></div>
-                  </div>
-                )}
-                {kind === "sql" && (
-                  <>
-                    <div>
-                      <label style={lbl}>Connection</label>
-                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                        {SQL_CONNECTIONS.map(function(c){
-                          var on = sqlConn === c.id;
-                          return <button key={c.id} type="button" onClick={function(){ setSqlConn(c.id); }} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:8, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background:"var(--panel)", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
-                            <span style={{ width:30, height:24, borderRadius:5, background:"var(--blue-fill)", color:"var(--blue)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, flexShrink:0 }}>{c.system.slice(0,3).toUpperCase()}</span>
-                            <div style={{ flex:1, minWidth:0 }}>
-                              <div style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", fontWeight:600 }}>{c.label}</div>
-                              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{c.system + " · " + c.sub}</div>
-                            </div>
-                          </button>;
-                        })}
-                      </div>
-                    </div>
-                    <div>
-                      <label style={lbl}>Query</label>
-                      <textarea value={sqlQuery} onChange={function(e){ setSqlQuery(e.target.value); }} rows={8} placeholder={"e.g. SELECT SUM(mrr_usd * 12) FROM Subscription WHERE account_id = :id AND status = 'active'"} style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", lineHeight:1.55, resize:"vertical" })} />
-                    </div>
-                  </>
-                )}
-                {kind === "agent" && (
-                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    {AGENTS.map(function(a){
-                      var on = agentId === a.id;
-                      return <button key={a.id} type="button" onClick={function(){ setAgentId(a.id); }} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", borderRadius:8, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background:"var(--panel)", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
-                        <span style={{ width:30, height:30, borderRadius:6, background:"var(--purple-fill)", color:"var(--purple)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0 }}>A</span>
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", fontWeight:600 }}>{a.label}</code>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:2 }}>{a.desc}</div>
-                        </div>
-                        {on && <span style={{ color:"var(--green)", fontWeight:700 }}>✓</span>}
-                      </button>;
-                    })}
-                  </div>
-                )}
-                {kind === "automation" && (
-                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    {AUTOMATIONS.map(function(a){
-                      var on = automationId === a.id;
-                      return <button key={a.id} type="button" onClick={function(){ setAutomationId(a.id); }} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", borderRadius:8, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background:"var(--panel)", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
-                        <span style={{ width:30, height:30, borderRadius:6, background:"var(--green-fill)", color:"var(--green)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0 }}>WF</span>
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", fontWeight:600 }}>{a.label}</code>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:2 }}>{a.desc}</div>
-                        </div>
-                        {on && <span style={{ color:"var(--green)", fontWeight:700 }}>✓</span>}
-                      </button>;
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* STEP 4: BEHAVIOUR & REVIEW */}
-            {step === 4 && (
-              <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-                  <div><label style={lbl}>Recompute when</label><select value={trigger} onChange={function(e){ setTrigger(e.target.value); }} style={inp}><option value="on_change">On input change (reactive)</option><option value="scheduled">On a schedule</option><option value="manual">Manual only</option></select></div>
-                  <div><label style={lbl}>Schedule</label><select value={schedule} onChange={function(e){ setSchedule(e.target.value); }} disabled={trigger !== "scheduled"} style={Object.assign({}, inp, { opacity: trigger !== "scheduled" ? 0.45 : 1 })}><option value="hourly">Hourly</option><option value="daily">Daily · 02:00 UTC</option><option value="weekly">Weekly</option><option value="custom">Custom (cron)</option></select></div>
-                </div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-                  <div><label style={lbl}>Backfill</label><select value={backfill} onChange={function(e){ setBackfill(e.target.value); }} style={inp}><option value="forward_only">Forward only — new writes</option><option value="all_records">Backfill all existing records</option><option value="last_90d">Backfill last 90 days</option></select></div>
-                  <div><label style={lbl}>On failure</label><select value={onFailure} onChange={function(e){ setOnFailure(e.target.value); }} style={inp}><option value="retain_last">Retain last good value</option><option value="set_null">Set to null</option><option value="raise">Raise error & alert</option></select></div>
-                </div>
-                <div><label style={lbl}>Owner</label><select value={owner} onChange={function(e){ setOwner(e.target.value); }} style={Object.assign({}, inp, { maxWidth:400 })}>{DIRECTORY.map(function(d){ return <option key={d.id} value={d.id}>{d.label}</option>; })}</select></div>
-                <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, overflow:"hidden" }}>
-                  <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}><span style={{ fontSize:14, fontWeight:600 }}>Summary</span></div>
-                  <div>
-                    {[
-                      { k:"OUTPUT",     v: outDisplay + (outMode === "new" ? " · " + outType + " (new)" : " · existing") },
-                      { k:"KIND",       v: kind || <span style={{ color:"var(--coral)" }}>not chosen</span> },
-                      { k:"DEFINITION", v: kind === "formula" ? formulaBody : kind === "sql" ? sqlQuery : kind === "agent" ? "agent:" + agentId : kind === "automation" ? automationId : "—" },
-                      { k:"RECOMPUTE",  v: trigger + (trigger === "scheduled" ? " · " + schedule : "") },
-                      { k:"BACKFILL",   v: backfill.replace(/_/g, " ") },
-                      { k:"ON FAILURE", v: onFailure.replace(/_/g, " ") },
-                      { k:"OWNER",      v: owner }
-                    ].map(function(row, j, arr){
-                      return (
-                        <div key={j} style={{ display:"grid", gridTemplateColumns:"160px 1fr", gap:14, padding:"10px 22px", borderBottom: j < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"baseline" }}>
-                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>{row.k}</span>
-                          <span style={{ fontSize:12.5, color:"var(--ink)", textAlign:"right", fontFamily: row.k === "DEFINITION" ? "JetBrains Mono" : "inherit", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{row.v}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-
-          </div>
-        </div>
-
-        {/* FOOTER */}
-        <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
-          <button className="btn-ghost" onClick={function(){ if (step > 1) setStep(step - 1); }} disabled={step === 1} style={{ opacity: step === 1 ? 0.4 : 1 }}>← Back</button>
-          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of " + steps.length + " · " + steps[step-1].label}</span>
-          <div style={{ display:"flex", gap:8 }}>
-            <button className="btn-ghost" onClick={onClose}>Cancel</button>
-            <button className="btn-dark" disabled={disabled} onClick={function(){ if (step < steps.length) setStep(step + 1); else onClose(); }} style={{ opacity: disabled ? 0.45 : 1 }}>{step < steps.length ? "Continue →" : "Create computation ↵"}</button>
           </div>
         </div>
 
@@ -4334,10 +4041,14 @@ function FormulaEditor({ editorRef, value, onChange, rePill, propNames, toHtml, 
   );
 }
 
-function AddPropertyFlowModal({ node, mode, initialProperty, onClose }) {
+function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, onClose }) {
   mode = mode || "manual";
   // ── Edit mode: pre-fill the form state from an existing property row ──
   var isEditProp = !!initialProperty;
+  // ── Computation entry: same flow, but pComputed starts true and the header
+  //     reads "New computation" rather than "Add property manually" so it's
+  //     contextually correct when invoked from the Computations tab.
+  var isComputationEntry = !!seedComputed && !isEditProp;
   const [step, setStep]           = useState(1); // manual: 1=basics, 2=behaviour, 3=governance, 4=review
   const [pName, setPName]         = useState(isEditProp ? (initialProperty.name || "") : "");
   const [pType, setPType]         = useState(isEditProp ? (initialProperty.type || "") : "");
@@ -4367,7 +4078,7 @@ function AddPropertyFlowModal({ node, mode, initialProperty, onClose }) {
   const [pIndexed, setPIndexed]   = useState(isEditProp ? !!initialProperty.indexed  : false);
   const [pPII, setPPII]           = useState(isEditProp ? !!initialProperty.pii      : false);
   const [pUnique, setPUnique]     = useState(isEditProp ? !!initialProperty.unique   : false);
-  const [pComputed, setPComputed] = useState(isEditProp ? !!initialProperty.computed : false);
+  const [pComputed, setPComputed] = useState(isEditProp ? !!initialProperty.computed : !!seedComputed);
   const [pDefault, setPDefault]   = useState("");
   const [pFormula, setPFormula]   = useState("");
   const [pSource, setPSource]     = useState(isEditProp && initialProperty.source ? initialProperty.source : "Salesforce CRM");
@@ -4622,7 +4333,7 @@ function AddPropertyFlowModal({ node, mode, initialProperty, onClose }) {
   const canSave = pName.trim().length > 0 && !!pType;
   const typeMeta = TYPE_META_LOCAL[pType] || TYPE_META_LOCAL.string;
 
-  const MODE_LABEL = { manual:"Add property manually", spreadsheet:"Upload a spreadsheet", document:"Parse a document", template:"Pick from a template" };
+  const MODE_LABEL = { manual: isComputationEntry ? "New computation" : "Add property manually", spreadsheet:"Upload a spreadsheet", document:"Parse a document", template:"Pick from a template" };
   // Manual flow is 4 steps; when "computed" is toggled on in Behaviour, a
   // Computation step is inserted between Behaviour and Governance.
   const MANUAL_STEP_IDS = pComputed
