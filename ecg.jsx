@@ -19250,50 +19250,22 @@ function App() {
   // ─── EDIT MODE ─────────────────────────────────────────────────────────────
   // When on, the canvas accepts: click-empty → add node (position pre-set),
   // drag from a node's connector handle → create edge, click a node/edge →
-  // open its editor, hover × → delete. Snapshots are taken on enter so the
-  // banner can show how many changes are pending and Discard restores them.
+  // open its editor, hover × → delete. Every change applies live to nodes/edges
+  // state so there's no separate Save / Discard step — exiting just turns the
+  // edit affordances off.
   const [editMode, setEditMode] = useState(false);
-  const [editSnapshot, setEditSnapshot] = useState(null);
   const [pendingEdgeFrom, setPendingEdgeFrom] = useState(null); // { fromId, toId } when a drag completes
   const [pendingAddPos, setPendingAddPos] = useState(null);     // { x, y } world coords for next created node
   const [confirmDelete, setConfirmDelete] = useState(null);     // { kind:"node"|"edge", id?:..., idx?:..., name:..., edgeCount?:... }
-  const [exitConfirm, setExitConfirm] = useState(false);
 
   function enterEditMode() {
-    setEditSnapshot({ nodes: nodes.map(function(n){ return Object.assign({}, n); }), edges: edges.map(function(e){ return Object.assign({}, e); }) });
     setEditMode(true);
     // Give the canvas room to work — close the inspector and collapse the
     // sidebar so the editable surface isn't squeezed between two panels.
     setSelected(null);
     setSidebarOpen(false);
   }
-  function discardEditChanges() {
-    if (editSnapshot) {
-      setNodes(editSnapshot.nodes);
-      setEdges(editSnapshot.edges);
-    }
-  }
-  function isDirty() {
-    if (!editSnapshot) return false;
-    if (editSnapshot.nodes.length !== nodes.length) return true;
-    if (editSnapshot.edges.length !== edges.length) return true;
-    for (var i = 0; i < nodes.length; i++) {
-      var a = editSnapshot.nodes[i]; var b = nodes[i];
-      if (!a || a.id !== b.id || a.x !== b.x || a.y !== b.y || a.label !== b.label) return true;
-    }
-    for (var j = 0; j < edges.length; j++) {
-      var ea = editSnapshot.edges[j]; var eb = edges[j];
-      if (!ea || ea.s !== eb.s || ea.t !== eb.t || ea.label !== eb.label) return true;
-    }
-    return false;
-  }
-  function requestExitEditMode() {
-    if (isDirty()) { setExitConfirm(true); return; }
-    setEditMode(false); setEditSnapshot(null);
-  }
-  function commitExitEditMode() {
-    setEditMode(false); setEditSnapshot(null); setExitConfirm(false);
-  }
+  function exitEditMode() { setEditMode(false); }
 
   // Expose a global opener used by the landing-page NewGraphFlow.onCreate
   // (so the user can land directly into an empty workspace they just created).
@@ -19454,16 +19426,6 @@ function App() {
               <label className="ctb-toggle"><input type="checkbox" checked={showCounts} onChange={(e) => setShowCounts(e.target.checked)} /> <span>Counts</span></label>
             </div>
           </div>
-          {editMode && (
-            <EditModeBanner
-              dirty={isDirty()}
-              addedNodes={nodes.length - (editSnapshot ? editSnapshot.nodes.length : 0)}
-              addedEdges={edges.length - (editSnapshot ? editSnapshot.edges.length : 0)}
-              onDiscard={function(){ discardEditChanges(); }}
-              onSave={function(){ /* publish snapshot → "saved" by setting new baseline */ setEditSnapshot({ nodes: nodes.map(function(n){ return Object.assign({}, n); }), edges: edges.map(function(e){ return Object.assign({}, e); }) }); }}
-              onExit={requestExitEditMode}
-            />
-          )}
           <Canvas
             nodes={nodes} setNodes={setNodes}
             edges={edges} setEdges={setEdges}
@@ -19496,7 +19458,7 @@ function App() {
               canvas. Sits inside the canvas surface so it doesn't crowd the
               toolbar. Hover reveals a small label tooltip. */}
           <button
-            onClick={editMode ? requestExitEditMode : enterEditMode}
+            onClick={editMode ? exitEditMode : enterEditMode}
             title={editMode ? "Exit edit mode" : "Enter edit mode"}
             style={{ position:"absolute", top:64, right:14, width:30, height:30, borderRadius:6, border:"1px solid " + (editMode ? "var(--ink)" : "var(--line)"), background: editMode ? "var(--ink)" : "var(--panel)", color: editMode ? "var(--bg-canvas)" : "var(--ink-3)", display:"inline-flex", alignItems:"center", justifyContent:"center", cursor:"pointer", boxShadow:"0 1px 2px rgba(40,40,20,0.05)", padding:0, zIndex:5 }}
             onMouseEnter={function(e){ if (!editMode) { e.currentTarget.style.color = "var(--ink)"; e.currentTarget.style.borderColor = "var(--ink-2)"; } }}
@@ -19582,40 +19544,6 @@ function App() {
           }}
         />
       )}
-      {exitConfirm && (
-        <ConfirmDialog
-          title="Exit edit mode with unsaved changes?"
-          body={<>You have unsaved changes. If you exit now, those changes are kept in this session but no longer staged for save. You can also discard them and exit.</>}
-          confirmLabel="Exit edit mode"
-          secondaryLabel="Discard & exit"
-          onCancel={function(){ setExitConfirm(false); }}
-          onConfirm={function(){ commitExitEditMode(); }}
-          onSecondary={function(){ discardEditChanges(); commitExitEditMode(); }}
-        />
-      )}
-    </div>
-  );
-}
-
-// ─── EDIT MODE UI ────────────────────────────────────────────────────────────
-// Banner sits above the canvas while edit mode is active. Shows a live count
-// of additions and the Save / Discard / Exit triplet.
-function EditModeBanner({ dirty, addedNodes, addedEdges, onSave, onDiscard, onExit }) {
-  return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 16px", background:"#fff8df", borderBottom:"1px solid #e2d899", borderTop:"1px solid #e2d899", fontFamily:"JetBrains Mono", fontSize:11, letterSpacing:"0.3px" }}>
-      <div style={{ display:"flex", alignItems:"center", gap:12, color:"#5b4a07" }}>
-        <span style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"3px 8px", borderRadius:4, background:"#5b4a07", color:"#fff8df", fontWeight:700, letterSpacing:"0.5px" }}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-          EDITING SCHEMA
-        </span>
-        <span>Click empty canvas to add a node · Drag from a node handle to draw an edge · Click an element to edit · Hover for delete</span>
-        {dirty && <span style={{ color:"#7a5a00" }}>· {addedNodes > 0 ? (addedNodes + " new node" + (addedNodes === 1 ? "" : "s") + "  ") : ""}{addedEdges > 0 ? (addedEdges + " new edge" + (addedEdges === 1 ? "" : "s")) : ""}</span>}
-      </div>
-      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-        <button onClick={onDiscard} disabled={!dirty} style={{ padding:"5px 10px", borderRadius:5, border:"1px solid #c4ac4c", background:"transparent", color:"#5b4a07", fontFamily:"JetBrains Mono", fontSize:10.5, cursor: dirty ? "pointer" : "not-allowed", opacity: dirty ? 1 : 0.45, letterSpacing:"0.3px", textTransform:"uppercase" }}>Discard</button>
-        <button onClick={onSave} disabled={!dirty} style={{ padding:"5px 10px", borderRadius:5, border:"1px solid #5b4a07", background: dirty ? "#5b4a07" : "transparent", color: dirty ? "#fff8df" : "#5b4a07", fontFamily:"JetBrains Mono", fontSize:10.5, cursor: dirty ? "pointer" : "not-allowed", opacity: dirty ? 1 : 0.45, letterSpacing:"0.3px", textTransform:"uppercase", fontWeight:700 }}>Save changes</button>
-        <button onClick={onExit} style={{ padding:"5px 10px", borderRadius:5, border:"1px solid transparent", background:"transparent", color:"#5b4a07", fontFamily:"JetBrains Mono", fontSize:10.5, cursor:"pointer", letterSpacing:"0.3px", textTransform:"uppercase" }}>Exit</button>
-      </div>
     </div>
   );
 }
