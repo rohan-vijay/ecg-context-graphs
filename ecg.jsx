@@ -1522,8 +1522,10 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
                     The handle's centre sits exactly on the node's circumference,
                     so half is inside the body and half pokes out — feels like a
                     port that belongs to the node rather than a chip pasted on
-                    top. Its palette mirrors the node's own fill + stroke. */}
-                {editMode && (isHov || (drag?.kind === "link" && drag.id === n.id)) && (function(){
+                    top. Its palette mirrors the node's own fill + stroke.
+                    Hidden while the user is moving a node — repositioning isn't
+                    an edge-creation moment. */}
+                {editMode && drag?.kind !== "node" && (isHov || (drag?.kind === "link" && drag.id === n.id)) && (function(){
                   var isLinking = drag?.kind === "link" && drag.id === n.id;
                   var angle = isLinking && drag.angle != null ? drag.angle : hoverAngle;
                   // Centre the handle on the node's circumference.
