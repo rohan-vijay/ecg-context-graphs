@@ -2141,16 +2141,18 @@ function GlobalPropertiesView() {
 
 // ─── GLOBAL EDGES VIEW ───────────────────────────────────────────────────────
 
-function GlobalEdgesView() {
+function GlobalEdgesView({ nodes: liveNodes, edges: liveEdges }) {
   const [kindFilter, setKindFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState({ col: "label", dir: "asc" });
   const [newEdgeOpen, setNewEdgeOpen] = useState(false);
+  const _nodes = liveNodes && liveNodes.length ? liveNodes : NODES;
+  const _edges = liveEdges && liveEdges.length ? liveEdges : EDGES;
 
   const allEdges = useMemo(() => {
-    return EDGES.map((e, i) => {
-      const from = NODES.find(n => n.id === e.s);
-      const to = NODES.find(n => n.id === e.t);
+    return _edges.map((e, i) => {
+      const from = _nodes.find(n => n.id === e.s);
+      const to = _nodes.find(n => n.id === e.t);
       const seed = e.label.length + i;
       return {
         uid: e.s + ":" + e.t + ":" + e.label,
@@ -2162,7 +2164,7 @@ function GlobalEdgesView() {
         directional: !e.bidirectional,
       };
     });
-  }, []);
+  }, [_edges, _nodes]);
 
   const KINDS = ["all", "direct", "inferred", "agent", "source"];
   const kindCounts = KINDS.reduce((acc, k) => { acc[k] = k === "all" ? allEdges.length : allEdges.filter(e => e.kind === k).length; return acc; }, {});
@@ -15669,21 +15671,23 @@ function GovernanceDetailView({ detail, onBack }) {
   return null;
 }
 
-function NodesView({ onSelect, onSwitchToCanvas, onAddNode }) {
+function NodesView({ onSelect, onSwitchToCanvas, onAddNode, nodes: liveNodes }) {
   const [catFilter, setCatFilter] = useState("all");
   const [sortBy, setSortBy] = useState("instances");
   const [sortDir, setSortDir] = useState("desc");
+  // Prefer live nodes from App state so freshly created nodes appear here too.
+  const _nodes = liveNodes && liveNodes.length ? liveNodes : NODES;
 
   const counts = useMemo(() => ({
-    all: NODES.length,
-    core: NODES.filter(n => n.cat === "core").length,
-    support: NODES.filter(n => n.cat === "support").length,
-    derived: NODES.filter(n => n.cat === "derived").length,
-    source: NODES.filter(n => n.cat === "source").length,
-  }), []);
+    all: _nodes.length,
+    core: _nodes.filter(n => n.cat === "core").length,
+    support: _nodes.filter(n => n.cat === "support").length,
+    derived: _nodes.filter(n => n.cat === "derived").length,
+    source: _nodes.filter(n => n.cat === "source").length,
+  }), [_nodes]);
 
   const rows = useMemo(() => {
-    const filtered = NODES.filter(n => catFilter === "all" || n.cat === catFilter);
+    const filtered = _nodes.filter(n => catFilter === "all" || n.cat === catFilter);
     const sorters = {
       label: (a, b) => a.label.localeCompare(b.label),
       category: (a, b) => a.cat.localeCompare(b.cat),
@@ -15696,9 +15700,9 @@ function NodesView({ onSelect, onSwitchToCanvas, onAddNode }) {
     };
     const sorted = [...filtered].sort(sorters[sortBy] || sorters.instances);
     return sortDir === "desc" ? sorted.reverse() : sorted;
-  }, [catFilter, sortBy, sortDir]);
+  }, [catFilter, sortBy, sortDir, _nodes]);
 
-  const totalInstances = NODES.reduce((s, n) => s + n.instancesN, 0);
+  const totalInstances = _nodes.reduce((s, n) => s + (n.instancesN || 0), 0);
 
   const onSort = (k) => {
     if (sortBy === k) setSortDir(d => d === "desc" ? "asc" : "desc");
@@ -19695,6 +19699,7 @@ function App() {
         />
       ) : tab === "Nodes" ? (
         <NodesView
+          nodes={nodes}
           onSelect={(id) => { setDetailId(id); }}
           onSwitchToCanvas={() => setTab("Graph")}
           onAddNode={() => setAddNodeOpen(true)}
@@ -19709,7 +19714,7 @@ function App() {
           icon={<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="1.5"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="12" r="3"/><line x1="9" y1="12" x2="15" y2="12" strokeDasharray="2 2"/></svg>}
         />
       ) : tab === "Edges" ? (
-        <GlobalEdgesView />
+        <GlobalEdgesView nodes={nodes} edges={edges} />
       ) : isBlank && tab === "Sources" ? (
         <WorkspaceEmpty
           eyebrow="SOURCES"
@@ -19846,10 +19851,15 @@ function App() {
           py = Math.floor(jitter / 400) * 120 - 60;
         }
         var userProps = (spec.properties && spec.properties.length) ? spec.properties.slice() : [];
+        // Map the user's chosen category to the workspace's filter buckets so
+        // the new node shows up correctly in Nodes view counts.
+        var catMap = { core: "core", secondary: "support", derived: "derived" };
+        var cat = catMap[spec.category] || "core";
         var newNode = {
           id: id + "-" + Date.now().toString(36).slice(-4),
           label: spec.name || "New node",
           type: spec.shape || "entity",
+          cat: cat,
           x: px,
           y: py,
           props: userProps.length,
@@ -19864,6 +19874,7 @@ function App() {
           _description: spec.description || "",
           instances: "—",
           instancesN: 0,
+          fill: 0, conf: 0, pii: 0, fresh: "—", change: "LOW",
         };
         setNodes(function(ns){ return ns.concat([newNode]); });
         setSelected(newNode.id);
