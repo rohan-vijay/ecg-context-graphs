@@ -19886,9 +19886,11 @@ function App() {
 }
 
 // ─── DELETE IMPACT DIALOG ───────────────────────────────────────────────────
-// Detailed confirmation before removing one or more nodes. Surfaces the full
-// blast radius — edges severed, connected nodes affected, record counts — so
-// the user understands deletion isn't a small undoable nudge.
+// Two-step destructive confirmation:
+//   Step 1 — Review impact (KPI strip, edge list, neighbour pills)
+//   Step 2 — Type confirmation: the node name (single) or "DELETE" (multi)
+// The user has to deliberately move through both steps to commit. Cancel
+// is always one tap away.
 function DeleteImpactDialog({ ids, nodes, edges, onCancel, onConfirm }) {
   var idSet = {}; ids.forEach(function(id){ idSet[id] = true; });
   var targetNodes = nodes.filter(function(n){ return idSet[n.id]; });
@@ -19906,17 +19908,27 @@ function DeleteImpactDialog({ ids, nodes, edges, onCancel, onConfirm }) {
   var totalProps = targetNodes.reduce(function(acc, n){ return acc + (n.props || 0); }, 0);
   var multi = ids.length > 1;
 
+  // Confirmation phrase: node name for single, "DELETE" for multi.
+  var requiredPhrase = multi ? "DELETE" : (targetNodes[0] ? targetNodes[0].label : "DELETE");
+  var [step, setStep] = useState(1);
+  var [typed, setTyped] = useState("");
+  var [ack, setAck] = useState(false);
+  var canContinue = step === 1 ? ack : (typed.trim() === requiredPhrase);
+
   function fmtNum(n){ return n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "K" : String(n); }
 
   return (
     <div onClick={function(e){ if (e.target === e.currentTarget) onCancel(); }}
       style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.45)", zIndex:300, display:"flex", alignItems:"center", justifyContent:"center" }}>
-      <div style={{ width:"min(94vw, 560px)", maxHeight:"86vh", overflow:"auto", background:"var(--bg-canvas)", borderRadius:14, border:"1px solid var(--line)", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
+      <div style={{ width:"min(94vw, 580px)", maxHeight:"88vh", overflow:"auto", background:"var(--bg-canvas)", borderRadius:14, border:"1px solid var(--line)", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
         {/* Header */}
         <div style={{ padding:"24px 26px 4px" }}>
-          <div style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"3px 9px", borderRadius:4, background:"var(--coral-fill)", color:"var(--coral)", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, letterSpacing:"0.5px", textTransform:"uppercase", marginBottom:12 }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l9 16H3l9-16z"/><line x1="12" y1="10" x2="12" y2="14"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/></svg>
-            Destructive action
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+            <div style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"3px 9px", borderRadius:4, background:"var(--coral-fill)", color:"var(--coral)", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, letterSpacing:"0.5px", textTransform:"uppercase" }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l9 16H3l9-16z"/><line x1="12" y1="10" x2="12" y2="14"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/></svg>
+              Destructive action
+            </div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.5px", textTransform:"uppercase" }}>Step {step} of 2 · {step === 1 ? "Review impact" : "Confirm"}</div>
           </div>
           <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:28, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>
             {multi ? ("Delete " + ids.length + " nodes?") : (
@@ -19928,96 +19940,155 @@ function DeleteImpactDialog({ ids, nodes, edges, onCancel, onConfirm }) {
           </div>
         </div>
 
-        {/* Impact summary — 4 KPI cells */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:0, margin:"18px 26px 0", border:"1px solid var(--line)", borderRadius:10, overflow:"hidden", background:"var(--panel)" }}>
-          {[
-            { k:"NODES",      v: ids.length },
-            { k:"EDGES",      v: affectedEdges.length },
-            { k:"PROPERTIES", v: totalProps },
-            { k:"RECORDS",    v: fmtNum(totalRecords) }
-          ].map(function(cell, i, arr){
-            return (
-              <div key={i} style={{ padding:"12px 14px", borderRight: i < arr.length-1 ? "1px solid var(--line-2)" : "none" }}>
-                <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:4 }}>{cell.k}</div>
-                <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:22, color:"var(--ink)", lineHeight:1 }}>{cell.v}</div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Affected nodes list */}
-        {multi && targetNodes.length > 0 && (
-          <div style={{ margin:"18px 26px 0" }}>
-            <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>Nodes being deleted</div>
-            <div style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:8, padding:"4px 0", maxHeight:140, overflow:"auto" }}>
-              {targetNodes.map(function(n, i, arr){
-                return (
-                  <div key={n.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"7px 14px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0 }}>
-                      <ListGlyph node={n} size={14} />
-                      <span style={{ fontSize:12.5, color:"var(--ink)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{n.label}</span>
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", textTransform:"uppercase" }}>{n.type}</span>
-                    </div>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{n.instances || "—"}</span>
-                  </div>
-                );
-              })}
-            </div>
+        {step === 1 && (<>
+          {/* Impact summary — 4 KPI cells */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:0, margin:"18px 26px 0", border:"1px solid var(--line)", borderRadius:10, overflow:"hidden", background:"var(--panel)" }}>
+            {[
+              { k:"NODES",      v: ids.length },
+              { k:"EDGES",      v: affectedEdges.length },
+              { k:"PROPERTIES", v: totalProps },
+              { k:"RECORDS",    v: fmtNum(totalRecords) }
+            ].map(function(cell, i, arr){
+              return (
+                <div key={i} style={{ padding:"12px 14px", borderRight: i < arr.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:4 }}>{cell.k}</div>
+                  <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:22, color:"var(--ink)", lineHeight:1 }}>{cell.v}</div>
+                </div>
+              );
+            })}
           </div>
-        )}
 
-        {/* Edges being severed */}
-        {affectedEdges.length > 0 && (
-          <div style={{ margin:"18px 26px 0" }}>
-            <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>Edges severed ({affectedEdges.length})</div>
-            <div style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:8, padding:"4px 0", maxHeight:160, overflow:"auto" }}>
-              {affectedEdges.slice(0, 8).map(function(e, i, arr){
-                var s = nodes.find(function(n){ return n.id === e.s; });
-                var t = nodes.find(function(n){ return n.id === e.t; });
-                return (
-                  <div key={i} style={{ display:"flex", alignItems:"center", gap:6, padding:"7px 14px", borderBottom: i < Math.min(arr.length, 8) - 1 ? "1px dashed var(--line-2)" : "none", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>
-                    <span style={{ color: idSet[e.s] ? "var(--coral)" : "var(--ink-3)" }}>{s ? s.label : e.s}</span>
-                    <span style={{ color:"var(--ink-4)" }}>:{e.label}</span>
-                    <span style={{ color:"var(--ink-3)" }}>→</span>
-                    <span style={{ color: idSet[e.t] ? "var(--coral)" : "var(--ink-3)" }}>{t ? t.label : e.t}</span>
-                  </div>
-                );
-              })}
-              {affectedEdges.length > 8 && (
-                <div style={{ padding:"7px 14px", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>+ {affectedEdges.length - 8} more</div>
+          {/* Affected nodes list (multi) */}
+          {multi && targetNodes.length > 0 && (
+            <div style={{ margin:"18px 26px 0" }}>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>Nodes being deleted</div>
+              <div style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:8, padding:"4px 0", maxHeight:140, overflow:"auto" }}>
+                {targetNodes.map(function(n, i, arr){
+                  return (
+                    <div key={n.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"7px 14px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none" }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0 }}>
+                        <ListGlyph node={n} size={14} />
+                        <span style={{ fontSize:12.5, color:"var(--ink)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{n.label}</span>
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", textTransform:"uppercase" }}>{n.type}</span>
+                      </div>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{n.instances || "—"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Edges being severed */}
+          {affectedEdges.length > 0 && (
+            <div style={{ margin:"18px 26px 0" }}>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>Edges severed ({affectedEdges.length})</div>
+              <div style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:8, padding:"4px 0", maxHeight:160, overflow:"auto" }}>
+                {affectedEdges.slice(0, 8).map(function(e, i, arr){
+                  var s = nodes.find(function(n){ return n.id === e.s; });
+                  var t = nodes.find(function(n){ return n.id === e.t; });
+                  return (
+                    <div key={i} style={{ display:"flex", alignItems:"center", gap:6, padding:"7px 14px", borderBottom: i < Math.min(arr.length, 8) - 1 ? "1px dashed var(--line-2)" : "none", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>
+                      <span style={{ color: idSet[e.s] ? "var(--coral)" : "var(--ink-3)" }}>{s ? s.label : e.s}</span>
+                      <span style={{ color:"var(--ink-4)" }}>:{e.label}</span>
+                      <span style={{ color:"var(--ink-3)" }}>→</span>
+                      <span style={{ color: idSet[e.t] ? "var(--coral)" : "var(--ink-3)" }}>{t ? t.label : e.t}</span>
+                    </div>
+                  );
+                })}
+                {affectedEdges.length > 8 && (
+                  <div style={{ padding:"7px 14px", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>+ {affectedEdges.length - 8} more</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Neighbour nodes that lose at least one connection */}
+          {neighbours.length > 0 && (
+            <div style={{ margin:"18px 26px 0" }}>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>Connected nodes affected ({neighbours.length})</div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                {neighbours.map(function(n){
+                  return (
+                    <span key={n.id} style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"4px 10px", borderRadius:999, background:"var(--panel)", border:"1px solid var(--line-2)", fontSize:11.5, color:"var(--ink-2)" }}>
+                      <ListGlyph node={n} size={12} />
+                      {n.label}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Acknowledgement checkbox */}
+          <label style={{ display:"flex", alignItems:"flex-start", gap:10, margin:"18px 26px 0", padding:"12px 14px", border:"1px solid " + (ack ? "var(--coral)" : "var(--line)"), borderRadius:9, background: ack ? "var(--coral-fill)" : "var(--panel)", cursor:"pointer", transition:"all 140ms ease-out" }}>
+            <input type="checkbox" checked={ack} onChange={function(e){ setAck(e.target.checked); }} style={{ marginTop:2, accentColor:"var(--coral)", width:14, height:14 }} />
+            <span style={{ fontSize:12.5, color:"var(--ink-2)", lineHeight:1.5 }}>
+              I understand this severs <strong>{affectedEdges.length}</strong> edge{affectedEdges.length === 1 ? "" : "s"}{neighbours.length > 0 ? <>, affects <strong>{neighbours.length}</strong> connected node{neighbours.length === 1 ? "" : "s"}</> : ""}, and may break downstream computations and rules.
+            </span>
+          </label>
+
+          {/* Footnote — undoable assurance */}
+          <div style={{ margin:"12px 26px 0", padding:"10px 12px", border:"1px dashed var(--line)", borderRadius:8, background:"var(--panel-2)", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", lineHeight:1.45 }}>
+            You can undo this with <strong style={{ color:"var(--ink-2)" }}>⌘Z</strong> within this session — but downstream rules and computations that referenced the deleted entities will need to be revisited before publishing.
+          </div>
+        </>)}
+
+        {step === 2 && (
+          <div style={{ margin:"22px 26px 0" }}>
+            {/* Compact recap pill */}
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6, alignItems:"center", padding:"10px 14px", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, marginBottom:18, fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>
+              <span style={{ color:"var(--coral)", fontWeight:700 }}>{ids.length}</span><span>node{ids.length === 1 ? "" : "s"}</span>
+              <span style={{ color:"var(--ink-4)" }}>·</span>
+              <span style={{ color:"var(--coral)", fontWeight:700 }}>{affectedEdges.length}</span><span>edge{affectedEdges.length === 1 ? "" : "s"}</span>
+              <span style={{ color:"var(--ink-4)" }}>·</span>
+              <span style={{ color:"var(--coral)", fontWeight:700 }}>{totalProps}</span><span>field{totalProps === 1 ? "" : "s"}</span>
+              <span style={{ color:"var(--ink-4)" }}>·</span>
+              <span style={{ color:"var(--coral)", fontWeight:700 }}>{fmtNum(totalRecords)}</span><span>record{totalRecords === 1 ? "" : "s"}</span>
+            </div>
+
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:6 }}>Type to confirm</div>
+            <div style={{ fontSize:13, color:"var(--ink-2)", lineHeight:1.5, marginBottom:10 }}>
+              {multi ? (
+                <>Type <code style={{ fontFamily:"JetBrains Mono", padding:"2px 6px", background:"var(--coral-fill)", color:"var(--coral)", borderRadius:4, fontWeight:700 }}>DELETE</code> below to confirm this destructive action.</>
+              ) : (
+                <>Type the node name <code style={{ fontFamily:"JetBrains Mono", padding:"2px 6px", background:"var(--coral-fill)", color:"var(--coral)", borderRadius:4, fontWeight:700 }}>{requiredPhrase}</code> below to confirm.</>
               )}
             </div>
+            <input
+              autoFocus
+              value={typed}
+              onChange={function(e){ setTyped(e.target.value); }}
+              placeholder={requiredPhrase}
+              style={{ width:"100%", padding:"11px 14px", fontSize:14, fontFamily:"JetBrains Mono", border:"1.5px solid " + (typed && typed.trim() !== requiredPhrase ? "var(--coral)" : "var(--line)"), borderRadius:9, background:"var(--panel)", color:"var(--ink)", outline:"none", boxSizing:"border-box", letterSpacing:"0.3px" }}
+            />
+            {typed && typed.trim() !== requiredPhrase && (
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--coral)", marginTop:6 }}>Doesn't match — type "{requiredPhrase}" exactly.</div>
+            )}
           </div>
         )}
-
-        {/* Neighbour nodes that lose at least one connection */}
-        {neighbours.length > 0 && (
-          <div style={{ margin:"18px 26px 0" }}>
-            <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8 }}>Connected nodes affected ({neighbours.length})</div>
-            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-              {neighbours.map(function(n){
-                return (
-                  <span key={n.id} style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"4px 10px", borderRadius:999, background:"var(--panel)", border:"1px solid var(--line-2)", fontSize:11.5, color:"var(--ink-2)" }}>
-                    <ListGlyph node={n} size={12} />
-                    {n.label}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Footnote — undoable assurance */}
-        <div style={{ margin:"18px 26px 0", padding:"10px 12px", border:"1px dashed var(--line)", borderRadius:8, background:"var(--panel-2)", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", lineHeight:1.45 }}>
-          You can undo this with <strong style={{ color:"var(--ink-2)" }}>⌘Z</strong> within this session — but downstream rules and computations that referenced the deleted entities will need to be revisited before publishing.
-        </div>
 
         {/* Footer actions */}
-        <div style={{ display:"flex", justifyContent:"flex-end", gap:8, padding:"18px 26px 22px" }}>
-          <button onClick={onCancel} className="btn-ghost">Cancel</button>
-          <button onClick={onConfirm} className="btn-dark" style={{ background:"var(--coral)", borderColor:"var(--coral)" }}>
-            Delete {ids.length > 1 ? (ids.length + " nodes") : "node"}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, padding:"22px 26px 22px", marginTop:18 }}>
+          <button onClick={step === 2 ? function(){ setStep(1); } : onCancel} className="btn-ghost">
+            {step === 2 ? "← Back" : "Cancel"}
           </button>
+          <div style={{ display:"flex", gap:8 }}>
+            {step === 2 && <button onClick={onCancel} className="btn-ghost">Cancel</button>}
+            {step === 1 ? (
+              <button onClick={function(){ if (ack) setStep(2); }} disabled={!ack}
+                className="btn-dark"
+                style={{ background: ack ? "var(--coral)" : "transparent", borderColor: ack ? "var(--coral)" : "var(--line)", color: ack ? "var(--bg-canvas)" : "var(--ink-4)", opacity: ack ? 1 : 0.6, cursor: ack ? "pointer" : "not-allowed" }}>
+                Continue →
+              </button>
+            ) : (
+              <button onClick={function(){ if (canContinue) onConfirm(); }} disabled={!canContinue}
+                className="btn-dark"
+                style={{ background: canContinue ? "var(--coral)" : "transparent", borderColor: canContinue ? "var(--coral)" : "var(--line)", color: canContinue ? "var(--bg-canvas)" : "var(--ink-4)", opacity: canContinue ? 1 : 0.6, cursor: canContinue ? "pointer" : "not-allowed" }}>
+                Delete {ids.length > 1 ? (ids.length + " nodes") : "node"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
