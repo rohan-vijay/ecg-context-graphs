@@ -524,7 +524,7 @@ function NodeShape({ node, selected, highlighted, dimmed, hover }) {
 
 // ---------- HEADER ----------------------------------------------------------
 
-const TABS = ["Graph", "Nodes", "Edges", "Sources", "Records", "Violations"];
+const TABS = ["Graph", "Nodes", "Edges", "Sources", "Records", "Violations", "Governance"];
 
 function Header({ tab, onTab, onAddNode, onBackToLanding, graphName }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -2441,7 +2441,7 @@ function EditSchemaView({ node, properties: initProps, onClose }) {
 // ---------- NODE DETAIL VIEW ------------------------------------------------
 
 // Quality tab temporarily hidden — content lives behind tab === "Quality" but the chip is omitted from this list.
-const DETAIL_TABS = ["Overview", "Properties", "Edges", "Sources", "Rules", "Governance", "History", "Sample"];
+const DETAIL_TABS = ["Overview", "Properties", "Edges", "Sources", "Rules", "Computations", "History", "Sample"];
 
 function NodeDetailView({ nodeId, onBack, onCanvas }) {
   const node = NODES.find(n => n.id === nodeId);
@@ -2602,8 +2602,14 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
         {tab === "Edges"      && <EdgesPane node={node} outgoing={outgoing} incoming={incoming} />}
         {tab === "Sources"    && <SourcesPane sources={sources} node={node} onLinkSource={() => setSrcLinkOpen(true)} />}
         {tab === "Rules"      && <RulesPane rules={rules} node={node} onViolationClick={setViolationRule} onMatchClick={setMatchRule} onSurvClick={setSurvConflict} onNewRule={() => setNewRuleOpen(true)} onEditRule={setEditRule} />}
+        {tab === "Computations" && (
+          <div style={{ padding:"60px 24px", textAlign:"center", color:"var(--ink-3)" }}>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:8 }}>{node.label} · Computations</div>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:24, color:"var(--ink)", marginBottom:8 }}>Computed fields for {node.label}</div>
+            <div style={{ fontSize:13, lineHeight:1.55, maxWidth:520, margin:"0 auto" }}>Define formulas, SQL queries, agent calls and automations that derive properties on this node. This view is under construction.</div>
+          </div>
+        )}
         {tab === "Quality"    && <QualityPane node={node} properties={properties} />}
-        {tab === "Governance" && <GovernancePane node={node} properties={properties} />}
         {tab === "History"    && <HistoryPane node={node} />}
         {tab === "Sample"     && <SamplePane node={node} properties={properties} />}
       </div>
