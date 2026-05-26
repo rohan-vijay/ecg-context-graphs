@@ -19600,32 +19600,33 @@ function App() {
 }
 
 // ─── EDIT MODE — View / Edit segmented toggle ───────────────────────────────
-// Floats on the canvas surface, top-right corner, below the canvas toolbar.
-// The active segment is a soft raised "tab" inside a recessed container —
-// like a macOS segmented control. No harsh ink-on-cream contrast.
+// Floats at the bottom-center of the canvas as a pill. The whole pill has the
+// same shape as the legend (rounded 999) so the bottom of the canvas reads as
+// one coherent control row: legend left, this in the middle, zoom/minimap right.
+// Active segment is a soft cream tab inside the recessed pill.
 function ViewEditToggle({ editMode, onEnter, onExit }) {
   var seg = function(active){ return {
-    display:"inline-flex", alignItems:"center", gap:6,
-    padding:"5px 12px", borderRadius:5, border:"none",
+    display:"inline-flex", alignItems:"center", gap:7,
+    padding:"6px 14px", borderRadius:999, border:"none",
     background: active ? "var(--bg-canvas)" : "transparent",
     color: active ? "var(--ink)" : "var(--ink-3)",
-    fontFamily:"JetBrains Mono", fontSize:10, cursor:"pointer",
-    letterSpacing:"0.4px", textTransform:"uppercase",
-    boxShadow: active ? "0 1px 2px rgba(40,40,20,0.06)" : "none",
-    fontWeight: active ? 600 : 400,
-    transition:"background 160ms ease-out, color 160ms ease-out"
+    fontFamily:"JetBrains Mono", fontSize:10.5, cursor:"pointer",
+    letterSpacing:"0.6px", textTransform:"uppercase",
+    boxShadow: active ? "0 1px 2px rgba(40,40,20,0.08), 0 0 0 1px var(--line)" : "none",
+    fontWeight: active ? 600 : 500,
+    transition:"background 160ms ease-out, color 160ms ease-out, box-shadow 160ms ease-out"
   }; };
   return (
-    <div style={{ position:"absolute", top:64, right:14, zIndex:10, display:"inline-flex", padding:2, borderRadius:7, background:"var(--panel-2)", border:"1px solid var(--line)" }}>
+    <div style={{ position:"absolute", bottom:18, left:"50%", transform:"translateX(-50%)", zIndex:10, display:"inline-flex", padding:3, borderRadius:999, background:"var(--panel)", border:"1px solid var(--line)", boxShadow:"0 4px 14px rgba(40,40,20,0.05)" }}>
       <button onClick={onExit} style={seg(!editMode)}>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
           <circle cx="12" cy="12" r="3"/>
         </svg>
         View
       </button>
       <button onClick={onEnter} style={seg(editMode)}>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 20h9"/>
           <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
         </svg>
