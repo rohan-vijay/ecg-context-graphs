@@ -11436,6 +11436,10 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
   var [inspectedNode, setInspectedNode] = React.useState(null);
   // Fullscreen overlay for the relationship graph.
   var [graphFullscreen, setGraphFullscreen] = React.useState(false);
+  // Drag-to-pan state for the embedded graph (Figma-style canvas panning,
+  // mirrors the main workspace canvas implementation).
+  var [graphPan, setGraphPan] = React.useState({ x: 0, y: 0 });
+  var graphDrag = React.useRef(null); // { startX, startY, origX, origY, moved }
   var props = generateProps(node);
   var c = colorForNode(node);
   var tabs = ["Graph", "Overview", "Provenance", "Activity"];
@@ -11721,7 +11725,7 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
         )}
 
         {tab === "Graph" && (
-          <div style={{ display:"grid", gridTemplateColumns:"minmax(0, 2fr) minmax(340px, 0.7fr)", gap:18, alignItems:"stretch" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"minmax(0, 2fr) minmax(340px, 0.7fr)", gap:18, alignItems:"stretch", height:"calc(100vh - 330px)", minHeight:560 }}>
             <div className="card" style={{ padding:0, overflow:"hidden", display:"flex", flexDirection:"column" }}>
               <div className="card-head card-head-row">
                 <span>Graph</span>
@@ -11739,15 +11743,32 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                   </button>
                 </div>
               </div>
-              <div style={{ background:"var(--bg-canvas)", padding:0, flex:1, minHeight:0, overflow:"auto" }}>
+              <div
+                onMouseDown={function(e){
+                  // Start a potential pan unless the click landed on a node (circle).
+                  // Nodes manage their own click → inspect interaction.
+                  if (e.target.tagName === "circle") return;
+                  graphDrag.current = { startX: e.clientX, startY: e.clientY, origX: graphPan.x, origY: graphPan.y, moved: false };
+                  e.currentTarget.style.cursor = "grabbing";
+                }}
+                onMouseMove={function(e){
+                  var d = graphDrag.current;
+                  if (!d) return;
+                  var dx = e.clientX - d.startX;
+                  var dy = e.clientY - d.startY;
+                  if (!d.moved && Math.hypot(dx, dy) > 3) d.moved = true;
+                  if (d.moved) setGraphPan({ x: d.origX + dx, y: d.origY + dy });
+                }}
+                onMouseUp={function(e){ graphDrag.current = null; e.currentTarget.style.cursor = "grab"; }}
+                onMouseLeave={function(e){ graphDrag.current = null; e.currentTarget.style.cursor = "grab"; }}
+                onDoubleClick={function(){ setGraphPan({ x:0, y:0 }); }}
+                style={{ background:"var(--bg-canvas)", padding:0, flex:1, minHeight:0, overflow:"hidden", cursor:"grab", position:"relative", userSelect:"none" }}>
                 {(function() {
-                  // Canvas renders at its natural size and the container scrolls — same
-                  // behaviour as the main workspace graph. Node radii are constant across
-                  // 1-hop and 2-hop; we only grow the viewBox when expanding so the new
-                  // 2-hop nodes have room. CRITICALLY the centre (cx, cy) is anchored to
-                  // the 1-hop layout regardless of mode, so every 1-hop node stays in
-                  // exactly the same position when the user toggles "Expand 2-hop" — only
-                  // the new 2-hop nodes show up around the edges.
+                  // Drag-to-pan canvas — viewBox stays anchored, and the entire content
+                  // group is translated by (graphPan.x, graphPan.y). Same model as the
+                  // main workspace canvas; double-click anywhere blank to recentre.
+                  // Layout coordinates are anchored on the 1-hop centre regardless of
+                  // mode so toggling 2-hop never reshuffles the existing nodes.
                   var BASE_W = 1100, BASE_H = 760;
                   var W = twoHop ? 1900 : BASE_W;
                   var H = twoHop ? 1300 : BASE_H;
@@ -11794,11 +11815,13 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                   }
 
                   return (
-                    <svg width={W} height={H} viewBox={"0 0 "+W+" "+H} style={{ display:"block" }}>
+                    <svg width="100%" height="100%" viewBox={"0 0 "+W+" "+H} preserveAspectRatio="xMidYMid meet" style={{ display:"block" }}>
                       <defs>
                         <marker id="rec-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-3)"/></marker>
                         <marker id="rec-arrow-2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-4)"/></marker>
                       </defs>
+                      {/* Pan transform — everything below is translated together */}
+                      <g transform={"translate(" + graphPan.x + "," + graphPan.y + ")"}>
 
                       {/* 2-hop edges (drawn first, behind) */}
                       {hops.map(function(h, i) {
@@ -11847,7 +11870,7 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                         var isInspected = inspectedNode && inspectedNode.id === h.rr.id;
                         return (
                           <g key={"h-n"+i} opacity={isHover || isInspected ? 1 : 0.92} style={{ cursor:"pointer" }}
-                            onClick={function(){ setInspectedNode(h.rr); }}
+                            onClick={function(){ if (graphDrag.current && graphDrag.current.moved) return; setInspectedNode(h.rr); }}
                             onMouseEnter={function(){ setHoverNode(h.rr.id); }}
                             onMouseLeave={function(){ setHoverNode(null); }}>
                             <circle cx={h.x} cy={h.y} r={isInspected ? 30 : isHover ? 28 : 26} fill={col.fill} stroke={isInspected || isHover ? "var(--ink)" : col.stroke} strokeWidth={isInspected ? 3 : isHover ? 2.6 : 1.8} />
@@ -11858,7 +11881,7 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                       })}
 
                       {/* Centre — clickable to reset the inspector back to the current record. */}
-                      <g style={{ cursor:"pointer" }} onClick={function(){ setInspectedNode(null); }}>
+                      <g style={{ cursor:"pointer" }} onClick={function(){ if (graphDrag.current && graphDrag.current.moved) return; setInspectedNode(null); }}>
                         <circle cx={cx} cy={cy} r="38" fill={c.fill} stroke={inspectedNode === null ? "var(--ink)" : c.stroke} strokeWidth={inspectedNode === null ? 3.6 : 2.8} />
                         <text x={cx} y={cy - 50} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"12px", fontWeight:600, fill:"var(--ink)", pointerEvents:"none" }}>{record.id}</text>
                         <text x={cx} y={cy + 60} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"11px", fill:"var(--ink-3)", pointerEvents:"none" }}>{record[Object.keys(record).find(function(k){ return k === "name" || k === "company_name" || k === "title"; })] || node.label}</text>
@@ -11871,7 +11894,7 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                         var isInspected = inspectedNode && inspectedNode.id === f.rr.id;
                         return (
                           <g key={"n"+i} style={{ cursor:"pointer" }}
-                            onClick={function(){ setInspectedNode(f.rr); }}
+                            onClick={function(){ if (graphDrag.current && graphDrag.current.moved) return; setInspectedNode(f.rr); }}
                             onMouseEnter={function(){ setHoverNode(f.rr.id); }}
                             onMouseLeave={function(){ setHoverNode(null); }}>
                             <circle cx={f.x} cy={f.y} r={isInspected ? 30 : isHover ? 28 : 26} fill={otherCol.fill} stroke={isInspected || isHover ? "var(--ink)" : otherCol.stroke} strokeWidth={isInspected ? 3 : isHover ? 2.6 : 1.8} />
@@ -11880,6 +11903,8 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                           </g>
                         );
                       })}
+                      </g>
+                      {/* ↑ closes pan transform group */}
                     </svg>
                   );
                 })()}
