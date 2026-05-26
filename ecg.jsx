@@ -1181,12 +1181,13 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
         : null;
       setDrag({ kind: "node", id: nodeId, startX: sx, startY: sy, origX: n.x, origY: n.y, moved: false, multiOrigins: multiOrigins });
       e.target.setPointerCapture?.(e.pointerId);
-    } else if (editMode && cursorMode === "select") {
-      // Marquee selection — drag a rectangle to multi-select.
+    } else if (editMode && cursorMode === "select" && e.shiftKey) {
+      // Shift + drag in select cursor mode → marquee multi-select.
       const [wx, wy] = toWorld(sx, sy);
       setDrag({ kind: "marquee", startX: sx, startY: sy, wx0: wx, wy0: wy, moved: false });
       setMarquee({ x0: wx, y0: wy, x1: wx, y1: wy });
     } else {
+      // Default drag on empty canvas → pan (works in view and edit mode).
       setDrag({ kind: "pan", startX: sx, startY: sy, origPanX: panX, origPanY: panY });
     }
   };
