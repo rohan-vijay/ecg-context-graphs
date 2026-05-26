@@ -406,44 +406,55 @@ function colorForNode(n) {
 
 // Semantic glyph library — each icon represents a real node type the user
 // is likely to model (account, contract, agreement, risk, ticket, etc).
-// All glyphs are drawn in the [-5..5] coordinate space so they compose into
-// both the small ListGlyph circle and the larger Canvas node body.
-// 28 entries — 6 columns × 5 rows in the picker grid (placeholder + upload
-// occupy the first two slots, leaving 28 for semantic icons).
-var NODE_GLYPHS = [
-  // ── COMMERCIAL ──────────────────────────────────────────────────────────
-  { id: "account",      label: "Account",      render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><rect x="-3" y="-2.6" width="6" height="5.4" rx="0.3"/><line x1="-1" y1="-2.6" x2="-1" y2="2.8"/><line x1="1" y1="-2.6" x2="1" y2="2.8"/><line x1="-3" y1="-0.4" x2="3" y2="-0.4"/></g>; } },
-  { id: "person",       label: "Person",       render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95"><circle cx="0" cy="-1.6" r="1.4"/><path d="M -2.6 3 q 2.6 -2.6 5.2 0"/></g>; } },
-  { id: "team",         label: "Team",         render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.8"><circle cx="-1.7" cy="-1.2" r="1.1"/><circle cx="1.7"  cy="-1.2" r="1.1"/><path d="M -3.6 3 q 1.8 -2 3.6 -0.8 q 1.8 -1.2 3.6 0.8"/></g>; } },
-  { id: "contract",     label: "Contract",     render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><path d="M -2 -3 L 1 -3 L 2.4 -1.6 L 2.4 3 L -2 3 Z"/><polyline points="1,-3 1,-1.6 2.4,-1.6"/><path d="M -1.2 1.7 q 0.6 -0.8 1.2 0 t 1.2 0 t 1.2 0"/></g>; } },
-  { id: "agreement",    label: "Agreement",    render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95" strokeLinecap="round" strokeLinejoin="round"><path d="M -3.6 0.4 L -1.6 -1.6 L 0 0 L 1.6 -1.6 L 3.6 0.4"/><path d="M -1.6 -1.6 L 0.4 0.4"/><path d="M -3.6 0.4 L -3.6 2"/><path d="M 3.6 0.4 L 3.6 2"/></g>; } },
-  { id: "sow",          label: "SOW",          render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><rect x="-2.4" y="-3.2" width="4.8" height="6.4" rx="0.3"/><polyline points="-1.5,-1.5 -0.9,-0.9 0.4,-2"/><line x1="-1.5" y1="0.3" x2="1.5" y2="0.3"/><line x1="-1.5" y1="1.7" x2="1.5" y2="1.7"/></g>; } },
-  { id: "invoice",      label: "Invoice",      render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><path d="M -2.2 -3.2 H 2.2 V 3.2 L 1.1 2.5 L 0 3.2 L -1.1 2.5 L -2.2 3.2 Z"/><line x1="-1.2" y1="-1.6" x2="1.2" y2="-1.6"/><line x1="-1.2" y1="-0.3" x2="1.2" y2="-0.3"/><line x1="-1.2" y1="1" x2="0.4" y2="1"/></g>; } },
-  { id: "payment",      label: "Payment",      render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.9"><circle r="3.2"/><path d="M 0 -2 q -1.4 0 -1.4 1 t 1.4 1 t 1.4 1 t -1.4 1"/><line x1="0" y1="-2.7" x2="0" y2="2.7"/></g>; } },
-  { id: "subscription", label: "Subscription", render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95" strokeLinecap="round"><path d="M 3 -1 a 3 3 0 1 0 0.6 1.7"/><polyline points="3,-2.4 3,-1 1.6,-1"/></g>; } },
-  { id: "order",        label: "Order",        render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85" strokeLinecap="round"><polyline points="-3.2,-2 -2,-2 -1.2,1.2 2.4,1.2 3.2,-1.4 -1.6,-1.4"/><circle cx="-0.8" cy="2.4" r="0.55" fill={c.stroke} stroke="none"/><circle cx="2" cy="2.4" r="0.55" fill={c.stroke} stroke="none"/></g>; } },
-  // ── RISK & GOVERNANCE ───────────────────────────────────────────────────
-  { id: "ticket",       label: "Ticket",       render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><path d="M -3 -2 H 3 V -0.6 a 0.8 0.8 0 0 0 0 1.6 V 2 H -3 V 1 a 0.8 0.8 0 0 0 0 -1.6 Z"/><line x1="-0.6" y1="-1" x2="-0.6" y2="1" strokeDasharray="0.6 0.6"/></g>; } },
-  { id: "incident",     label: "Incident",     render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95" strokeLinejoin="round"><path d="M 0 -3.2 L 3.4 2.8 L -3.4 2.8 Z"/><line x1="0" y1="-1" x2="0" y2="1.1" strokeLinecap="round"/><circle cx="0" cy="2.2" r="0.55" fill={c.stroke} stroke="none"/></g>; } },
-  { id: "risk",         label: "Risk",         render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95" strokeLinejoin="round"><path d="M 0 -3.2 L 3 -2 V 0.8 Q 3 2.8 0 3.4 Q -3 2.8 -3 0.8 V -2 Z"/><line x1="0" y1="-1.2" x2="0" y2="0.8" strokeLinecap="round"/><circle cx="0" cy="1.8" r="0.5" fill={c.stroke} stroke="none"/></g>; } },
-  { id: "flag",         label: "Flag",         render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95" strokeLinejoin="round" strokeLinecap="round"><line x1="-2.4" y1="-3.2" x2="-2.4" y2="3.2"/><path d="M -2.4 -3 H 2.6 L 1.2 -1.4 L 2.6 0.2 H -2.4"/></g>; } },
-  { id: "policy",       label: "Policy",       render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95" strokeLinejoin="round"><path d="M 0 -3.2 L 3 -2 V 0.8 Q 3 2.8 0 3.4 Q -3 2.8 -3 0.8 V -2 Z"/><polyline points="-1.4,0.4 -0.3,1.5 1.5,-0.6" strokeLinecap="round"/></g>; } },
-  // ── PIPELINE & DATA ─────────────────────────────────────────────────────
-  { id: "lead",         label: "Lead",         render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><circle r="3.2"/><circle r="1.8"/><circle r="0.5" fill={c.stroke} stroke="none"/></g>; } },
-  { id: "opportunity",  label: "Opportunity",  render: function(c){ return <g fill={c.stroke} stroke="none"><polygon points="-1.6,-3.4 1.8,-0.6 -0.4,-0.2 1.4,3.4 -2,0.6 0.2,0.2"/></g>; } },
-  { id: "product",      label: "Product",      render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85" strokeLinejoin="round"><polygon points="-3,-1.4 0,-3 3,-1.4 3,2 0,3.6 -3,2"/><polyline points="-3,-1.4 0,0.2 3,-1.4"/><line x1="0" y1="0.2" x2="0" y2="3.6"/></g>; } },
-  { id: "metric",       label: "Metric",       render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95" strokeLinecap="round"><line x1="-3" y1="3" x2="3" y2="3"/><rect x="-2.6" y="0.6" width="1.4" height="2"/><rect x="-0.7" y="-1" width="1.4" height="3.6"/><rect x="1.2" y="-2.4" width="1.4" height="5"/></g>; } },
-  { id: "document",     label: "Document",     render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><path d="M -2 -3.2 H 1 L 2.4 -1.8 V 3.2 H -2 Z"/><polyline points="1,-3.2 1,-1.8 2.4,-1.8"/><line x1="-1.2" y1="-0.3" x2="1.6" y2="-0.3"/><line x1="-1.2" y1="1" x2="1.6" y2="1"/><line x1="-1.2" y1="2.2" x2="0.6" y2="2.2"/></g>; } },
-  { id: "database",     label: "Database",     render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><ellipse cx="0" cy="-2.4" rx="2.6" ry="0.9"/><path d="M -2.6 -2.4 V 2.4 Q 0 3.4 2.6 2.4 V -2.4"/><path d="M -2.6 -0.4 Q 0 0.6 2.6 -0.4"/></g>; } },
-  { id: "email",        label: "Email",        render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><rect x="-3" y="-2.2" width="6" height="4.4" rx="0.3"/><polyline points="-3,-2.2 0,0.6 3,-2.2"/></g>; } },
-  { id: "event",        label: "Event",        render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><rect x="-2.8" y="-2.4" width="5.6" height="5.4" rx="0.3"/><line x1="-2.8" y1="-0.6" x2="2.8" y2="-0.6"/><line x1="-1.2" y1="-3.2" x2="-1.2" y2="-1.6"/><line x1="1.2" y1="-3.2" x2="1.2" y2="-1.6"/><rect x="-0.7" y="0.4" width="1.4" height="1.4" fill={c.stroke} stroke="none"/></g>; } },
-  { id: "location",     label: "Location",     render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95"><path d="M 0 3.6 C -2.6 1 -3 -0.4 -3 -1.4 a 3 3 0 0 1 6 0 c 0 1 -0.4 2.4 -3 5 z"/><circle cx="0" cy="-1.2" r="0.9"/></g>; } },
-  // ── AGENTS & AUTOMATION ─────────────────────────────────────────────────
-  { id: "agent",        label: "Agent",        render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85" strokeLinecap="round"><rect x="-2.6" y="-1.6" width="5.2" height="4.4" rx="1"/><line x1="0" y1="-3.4" x2="0" y2="-1.6"/><circle cx="0" cy="-3.4" r="0.4" fill={c.stroke} stroke="none"/><circle cx="-1.1" cy="0.3" r="0.55" fill={c.stroke} stroke="none"/><circle cx="1.1"  cy="0.3" r="0.55" fill={c.stroke} stroke="none"/><line x1="-1" y1="1.8" x2="1" y2="1.8"/></g>; } },
-  { id: "automation",   label: "Automation",   render: function(c){ return <g fill={c.stroke} stroke="none"><polygon points="0.4,-3.4 -2.4,0.6 -0.2,0.6 -0.6,3.4 2.4,-0.4 0.2,-0.4"/></g>; } },
-  { id: "workflow",     label: "Workflow",     render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.9" strokeLinecap="round"><circle cx="-2.4" cy="-1.6" r="0.9"/><circle cx="2.4"  cy="-1.6" r="0.9"/><circle cx="0"    cy="2.2" r="0.9"/><line x1="-1.7" y1="-0.9" x2="-0.5" y2="1.5"/><line x1="1.7"  y1="-0.9" x2="0.5"  y2="1.5"/><line x1="-1.5" y1="-1.6" x2="1.5"  y2="-1.6"/></g>; } },
-  { id: "tag",          label: "Tag",          render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.9"><path d="M -3 -2.6 H 0.6 L 3.4 0.2 L 0.4 3.2 L -3 -0.4 Z"/><circle cx="-1.6" cy="-1" r="0.55" fill={c.stroke} stroke="none"/></g>; } },
-];
+//
+// Design rules (consistent across all 28 glyphs):
+//   - Pure outline. No solid fills except tiny indicator dots.
+//   - Single stroke weight (0.7 in user space). With the picker's tight
+//     viewBox that lands at ~1.8px on screen — light enough to feel of-a-piece
+//     with the cream/paper aesthetic, heavy enough to read at small size.
+//   - strokeLinecap + strokeLinejoin: round. No sharp corners.
+//   - All glyphs drawn in the [-4..4] coordinate space so they sit balanced
+//     inside the picker tile and the canvas disc.
+var NODE_GLYPHS = (function(){
+  // Wrap each glyph in a <g> that inherits styling — caller only sets stroke.
+  function S(c){ return { fill:"none", stroke:c.stroke, strokeWidth:0.7, strokeLinecap:"round", strokeLinejoin:"round" }; }
+  // A small filled dot used as an accent inside line-art icons.
+  function dot(c, x, y, r){ return <circle cx={x} cy={y} r={r || 0.45} fill={c.stroke} stroke="none" />; }
+  return [
+    // ── COMMERCIAL ────────────────────────────────────────────────────────
+    { id:"account",      label:"Account",      render:function(c){ return <g {...S(c)}><rect x="-3.2" y="-3" width="6.4" height="6" rx="0.6"/><line x1="-3.2" y1="-1.2" x2="3.2" y2="-1.2"/><circle cx="0" cy="0.6" r="1"/><line x1="-1.6" y1="2.4" x2="1.6" y2="2.4"/></g>; } },
+    { id:"person",       label:"Person",       render:function(c){ return <g {...S(c)}><circle cx="0" cy="-1.4" r="1.5"/><path d="M -2.8 3.2 a 2.8 2.8 0 0 1 5.6 0"/></g>; } },
+    { id:"team",         label:"Team",         render:function(c){ return <g {...S(c)}><circle cx="-1.6" cy="-1.4" r="1.2"/><circle cx="1.6" cy="-1.4" r="1.2"/><path d="M -3.6 3.2 a 2 2 0 0 1 4 0"/><path d="M -0.4 3.2 a 2 2 0 0 1 4 0"/></g>; } },
+    { id:"contract",     label:"Contract",     render:function(c){ return <g {...S(c)}><path d="M -2.2 -3.2 H 1 L 2.6 -1.6 V 3.2 H -2.2 Z"/><path d="M 1 -3.2 V -1.6 H 2.6"/><line x1="-1.2" y1="0.4" x2="1.6" y2="0.4"/><line x1="-1.2" y1="1.8" x2="0.6" y2="1.8"/></g>; } },
+    { id:"agreement",    label:"Agreement",    render:function(c){ return <g {...S(c)}><path d="M -3.4 -0.6 L -1.6 -2.4 L 0 -0.8 L 1.6 -2.4 L 3.4 -0.6"/><path d="M -3.4 -0.6 V 1.4 L -1.6 3 L 0 1.4"/><path d="M 3.4 -0.6 V 1.4 L 1.6 3 L 0 1.4"/></g>; } },
+    { id:"sow",          label:"SOW",          render:function(c){ return <g {...S(c)}><rect x="-2.6" y="-3.2" width="5.2" height="6.4" rx="0.5"/><polyline points="-1.6,-1.2 -1,-0.6 0,-1.8"/><line x1="0.6" y1="-1" x2="1.8" y2="-1"/><polyline points="-1.6,0.8 -1,1.4 0,0.2"/><line x1="0.6" y1="1" x2="1.8" y2="1"/></g>; } },
+    { id:"invoice",      label:"Invoice",      render:function(c){ return <g {...S(c)}><path d="M -2.2 -3.2 H 2.2 V 3.2 L 1.4 2.4 L 0.6 3.2 L -0.2 2.4 L -1 3.2 L -1.8 2.4 L -2.2 3 Z"/><line x1="-1.2" y1="-1.6" x2="1.2" y2="-1.6"/><line x1="-1.2" y1="-0.3" x2="1.2" y2="-0.3"/><line x1="-1.2" y1="1" x2="0.4" y2="1"/></g>; } },
+    { id:"payment",      label:"Payment",      render:function(c){ return <g {...S(c)}><rect x="-3.4" y="-2.2" width="6.8" height="4.4" rx="0.5"/><circle cx="0" cy="0" r="1.1"/><line x1="-2.6" y1="-1.4" x2="-2.6" y2="1.4"/><line x1="2.6" y1="-1.4" x2="2.6" y2="1.4"/></g>; } },
+    { id:"subscription", label:"Subscription", render:function(c){ return <g {...S(c)}><path d="M 3 0 a 3 3 0 1 1 -0.9 -2.1"/><polyline points="3,-2.6 3,-0.4 0.8,-0.4"/></g>; } },
+    { id:"order",        label:"Order",        render:function(c){ return <g {...S(c)}><path d="M -2.6 -1.2 L -2.2 3.2 H 2.2 L 2.6 -1.2 Z"/><path d="M -1.4 -1.2 V -1.8 a 1.4 1.4 0 0 1 2.8 0 V -1.2"/></g>; } },
+    // ── RISK & GOVERNANCE ────────────────────────────────────────────────
+    { id:"ticket",       label:"Ticket",       render:function(c){ return <g {...S(c)}><path d="M -3.2 -2 H 3.2 V -0.6 a 0.7 0.7 0 0 0 0 1.4 V 2 H -3.2 V 0.8 a 0.7 0.7 0 0 0 0 -1.4 Z"/><line x1="-0.4" y1="-1" x2="-0.4" y2="1" strokeDasharray="0.5 0.5"/></g>; } },
+    { id:"incident",     label:"Incident",     render:function(c){ return <g {...S(c)}><path d="M 0 -3.2 L 3.4 2.8 H -3.4 Z"/><line x1="0" y1="-0.8" x2="0" y2="1.1"/>{dot(c,0,2.1,0.4)}</g>; } },
+    { id:"risk",         label:"Risk",         render:function(c){ return <g {...S(c)}><path d="M 0 -3.2 L 3 -2 V 0.8 Q 3 2.6 0 3.2 Q -3 2.6 -3 0.8 V -2 Z"/><line x1="0" y1="-1.2" x2="0" y2="0.6"/>{dot(c,0,1.6,0.4)}</g>; } },
+    { id:"flag",         label:"Flag",         render:function(c){ return <g {...S(c)}><line x1="-2.4" y1="-3.2" x2="-2.4" y2="3.2"/><path d="M -2.4 -2.6 L 2.6 -2.6 L 1.4 -0.8 L 2.6 1 L -2.4 1"/></g>; } },
+    { id:"policy",       label:"Policy",       render:function(c){ return <g {...S(c)}><path d="M 0 -3.2 L 3 -2 V 0.8 Q 3 2.6 0 3.2 Q -3 2.6 -3 0.8 V -2 Z"/><polyline points="-1.2,0.2 -0.2,1.2 1.4,-0.6"/></g>; } },
+    // ── PIPELINE & DATA ──────────────────────────────────────────────────
+    { id:"lead",         label:"Lead",         render:function(c){ return <g {...S(c)}><circle r="3"/><circle r="1.6"/>{dot(c,0,0,0.5)}</g>; } },
+    { id:"opportunity",  label:"Opportunity",  render:function(c){ return <g {...S(c)}><path d="M 0.8 -3.2 L -1.8 0.4 L 0 0.4 L -0.6 3.2 L 2 -0.2 L 0.2 -0.2 Z"/></g>; } },
+    { id:"product",      label:"Product",      render:function(c){ return <g {...S(c)}><path d="M 0 -3.2 L 3 -1.6 V 1.6 L 0 3.2 L -3 1.6 V -1.6 Z"/><path d="M 0 -3.2 V 0 L 3 -1.6"/><path d="M 0 0 L -3 -1.6"/><path d="M 0 0 V 3.2"/></g>; } },
+    { id:"metric",       label:"Metric",       render:function(c){ return <g {...S(c)}><line x1="-3" y1="3" x2="3" y2="3"/><line x1="-2" y1="3" x2="-2" y2="1"/><line x1="0" y1="3" x2="0" y2="-0.5"/><line x1="2" y1="3" x2="2" y2="-2"/></g>; } },
+    { id:"document",     label:"Document",     render:function(c){ return <g {...S(c)}><path d="M -2.2 -3.2 H 1 L 2.6 -1.6 V 3.2 H -2.2 Z"/><path d="M 1 -3.2 V -1.6 H 2.6"/><line x1="-1.2" y1="-0.3" x2="1.6" y2="-0.3"/><line x1="-1.2" y1="1" x2="1.6" y2="1"/><line x1="-1.2" y1="2.2" x2="0.6" y2="2.2"/></g>; } },
+    { id:"database",     label:"Database",     render:function(c){ return <g {...S(c)}><ellipse cx="0" cy="-2.2" rx="2.8" ry="0.9"/><path d="M -2.8 -2.2 V 2.2 Q 0 3.2 2.8 2.2 V -2.2"/><path d="M -2.8 0 Q 0 1 2.8 0"/></g>; } },
+    { id:"email",        label:"Email",        render:function(c){ return <g {...S(c)}><rect x="-3" y="-2.2" width="6" height="4.4" rx="0.5"/><polyline points="-3,-2 0,0.4 3,-2"/></g>; } },
+    { id:"event",        label:"Event",        render:function(c){ return <g {...S(c)}><rect x="-2.8" y="-2.4" width="5.6" height="5.4" rx="0.5"/><line x1="-2.8" y1="-0.6" x2="2.8" y2="-0.6"/><line x1="-1.4" y1="-3.2" x2="-1.4" y2="-1.6"/><line x1="1.4" y1="-3.2" x2="1.4" y2="-1.6"/>{dot(c,-1,1.4,0.4)}{dot(c,1,1.4,0.4)}</g>; } },
+    { id:"location",     label:"Location",     render:function(c){ return <g {...S(c)}><path d="M 0 3.4 C -2.4 1 -2.8 -0.4 -2.8 -1.2 a 2.8 2.8 0 0 1 5.6 0 C 2.8 -0.4 2.4 1 0 3.4 Z"/><circle cx="0" cy="-1.2" r="0.8"/></g>; } },
+    // ── AGENTS & AUTOMATION ──────────────────────────────────────────────
+    { id:"agent",        label:"Agent",        render:function(c){ return <g {...S(c)}><rect x="-2.6" y="-1.6" width="5.2" height="4.4" rx="1"/><line x1="0" y1="-3.4" x2="0" y2="-1.6"/>{dot(c,0,-3.4,0.4)}{dot(c,-1.1,0.4,0.45)}{dot(c,1.1,0.4,0.45)}<line x1="-1" y1="1.8" x2="1" y2="1.8"/></g>; } },
+    { id:"automation",   label:"Automation",   render:function(c){ return <g {...S(c)}><path d="M 0.8 -3.2 L -1.8 0.4 L 0 0.4 L -0.6 3.2 L 2 -0.2 L 0.2 -0.2 Z"/></g>; } },
+    { id:"workflow",     label:"Workflow",     render:function(c){ return <g {...S(c)}><circle cx="-2.4" cy="-1.8" r="1"/><circle cx="2.4" cy="-1.8" r="1"/><circle cx="0" cy="2.2" r="1"/><line x1="-1.6" y1="-1" x2="-0.6" y2="1.4"/><line x1="1.6" y1="-1" x2="0.6" y2="1.4"/><line x1="-1.4" y1="-1.8" x2="1.4" y2="-1.8"/></g>; } },
+    { id:"tag",          label:"Tag",          render:function(c){ return <g {...S(c)}><path d="M -3 -2.4 H 0.6 L 3.2 0.2 L 0.4 3 L -3 -0.4 Z"/><circle cx="-1.6" cy="-1" r="0.5"/></g>; } },
+  ];
+})();
 
 // Look up a glyph renderer by id. Returns null if not found.
 function glyphById(id) {
@@ -16493,10 +16504,11 @@ function AddNodeFlow({ onClose, onCreate }) {
                                                 </svg>
                                               )
                                             ) : (
-                                              // Render the bare glyph (no surrounding disc) at a larger scale so
-                                              // it reads cleanly inside the 40×40 picker tile.
-                                              <svg width="28" height="28" viewBox="-5.4 -5.4 10.8 10.8" style={{ display:"block" }}>
-                                                {gOpt.render({ fill: "none", stroke: "var(--ink-2)" })}
+                                              // Bare glyph (no surrounding disc) rendered in a tight viewBox so
+                                              // the icon fills the picker tile. Stroke color is light enough to
+                                              // sit on the cream tile without feeling like a heavy badge.
+                                              <svg width="28" height="28" viewBox="-5 -5 10 10" style={{ display:"block" }}>
+                                                {gOpt.render({ fill: "none", stroke: "var(--ink-3)" })}
                                               </svg>
                                             )}
                                           </button>
