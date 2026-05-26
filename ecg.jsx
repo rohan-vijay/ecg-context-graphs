@@ -2765,24 +2765,14 @@ function ComputationsPane({ node, properties, rules }) {
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
 
       {/* HEADER */}
-      <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:14 }}>
-        <div>
-          <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.7px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:4 }}>{node.label} · Computations</div>
-          <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1 }}>Derived logic for {node.label}</div>
-          <div style={{ fontSize:13, color:"var(--ink-3)", marginTop:6, lineHeight:1.55, maxWidth:680 }}>Every formula, query, agent and workflow that writes a field on this node. Click a row to see the full definition and run health.</div>
-        </div>
-        <div style={{ display:"flex", gap:8 }}>
-          <button className="btn-dark" onClick={function(){ setCreateOpen(true); }}>+ New computation</button>
-        </div>
-      </div>
-
-      {/* FILTER BAR */}
+      {/* Simple toolbar: search + kind filter + new-computation CTA. No title block,
+          no status filter — keep the surface minimal. */}
       <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
         <div style={{ position:"relative", flex:"0 1 320px" }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"var(--ink-3)", pointerEvents:"none" }}>
             <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
           </svg>
-          <input value={search} onChange={function(e){ setSearch(e.target.value); }} placeholder="Search by name, output, or expression" style={{ border:"1px solid var(--line)", borderRadius:7, padding:"8px 10px 8px 30px", fontSize:12.5, fontFamily:"inherit", background:"var(--panel)", width:"100%", boxSizing:"border-box" }} />
+          <input value={search} onChange={function(e){ setSearch(e.target.value); }} placeholder="Search computations" style={{ border:"1px solid var(--line)", borderRadius:7, padding:"8px 10px 8px 30px", fontSize:12.5, fontFamily:"inherit", background:"var(--panel)", width:"100%", boxSizing:"border-box" }} />
         </div>
         <div style={{ display:"flex", gap:4 }}>
           {[{ id:"all", l:"All" }, { id:"formula", l:"Formula" }, { id:"sql", l:"SQL" }, { id:"agent", l:"Agent" }, { id:"automation", l:"Automation" }].map(function(f){
@@ -2790,12 +2780,7 @@ function ComputationsPane({ node, properties, rules }) {
             return <button key={f.id} onClick={function(){ setFilter(f.id); }} style={{ padding:"6px 10px", borderRadius:5, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "var(--panel)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:10.5, cursor:"pointer", letterSpacing:"0.3px" }}>{f.l}</button>;
           })}
         </div>
-        <div style={{ marginLeft:"auto", display:"flex", gap:4 }}>
-          {[{ id:"all", l:"Any status" }, { id:"healthy", l:"Healthy" }, { id:"stale", l:"Stale" }, { id:"failing", l:"Failing" }].map(function(f){
-            var on = statusFilter === f.id;
-            return <button key={f.id} onClick={function(){ setStatusFilter(f.id); }} style={{ padding:"6px 10px", borderRadius:5, border:"1px solid " + (on ? "var(--ink-3)" : "var(--line)"), background: on ? "var(--bg-canvas)" : "var(--panel)", color:"var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:10.5, cursor:"pointer", letterSpacing:"0.3px" }}>{f.l}</button>;
-          })}
-        </div>
+        <button className="btn-dark" onClick={function(){ setCreateOpen(true); }} style={{ marginLeft:"auto" }}>+ New computation</button>
       </div>
 
       {/* CATALOG TABLE — click a row to open the detail modal */}
@@ -3092,18 +3077,27 @@ function NewComputationFlow({ node, properties, onClose }) {
   var systemConnections = SQL_CONNECTIONS[sqlSystem] || [];
   var selectedConn = systemConnections.find(function(c){ return c.id === sqlConn; });
 
-  // Shared rich dropdown picker (same visual as AddPropertyFlowModal's renderPropPick)
-  function richPicker(value, onChange, open, setOpen, options, placeholder) {
+  // Self-managing dropdown picker — same visual as AddPropertyFlowModal's
+  // renderPropPick. Keeps its own open state so callers don't have to thread
+  // setOpen handlers (the previous version did, but ended up wired to a noop
+  // function which made the dropdowns appear dead).
+  function RichPicker({ value, onChange, options, placeholder, initialOpen }) {
+    var [open, setOpen] = useState(!!initialOpen);
     var sel = options.find(function(o){ return o.id === value; });
     return (
       <div style={{ position:"relative" }}>
         <button onClick={function(){ setOpen(!open); }} type="button"
           style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
           {sel ? (
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{sel.l}</div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{sel.d || sel.sub || ""}</div>
-            </div>
+            <>
+              {sel.color && (
+                <span style={{ width:34, height:34, borderRadius:7, background:sel.color, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700 }}>{sel.glyph || ""}</span>
+              )}
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{sel.l}</div>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{sel.d || sel.sub || ""}</div>
+              </div>
+            </>
           ) : (
             <>
               <span style={{ width:34, height:34, borderRadius:7, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>+</span>
@@ -3213,7 +3207,7 @@ function NewComputationFlow({ node, properties, onClose }) {
                 {/* Computation type FIRST — dropdown opens by default */}
                 <div>
                   <label style={lbl}>Computation type</label>
-                  {richPicker(kind, function(v){ setKind(v); }, kindOpen, setKindOpen, KINDS, "Pick a computation type")}
+                  <RichPicker value={kind} onChange={function(v){ setKind(v); }} options={KINDS} placeholder="Pick a computation type" initialOpen={!kind} />
                 </div>
 
                 {/* Everything else gated behind kind selection */}
@@ -3230,7 +3224,7 @@ function NewComputationFlow({ node, properties, onClose }) {
                     </div>
                     <div>
                       <label style={lbl}>Type</label>
-                      {richPicker(pType, function(v){ setPType(v); }, pTypeOpen, setPTypeOpen, TYPE_OPTIONS.map(function(t){ var m = TYPE_META[t]; return { id:t, l:t, d:m.d, color:m.color, glyph:m.glyph }; }), "Pick a storage type")}
+                      <RichPicker value={pType} onChange={function(v){ setPType(v); }} options={TYPE_OPTIONS.map(function(t){ var m = TYPE_META[t]; return { id:t, l:t, d:m.d, color:m.color, glyph:m.glyph }; })} placeholder="Pick a storage type" />
                     </div>
                     <div>
                       <label style={lbl}>Default value <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", letterSpacing:0, textTransform:"none", marginLeft:6 }}>optional · used when the computation hasn't run yet</span></label>
@@ -3278,13 +3272,13 @@ function NewComputationFlow({ node, properties, onClose }) {
                         {/* System segment */}
                         <div style={{ borderRight:"1px solid var(--line-2)" }}>
                           <div style={{ padding:"8px 14px 0", fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-4)", textTransform:"uppercase", fontWeight:600 }}>System</div>
-                          {richPicker(sqlSystem, function(v){ setSqlSystem(v); setSqlConn(""); }, false, function(){}, SQL_SYSTEMS, "Pick a system")}
+                          <RichPicker value={sqlSystem} onChange={function(v){ setSqlSystem(v); setSqlConn(""); }} options={SQL_SYSTEMS} placeholder="Pick a system" />
                         </div>
                         {/* Connection segment */}
                         <div>
                           <div style={{ padding:"8px 14px 0", fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-4)", textTransform:"uppercase", fontWeight:600 }}>Connection</div>
                           {sqlSystem ? (
-                            richPicker(sqlConn, function(v){ setSqlConn(v); }, false, function(){}, systemConnections, "Pick a " + (selectedSystem && selectedSystem.l) + " connection")
+                            <RichPicker value={sqlConn} onChange={function(v){ setSqlConn(v); }} options={systemConnections} placeholder={"Pick a " + (selectedSystem && selectedSystem.l) + " connection"} />
                           ) : (
                             <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px" }}>
                               <span style={{ width:34, height:34, borderRadius:7, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>·</span>
@@ -3309,7 +3303,7 @@ function NewComputationFlow({ node, properties, onClose }) {
                 {kind === "agent" && (
                   <div>
                     <label style={lbl}>Select agent</label>
-                    {richPicker(agentId, setAgentId, false, function(){}, AGENTS, "Select an existing agent")}
+                    <RichPicker value={agentId} onChange={setAgentId} options={AGENTS} placeholder="Select an existing agent" />
                   </div>
                 )}
 
@@ -3317,22 +3311,22 @@ function NewComputationFlow({ node, properties, onClose }) {
                 {kind === "automation" && (
                   <div>
                     <label style={lbl}>Select automation</label>
-                    {richPicker(automationId, setAutomationId, false, function(){}, AUTOMATIONS, "Select an existing automation")}
+                    <RichPicker value={automationId} onChange={setAutomationId} options={AUTOMATIONS} placeholder="Select an existing automation" />
                   </div>
                 )}
 
                 {/* Runtime controls — same for all kinds */}
                 <div>
                   <label style={lbl}>Recompute when</label>
-                  {richPicker(recompute, setRecompute, false, function(){}, RECOMPUTE_OPTIONS, "Pick a recompute trigger")}
+                  <RichPicker value={recompute} onChange={setRecompute} options={RECOMPUTE_OPTIONS} placeholder="Pick a recompute trigger" />
                 </div>
                 <div>
                   <label style={lbl}>Backfill existing records</label>
-                  {richPicker(backfill, setBackfill, false, function(){}, BACKFILL_OPTIONS, "Pick a backfill strategy")}
+                  <RichPicker value={backfill} onChange={setBackfill} options={BACKFILL_OPTIONS} placeholder="Pick a backfill strategy" />
                 </div>
                 <div>
                   <label style={lbl}>On computation failure</label>
-                  {richPicker(onFailure, setOnFailure, false, function(){}, FAILURE_OPTIONS, "Pick a failure behaviour")}
+                  <RichPicker value={onFailure} onChange={setOnFailure} options={FAILURE_OPTIONS} placeholder="Pick a failure behaviour" />
                 </div>
               </div>
             )}
@@ -11969,8 +11963,10 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                       })}
                     </div>
 
-                    {/* PROPERTIES (scrollable list — ALL fields, not just 6) */}
-                    <div style={{ flex:1, minHeight:0, overflowY:"auto", maxHeight:480 }}>
+                    {/* PROPERTIES (scrollable list — ALL fields, not just 6).
+                        flex:1 + minHeight:0 lets it fill all remaining space in the row,
+                        so the inspector card and graph card stay the same height. */}
+                    <div style={{ flex:1, minHeight:0, overflowY:"auto" }}>
                       <div style={{ padding:"12px 18px 6px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase", display:"flex", justifyContent:"space-between" }}>
                         <span>Properties</span>
                         <span>{insp.propsList.length + " fields · " + insp.sourceLabel}</span>
