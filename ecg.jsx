@@ -783,7 +783,6 @@ function Sidebar({ open, onToggle, filter, setFilter, query, setQuery, selected,
           value={query}
           onChange={e => setQuery(e.target.value)}
         />
-        <span className="sb-search-key">⌘F</span>
         <button className="sb-collapse" onClick={onToggle} title="Collapse sidebar">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
