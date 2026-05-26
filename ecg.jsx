@@ -992,13 +992,18 @@ function Meter({ label, v, tail, tone }) {
 
 // ---------- CANVAS (graph) --------------------------------------------------
 
-function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filter, query, savedView, viewport, setViewport, sidebarOpen, showInferred, showEdgeLabels, showCounts }) {
+function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover, setHover, filter, query, savedView, viewport, setViewport, sidebarOpen, showInferred, showEdgeLabels, showCounts, editMode, onEditAdd, onEditConnect, onEditOpenNode, onDeleteNode, onDeleteEdge }) {
   // Defaults if props omitted by older callers.
   if (showInferred === undefined)  showInferred  = true;
   if (showEdgeLabels === undefined) showEdgeLabels = true;
   if (showCounts === undefined)    showCounts    = true;
+  // Fall back to module EDGES if no caller passes an explicit edges array.
+  // (Older code paths read EDGES directly — keeping the fallback here preserves
+  // that behaviour and lets edit-mode swap in a stateful list.)
+  if (!edges) edges = EDGES;
   const svgRef = useRef(null);
-  const [drag, setDrag] = useState(null); // {kind:'node'|'pan', id?, startX, startY, origX, origY}
+  const [drag, setDrag] = useState(null); // {kind:'node'|'pan'|'link', id?, startX, startY, origX, origY}
+  const [linkCursor, setLinkCursor] = useState(null); // {x,y} in world coords while drawing a new edge
   const [size, setSize] = useState({ w: 1200, h: 800 });
 
   useEffect(() => {
@@ -1043,7 +1048,7 @@ function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filte
   const nodeIsLit = (id) => {
     if (!highlightId) return false;
     if (id === highlightId) return true;
-    return EDGES.some(e => (e.s === highlightId && e.t === id) || (e.t === highlightId && e.s === id));
+    return edges.some(e => (e.s === highlightId && e.t === id) || (e.t === highlightId && e.s === id));
   };
   const nodeIsDim = (id) => {
     if (!highlightId) return false;
@@ -1051,10 +1056,16 @@ function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filte
   };
 
   // pointer handlers
-  const onPointerDown = (e, nodeId) => {
+  const onPointerDown = (e, nodeId, linkHandle) => {
     const pt = svgRef.current.getBoundingClientRect();
     const sx = e.clientX - pt.left;
     const sy = e.clientY - pt.top;
+    if (linkHandle && nodeId) {
+      // Drag from a node's connector handle → start linking
+      setDrag({ kind: "link", id: nodeId, startX: sx, startY: sy, moved: false });
+      e.target.setPointerCapture?.(e.pointerId);
+      return;
+    }
     if (nodeId) {
       const n = nodes.find(n => n.id === nodeId);
       setDrag({ kind: "node", id: nodeId, startX: sx, startY: sy, origX: n.x, origY: n.y, moved: false });
@@ -1075,15 +1086,49 @@ function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filte
       setNodes(ns => ns.map(n => n.id === drag.id ? { ...n, x: drag.origX + dx, y: drag.origY + dy } : n));
     } else if (drag.kind === "pan") {
       setViewport(v => ({ ...v, panX: drag.origPanX + (sx - drag.startX), panY: drag.origPanY + (sy - drag.startY) }));
+    } else if (drag.kind === "link") {
+      drag.moved = true;
+      const [wx, wy] = toWorld(sx, sy);
+      setLinkCursor({ x: wx, y: wy });
     }
   };
   const onPointerUp = (e, nodeId) => {
+    if (drag?.kind === "link") {
+      // If we dropped over a different node, fire connect; else cancel.
+      const pt = svgRef.current.getBoundingClientRect();
+      const sx = e.clientX - pt.left;
+      const sy = e.clientY - pt.top;
+      const [wx, wy] = toWorld(sx, sy);
+      let target = null;
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        const r = (n.size || 22);
+        if (n.id !== drag.id && (wx - n.x) * (wx - n.x) + (wy - n.y) * (wy - n.y) < r * r) { target = n; break; }
+      }
+      if (target && onEditConnect) onEditConnect(drag.id, target.id);
+      setLinkCursor(null);
+      setDrag(null);
+      return;
+    }
     if (drag?.kind === "node" && !drag.moved && nodeId) {
-      setSelected(nodeId);
+      // Edit-mode click → open the node's detail editor; otherwise select for the inspector.
+      if (editMode && onEditOpenNode) onEditOpenNode(nodeId);
+      else setSelected(nodeId);
     } else if (drag?.kind === "pan") {
-      const dx = Math.abs(e.clientX - svgRef.current.getBoundingClientRect().left - drag.startX);
-      const dy = Math.abs(e.clientY - svgRef.current.getBoundingClientRect().top - drag.startY);
-      if (dx + dy < 3) setSelected(null);
+      const pt = svgRef.current.getBoundingClientRect();
+      const dx = Math.abs(e.clientX - pt.left - drag.startX);
+      const dy = Math.abs(e.clientY - pt.top - drag.startY);
+      if (dx + dy < 3) {
+        if (editMode && onEditAdd) {
+          // Click on empty canvas → add a node here.
+          const sx = e.clientX - pt.left;
+          const sy = e.clientY - pt.top;
+          const [wx, wy] = toWorld(sx, sy);
+          onEditAdd(wx, wy);
+        } else {
+          setSelected(null);
+        }
+      }
     }
     setDrag(null);
   };
@@ -1157,7 +1202,7 @@ function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filte
         onPointerUp={e => onPointerUp(e)}
         onPointerDown={e => onPointerDown(e)}
         onWheel={onWheel}
-        style={{ cursor: drag?.kind === "pan" ? "grabbing" : "grab" }}
+        style={{ cursor: drag?.kind === "link" ? "crosshair" : (editMode ? (drag?.kind === "pan" ? "grabbing" : "crosshair") : (drag?.kind === "pan" ? "grabbing" : "grab")) }}
       >
         <defs>
           <pattern id="dotgrid" x="0" y="0" width={24 * zoom} height={24 * zoom} patternUnits="userSpaceOnUse" patternTransform={`translate(${(panX + cx) % (24 * zoom)},${(panY + cy) % (24 * zoom)})`}>
@@ -1174,7 +1219,7 @@ function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filte
 
         <g transform={`translate(${cx + panX} ${cy + panY}) scale(${zoom})`}>
           {/* edges */}
-          {EDGES.map((e, i) => {
+          {edges.map((e, i) => {
             if (!showInferred && e.kind === "inferred") return null;
             const visEdge = isVisible(e.s) && isVisible(e.t);
             const lit = edgeIsLit(e);
@@ -1198,7 +1243,7 @@ function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filte
           })}
 
           {/* edge labels — only render at decent zoom or when lit */}
-          {showEdgeLabels && EDGES.map((e, i) => {
+          {showEdgeLabels && edges.map((e, i) => {
             if (!showInferred && e.kind === "inferred") return null;
             const visEdge = isVisible(e.s) && isVisible(e.t);
             const lit = edgeIsLit(e);
@@ -1269,9 +1314,42 @@ function Canvas({ nodes, setNodes, selected, setSelected, hover, setHover, filte
                     {n.instances}
                   </text>
                 )}
+                {/* Edit-mode chrome: connector handle + delete × on hover */}
+                {editMode && isHov && (
+                  <g>
+                    {/* Connector handle to the right — drag to create an edge */}
+                    <g transform={`translate(${n.size + 12}, 0)`}
+                       style={{ cursor:"crosshair" }}
+                       onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, n.id, true); }}>
+                      <circle r="8" fill="var(--bg-canvas)" stroke="var(--ink-2)" strokeWidth="1.3" />
+                      <line x1="-3.5" y1="0" x2="3.5" y2="0" stroke="var(--ink)" strokeWidth="1.5" strokeLinecap="round" />
+                      <line x1="0" y1="-3.5" x2="0" y2="3.5" stroke="var(--ink)" strokeWidth="1.5" strokeLinecap="round" />
+                    </g>
+                    {/* Delete × to the top-right */}
+                    <g transform={`translate(${n.size * 0.78}, ${-n.size * 0.78})`}
+                       style={{ cursor:"pointer" }}
+                       onPointerDown={(e) => { e.stopPropagation(); }}
+                       onClick={(e) => { e.stopPropagation(); if (onDeleteNode) onDeleteNode(n.id); }}>
+                      <circle r="7" fill="var(--coral-fill)" stroke="var(--coral)" strokeWidth="1.2" />
+                      <line x1="-3" y1="-3" x2="3" y2="3" stroke="var(--coral)" strokeWidth="1.4" strokeLinecap="round" />
+                      <line x1="-3" y1="3" x2="3" y2="-3" stroke="var(--coral)" strokeWidth="1.4" strokeLinecap="round" />
+                    </g>
+                  </g>
+                )}
               </g>
             );
           })}
+          {/* Rubber-band edge being drawn from a node handle */}
+          {drag?.kind === "link" && linkCursor && (function(){
+            var from = nodes.find(function(x){ return x.id === drag.id; });
+            if (!from) return null;
+            return (
+              <g style={{ pointerEvents:"none" }}>
+                <line x1={from.x} y1={from.y} x2={linkCursor.x} y2={linkCursor.y} stroke="var(--ink-2)" strokeWidth="1.6" strokeDasharray="4 4" />
+                <circle cx={linkCursor.x} cy={linkCursor.y} r="4" fill="var(--bg-canvas)" stroke="var(--ink-2)" strokeWidth="1.4" />
+              </g>
+            );
+          })()}
         </g>
       </svg>
     </div>
@@ -18051,12 +18129,12 @@ function NewGraphFlow({ onClose, onCreate }) {
 // come from. Four mutually-exclusive options keep it concrete (no Cypher).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function NewEdgeFlow({ onClose, onCreate, fromNode }) {
+function NewEdgeFlow({ onClose, onCreate, fromNode, toNode }) {
   var [step, setStep]                 = useState(1);
   var [label, setLabel]               = useState("");
   var [desc, setDesc]                 = useState("");
   var [fromId, setFromId]             = useState(fromNode ? fromNode.id : null);
-  var [toId, setToId]                 = useState(null);
+  var [toId, setToId]                 = useState(toNode ? toNode.id : null);
   var [cardinality, setCardinality]   = useState("1:N");
   var [inverseLabel, setInverseLabel] = useState("");
   var [requiredAtFrom, setRequiredAtFrom] = useState(false);
@@ -19079,9 +19157,54 @@ function App() {
   const [showCounts,    setShowCounts]    = useState(true);
   const [viewport, setViewport] = useState({ zoom: 0.95, panX: 0, panY: 0 });
   const [nodes, setNodes] = useState(NODES.filter(n => n.type !== "agent"));
+  const [edges, setEdges] = useState(EDGES);
   const [blankGraphName, setBlankGraphName] = useState(null); // when set, this graph is in blank-mode
   const isBlank = blankGraphName !== null;
   const canvasSize = useRef({ w: 1000, h: 700 });
+
+  // ─── EDIT MODE ─────────────────────────────────────────────────────────────
+  // When on, the canvas accepts: click-empty → add node (position pre-set),
+  // drag from a node's connector handle → create edge, click a node/edge →
+  // open its editor, hover × → delete. Snapshots are taken on enter so the
+  // banner can show how many changes are pending and Discard restores them.
+  const [editMode, setEditMode] = useState(false);
+  const [editSnapshot, setEditSnapshot] = useState(null);
+  const [pendingEdgeFrom, setPendingEdgeFrom] = useState(null); // { fromId, toId } when a drag completes
+  const [pendingAddPos, setPendingAddPos] = useState(null);     // { x, y } world coords for next created node
+  const [confirmDelete, setConfirmDelete] = useState(null);     // { kind:"node"|"edge", id?:..., idx?:..., name:..., edgeCount?:... }
+  const [exitConfirm, setExitConfirm] = useState(false);
+
+  function enterEditMode() {
+    setEditSnapshot({ nodes: nodes.map(function(n){ return Object.assign({}, n); }), edges: edges.map(function(e){ return Object.assign({}, e); }) });
+    setEditMode(true);
+  }
+  function discardEditChanges() {
+    if (editSnapshot) {
+      setNodes(editSnapshot.nodes);
+      setEdges(editSnapshot.edges);
+    }
+  }
+  function isDirty() {
+    if (!editSnapshot) return false;
+    if (editSnapshot.nodes.length !== nodes.length) return true;
+    if (editSnapshot.edges.length !== edges.length) return true;
+    for (var i = 0; i < nodes.length; i++) {
+      var a = editSnapshot.nodes[i]; var b = nodes[i];
+      if (!a || a.id !== b.id || a.x !== b.x || a.y !== b.y || a.label !== b.label) return true;
+    }
+    for (var j = 0; j < edges.length; j++) {
+      var ea = editSnapshot.edges[j]; var eb = edges[j];
+      if (!ea || ea.s !== eb.s || ea.t !== eb.t || ea.label !== eb.label) return true;
+    }
+    return false;
+  }
+  function requestExitEditMode() {
+    if (isDirty()) { setExitConfirm(true); return; }
+    setEditMode(false); setEditSnapshot(null);
+  }
+  function commitExitEditMode() {
+    setEditMode(false); setEditSnapshot(null); setExitConfirm(false);
+  }
 
   // Expose a global opener used by the landing-page NewGraphFlow.onCreate
   // (so the user can land directly into an empty workspace they just created).
@@ -19240,16 +19363,46 @@ function App() {
               <label className="ctb-toggle"><input type="checkbox" checked={showInferred} onChange={(e) => setShowInferred(e.target.checked)} /> <span>Inferred</span></label>
               <label className="ctb-toggle"><input type="checkbox" checked={showEdgeLabels} onChange={(e) => setShowEdgeLabels(e.target.checked)} /> <span>Edge labels</span></label>
               <label className="ctb-toggle"><input type="checkbox" checked={showCounts} onChange={(e) => setShowCounts(e.target.checked)} /> <span>Counts</span></label>
+              <span style={{ width:1, height:18, background:"var(--line)", margin:"0 4px" }} />
+              <button onClick={editMode ? requestExitEditMode : enterEditMode}
+                style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"5px 10px", borderRadius:6, border:"1px solid " + (editMode ? "var(--ink)" : "var(--line)"), background: editMode ? "var(--ink)" : "var(--panel)", color: editMode ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:10.5, cursor:"pointer", letterSpacing:"0.3px", textTransform:"uppercase" }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+                {editMode ? "Exit edit" : "Edit mode"}
+              </button>
             </div>
           </div>
+          {editMode && (
+            <EditModeBanner
+              dirty={isDirty()}
+              addedNodes={nodes.length - (editSnapshot ? editSnapshot.nodes.length : 0)}
+              addedEdges={edges.length - (editSnapshot ? editSnapshot.edges.length : 0)}
+              onDiscard={function(){ discardEditChanges(); }}
+              onSave={function(){ /* publish snapshot → "saved" by setting new baseline */ setEditSnapshot({ nodes: nodes.map(function(n){ return Object.assign({}, n); }), edges: edges.map(function(e){ return Object.assign({}, e); }) }); }}
+              onExit={requestExitEditMode}
+            />
+          )}
           <Canvas
             nodes={nodes} setNodes={setNodes}
+            edges={edges} setEdges={setEdges}
             selected={selected} setSelected={setSelected}
             hover={hover} setHover={setHover}
             filter={filter} query={query} savedView={savedView}
             viewport={viewport} setViewport={setViewport}
             sidebarOpen={sidebarOpen}
             showInferred={showInferred} showEdgeLabels={showEdgeLabels} showCounts={showCounts}
+            editMode={editMode}
+            onEditAdd={function(worldX, worldY){ setPendingAddPos({ x: worldX, y: worldY }); setAddNodeOpen(true); }}
+            onEditConnect={function(fromId, toId){ setPendingEdgeFrom({ fromId: fromId, toId: toId }); }}
+            onEditOpenNode={function(id){ setDetailId(id); setTab("Nodes"); }}
+            onDeleteNode={function(id){
+              var n = nodes.find(function(x){ return x.id === id; });
+              var ec = edges.filter(function(e){ return e.s === id || e.t === id; }).length;
+              setConfirmDelete({ kind:"node", id: id, name: n ? n.label : id, edgeCount: ec });
+            }}
+            onDeleteEdge={function(idx){
+              var e = edges[idx];
+              setConfirmDelete({ kind:"edge", idx: idx, name: e ? (":" + e.label) : "edge" });
+            }}
           />
           <Legend filter={filter} setFilter={setFilter} />
           <div className="bottomright">
@@ -19260,17 +19413,25 @@ function App() {
         {selectedNode && <Inspector node={selectedNode} onClose={() => setSelected(null)} onOpenDetail={() => { setDetailId(selectedNode.id); setTab("Nodes"); }} />}
       </div>
       )}
-      {addNodeOpen && <AddNodeFlow onClose={() => setAddNodeOpen(false)} onCreate={function(spec){
-        // Build a minimal node from the flow output. Position it near canvas centre,
-        // jittered so multiple additions don't pile on top of each other.
+      {addNodeOpen && <AddNodeFlow onClose={function(){ setAddNodeOpen(false); setPendingAddPos(null); }} onCreate={function(spec){
+        // Build a minimal node from the flow output. If the user clicked the
+        // canvas at a specific world position (edit-mode add), drop the node
+        // there; otherwise jitter near the centre.
         var id = (spec.name || "node").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || ("node-" + Date.now());
-        var jitter = nodes.length * 80;
+        var px, py;
+        if (pendingAddPos) {
+          px = pendingAddPos.x; py = pendingAddPos.y;
+        } else {
+          var jitter = nodes.length * 80;
+          px = (jitter % 400) - 200;
+          py = Math.floor(jitter / 400) * 120 - 60;
+        }
         var newNode = {
           id: id + "-" + Date.now().toString(36).slice(-4),
           label: spec.name || "New node",
           type: spec.shape || "entity",
-          x: (jitter % 400) - 200,
-          y: Math.floor(jitter / 400) * 120 - 60,
+          x: px,
+          y: py,
           props: (spec.properties && spec.properties.length) || 0,
           edges: 0,
           glyph: spec.glyph || null,
@@ -19278,7 +19439,102 @@ function App() {
         };
         setNodes(function(ns){ return ns.concat([newNode]); });
         setSelected(newNode.id);
+        setPendingAddPos(null);
       }} />}
+      {/* Edge-create flow triggered by an edit-mode drag from a node handle */}
+      {pendingEdgeFrom && (
+        <NewEdgeFlow
+          fromNode={nodes.find(function(n){ return n.id === pendingEdgeFrom.fromId; })}
+          toNode={nodes.find(function(n){ return n.id === pendingEdgeFrom.toId; })}
+          onClose={function(){ setPendingEdgeFrom(null); }}
+          onCreate={function(spec){
+            var s = spec && spec.from && spec.from.id;
+            var t = spec && spec.to && spec.to.id;
+            if (s && t) {
+              setEdges(function(es){ return es.concat([{ s: s, t: t, label: (spec.label || "RELATES").toUpperCase(), kind: "direct" }]); });
+            }
+            setPendingEdgeFrom(null);
+          }}
+        />
+      )}
+      {/* Delete-confirm dialog */}
+      {confirmDelete && (
+        <ConfirmDialog
+          title={confirmDelete.kind === "node" ? "Delete this node?" : "Delete this edge?"}
+          body={confirmDelete.kind === "node"
+            ? (confirmDelete.edgeCount > 0
+                ? <>You're about to delete <strong>{confirmDelete.name}</strong> and the <strong>{confirmDelete.edgeCount}</strong> edge{confirmDelete.edgeCount === 1 ? "" : "s"} connected to it. This can't be undone from this session.</>
+                : <>You're about to delete <strong>{confirmDelete.name}</strong>. This can't be undone from this session.</>)
+            : <>You're about to delete <strong>{confirmDelete.name}</strong>. This can't be undone from this session.</>}
+          confirmLabel="Delete"
+          danger
+          onCancel={function(){ setConfirmDelete(null); }}
+          onConfirm={function(){
+            if (confirmDelete.kind === "node") {
+              var id = confirmDelete.id;
+              setEdges(function(es){ return es.filter(function(e){ return e.s !== id && e.t !== id; }); });
+              setNodes(function(ns){ return ns.filter(function(n){ return n.id !== id; }); });
+              if (selected === id) setSelected(null);
+            } else {
+              var idx = confirmDelete.idx;
+              setEdges(function(es){ return es.filter(function(_, i){ return i !== idx; }); });
+            }
+            setConfirmDelete(null);
+          }}
+        />
+      )}
+      {exitConfirm && (
+        <ConfirmDialog
+          title="Exit edit mode with unsaved changes?"
+          body={<>You have unsaved changes. If you exit now, those changes are kept in this session but no longer staged for save. You can also discard them and exit.</>}
+          confirmLabel="Exit edit mode"
+          secondaryLabel="Discard & exit"
+          onCancel={function(){ setExitConfirm(false); }}
+          onConfirm={function(){ commitExitEditMode(); }}
+          onSecondary={function(){ discardEditChanges(); commitExitEditMode(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── EDIT MODE UI ────────────────────────────────────────────────────────────
+// Banner sits above the canvas while edit mode is active. Shows a live count
+// of additions and the Save / Discard / Exit triplet.
+function EditModeBanner({ dirty, addedNodes, addedEdges, onSave, onDiscard, onExit }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 16px", background:"#fff8df", borderBottom:"1px solid #e2d899", borderTop:"1px solid #e2d899", fontFamily:"JetBrains Mono", fontSize:11, letterSpacing:"0.3px" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:12, color:"#5b4a07" }}>
+        <span style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"3px 8px", borderRadius:4, background:"#5b4a07", color:"#fff8df", fontWeight:700, letterSpacing:"0.5px" }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+          EDITING SCHEMA
+        </span>
+        <span>Click empty canvas to add a node · Drag from a node handle to draw an edge · Click an element to edit · Hover for delete</span>
+        {dirty && <span style={{ color:"#7a5a00" }}>· {addedNodes > 0 ? (addedNodes + " new node" + (addedNodes === 1 ? "" : "s") + "  ") : ""}{addedEdges > 0 ? (addedEdges + " new edge" + (addedEdges === 1 ? "" : "s")) : ""}</span>}
+      </div>
+      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+        <button onClick={onDiscard} disabled={!dirty} style={{ padding:"5px 10px", borderRadius:5, border:"1px solid #c4ac4c", background:"transparent", color:"#5b4a07", fontFamily:"JetBrains Mono", fontSize:10.5, cursor: dirty ? "pointer" : "not-allowed", opacity: dirty ? 1 : 0.45, letterSpacing:"0.3px", textTransform:"uppercase" }}>Discard</button>
+        <button onClick={onSave} disabled={!dirty} style={{ padding:"5px 10px", borderRadius:5, border:"1px solid #5b4a07", background: dirty ? "#5b4a07" : "transparent", color: dirty ? "#fff8df" : "#5b4a07", fontFamily:"JetBrains Mono", fontSize:10.5, cursor: dirty ? "pointer" : "not-allowed", opacity: dirty ? 1 : 0.45, letterSpacing:"0.3px", textTransform:"uppercase", fontWeight:700 }}>Save changes</button>
+        <button onClick={onExit} style={{ padding:"5px 10px", borderRadius:5, border:"1px solid transparent", background:"transparent", color:"#5b4a07", fontFamily:"JetBrains Mono", fontSize:10.5, cursor:"pointer", letterSpacing:"0.3px", textTransform:"uppercase" }}>Exit</button>
+      </div>
+    </div>
+  );
+}
+
+// Small confirmation dialog used by edit-mode deletes and the dirty-exit prompt.
+function ConfirmDialog({ title, body, confirmLabel, secondaryLabel, danger, onConfirm, onSecondary, onCancel }) {
+  return (
+    <div onClick={function(e){ if (e.target === e.currentTarget) onCancel(); }}
+      style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.42)", zIndex:300, display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ width:"min(92vw, 460px)", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", padding:"22px 24px 18px", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
+        <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:24, color:"var(--ink)", lineHeight:1.15, marginBottom:8 }}>{title}</div>
+        <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, marginBottom:18 }}>{body}</div>
+        <div style={{ display:"flex", justifyContent:"flex-end", gap:8, flexWrap:"wrap" }}>
+          <button onClick={onCancel} className="btn-ghost">Cancel</button>
+          {secondaryLabel && <button onClick={onSecondary} className="btn-ghost" style={{ border:"1px solid var(--line)", borderRadius:7, padding:"7px 12px" }}>{secondaryLabel}</button>}
+          <button onClick={onConfirm} className="btn-dark" style={ danger ? { background:"var(--coral)", borderColor:"var(--coral)" } : undefined }>{confirmLabel}</button>
+        </div>
+      </div>
     </div>
   );
 }
