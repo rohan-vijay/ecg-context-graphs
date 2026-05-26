@@ -1301,7 +1301,9 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
         onPointerUp={e => onPointerUp(e)}
         onPointerDown={e => onPointerDown(e)}
         onWheel={onWheel}
-        style={{ cursor: drag?.kind === "link" ? "crosshair" : (editMode ? (drag?.kind === "pan" ? "grabbing" : "crosshair") : (drag?.kind === "pan" ? "grabbing" : "grab")) }}
+        style={{ cursor: drag?.kind === "link" ? "crosshair" : drag?.kind === "pan" ? "grabbing" : (editMode
+          ? "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'><circle cx='22' cy='22' r='15' fill='%23f3ede0' stroke='%23bdb39a' stroke-width='1.2' stroke-dasharray='3 3'/><line x1='22' y1='15' x2='22' y2='29' stroke='%23645d4d' stroke-width='1.6' stroke-linecap='round'/><line x1='15' y1='22' x2='29' y2='22' stroke='%23645d4d' stroke-width='1.6' stroke-linecap='round'/></svg>\") 22 22, copy"
+          : "grab") }}
       >
         <defs>
           <pattern id="dotgrid" x="0" y="0" width={24 * zoom} height={24 * zoom} patternUnits="userSpaceOnUse" patternTransform={`translate(${(panX + cx) % (24 * zoom)},${(panY + cy) % (24 * zoom)})`}>
@@ -1385,14 +1387,18 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
                 onMouseEnter={() => setHover(n.id)}
                 onMouseLeave={() => setHover(null)}
                 onMouseMove={editMode ? (e) => {
-                  // Track the cursor angle relative to this node so the handle
-                  // pops out on the side nearest to where the mouse is.
+                  // Track the cursor's quadrant relative to this node and snap
+                  // the handle to one of the four cardinal points (N / E / S / W).
                   const pt = svgRef.current.getBoundingClientRect();
                   const sx = e.clientX - pt.left;
                   const sy = e.clientY - pt.top;
                   const [wx, wy] = toWorld(sx, sy);
                   const dx = wx - n.x, dy = wy - n.y;
-                  if (dx * dx + dy * dy > 4) setHoverAngle(Math.atan2(dy, dx));
+                  if (dx * dx + dy * dy < 4) return;
+                  const a = Math.atan2(dy, dx);
+                  // Snap to nearest π/2 — gives E=0, S=π/2, W=±π, N=-π/2.
+                  const snapped = Math.round(a / (Math.PI / 2)) * (Math.PI / 2);
+                  if (snapped !== hoverAngle) setHoverAngle(snapped);
                 } : undefined}
                 opacity={lit ? 1 : (highlightId ? (vis ? 0.18 : 0.06) : (vis ? 1 : 0.22))}
               >
