@@ -19249,6 +19249,10 @@ function App() {
   function enterEditMode() {
     setEditSnapshot({ nodes: nodes.map(function(n){ return Object.assign({}, n); }), edges: edges.map(function(e){ return Object.assign({}, e); }) });
     setEditMode(true);
+    // Give the canvas room to work — close the inspector and collapse the
+    // sidebar so the editable surface isn't squeezed between two panels.
+    setSelected(null);
+    setSidebarOpen(false);
   }
   function discardEditChanges() {
     if (editSnapshot) {
@@ -19435,12 +19439,6 @@ function App() {
               <label className="ctb-toggle"><input type="checkbox" checked={showInferred} onChange={(e) => setShowInferred(e.target.checked)} /> <span>Inferred</span></label>
               <label className="ctb-toggle"><input type="checkbox" checked={showEdgeLabels} onChange={(e) => setShowEdgeLabels(e.target.checked)} /> <span>Edge labels</span></label>
               <label className="ctb-toggle"><input type="checkbox" checked={showCounts} onChange={(e) => setShowCounts(e.target.checked)} /> <span>Counts</span></label>
-              <span style={{ width:1, height:18, background:"var(--line)", margin:"0 4px" }} />
-              <button onClick={editMode ? requestExitEditMode : enterEditMode}
-                style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"5px 10px", borderRadius:6, border:"1px solid " + (editMode ? "var(--ink)" : "var(--line)"), background: editMode ? "var(--ink)" : "var(--panel)", color: editMode ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:10.5, cursor:"pointer", letterSpacing:"0.3px", textTransform:"uppercase" }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-                {editMode ? "Exit edit" : "Edit mode"}
-              </button>
             </div>
           </div>
           {editMode && (
@@ -19481,6 +19479,21 @@ function App() {
             <Minimap nodes={nodes} viewport={viewport} size={{ w: 1100, h: 700 }} />
             <ZoomControls viewport={viewport} setViewport={setViewport} nodes={nodes} size={{ w: 1100, h: 700 }} />
           </div>
+          {/* Subtle floating edit-mode toggle — icon-only, top-right of the
+              canvas. Sits inside the canvas surface so it doesn't crowd the
+              toolbar. Hover reveals a small label tooltip. */}
+          <button
+            onClick={editMode ? requestExitEditMode : enterEditMode}
+            title={editMode ? "Exit edit mode" : "Enter edit mode"}
+            style={{ position:"absolute", top:64, right:14, width:30, height:30, borderRadius:6, border:"1px solid " + (editMode ? "var(--ink)" : "var(--line)"), background: editMode ? "var(--ink)" : "var(--panel)", color: editMode ? "var(--bg-canvas)" : "var(--ink-3)", display:"inline-flex", alignItems:"center", justifyContent:"center", cursor:"pointer", boxShadow:"0 1px 2px rgba(40,40,20,0.05)", padding:0, zIndex:5 }}
+            onMouseEnter={function(e){ if (!editMode) { e.currentTarget.style.color = "var(--ink)"; e.currentTarget.style.borderColor = "var(--ink-2)"; } }}
+            onMouseLeave={function(e){ if (!editMode) { e.currentTarget.style.color = "var(--ink-3)"; e.currentTarget.style.borderColor = "var(--line)"; } }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9"/>
+              <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+            </svg>
+          </button>
         </main>
         {selectedNode && <Inspector node={selectedNode} onClose={() => setSelected(null)} onOpenDetail={() => { setDetailId(selectedNode.id); setTab("Nodes"); }} />}
       </div>
