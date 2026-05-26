@@ -408,23 +408,31 @@ function colorForNode(n) {
 // `id` is stored on the node (node.glyph); each renderer returns SVG drawn in
 // the [-5..5] coordinate space so it composes cleanly inside both the small
 // ListGlyph circle and the larger Canvas node body.
+// 24 entries — 6 columns × 4 rows in the picker grid. Distinct silhouettes.
 var NODE_GLYPHS = [
-  { id: "dot",      label: "Dot",      render: function(c){ return <circle r="1.6" fill={c.stroke} />; } },
-  { id: "ring",     label: "Ring",     render: function(c){ return <circle r="3" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
-  { id: "diamond",  label: "Diamond",  render: function(c){ return <polygon points="0,-3.6 3.6,0 0,3.6 -3.6,0" fill={c.stroke} />; } },
-  { id: "square",   label: "Square",   render: function(c){ return <rect x="-3" y="-3" width="6" height="6" rx="0.6" fill="none" stroke={c.stroke} strokeWidth="1.1" />; } },
-  { id: "triangle", label: "Triangle", render: function(c){ return <polygon points="0,-3.4 3.2,2.6 -3.2,2.6" fill="none" stroke={c.stroke} strokeWidth="1.1" />; } },
-  { id: "hex",      label: "Hex",      render: function(c){ return <polygon points="-3,-1.7 0,-3.4 3,-1.7 3,1.7 0,3.4 -3,1.7" fill="none" stroke={c.stroke} strokeWidth="1.1" />; } },
-  { id: "bar",      label: "Bar",      render: function(c){ return <rect x="-3.6" y="-1" width="7.2" height="2" rx="1" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
-  { id: "doc",      label: "Doc",      render: function(c){ return <rect x="-2.6" y="-3.6" width="5.2" height="7.2" rx="0.6" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
-  { id: "wave",     label: "Wave",     render: function(c){ return <path d="M -4 0 q 1.5 -2.4 3 0 t 3 0" fill="none" stroke={c.stroke} strokeWidth="1.1" />; } },
-  { id: "moon",     label: "Moon",     render: function(c){ return <g><circle r="3.4" fill="none" stroke={c.stroke} strokeWidth="1" /><path d="M 0 -3.4 A 3.4 3.4 0 0 1 0 3.4 Z" fill={c.stroke} /></g>; } },
-  { id: "cross",    label: "Cross",    render: function(c){ return <g><line x1="-3" y1="0" x2="3" y2="0" stroke={c.stroke} strokeWidth="1.2" strokeLinecap="round" /><line x1="0" y1="-3" x2="0" y2="3" stroke={c.stroke} strokeWidth="1.2" strokeLinecap="round" /></g>; } },
-  { id: "grid",     label: "Grid",     render: function(c){ return <g><rect x="-3" y="-3" width="3" height="3" fill="none" stroke={c.stroke} strokeWidth="0.9" /><rect x="0" y="-3" width="3" height="3" fill="none" stroke={c.stroke} strokeWidth="0.9" /><rect x="-3" y="0" width="3" height="3" fill="none" stroke={c.stroke} strokeWidth="0.9" /><rect x="0" y="0" width="3" height="3" fill="none" stroke={c.stroke} strokeWidth="0.9" /></g>; } },
-  { id: "bolt",     label: "Bolt",     render: function(c){ return <polygon points="-1.6,-3.4 1.8,-0.8 -0.4,-0.4 1.6,3.4 -1.8,0.6 0.2,0.2" fill={c.stroke} />; } },
-  { id: "star",     label: "Star",     render: function(c){ return <polygon points="0,-3.6 1.1,-1.1 3.6,-0.8 1.7,0.9 2.2,3.4 0,2.1 -2.2,3.4 -1.7,0.9 -3.6,-0.8 -1.1,-1.1" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
-  { id: "arrow",    label: "Arrow",    render: function(c){ return <g><line x1="-3" y1="0" x2="3" y2="0" stroke={c.stroke} strokeWidth="1.2" strokeLinecap="round" /><polyline points="1,-1.5 3,0 1,1.5" fill="none" stroke={c.stroke} strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" /></g>; } },
-  { id: "alert",    label: "Alert",    render: function(c){ return <g><line x1="0" y1="-2.4" x2="0" y2="1.2" stroke={c.stroke} strokeWidth="1.3" strokeLinecap="round" /><circle cx="0" cy="2.6" r="0.7" fill={c.stroke} /></g>; } },
+  { id: "dot",       label: "Dot",       render: function(c){ return <circle r="1.6" fill={c.stroke} />; } },
+  { id: "ring",      label: "Ring",      render: function(c){ return <circle r="3" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
+  { id: "diamond",   label: "Diamond",   render: function(c){ return <polygon points="0,-3.6 3.6,0 0,3.6 -3.6,0" fill={c.stroke} />; } },
+  { id: "square",    label: "Square",    render: function(c){ return <rect x="-3" y="-3" width="6" height="6" rx="0.6" fill="none" stroke={c.stroke} strokeWidth="1.1" />; } },
+  { id: "triangle",  label: "Triangle",  render: function(c){ return <polygon points="0,-3.4 3.2,2.6 -3.2,2.6" fill="none" stroke={c.stroke} strokeWidth="1.1" />; } },
+  { id: "hex",       label: "Hex",       render: function(c){ return <polygon points="-3,-1.7 0,-3.4 3,-1.7 3,1.7 0,3.4 -3,1.7" fill="none" stroke={c.stroke} strokeWidth="1.1" />; } },
+  { id: "bar",       label: "Bar",       render: function(c){ return <rect x="-3.6" y="-1" width="7.2" height="2" rx="1" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
+  { id: "doc",       label: "Doc",       render: function(c){ return <rect x="-2.6" y="-3.6" width="5.2" height="7.2" rx="0.6" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
+  { id: "wave",      label: "Wave",      render: function(c){ return <path d="M -4 0 q 1.5 -2.4 3 0 t 3 0" fill="none" stroke={c.stroke} strokeWidth="1.1" />; } },
+  { id: "moon",      label: "Moon",      render: function(c){ return <g><circle r="3.4" fill="none" stroke={c.stroke} strokeWidth="1" /><path d="M 0 -3.4 A 3.4 3.4 0 0 1 0 3.4 Z" fill={c.stroke} /></g>; } },
+  { id: "cross",     label: "Cross",     render: function(c){ return <g><line x1="-3" y1="0" x2="3" y2="0" stroke={c.stroke} strokeWidth="1.2" strokeLinecap="round" /><line x1="0" y1="-3" x2="0" y2="3" stroke={c.stroke} strokeWidth="1.2" strokeLinecap="round" /></g>; } },
+  { id: "grid",      label: "Grid",      render: function(c){ return <g><rect x="-3" y="-3" width="3" height="3" fill="none" stroke={c.stroke} strokeWidth="0.9" /><rect x="0" y="-3" width="3" height="3" fill="none" stroke={c.stroke} strokeWidth="0.9" /><rect x="-3" y="0" width="3" height="3" fill="none" stroke={c.stroke} strokeWidth="0.9" /><rect x="0" y="0" width="3" height="3" fill="none" stroke={c.stroke} strokeWidth="0.9" /></g>; } },
+  { id: "bolt",      label: "Bolt",      render: function(c){ return <polygon points="-1.6,-3.4 1.8,-0.8 -0.4,-0.4 1.6,3.4 -1.8,0.6 0.2,0.2" fill={c.stroke} />; } },
+  { id: "star",      label: "Star",      render: function(c){ return <polygon points="0,-3.6 1.1,-1.1 3.6,-0.8 1.7,0.9 2.2,3.4 0,2.1 -2.2,3.4 -1.7,0.9 -3.6,-0.8 -1.1,-1.1" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
+  { id: "arrow",     label: "Arrow",     render: function(c){ return <g><line x1="-3" y1="0" x2="3" y2="0" stroke={c.stroke} strokeWidth="1.2" strokeLinecap="round" /><polyline points="1,-1.5 3,0 1,1.5" fill="none" stroke={c.stroke} strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" /></g>; } },
+  { id: "alert",     label: "Alert",     render: function(c){ return <g><line x1="0" y1="-2.4" x2="0" y2="1.2" stroke={c.stroke} strokeWidth="1.3" strokeLinecap="round" /><circle cx="0" cy="2.6" r="0.7" fill={c.stroke} /></g>; } },
+  { id: "target",    label: "Target",    render: function(c){ return <g><circle r="3.2" fill="none" stroke={c.stroke} strokeWidth="1" /><circle r="1.2" fill={c.stroke} /></g>; } },
+  { id: "check",     label: "Check",     render: function(c){ return <polyline points="-2.6,0.2 -0.5,2.3 2.8,-1.6" fill="none" stroke={c.stroke} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />; } },
+  { id: "spark",     label: "Spark",     render: function(c){ return <g><line x1="0" y1="-3.4" x2="0" y2="3.4" stroke={c.stroke} strokeWidth="1.1" strokeLinecap="round" /><line x1="-3.4" y1="0" x2="3.4" y2="0" stroke={c.stroke} strokeWidth="1.1" strokeLinecap="round" /><line x1="-2.4" y1="-2.4" x2="2.4" y2="2.4" stroke={c.stroke} strokeWidth="1" strokeLinecap="round" /><line x1="2.4" y1="-2.4" x2="-2.4" y2="2.4" stroke={c.stroke} strokeWidth="1" strokeLinecap="round" /></g>; } },
+  { id: "pin",       label: "Pin",       render: function(c){ return <path d="M 0 -3.6 a 2 2 0 0 1 2 2 c 0 1.6 -2 3.8 -2 3.8 s -2 -2.2 -2 -3.8 a 2 2 0 0 1 2 -2 z" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
+  { id: "eye",       label: "Eye",       render: function(c){ return <g><path d="M -3.8 0 q 3.8 -3 7.6 0 q -3.8 3 -7.6 0 z" fill="none" stroke={c.stroke} strokeWidth="1" /><circle r="1.1" fill={c.stroke} /></g>; } },
+  { id: "tag",       label: "Tag",       render: function(c){ return <g><path d="M -3.2 -2.6 L 0.6 -2.6 L 3.4 0 L 0.6 2.6 L -3.2 2.6 Z" fill="none" stroke={c.stroke} strokeWidth="1" /><circle cx="-1.6" cy="0" r="0.7" fill={c.stroke} /></g>; } },
+  { id: "play",      label: "Play",      render: function(c){ return <polygon points="-2.2,-3 -2.2,3 3.2,0" fill={c.stroke} />; } },
 ];
 
 // Look up a glyph renderer by id. Returns null if not found.
@@ -16312,29 +16320,39 @@ function AddNodeFlow({ onClose, onCreate }) {
                             {glyphOpen && (
                               <>
                                 <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setGlyphOpen(false); }} />
-                                <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:10, width:288 }}>
+                                <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:10, width:294 }}>
                                   <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:8, padding:"0 2px" }}>Pick an icon</div>
                                   <div style={{ display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:6 }}>
-                                    {NODE_GLYPHS.map(function(gOpt){
-                                      var isSel = glyph === gOpt.id;
-                                      return (
-                                        <button key={gOpt.id} type="button"
-                                          onClick={function(){ setGlyph(gOpt.id); setGlyphOpen(false); }}
-                                          title={gOpt.label}
-                                          style={{ width:40, height:40, borderRadius:8, border:"1px solid " + (isSel ? "var(--ink)" : "var(--line-2)"), background: isSel ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", padding:0, display:"flex", alignItems:"center", justifyContent:"center" }}
-                                          onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
-                                          onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel)"; }}>
-                                          <svg width="24" height="24" viewBox="-12 -12 24 24">
-                                            <circle r="9" fill={previewC.fill} stroke={previewC.stroke} strokeWidth="1.2" />
-                                            {gOpt.render(previewC)}
-                                          </svg>
-                                        </button>
-                                      );
-                                    })}
+                                    {/* First slot is the dashed placeholder — selecting it clears any picked glyph
+                                        so the node has the empty-state icon. The remaining 23 tiles are unique glyphs. */}
+                                    {(function(){
+                                      var slots = [{ id: null, label: "No icon", placeholder: true }].concat(NODE_GLYPHS);
+                                      return slots.map(function(gOpt, i){
+                                        var isSel = glyph === gOpt.id || (gOpt.placeholder && glyph === null);
+                                        return (
+                                          <button key={gOpt.id || "none"} type="button"
+                                            onClick={function(){ setGlyph(gOpt.id); setGlyphOpen(false); }}
+                                            title={gOpt.label}
+                                            style={{ width:40, height:40, borderRadius:8, border:"1px solid " + (isSel ? "var(--ink)" : "var(--line-2)"), background: isSel ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", padding:0, display:"flex", alignItems:"center", justifyContent:"center" }}
+                                            onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                                            onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel)"; }}>
+                                            {gOpt.placeholder ? (
+                                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ink-4)" strokeWidth="1.4" strokeLinecap="round">
+                                                <circle cx="12" cy="12" r="8" strokeDasharray="3 3" />
+                                                <line x1="12" y1="9" x2="12" y2="15" />
+                                                <line x1="9" y1="12" x2="15" y2="12" />
+                                              </svg>
+                                            ) : (
+                                              <svg width="24" height="24" viewBox="-12 -12 24 24">
+                                                <circle r="9" fill={previewC.fill} stroke={previewC.stroke} strokeWidth="1.2" />
+                                                {gOpt.render(previewC)}
+                                              </svg>
+                                            )}
+                                          </button>
+                                        );
+                                      });
+                                    })()}
                                   </div>
-                                  {glyph && (
-                                    <button type="button" onClick={function(){ setGlyph(null); setGlyphOpen(false); }} className="btn-ghost" style={{ marginTop:8, padding:"6px 10px", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>Clear icon</button>
-                                  )}
                                 </div>
                               </>
                             )}
@@ -19010,7 +19028,7 @@ function BlankCanvas({ onAddNode }) {
           <div style={{ textAlign:"center", maxWidth:460, pointerEvents:"none" }}>
             <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:38, lineHeight:1.05, color:"var(--ink)" }}>Start your context graph</div>
             <div style={{ fontSize:13.5, color:"var(--ink-3)", marginTop:12, lineHeight:1.55 }}>Click anywhere on the canvas to drop your first node. Nodes can be entities, data sources, or agents — connect them with edges to model your domain.</div>
-            <div style={{ marginTop:18, fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)", letterSpacing:"0.4px" }}>CLICK CANVAS · OR PRESS  +  NEW NODE</div>
+            <div style={{ marginTop:18, fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)", letterSpacing:"0.4px" }}>CLICK ON GRAPH TO CREATE A NODE</div>
           </div>
           {/* Custom cursor — follows the pointer, scales up on press */}
           {pos.inside && (
