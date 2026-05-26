@@ -1086,7 +1086,7 @@ function Meter({ label, v, tail, tone }) {
 
 // ---------- CANVAS (graph) --------------------------------------------------
 
-function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover, setHover, filter, query, savedView, viewport, setViewport, sidebarOpen, showInferred, showEdgeLabels, showCounts, editMode, onEditAdd, onEditConnect, onEditOpenNode, onEditEdge }) {
+function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover, setHover, filter, query, savedView, viewport, setViewport, sidebarOpen, showInferred, showEdgeLabels, showCounts, editMode, cursorMode, onEditAdd, onEditConnect, onEditOpenNode, onEditEdge }) {
   // Defaults if props omitted by older callers.
   if (showInferred === undefined)  showInferred  = true;
   if (showEdgeLabels === undefined) showEdgeLabels = true;
@@ -1247,8 +1247,8 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
       const dx = Math.abs(e.clientX - pt.left - drag.startX);
       const dy = Math.abs(e.clientY - pt.top - drag.startY);
       if (dx + dy < 3) {
-        if (editMode && onEditAdd) {
-          // Click on empty canvas → add a node here.
+        if (editMode && cursorMode === "add" && onEditAdd) {
+          // Add-cursor mode: click on empty canvas → add a node here.
           const sx = e.clientX - pt.left;
           const sy = e.clientY - pt.top;
           const [wx, wy] = toWorld(sx, sy);
@@ -1333,7 +1333,9 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
         style={{ cursor: drag?.kind === "link" ? "crosshair" : drag?.kind === "pan" ? "grabbing" : (editMode
           ? (hover
               ? "grab"  /* near a node (within buffer) — stay in grab mode */
-              : "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'><circle cx='22' cy='22' r='15' fill='%23f3ede0' stroke='%23bdb39a' stroke-width='1.2' stroke-dasharray='3 3'/><line x1='22' y1='15' x2='22' y2='29' stroke='%23645d4d' stroke-width='1.6' stroke-linecap='round'/><line x1='15' y1='22' x2='29' y2='22' stroke='%23645d4d' stroke-width='1.6' stroke-linecap='round'/></svg>\") 22 22, copy")
+              : (cursorMode === "select"
+                  ? "grab"  /* select mode — plain pointer / grab on empty canvas */
+                  : "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'><circle cx='22' cy='22' r='15' fill='%23f3ede0' stroke='%23bdb39a' stroke-width='1.2' stroke-dasharray='3 3'/><line x1='22' y1='15' x2='22' y2='29' stroke='%23645d4d' stroke-width='1.6' stroke-linecap='round'/><line x1='15' y1='22' x2='29' y2='22' stroke='%23645d4d' stroke-width='1.6' stroke-linecap='round'/></svg>\") 22 22, copy"))
           : "grab") }}
       >
         <defs>
@@ -19392,6 +19394,11 @@ function App() {
   // state so there's no separate Save / Discard step — exiting just turns the
   // edit affordances off.
   const [editMode, setEditMode] = useState(false);
+  // Cursor mode while in edit:
+  //   "add"    — dashed-plus canvas cursor on empty canvas, click drops a node.
+  //   "select" — regular grab/pointer, click empty space just deselects (pan).
+  // Users who want to pan/inspect without adding nodes flip this to "select".
+  const [cursorMode, setCursorMode] = useState("add");
   // { fromId, toId, editIdx?, initialLabel? } — set when a drag completes or
   // when an existing edge is clicked for edit. editIdx tells the onCreate
   // callback to splice the existing edge instead of appending.
@@ -19578,6 +19585,7 @@ function App() {
             sidebarOpen={sidebarOpen}
             showInferred={showInferred} showEdgeLabels={showEdgeLabels} showCounts={showCounts}
             editMode={editMode}
+            cursorMode={cursorMode}
             onEditAdd={function(worldX, worldY){ setPendingAddPos({ x: worldX, y: worldY }); setAddNodeOpen(true); }}
             onEditConnect={function(fromId, toId){ setPendingEdgeFrom({ fromId: fromId, toId: toId }); }}
             onEditOpenNode={function(id){ setDetailId(id); setTab("Nodes"); }}
@@ -19594,7 +19602,7 @@ function App() {
           </div>
           {/* View / Edit segmented toggle — floating pill, top-center of the
               canvas. Active segment slides into the ink-filled state. */}
-          <ViewEditToggle editMode={editMode} onEnter={enterEditMode} onExit={exitEditMode} />
+          <ViewEditToggle editMode={editMode} onEnter={enterEditMode} onExit={exitEditMode} cursorMode={cursorMode} setCursorMode={setCursorMode} />
         </main>
         {selectedNode && <Inspector node={selectedNode} onClose={() => setSelected(null)} onOpenDetail={() => { setDetailId(selectedNode.id); setTab("Nodes"); }} />}
       </div>
@@ -19659,11 +19667,12 @@ function App() {
   );
 }
 
-// ─── EDIT MODE — View / Edit segmented toggle ───────────────────────────────
-// Floats at the bottom-center of the canvas as a pill. Recessed container
-// with a clearly raised active segment — both lifted off the canvas with a
-// soft drop shadow so the control reads as a tactile chip, not flat text.
-function ViewEditToggle({ editMode, onEnter, onExit }) {
+// ─── EDIT MODE — View / Edit segmented toggle + cursor-mode toggle ──────────
+// Floats at the bottom-center of the canvas. View/Edit pill on the left; in
+// edit mode, a second smaller pill appears to the right with two cursor
+// options: "add" (dashed-plus drop cursor, click adds a node) and "select"
+// (plain grab, click empty canvas just deselects).
+function ViewEditToggle({ editMode, onEnter, onExit, cursorMode, setCursorMode }) {
   var seg = function(active){ return {
     display:"inline-flex", alignItems:"center", gap:7,
     padding:"7px 16px", borderRadius:999, border:"none",
@@ -19675,22 +19684,52 @@ function ViewEditToggle({ editMode, onEnter, onExit }) {
     fontWeight: active ? 700 : 500,
     transition:"all 160ms ease-out"
   }; };
+  var iconSeg = function(active){ return {
+    display:"inline-flex", alignItems:"center", justifyContent:"center",
+    width:34, height:30, padding:0, borderRadius:999, border:"none",
+    background: active ? "var(--panel)" : "transparent",
+    color: active ? "var(--ink-2)" : "var(--ink-4)",
+    cursor:"pointer",
+    boxShadow: active ? "0 1px 3px rgba(40,40,20,0.16), 0 0 0 1px var(--line)" : "none",
+    transition:"all 160ms ease-out"
+  }; };
+  var pill = { display:"inline-flex", padding:3, borderRadius:999, background:"var(--panel-2)", border:"1px solid var(--line)", boxShadow:"0 6px 24px rgba(40,40,20,0.10), 0 1px 2px rgba(40,40,20,0.05)" };
   return (
-    <div style={{ position:"absolute", bottom:18, left:"50%", transform:"translateX(-50%)", zIndex:10, display:"inline-flex", padding:3, borderRadius:999, background:"var(--panel-2)", border:"1px solid var(--line)", boxShadow:"0 6px 24px rgba(40,40,20,0.10), 0 1px 2px rgba(40,40,20,0.05)" }}>
-      <button onClick={onExit} style={seg(!editMode)}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-          <circle cx="12" cy="12" r="3"/>
-        </svg>
-        View
-      </button>
-      <button onClick={onEnter} style={seg(editMode)}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 20h9"/>
-          <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
-        </svg>
-        Edit
-      </button>
+    <div style={{ position:"absolute", bottom:18, left:"50%", transform:"translateX(-50%)", zIndex:10, display:"inline-flex", gap:8, alignItems:"center" }}>
+      {/* View / Edit pill */}
+      <div style={pill}>
+        <button onClick={onExit} style={seg(!editMode)}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          View
+        </button>
+        <button onClick={onEnter} style={seg(editMode)}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 20h9"/>
+            <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+          </svg>
+          Edit
+        </button>
+      </div>
+      {/* Cursor mode toggle — only in edit mode */}
+      {editMode && (
+        <div style={pill}>
+          <button onClick={function(){ setCursorMode("select"); }} style={iconSeg(cursorMode === "select")} title="Select cursor — click empty canvas to deselect / pan">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 3 L19 11 L13 13 L11 19 Z"/>
+            </svg>
+          </button>
+          <button onClick={function(){ setCursorMode("add"); }} style={iconSeg(cursorMode === "add")} title="Add-node cursor — click empty canvas to drop a node">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <circle cx="12" cy="12" r="8" strokeDasharray="3 3"/>
+              <line x1="12" y1="8" x2="12" y2="16"/>
+              <line x1="8" y1="12" x2="16" y2="12"/>
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
