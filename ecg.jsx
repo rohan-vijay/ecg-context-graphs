@@ -11017,7 +11017,7 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
   // users can scan context without paging through.
   var [tab, setTab] = React.useState("Graph");
   var [expandedProp, setExpandedProp] = React.useState(null);
-  var [twoHop, setTwoHop] = React.useState(true);
+  var [twoHop, setTwoHop] = React.useState(false);
   var [hoverNode, setHoverNode] = React.useState(null);
   // When a node in the graph is clicked, its record-preview shows on the right.
   // null = inspect the centre (current record).
@@ -11328,8 +11328,8 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
         )}
 
         {tab === "Graph" && (
-          <div style={{ display:"grid", gridTemplateColumns:"minmax(0, 1.4fr) minmax(420px, 1fr)", gap:18 }}>
-            <div className="card" style={{ padding:0, overflow:"hidden" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"minmax(0, 2fr) minmax(340px, 0.7fr)", gap:18, alignItems:"stretch" }}>
+            <div className="card" style={{ padding:0, overflow:"hidden", display:"flex", flexDirection:"column" }}>
               <div className="card-head card-head-row">
                 <span>Graph</span>
                 <div style={{ display:"flex", gap:6, alignItems:"center" }}>
@@ -11346,12 +11346,14 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                   </button>
                 </div>
               </div>
-              <div style={{ background:"var(--bg-canvas)", padding:"20px" }}>
+              <div style={{ background:"var(--bg-canvas)", padding:"20px", flex:1, display:"flex", flexDirection:"column" }}>
                 {(function() {
-                  var W = twoHop ? 980 : 720;
-                  var H = twoHop ? 620 : 460;
+                  // Wider/taller viewBox so the SVG visibly fills the bigger pane,
+                  // and the node circles end up roughly the size of the workspace canvas.
+                  var W = twoHop ? 1120 : 900;
+                  var H = twoHop ? 720 : 600;
                   var cx = W/2, cy = H/2;
-                  var r1 = twoHop ? 160 : 170;
+                  var r1 = twoHop ? 200 : 220;
                   var r2 = 290;
 
                   // 1-hop nodes
@@ -11393,7 +11395,7 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                   }
 
                   return (
-                    <svg width="100%" height={H} viewBox={"0 0 "+W+" "+H} style={{ display:"block" }}>
+                    <svg width="100%" height="100%" viewBox={"0 0 "+W+" "+H} preserveAspectRatio="xMidYMid meet" style={{ display:"block", flex:1 }}>
                       <defs>
                         <marker id="rec-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-3)"/></marker>
                         <marker id="rec-arrow-2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-4)"/></marker>
@@ -11405,8 +11407,8 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                         var dx = h.x - px, dy = h.y - py;
                         var len = Math.sqrt(dx*dx + dy*dy);
                         var ux = dx/len, uy = dy/len;
-                        var sx = px + ux * 16, sy = py + uy * 16;
-                        var tx = h.x - ux * 13, ty = h.y - uy * 13;
+                        var sx = px + ux * 28, sy = py + uy * 28;
+                        var tx = h.x - ux * 20, ty = h.y - uy * 20;
                         var midX = (sx + tx) / 2, midY = (sy + ty) / 2;
                         return (
                           <g key={"h-e"+i}>
@@ -11425,8 +11427,8 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                         var dx = f.x - cx, dy = f.y - cy;
                         var len = Math.sqrt(dx*dx + dy*dy);
                         var ux = dx/len, uy = dy/len;
-                        var sx = cx + ux * 28, sy = cy + uy * 28;
-                        var tx = f.x - ux * 18, ty = f.y - uy * 18;
+                        var sx = cx + ux * 40, sy = cy + uy * 40;
+                        var tx = f.x - ux * 28, ty = f.y - uy * 28;
                         return (
                           <g key={"e"+i}>
                             <line x1={sx} y1={sy} x2={tx} y2={ty} stroke="var(--ink-3)" strokeWidth="1.3" opacity="0.6" strokeDasharray={f.rr.kind === "inferred" ? "4,3" : "none"} markerEnd="url(#rec-arrow)" />
@@ -11449,18 +11451,18 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                             onClick={function(){ setInspectedNode(h.rr); }}
                             onMouseEnter={function(){ setHoverNode(h.rr.id); }}
                             onMouseLeave={function(){ setHoverNode(null); }}>
-                            <circle cx={h.x} cy={h.y} r={isInspected ? 16 : isHover ? 15 : 13} fill={col.fill} stroke={isInspected || isHover ? "var(--ink)" : col.stroke} strokeWidth={isInspected ? 2.4 : isHover ? 2 : 1.2} />
-                            <text x={h.x} y={h.y - 19} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"7.5px", fontWeight:600, fill: isHover || isInspected ? "var(--ink)" : "var(--ink-2)", pointerEvents:"none" }}>{h.rr.id}</text>
-                            <text x={h.x} y={h.y + 23} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"7.5px", fill:"var(--ink-4)", pointerEvents:"none" }}>{String(h.rr.keyValue).slice(0, 18)}</text>
+                            <circle cx={h.x} cy={h.y} r={isInspected ? 22 : isHover ? 20 : 18} fill={col.fill} stroke={isInspected || isHover ? "var(--ink)" : col.stroke} strokeWidth={isInspected ? 2.6 : isHover ? 2.2 : 1.4} />
+                            <text x={h.x} y={h.y - 26} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9px", fontWeight:600, fill: isHover || isInspected ? "var(--ink)" : "var(--ink-2)", pointerEvents:"none" }}>{h.rr.id}</text>
+                            <text x={h.x} y={h.y + 30} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"8.5px", fill:"var(--ink-4)", pointerEvents:"none" }}>{String(h.rr.keyValue).slice(0, 18)}</text>
                           </g>
                         );
                       })}
 
                       {/* Centre — clickable to reset the inspector back to the current record. */}
                       <g style={{ cursor:"pointer" }} onClick={function(){ setInspectedNode(null); }}>
-                        <circle cx={cx} cy={cy} r="28" fill={c.fill} stroke={inspectedNode === null ? "var(--ink)" : c.stroke} strokeWidth={inspectedNode === null ? 3.2 : 2.5} />
-                        <text x={cx} y={cy - 38} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"10.5px", fontWeight:600, fill:"var(--ink)", pointerEvents:"none" }}>{record.id}</text>
-                        <text x={cx} y={cy + 48} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9.5px", fill:"var(--ink-3)", pointerEvents:"none" }}>{record[Object.keys(record).find(function(k){ return k === "name" || k === "company_name" || k === "title"; })] || node.label}</text>
+                        <circle cx={cx} cy={cy} r="38" fill={c.fill} stroke={inspectedNode === null ? "var(--ink)" : c.stroke} strokeWidth={inspectedNode === null ? 3.6 : 2.8} />
+                        <text x={cx} y={cy - 50} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"12px", fontWeight:600, fill:"var(--ink)", pointerEvents:"none" }}>{record.id}</text>
+                        <text x={cx} y={cy + 60} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"11px", fill:"var(--ink-3)", pointerEvents:"none" }}>{record[Object.keys(record).find(function(k){ return k === "name" || k === "company_name" || k === "title"; })] || node.label}</text>
                       </g>
 
                       {/* 1-hop nodes — clickable, drawn last so they sit on top */}
@@ -11473,9 +11475,9 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                             onClick={function(){ setInspectedNode(f.rr); }}
                             onMouseEnter={function(){ setHoverNode(f.rr.id); }}
                             onMouseLeave={function(){ setHoverNode(null); }}>
-                            <circle cx={f.x} cy={f.y} r={isInspected ? 23 : isHover ? 21 : 18} fill={otherCol.fill} stroke={isInspected || isHover ? "var(--ink)" : otherCol.stroke} strokeWidth={isInspected ? 2.8 : isHover ? 2.4 : 1.6} />
-                            <text x={f.x} y={f.y - 24} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9px", fontWeight:600, fill:"var(--ink)", pointerEvents:"none" }}>{f.rr.id}</text>
-                            <text x={f.x} y={f.y + 30} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"8.5px", fill:"var(--ink-3)", pointerEvents:"none" }}>{f.rr.keyName + ": " + String(f.rr.keyValue).slice(0, 20)}</text>
+                            <circle cx={f.x} cy={f.y} r={isInspected ? 30 : isHover ? 28 : 26} fill={otherCol.fill} stroke={isInspected || isHover ? "var(--ink)" : otherCol.stroke} strokeWidth={isInspected ? 3 : isHover ? 2.6 : 1.8} />
+                            <text x={f.x} y={f.y - 34} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"11.5px", fontWeight:600, fill:"var(--ink)", pointerEvents:"none" }}>{f.rr.id}</text>
+                            <text x={f.x} y={f.y + 42} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"10.5px", fill:"var(--ink-3)", pointerEvents:"none" }}>{f.rr.keyName + ": " + String(f.rr.keyValue).slice(0, 20)}</text>
                           </g>
                         );
                       })}
