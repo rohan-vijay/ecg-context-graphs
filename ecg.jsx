@@ -12333,6 +12333,718 @@ function StewardshipTaskDetail({ task, onBack }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// GOVERNANCE WORKSPACE — workspace-level governance hub
+//
+// Sidebar nav with 10 sections. Built to feel like a real enterprise data-
+// governance product (control inventory, policy registry, RBAC matrix,
+// framework coverage, retention, stewardship, approvals queue, audit log,
+// risk register). All data is mock; the surfaces are styled to match the rest
+// of the app (cards, KPIs, dashed-row tables, JetBrains Mono labels).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Mock data — shared across sections so counts in the sidebar match the tables.
+var GOV_DATA = {
+  kpis: { policies: 14, compliance: 92, approvals: 5, risks: 7, stewards: 11, frameworks: 5, retention: 18, audits: 1240 },
+  policies: [
+    { id:"P-001", name:"PII Access Policy",            type:"Access",         scope:["Customer","Person","Contact"], owner:"Morgan Lee",     status:"Active",   version:"v3.2", reviewed:"12 days ago", effective:"2025-04-01" },
+    { id:"P-002", name:"7-Year Retention Standard",    type:"Retention",      scope:["Invoice","Subscription","Account"], owner:"Ramin K",   status:"Active",   version:"v2.0", reviewed:"31 days ago", effective:"2024-01-01" },
+    { id:"P-003", name:"Customer Data Sharing Policy", type:"Sharing",        scope:["Customer","Account","Contact"], owner:"Jordan S",      status:"Active",   version:"v1.4", reviewed:"3 mo ago",    effective:"2024-06-15" },
+    { id:"P-004", name:"Confidential Classification",  type:"Classification", scope:["Person","Employee","Worker"], owner:"Casey M",         status:"Active",   version:"v2.1", reviewed:"45 days ago", effective:"2024-09-01" },
+    { id:"P-005", name:"Data Quality SLAs",            type:"Quality",        scope:["all"], owner:"data-platform",                          status:"Active",   version:"v1.0", reviewed:"2 mo ago",    effective:"2024-11-01" },
+    { id:"P-006", name:"EU Data Residency",            type:"Residency",      scope:["Customer","Person","Account"], owner:"Alex R",         status:"Active",   version:"v1.0", reviewed:"6 mo ago",    effective:"2024-05-25" },
+    { id:"P-007", name:"Schema Change Approval",       type:"Change",         scope:["all"], owner:"data-platform",                          status:"Active",   version:"v3.0", reviewed:"1 mo ago",    effective:"2025-01-15" },
+    { id:"P-008", name:"Encryption at Rest",           type:"Security",       scope:["all"], owner:"security",                               status:"Active",   version:"v2.4", reviewed:"5 mo ago",    effective:"2024-03-01" },
+    { id:"P-009", name:"Vendor Data Processing DPA",   type:"Sharing",        scope:["Customer","Account"], owner:"legal-ops",               status:"Active",   version:"v1.2", reviewed:"4 mo ago",    effective:"2024-07-01" },
+    { id:"P-010", name:"Right-to-Erasure SOP",         type:"Compliance",     scope:["Customer","Person","Contact"], owner:"legal-ops",      status:"Active",   version:"v2.0", reviewed:"2 mo ago",    effective:"2024-08-01" },
+    { id:"P-011", name:"Synthetic Sandbox Policy",     type:"Access",         scope:["all"], owner:"data-platform",                          status:"Draft",    version:"v0.3", reviewed:"5 days ago",  effective:"—" },
+    { id:"P-012", name:"Agent Write Authorisation",    type:"Access",         scope:["all"], owner:"data-platform",                          status:"Active",   version:"v1.0", reviewed:"2 mo ago",    effective:"2024-12-01" },
+    { id:"P-013", name:"Cross-Border Transfer Policy", type:"Residency",      scope:["Customer","Person"], owner:"legal-ops",                status:"Review",   version:"v1.5", reviewed:"8 days ago",  effective:"2025-02-01" },
+    { id:"P-014", name:"Decommissioning Standard",     type:"Retention",      scope:["all"], owner:"data-platform",                          status:"Retired",  version:"v1.0", reviewed:"1 y ago",     effective:"2023-06-01" }
+  ],
+  roles: [
+    { id:"role-admin",      name:"Workspace Admin",   members:3,  perms:{ read:"all", write:"all", admin:"all" },                            tone:"coral" },
+    { id:"role-steward",    name:"Data Steward",      members:11, perms:{ read:"all", write:"owned domains", admin:"none" },                 tone:"gold"  },
+    { id:"role-engineer",   name:"Data Engineer",     members:18, perms:{ read:"all", write:"schemas + sources", admin:"none" },             tone:"blue"  },
+    { id:"role-analyst",    name:"Analyst",           members:42, perms:{ read:"all non-PII", write:"saved views", admin:"none" },           tone:"green" },
+    { id:"role-pii-officer",name:"Privacy Officer",   members:2,  perms:{ read:"PII (audited)", write:"DSAR fulfilment", admin:"none" },     tone:"purple"},
+    { id:"role-ext-aud",    name:"External Auditor",  members:1,  perms:{ read:"approved evidence only", write:"none", admin:"none" },       tone:"ink"   },
+    { id:"role-readonly",   name:"Read-only (Org)",   members:128,perms:{ read:"all non-confidential", write:"none", admin:"none" },         tone:"ink"   },
+    { id:"role-agent-runtime",name:"Agent Runtime",   members:6,  perms:{ read:"all", write:"computed fields only", admin:"none" },          tone:"purple"}
+  ],
+  accessRequests: [
+    { id:"AR-401", who:"jordan.s",  what:"PII access · Customer.email",       submitted:"2 h ago",  status:"pending" },
+    { id:"AR-402", who:"alex.r",    what:"Steward of Invoice (transfer)",     submitted:"5 h ago",  status:"pending" },
+    { id:"AR-403", who:"casey.m",   what:"Read on Employee.salary",           submitted:"1 d ago",  status:"pending" }
+  ],
+  frameworks: [
+    { id:"soc2",    name:"SOC 2 Type II",   coverage:96, controls:{ passed:113, failed:5,  total:118 }, lastAudit:"2025-01-08", nextAudit:"2026-01-08", owner:"security",      evidence:412, status:"on-track"  },
+    { id:"gdpr",    name:"GDPR",            coverage:91, controls:{ passed: 84, failed:8,  total: 92 }, lastAudit:"2024-11-22", nextAudit:"2025-11-22", owner:"legal-ops",     evidence:288, status:"on-track"  },
+    { id:"ccpa",    name:"CCPA",            coverage:88, controls:{ passed: 53, failed:7,  total: 60 }, lastAudit:"2024-09-15", nextAudit:"2025-09-15", owner:"legal-ops",     evidence:174, status:"at-risk"   },
+    { id:"hipaa",   name:"HIPAA",           coverage:78, controls:{ passed: 47, failed:13, total: 60 }, lastAudit:"2024-07-30", nextAudit:"2025-07-30", owner:"security",      evidence: 96, status:"at-risk"   },
+    { id:"iso",     name:"ISO 27001",       coverage:94, controls:{ passed:108, failed:7,  total:115 }, lastAudit:"2024-12-14", nextAudit:"2025-12-14", owner:"security",      evidence:330, status:"on-track"  },
+    { id:"pci",     name:"PCI-DSS",         coverage:82, controls:{ passed: 36, failed:8,  total: 44 }, lastAudit:"2024-10-02", nextAudit:"2025-10-02", owner:"finance-ops",   evidence: 88, status:"at-risk"   }
+  ],
+  classifications: [
+    { level:"Public",       count:184, color:"var(--green)",  fill:"var(--green-fill)",  desc:"Approved for external publication." },
+    { level:"Internal",     count:1102,color:"var(--blue)",   fill:"var(--blue-fill)",   desc:"Default — visible to all employees." },
+    { level:"Confidential", count:482, color:"var(--gold)",   fill:"var(--gold-fill)",   desc:"Restricted to named teams." },
+    { level:"Restricted",   count:218, color:"var(--coral)",  fill:"var(--coral-fill)",  desc:"Named-individual access · audited." }
+  ],
+  piiInventory: [
+    { category:"Direct identifiers",  fields:["full_name","email","phone","ssn_last_4","passport"],            entities:8, dataSubjects:"Customer, Person, Employee" },
+    { category:"Quasi-identifiers",   fields:["dob","zip","gender","employer","ip_address"],                   entities:5, dataSubjects:"Person, Visitor" },
+    { category:"Sensitive (special)", fields:["health_flag","biometric_hash","religion","political_view"],     entities:2, dataSubjects:"Employee, Patient" },
+    { category:"Financial",           fields:["card_last_4","bank_account","tax_id","payout_ref"],             entities:4, dataSubjects:"Customer, Vendor" }
+  ],
+  retention: [
+    { entity:"Customer",     rule:"7 years after last activity",     legal:"SOX, GDPR right-to-erasure",       lastReview:"2 mo ago", nextPurge:"in 4 days",   recordsDueAt:418 },
+    { entity:"Account",      rule:"7 years after closure",           legal:"SOX",                              lastReview:"3 mo ago", nextPurge:"in 11 days",  recordsDueAt:120 },
+    { entity:"Invoice",      rule:"10 years (financial)",            legal:"IRS, SOX",                         lastReview:"1 mo ago", nextPurge:"—",            recordsDueAt:0   },
+    { entity:"Ticket",       rule:"3 years after close",             legal:"none",                             lastReview:"6 mo ago", nextPurge:"in 22 days",  recordsDueAt:2840 },
+    { entity:"Interaction",  rule:"18 months",                       legal:"GDPR proportionality",             lastReview:"1 mo ago", nextPurge:"in 2 days",   recordsDueAt:9120 },
+    { entity:"Person (lead)",rule:"90 days if no consent",           legal:"GDPR Art.7",                       lastReview:"2 wk ago", nextPurge:"in 1 day",    recordsDueAt:312 },
+    { entity:"Employee",     rule:"7 years after leave date",        legal:"local labour law",                 lastReview:"5 mo ago", nextPurge:"—",            recordsDueAt:0   },
+    { entity:"Agreement",    rule:"Keep forever (legal hold)",       legal:"litigation hold",                  lastReview:"1 y ago",  nextPurge:"—",            recordsDueAt:0   }
+  ],
+  stewards: [
+    { name:"Morgan Lee",  team:"data-platform",  domains:["Customer","Account"],          sla:"≤ 4h",   lastActivity:"23 min ago", openTasks: 3 },
+    { name:"Ramin K",     team:"data-platform",  domains:["Subscription","Invoice"],      sla:"≤ 8h",   lastActivity:"1 h ago",    openTasks: 1 },
+    { name:"Jordan S",    team:"customer-ops",   domains:["Ticket","Interaction"],        sla:"≤ 12h",  lastActivity:"3 h ago",    openTasks: 5 },
+    { name:"Alex R",      team:"finance-ops",    domains:["Invoice","Agreement"],         sla:"≤ 4h",   lastActivity:"2 d ago",    openTasks: 0 },
+    { name:"Casey M",     team:"security",       domains:["Employee","Worker"],           sla:"≤ 24h",  lastActivity:"5 h ago",    openTasks: 2 },
+    { name:"Taylor J",    team:"revenue-ops",    domains:["Opportunity","Quote"],         sla:"≤ 8h",   lastActivity:"30 min ago", openTasks: 4 },
+    { name:"Priya N",     team:"product",        domains:["Signal","Risk"],               sla:"≤ 4h",   lastActivity:"45 min ago", openTasks: 1 },
+    { name:"Sam W",       team:"legal-ops",      domains:["Agreement","Consent"],         sla:"≤ 4h",   lastActivity:"6 h ago",    openTasks: 0 },
+    { name:"Avery K",     team:"customer-ops",   domains:["Person","Contact"],            sla:"≤ 8h",   lastActivity:"2 h ago",    openTasks: 2 },
+    { name:"Robin H",     team:"analytics",      domains:["Engagement","Campaign"],       sla:"≤ 12h",  lastActivity:"1 d ago",    openTasks: 1 },
+    { name:"Quinn P",     team:"security",       domains:["Incident","Audit"],            sla:"≤ 4h",   lastActivity:"15 min ago", openTasks: 3 }
+  ],
+  approvals: [
+    { id:"AP-1024", type:"Schema change",  what:"Add Customer.churn_score (computed)",       submitter:"morgan.lee", submitted:"32 min ago", sla:"≤ 4 h",  status:"pending" },
+    { id:"AP-1023", type:"Source link",    what:"NetSuite ERP → Invoice (read-write)",        submitter:"alex.r",     submitted:"2 h ago",    sla:"≤ 8 h",  status:"pending" },
+    { id:"AP-1022", type:"Access grant",   what:"Grant analyst read on Employee.salary",     submitter:"jordan.s",   submitted:"5 h ago",    sla:"≤ 24 h", status:"pending" },
+    { id:"AP-1021", type:"Data export",    what:"Export Customer.email (regulatory request)", submitter:"sam.w",      submitted:"1 d ago",    sla:"≤ 12 h", status:"pending" },
+    { id:"AP-1020", type:"Policy update",  what:"PII Access Policy v3.3 — add Brazil",       submitter:"morgan.lee", submitted:"2 d ago",    sla:"—",     status:"approved" },
+    { id:"AP-1019", type:"Schema change",  what:"Drop Ticket.legacy_priority",                submitter:"jordan.s",   submitted:"3 d ago",    sla:"—",     status:"approved" },
+    { id:"AP-1018", type:"Source link",    what:"Workday → Employee (read-only)",            submitter:"casey.m",    submitted:"4 d ago",    sla:"—",     status:"approved" },
+    { id:"AP-1017", type:"Access grant",   what:"Steward transfer Subscription → Ramin K",   submitter:"morgan.lee", submitted:"6 d ago",    sla:"—",     status:"approved" },
+    { id:"AP-1016", type:"Schema change",  what:"Add Account.health_band (enum)",            submitter:"taylor.j",   submitted:"8 d ago",    sla:"—",     status:"rejected" }
+  ],
+  audit: [
+    { ts:"32 min ago", actor:"morgan.lee",      action:"submitted",  resource:"AP-1024 (schema change)",      result:"queued",   ip:"10.0.4.18"  },
+    { ts:"1 h ago",    actor:"agent:enrich_v3",action:"computed",   resource:"Account.churn_score (4,218)",  result:"ok",       ip:"agent-pool" },
+    { ts:"2 h ago",    actor:"alex.r",          action:"connected",  resource:"NetSuite ERP → Invoice",       result:"pending",  ip:"10.0.7.92"  },
+    { ts:"3 h ago",    actor:"schema-bot",     action:"validated",  resource:"all rules · 0 violations",     result:"ok",       ip:"system"     },
+    { ts:"4 h ago",    actor:"morgan.lee",      action:"granted",    resource:"Read on Customer to analytics",result:"ok",       ip:"10.0.4.18"  },
+    { ts:"6 h ago",    actor:"casey.m",         action:"updated",    resource:"P-004 Classification v2.1",    result:"ok",       ip:"10.0.5.22"  },
+    { ts:"8 h ago",    actor:"sam.w",           action:"exported",   resource:"Customer.email (3 records)",   result:"approved", ip:"10.0.9.11"  },
+    { ts:"12 h ago",   actor:"jordan.s",        action:"viewed",     resource:"Employee.salary",              result:"denied",   ip:"10.0.7.40"  },
+    { ts:"1 d ago",    actor:"system",         action:"purged",     resource:"Person · 312 leads (90d rule)",result:"ok",       ip:"system"     },
+    { ts:"1 d ago",    actor:"priya.n",         action:"created",    resource:"Risk R-019 (PII drift)",       result:"ok",       ip:"10.0.6.74"  },
+    { ts:"2 d ago",    actor:"ramin.k",         action:"published",  resource:"Subscription schema v4.1",     result:"ok",       ip:"10.0.4.21"  },
+    { ts:"2 d ago",    actor:"morgan.lee",      action:"approved",   resource:"AP-1020 (P-001 update)",       result:"ok",       ip:"10.0.4.18"  }
+  ],
+  risks: [
+    { id:"R-019", title:"PII drift on Customer.email",           severity:"High",     status:"Mitigating",  owner:"Morgan Lee",  due:"in 4 days",   impact:"high",  likelihood:"high"   },
+    { id:"R-018", title:"Stale retention rule on Person (lead)", severity:"Medium",   status:"Open",        owner:"Sam W",       due:"in 9 days",   impact:"high",  likelihood:"medium" },
+    { id:"R-017", title:"Vendor DPA missing for HubSpot",        severity:"High",     status:"Open",        owner:"Sam W",       due:"in 2 days",   impact:"high",  likelihood:"medium" },
+    { id:"R-016", title:"Encryption key rotation overdue",       severity:"Critical", status:"Mitigating",  owner:"Casey M",     due:"in 1 day",    impact:"high",  likelihood:"high"   },
+    { id:"R-015", title:"Cross-region replication latency",      severity:"Low",      status:"Accepted",    owner:"Ramin K",     due:"—",           impact:"low",   likelihood:"medium" },
+    { id:"R-014", title:"Agent write rate spike (anomaly)",      severity:"Medium",   status:"Open",        owner:"Priya N",     due:"in 6 days",   impact:"medium",likelihood:"medium" },
+    { id:"R-013", title:"Source schema drift — NetSuite",        severity:"Medium",   status:"Mitigating",  owner:"Alex R",      due:"in 12 days",  impact:"medium",likelihood:"low"    },
+    { id:"R-012", title:"Synthetic sandbox PII leak (potential)",severity:"High",     status:"Closed",      owner:"Casey M",     due:"—",           impact:"high",  likelihood:"low"    }
+  ],
+  incidents: [
+    { id:"INC-08", title:"Salesforce sync paused — schema mismatch", severity:"Medium", status:"Open",    opened:"2 h ago",  closed:"—" },
+    { id:"INC-07", title:"Email export queue backed up",             severity:"Low",    status:"Closed",  opened:"5 d ago",  closed:"4 d ago" },
+    { id:"INC-06", title:"PII access audit log gap (resolved)",      severity:"High",   status:"Closed",  opened:"2 wk ago", closed:"12 d ago" }
+  ]
+};
+
+function GovernanceWorkspace() {
+  var [section, setSection] = useState("overview");
+
+  // Section registry. Counts surface in the sidebar so the nav feels alive.
+  var sections = [
+    { id:"overview",       label:"Overview",       desc:"At-a-glance health & action items" },
+    { id:"policies",       label:"Policies",       count: GOV_DATA.policies.length,  desc:"Policy registry & lifecycle" },
+    { id:"access",         label:"Access & Roles", count: GOV_DATA.roles.length,     desc:"RBAC, roles & requests" },
+    { id:"compliance",     label:"Compliance",     count: GOV_DATA.frameworks.length,desc:"Framework coverage" },
+    { id:"classification", label:"Classification", desc:"Sensitivity & PII inventory" },
+    { id:"retention",      label:"Retention",      count: GOV_DATA.retention.length, desc:"Lifecycle rules & purges" },
+    { id:"stewardship",    label:"Stewardship",    count: GOV_DATA.stewards.length,  desc:"Owners by domain" },
+    { id:"approvals",      label:"Approvals",      count: GOV_DATA.approvals.filter(function(a){ return a.status==="pending"; }).length, desc:"Change & access queue" },
+    { id:"audit",          label:"Audit log",      desc:"Every governance event" },
+    { id:"risk",           label:"Risk register",  count: GOV_DATA.risks.filter(function(r){ return r.status !== "Closed"; }).length, desc:"Open risks & remediation" },
+    { id:"incidents",      label:"Incidents",      count: GOV_DATA.incidents.filter(function(i){ return i.status === "Open"; }).length, desc:"Privacy & data incidents" }
+  ];
+
+  function severityTone(sev){
+    return sev === "Critical" ? { bg:"var(--coral-fill)", fg:"var(--coral)" }
+         : sev === "High"     ? { bg:"var(--coral-fill)", fg:"var(--coral)" }
+         : sev === "Medium"   ? { bg:"var(--gold-fill)",  fg:"var(--gold)" }
+         :                       { bg:"var(--chip)",      fg:"var(--ink-3)" };
+  }
+  function statusTone(s){
+    return /active|on-track|approved|ok/i.test(s) ? { bg:"var(--green-fill)", fg:"var(--green)" }
+         : /draft|pending|review|queued|mitigating/i.test(s) ? { bg:"var(--gold-fill)", fg:"var(--gold)" }
+         : /retired|closed|accepted|denied|rejected/i.test(s) ? { bg:"var(--chip)", fg:"var(--ink-3)" }
+         : /open|at-risk|failed/i.test(s) ? { bg:"var(--coral-fill)", fg:"var(--coral)" }
+         : { bg:"var(--chip)", fg:"var(--ink-3)" };
+  }
+  function policyTypeTone(t){
+    var map = { Access:"var(--blue)", Retention:"var(--gold)", Sharing:"var(--coral)", Classification:"var(--purple)", Quality:"var(--green)", Residency:"var(--blue)", Change:"var(--ink-3)", Security:"var(--ink-2)", Compliance:"var(--coral)" };
+    return { bg:"var(--chip)", fg: map[t] || "var(--ink-2)" };
+  }
+
+  // Tiny helpers ---------------------------------------------------------------
+  function KPI({ lbl, v, sub, color }) {
+    return (
+      <div style={{ padding:"14px 16px", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 1px 0 var(--line-2)" }}>
+        <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-4)", textTransform:"uppercase" }}>{lbl}</div>
+        <div style={{ fontFamily:"Instrument Serif", fontSize:24, color: color || "var(--ink)", lineHeight:1.1, marginTop:5 }}>{v}</div>
+        {sub && <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:5 }}>{sub}</div>}
+      </div>
+    );
+  }
+  function Pill({ tone, children, mono }) {
+    return <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background: tone.bg, color: tone.fg, fontWeight:700, letterSpacing:"0.4px", textTransform: mono?undefined:"uppercase" }}>{children}</span>;
+  }
+  function SectionHeader({ title, sub, actions }) {
+    return (
+      <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", marginBottom:18, gap:14 }}>
+        <div>
+          <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.7px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:4 }}>Governance</div>
+          <div style={{ fontFamily:"Instrument Serif", fontSize:28, color:"var(--ink)", lineHeight:1.1 }}>{title}</div>
+          {sub && <div style={{ fontSize:13, color:"var(--ink-3)", marginTop:6, lineHeight:1.55, maxWidth:680 }}>{sub}</div>}
+        </div>
+        {actions && <div style={{ display:"flex", gap:8, flexShrink:0 }}>{actions}</div>}
+      </div>
+    );
+  }
+  function Card({ title, sub, actions, children, padded }) {
+    return (
+      <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
+        {title && (
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 18px", borderBottom:"1px solid var(--line-2)", background:"var(--panel-2)", gap:14 }}>
+            <div>
+              <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{title}</div>
+              {sub && <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3 }}>{sub}</div>}
+            </div>
+            {actions}
+          </div>
+        )}
+        <div style={padded ? { padding:"16px 18px" } : null}>{children}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display:"flex", height:"100%", overflow:"hidden", background:"var(--bg-canvas)" }}>
+      {/* SIDEBAR ─────────────────────────────────────────────────────────── */}
+      <div style={{ width:264, flexShrink:0, borderRight:"1px solid var(--line)", padding:"24px 14px 22px", overflowY:"auto", background:"var(--panel-2)", display:"flex", flexDirection:"column", gap:2 }}>
+        <div style={{ padding:"0 8px 12px", borderBottom:"1px solid var(--line-2)", marginBottom:10 }}>
+          <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.7px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:4 }}>Module</div>
+          <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", lineHeight:1.1 }}>Governance</div>
+          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:6, lineHeight:1.5 }}>Workspace-wide controls — policies, access, compliance, lifecycle.</div>
+        </div>
+        <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.7px", color:"var(--ink-4)", textTransform:"uppercase", padding:"4px 10px 6px" }}>Sections</div>
+        {sections.map(function(s){
+          var isOn = section === s.id;
+          return (
+            <button key={s.id} onClick={function(){ setSection(s.id); }}
+              style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 12px", borderRadius:7, border:"1px solid " + (isOn ? "var(--line)" : "transparent"), background: isOn ? "var(--panel)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", color: isOn ? "var(--ink)" : "var(--ink-2)" }}
+              onMouseEnter={function(e){ if (!isOn) e.currentTarget.style.background = "rgba(0,0,0,0.025)"; }}
+              onMouseLeave={function(e){ if (!isOn) e.currentTarget.style.background = "transparent"; }}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:13, fontWeight: isOn ? 600 : 500, lineHeight:1.2 }}>{s.label}</div>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", marginTop:2, lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.desc}</div>
+              </div>
+              {s.count != null && <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"1px 6px", borderRadius:3, background: isOn ? "var(--ink)" : "var(--chip)", color: isOn ? "var(--bg-canvas)" : "var(--ink-3)", fontWeight:700 }}>{s.count}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* MAIN ──────────────────────────────────────────────────────────── */}
+      <div style={{ flex:1, overflowY:"auto", padding:"26px 32px 40px" }}>
+
+        {/* ─── OVERVIEW ─── */}
+        {section === "overview" && (
+          <div>
+            <SectionHeader
+              title="Governance overview"
+              sub="Cross-cutting health of the workspace — policies in force, compliance posture, open risks, the change queue, and what needs attention today."
+              actions={<><button className="btn-ghost">Export report</button><button className="btn-dark">Schedule review</button></>}
+            />
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:12, marginBottom:18 }}>
+              <KPI lbl="Active policies"        v={GOV_DATA.policies.filter(function(p){ return p.status === "Active"; }).length} sub={GOV_DATA.policies.length + " total · " + GOV_DATA.policies.filter(function(p){ return p.status === "Review"; }).length + " in review"} />
+              <KPI lbl="Compliance score"        v={Math.round(GOV_DATA.frameworks.reduce(function(s,f){ return s+f.coverage; }, 0)/GOV_DATA.frameworks.length) + "%"} sub={GOV_DATA.frameworks.length + " frameworks · " + GOV_DATA.frameworks.filter(function(f){ return f.status === "at-risk"; }).length + " at risk"} color="var(--green)" />
+              <KPI lbl="Pending approvals"       v={GOV_DATA.approvals.filter(function(a){ return a.status === "pending"; }).length} sub={GOV_DATA.approvals.filter(function(a){ return a.status === "pending" && a.sla.indexOf("4") >= 0; }).length + " due in 4h"} color="var(--gold)" />
+              <KPI lbl="Open risks"              v={GOV_DATA.risks.filter(function(r){ return r.status !== "Closed"; }).length} sub={GOV_DATA.risks.filter(function(r){ return r.severity === "Critical"; }).length + " critical · " + GOV_DATA.risks.filter(function(r){ return r.severity === "High"; }).length + " high"} color="var(--coral)" />
+              <KPI lbl="Stewards"                v={GOV_DATA.stewards.length} sub={GOV_DATA.stewards.reduce(function(s,x){ return s+x.openTasks; }, 0) + " open tasks"} />
+              <KPI lbl="PII fields under policy" v={GOV_DATA.piiInventory.reduce(function(s,c){ return s+c.fields.length; }, 0)} sub={GOV_DATA.piiInventory.length + " categories"} />
+              <KPI lbl="Retention rules"         v={GOV_DATA.retention.length} sub={GOV_DATA.retention.filter(function(r){ return r.recordsDueAt > 0; }).length + " run within 30 days"} />
+              <KPI lbl="Audit events (30d)"      v={GOV_DATA.kpis.audits.toLocaleString()} sub="0 unauthorised access denied" />
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr", gap:18 }}>
+              <Card title="Action items" sub="Ranked by SLA · click to drill in">
+                {[
+                  { tone:"coral", title:"Encryption key rotation overdue",       sub:"R-016 · due in 1 day",   target:"risk" },
+                  { tone:"coral", title:"Vendor DPA missing for HubSpot",        sub:"R-017 · due in 2 days",  target:"risk" },
+                  { tone:"gold",  title:"Approve schema change AP-1024",         sub:"morgan.lee · 32 min ago",target:"approvals" },
+                  { tone:"gold",  title:"Approve source link AP-1023",           sub:"alex.r · 2 h ago",       target:"approvals" },
+                  { tone:"gold",  title:"Review P-013 Cross-Border Transfer",    sub:"in review · 8 days",     target:"policies" },
+                  { tone:"blue",  title:"Purge 312 lead records (Person)",       sub:"P-010 · runs in 1 day",  target:"retention" },
+                  { tone:"blue",  title:"HIPAA controls — 13 failing",           sub:"next audit in 88 days",  target:"compliance" }
+                ].map(function(item, i){
+                  return (
+                    <div key={i} onClick={function(){ setSection(item.target); }}
+                      style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 18px", borderBottom: i < 6 ? "1px dashed var(--line-2)" : "none", cursor:"pointer" }}
+                      onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
+                      onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
+                      <span style={{ width:8, height:8, borderRadius:"50%", background: "var(--" + item.tone + ")", flexShrink:0 }} />
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, color:"var(--ink)" }}>{item.title}</div>
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2 }}>{item.sub}</div>
+                      </div>
+                      <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:11 }}>→</span>
+                    </div>
+                  );
+                })}
+              </Card>
+
+              <Card title="Compliance posture" sub="Framework coverage">
+                {GOV_DATA.frameworks.map(function(f, i, a){
+                  var c = f.coverage >= 95 ? "var(--green)" : f.coverage >= 85 ? "var(--gold)" : "var(--coral)";
+                  return (
+                    <div key={f.id} style={{ padding:"12px 18px", borderBottom: i < a.length-1 ? "1px dashed var(--line-2)" : "none" }}>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
+                        <span style={{ fontSize:13, color:"var(--ink)", fontWeight:500 }}>{f.name}</span>
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color: c, fontWeight:700 }}>{f.coverage + "%"}</span>
+                      </div>
+                      <div style={{ height:5, background:"var(--line)", borderRadius:3, overflow:"hidden" }}>
+                        <div style={{ height:"100%", width: f.coverage + "%", background: c }} />
+                      </div>
+                      <div style={{ display:"flex", justifyContent:"space-between", marginTop:5, fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)" }}>
+                        <span>{f.controls.passed + "/" + f.controls.total + " controls"}</span>
+                        <span>next audit {f.nextAudit}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </Card>
+            </div>
+
+            <div style={{ marginTop:18 }}>
+              <Card title="Recent governance events" sub={GOV_DATA.audit.length + " events · last 24h"} actions={<button className="btn-ghost" onClick={function(){ setSection("audit"); }} style={{ fontSize:11.5 }}>Full audit log →</button>}>
+                {GOV_DATA.audit.slice(0, 6).map(function(e, i, a){
+                  var rt = statusTone(e.result);
+                  return (
+                    <div key={i} style={{ display:"grid", gridTemplateColumns:"100px 14px 1fr 90px", gap:14, alignItems:"center", padding:"11px 18px", borderBottom: i < a.length-1 ? "1px dashed var(--line-2)" : "none" }}>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{e.ts}</span>
+                      <span style={{ width:8, height:8, borderRadius:"50%", background:"var(--ink-3)", justifySelf:"center" }} />
+                      <div style={{ display:"flex", alignItems:"baseline", gap:8, flexWrap:"wrap" }}>
+                        <code style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", fontWeight:600 }}>{e.actor}</code>
+                        <span style={{ fontSize:12, color:"var(--ink-3)" }}>{e.action}</span>
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink)" }}>{e.resource}</span>
+                      </div>
+                      <Pill tone={rt}>{e.result}</Pill>
+                    </div>
+                  );
+                })}
+              </Card>
+            </div>
+          </div>
+        )}
+
+        {/* ─── POLICIES ─── */}
+        {section === "policies" && (
+          <div>
+            <SectionHeader
+              title="Policies"
+              sub="Every workspace-wide policy in force. Each policy carries an owner, a version, a scope (entities it applies to), and a renewal cadence."
+              actions={<><button className="btn-ghost">Templates</button><button className="btn-dark">+ New policy</button></>}
+            />
+            <Card title={GOV_DATA.policies.length + " policies"} sub={GOV_DATA.policies.filter(function(p){ return p.status === "Active"; }).length + " active · " + GOV_DATA.policies.filter(function(p){ return p.status === "Review"; }).length + " in review · " + GOV_DATA.policies.filter(function(p){ return p.status === "Draft"; }).length + " draft"}>
+              <div style={{ display:"grid", gridTemplateColumns:"70px 1.6fr 110px 1.4fr 130px 90px 90px 100px", gap:12, padding:"10px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
+                <div>ID</div><div>Name</div><div>Type</div><div>Scope</div><div>Owner</div><div>Version</div><div>Reviewed</div><div style={{ textAlign:"right" }}>Status</div>
+              </div>
+              {GOV_DATA.policies.map(function(p, i, a){
+                return (
+                  <div key={p.id} style={{ display:"grid", gridTemplateColumns:"70px 1.6fr 110px 1.4fr 130px 90px 90px 100px", gap:12, padding:"10px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)" }}>
+                    <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{p.id}</code>
+                    <div style={{ fontSize:13, color:"var(--ink)", fontWeight:500 }}>{p.name}</div>
+                    <Pill tone={policyTypeTone(p.type)}>{p.type}</Pill>
+                    <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                      {p.scope.slice(0, 3).map(function(e){ return <span key={e} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-2)" }}>{e}</span>; })}
+                      {p.scope.length > 3 && <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 6px", color:"var(--ink-4)" }}>{"+" + (p.scope.length-3)}</span>}
+                    </div>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{p.owner}</span>
+                    <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{p.version}</code>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{p.reviewed}</span>
+                    <div style={{ justifySelf:"end" }}><Pill tone={statusTone(p.status)}>{p.status}</Pill></div>
+                  </div>
+                );
+              })}
+            </Card>
+          </div>
+        )}
+
+        {/* ─── ACCESS & ROLES ─── */}
+        {section === "access" && (
+          <div>
+            <SectionHeader
+              title="Access & roles"
+              sub="Role-based access across the workspace. Roles bundle permissions on resources (entities, properties, sources, audit logs). Access requests route to the resource owner first, then to a workspace admin."
+              actions={<><button className="btn-ghost">Audit access</button><button className="btn-dark">+ New role</button></>}
+            />
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:12, marginBottom:18 }}>
+              <KPI lbl="Defined roles"  v={GOV_DATA.roles.length} />
+              <KPI lbl="Total members"  v={GOV_DATA.roles.reduce(function(s,r){ return s + r.members; }, 0)} />
+              <KPI lbl="Pending grants" v={GOV_DATA.accessRequests.length} color="var(--gold)" />
+              <KPI lbl="Last access review" v="14 days ago" sub="quarterly cadence" />
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1.6fr 1fr", gap:18 }}>
+              <Card title="Roles" sub="Click a role to view the permission grants">
+                {GOV_DATA.roles.map(function(r, i, a){
+                  return (
+                    <div key={r.id} style={{ padding:"14px 18px", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none", display:"grid", gridTemplateColumns:"220px 70px 1fr", gap:18, alignItems:"center" }}>
+                      <div>
+                        <div style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{r.name}</div>
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:2 }}>{r.members + " member" + (r.members === 1 ? "" : "s")}</div>
+                      </div>
+                      <span style={{ width:34, height:34, borderRadius:7, background:"var(--" + r.tone + "-fill)", color:"var(--" + r.tone + ")", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700 }}>{r.name.split(" ").map(function(w){ return w[0]; }).join("").slice(0,2)}</span>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                        {[{ k:"R", v:r.perms.read, tone:"blue" }, { k:"W", v:r.perms.write, tone:"green" }, { k:"A", v:r.perms.admin, tone:"coral" }].map(function(p){
+                          return (
+                            <div key={p.k} style={{ padding:"6px 9px", borderRadius:6, background:"var(--panel-2)", border:"1px solid var(--line-2)", display:"flex", alignItems:"center", gap:7 }}>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 5px", borderRadius:3, background:"var(--" + p.tone + "-fill)", color:"var(--" + p.tone + ")", fontWeight:700 }}>{p.k}</span>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.v}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </Card>
+              <Card title="Pending access requests" sub={GOV_DATA.accessRequests.length + " in queue"}>
+                {GOV_DATA.accessRequests.map(function(ar, i, a){
+                  return (
+                    <div key={ar.id} style={{ padding:"12px 18px", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
+                        <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{ar.id}</code>
+                        <Pill tone={statusTone(ar.status)}>{ar.status}</Pill>
+                      </div>
+                      <div style={{ fontSize:12.5, color:"var(--ink)", marginBottom:3 }}>{ar.what}</div>
+                      <div style={{ display:"flex", justifyContent:"space-between", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>
+                        <span>{ar.who}</span><span>{ar.submitted}</span>
+                      </div>
+                      <div style={{ display:"flex", gap:6, marginTop:8 }}>
+                        <button className="btn-dark" style={{ fontSize:11, padding:"4px 10px" }}>Approve</button>
+                        <button className="btn-ghost" style={{ fontSize:11, padding:"4px 10px" }}>Deny</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </Card>
+            </div>
+          </div>
+        )}
+
+        {/* ─── COMPLIANCE ─── */}
+        {section === "compliance" && (
+          <div>
+            <SectionHeader
+              title="Compliance"
+              sub="Coverage across each framework. Each card surfaces control health, evidence count, and the next audit date. Click a card to open the control inventory."
+              actions={<><button className="btn-ghost">Evidence library</button><button className="btn-dark">+ Onboard framework</button></>}
+            />
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(2, 1fr)", gap:14 }}>
+              {GOV_DATA.frameworks.map(function(f){
+                var trafficColor = f.coverage >= 95 ? "var(--green)" : f.coverage >= 85 ? "var(--gold)" : "var(--coral)";
+                var passPct = Math.round(f.controls.passed / f.controls.total * 100);
+                return (
+                  <div key={f.id} style={{ padding:"18px 20px", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
+                      <div>
+                        <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", lineHeight:1.1 }}>{f.name}</div>
+                        <div style={{ display:"flex", gap:6, marginTop:8 }}>
+                          <Pill tone={statusTone(f.status)}>{f.status}</Pill>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>owner · {f.owner}</span>
+                        </div>
+                      </div>
+                      <div style={{ textAlign:"right" }}>
+                        <div style={{ fontFamily:"Instrument Serif", fontSize:30, color: trafficColor, lineHeight:1 }}>{f.coverage + "%"}</div>
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", marginTop:3, textTransform:"uppercase", letterSpacing:"0.5px" }}>Coverage</div>
+                      </div>
+                    </div>
+                    <div style={{ height:6, background:"var(--line)", borderRadius:3, overflow:"hidden", marginBottom:12 }}>
+                      <div style={{ height:"100%", width: passPct + "%", background: trafficColor }} />
+                    </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:12 }}>
+                      <div><div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", letterSpacing:"0.5px", textTransform:"uppercase" }}>Passed</div><div style={{ fontFamily:"JetBrains Mono", fontSize:13, color:"var(--green)", fontWeight:700, marginTop:2 }}>{f.controls.passed}</div></div>
+                      <div><div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", letterSpacing:"0.5px", textTransform:"uppercase" }}>Failed</div><div style={{ fontFamily:"JetBrains Mono", fontSize:13, color: f.controls.failed > 0 ? "var(--coral)" : "var(--ink-3)", fontWeight:700, marginTop:2 }}>{f.controls.failed}</div></div>
+                      <div><div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", letterSpacing:"0.5px", textTransform:"uppercase" }}>Evidence</div><div style={{ fontFamily:"JetBrains Mono", fontSize:13, color:"var(--ink)", fontWeight:700, marginTop:2 }}>{f.evidence}</div></div>
+                    </div>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingTop:12, borderTop:"1px dashed var(--line-2)" }}>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>last {f.lastAudit} · next {f.nextAudit}</div>
+                      <button className="btn-ghost" style={{ fontSize:11 }}>Open controls →</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ─── CLASSIFICATION ─── */}
+        {section === "classification" && (
+          <div>
+            <SectionHeader
+              title="Classification"
+              sub="The sensitivity taxonomy applied to every entity and field in the graph. PII categories are tagged so DSAR fulfilment, masking, and retention can operate against precise inventories."
+              actions={<><button className="btn-ghost">Edit taxonomy</button><button className="btn-dark">Tag entity</button></>}
+            />
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:12, marginBottom:18 }}>
+              {GOV_DATA.classifications.map(function(c){
+                return (
+                  <div key={c.level} style={{ padding:"16px 18px", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                      <span style={{ width:10, height:10, borderRadius:3, background: c.color }} />
+                      <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{c.level}</span>
+                    </div>
+                    <div style={{ fontFamily:"Instrument Serif", fontSize:26, color: c.color, lineHeight:1 }}>{c.count.toLocaleString()}</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", marginTop:5, textTransform:"uppercase", letterSpacing:"0.5px" }}>Fields tagged</div>
+                    <div style={{ fontSize:11.5, color:"var(--ink-3)", marginTop:10, lineHeight:1.5 }}>{c.desc}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <Card title="PII inventory" sub="Fields grouped by category — drives DSAR, masking, and retention">
+              <div style={{ display:"grid", gridTemplateColumns:"220px 1.6fr 80px 1.2fr", gap:12, padding:"10px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
+                <div>Category</div><div>Fields</div><div>Entities</div><div>Data subjects</div>
+              </div>
+              {GOV_DATA.piiInventory.map(function(p, i, a){
+                return (
+                  <div key={p.category} style={{ display:"grid", gridTemplateColumns:"220px 1.6fr 80px 1.2fr", gap:12, padding:"12px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                    <span style={{ fontSize:13, color:"var(--ink)", fontWeight:500 }}>{p.category}</span>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+                      {p.fields.map(function(f){ return <code key={f} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-2)" }}>{f}</code>; })}
+                    </div>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)" }}>{p.entities}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{p.dataSubjects}</span>
+                  </div>
+                );
+              })}
+            </Card>
+          </div>
+        )}
+
+        {/* ─── RETENTION ─── */}
+        {section === "retention" && (
+          <div>
+            <SectionHeader
+              title="Retention"
+              sub="Lifecycle rules per entity. Purges run on a nightly cadence; records flagged for legal hold are excluded from automated deletion."
+              actions={<><button className="btn-ghost">Hold list</button><button className="btn-dark">+ New rule</button></>}
+            />
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:12, marginBottom:18 }}>
+              <KPI lbl="Active rules" v={GOV_DATA.retention.length} />
+              <KPI lbl="Records due ≤ 30d" v={GOV_DATA.retention.reduce(function(s,r){ return s+r.recordsDueAt; }, 0).toLocaleString()} color="var(--gold)" />
+              <KPI lbl="On legal hold" v="2 entities" sub="excluded from purges" />
+              <KPI lbl="Last purge run" v="22 h ago" sub="3,210 records · 0 errors" />
+            </div>
+            <Card title="Retention rules" sub="Per entity — runtime is the next nightly window">
+              <div style={{ display:"grid", gridTemplateColumns:"140px 1.6fr 1fr 110px 110px 110px", gap:12, padding:"10px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
+                <div>Entity</div><div>Rule</div><div>Legal basis</div><div>Last review</div><div>Next purge</div><div style={{ textAlign:"right" }}>Due</div>
+              </div>
+              {GOV_DATA.retention.map(function(r, i, a){
+                var dueColor = r.recordsDueAt > 1000 ? "var(--coral)" : r.recordsDueAt > 0 ? "var(--gold)" : "var(--ink-3)";
+                return (
+                  <div key={r.entity} style={{ display:"grid", gridTemplateColumns:"140px 1.6fr 1fr 110px 110px 110px", gap:12, padding:"12px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)" }}>
+                    <span style={{ fontSize:13, color:"var(--ink)", fontWeight:500 }}>{r.entity}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)" }}>{r.rule}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{r.legal}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{r.lastReview}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{r.nextPurge}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color: dueColor, fontWeight:700, textAlign:"right" }}>{r.recordsDueAt > 0 ? r.recordsDueAt.toLocaleString() : "—"}</span>
+                  </div>
+                );
+              })}
+            </Card>
+          </div>
+        )}
+
+        {/* ─── STEWARDSHIP ─── */}
+        {section === "stewardship" && (
+          <div>
+            <SectionHeader
+              title="Stewardship"
+              sub="The people accountable for each data domain. Stewards triage rule violations, approve schema changes within their domain, and own the SLA for source freshness."
+              actions={<><button className="btn-ghost">Escalation matrix</button><button className="btn-dark">+ Assign steward</button></>}
+            />
+            <Card title={GOV_DATA.stewards.length + " stewards"} sub={GOV_DATA.stewards.reduce(function(s,x){ return s+x.openTasks; }, 0) + " open tasks across the team"}>
+              <div style={{ display:"grid", gridTemplateColumns:"32px 1fr 130px 1.4fr 90px 120px 80px", gap:12, padding:"10px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
+                <div/><div>Steward</div><div>Team</div><div>Domains owned</div><div>SLA</div><div>Last activity</div><div style={{ textAlign:"right" }}>Tasks</div>
+              </div>
+              {GOV_DATA.stewards.map(function(s, i, a){
+                var initials = s.name.split(" ").map(function(p){ return p[0]; }).join("").slice(0,2);
+                return (
+                  <div key={s.name} style={{ display:"grid", gridTemplateColumns:"32px 1fr 130px 1.4fr 90px 120px 80px", gap:12, padding:"11px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                    <span style={{ width:28, height:28, borderRadius:"50%", background:"var(--ink-2)", color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10.5, fontWeight:700 }}>{initials}</span>
+                    <span style={{ fontSize:13, color:"var(--ink)", fontWeight:500 }}>{s.name}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{s.team}</span>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+                      {s.domains.map(function(d){ return <span key={d} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-2)" }}>{d}</span>; })}
+                    </div>
+                    <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{s.sla}</code>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{s.lastActivity}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color: s.openTasks > 3 ? "var(--coral)" : s.openTasks > 0 ? "var(--gold)" : "var(--ink-3)", fontWeight:700, textAlign:"right" }}>{s.openTasks || "—"}</span>
+                  </div>
+                );
+              })}
+            </Card>
+          </div>
+        )}
+
+        {/* ─── APPROVALS ─── */}
+        {section === "approvals" && (
+          <div>
+            <SectionHeader
+              title="Approvals"
+              sub="Every change that needs a second pair of eyes routes here — schema edits, new source connections, sensitive-field access grants and bulk exports."
+              actions={<><button className="btn-ghost">Filter</button><button className="btn-dark">Auto-route rules</button></>}
+            />
+            <Card title={GOV_DATA.approvals.filter(function(a){ return a.status === "pending"; }).length + " pending · " + GOV_DATA.approvals.filter(function(a){ return a.status === "approved"; }).length + " approved · " + GOV_DATA.approvals.filter(function(a){ return a.status === "rejected"; }).length + " rejected"} sub="last 30 days">
+              <div style={{ display:"grid", gridTemplateColumns:"90px 130px 1.8fr 120px 90px 70px 110px", gap:12, padding:"10px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
+                <div>ID</div><div>Type</div><div>Request</div><div>Submitter</div><div>SLA</div><div>Age</div><div style={{ textAlign:"right" }}>Status</div>
+              </div>
+              {GOV_DATA.approvals.map(function(ap, i, a){
+                return (
+                  <div key={ap.id} style={{ display:"grid", gridTemplateColumns:"90px 130px 1.8fr 120px 90px 70px 110px", gap:12, padding:"11px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                    <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{ap.id}</code>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"2px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-2)", justifySelf:"start", fontWeight:600 }}>{ap.type}</span>
+                    <span style={{ fontSize:12.5, color:"var(--ink)" }}>{ap.what}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{ap.submitter}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{ap.sla}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{ap.submitted}</span>
+                    <div style={{ justifySelf:"end" }}><Pill tone={statusTone(ap.status)}>{ap.status}</Pill></div>
+                  </div>
+                );
+              })}
+            </Card>
+          </div>
+        )}
+
+        {/* ─── AUDIT LOG ─── */}
+        {section === "audit" && (
+          <div>
+            <SectionHeader
+              title="Audit log"
+              sub="Every governance-relevant event in the workspace. Immutable, queryable, exportable. Streamed in near-real-time from the central control plane."
+              actions={<><input placeholder="Filter actor, resource, action…" style={{ border:"1px solid var(--line)", borderRadius:6, padding:"7px 10px", fontSize:12, fontFamily:"JetBrains Mono", minWidth:280, background:"var(--panel)" }} /><button className="btn-ghost">Export</button></>}
+            />
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:12, marginBottom:18 }}>
+              <KPI lbl="Events (30d)" v={GOV_DATA.kpis.audits.toLocaleString()} />
+              <KPI lbl="Unique actors" v="42" />
+              <KPI lbl="Denied actions (30d)" v="3" color="var(--coral)" />
+              <KPI lbl="Retention" v="3 years" sub="immutable storage" />
+            </div>
+            <Card title="Recent events" sub="last 24 hours">
+              <div style={{ display:"grid", gridTemplateColumns:"110px 14px 130px 110px 1fr 110px 100px", gap:12, padding:"10px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
+                <div>When</div><div/><div>Actor</div><div>Action</div><div>Resource</div><div>Source</div><div style={{ textAlign:"right" }}>Result</div>
+              </div>
+              {GOV_DATA.audit.map(function(e, i, a){
+                var rt = statusTone(e.result);
+                var dotColor = e.action === "denied" || e.result === "denied" ? "var(--coral)" : e.actor === "system" || e.actor === "schema-bot" ? "var(--blue)" : e.actor.indexOf("agent:") === 0 ? "var(--purple)" : "var(--ink-3)";
+                return (
+                  <div key={i} style={{ display:"grid", gridTemplateColumns:"110px 14px 130px 110px 1fr 110px 100px", gap:12, padding:"10px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px dashed var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)" }}>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{e.ts}</span>
+                    <span style={{ width:8, height:8, borderRadius:"50%", background: dotColor, justifySelf:"center" }} />
+                    <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)", fontWeight:600 }}>{e.actor}</code>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{e.action}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink)" }}>{e.resource}</span>
+                    <code style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{e.ip}</code>
+                    <div style={{ justifySelf:"end" }}><Pill tone={rt}>{e.result}</Pill></div>
+                  </div>
+                );
+              })}
+            </Card>
+          </div>
+        )}
+
+        {/* ─── RISK REGISTER ─── */}
+        {section === "risk" && (
+          <div>
+            <SectionHeader
+              title="Risk register"
+              sub="Every identified governance risk — its severity, owner, mitigation status and the impact / likelihood it carries today."
+              actions={<><button className="btn-ghost">Filter</button><button className="btn-dark">+ Log risk</button></>}
+            />
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:12, marginBottom:18 }}>
+              <KPI lbl="Open risks"  v={GOV_DATA.risks.filter(function(r){ return r.status === "Open"; }).length} color="var(--coral)" />
+              <KPI lbl="Mitigating"  v={GOV_DATA.risks.filter(function(r){ return r.status === "Mitigating"; }).length} color="var(--gold)" />
+              <KPI lbl="Accepted"    v={GOV_DATA.risks.filter(function(r){ return r.status === "Accepted"; }).length} />
+              <KPI lbl="Closed (90d)" v={GOV_DATA.risks.filter(function(r){ return r.status === "Closed"; }).length} color="var(--green)" />
+            </div>
+            <Card title="Open & in-flight risks">
+              <div style={{ display:"grid", gridTemplateColumns:"70px 1.8fr 100px 120px 130px 100px", gap:12, padding:"10px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
+                <div>ID</div><div>Risk</div><div>Severity</div><div>Status</div><div>Owner</div><div style={{ textAlign:"right" }}>Due</div>
+              </div>
+              {GOV_DATA.risks.map(function(r, i, a){
+                return (
+                  <div key={r.id} style={{ display:"grid", gridTemplateColumns:"70px 1.8fr 100px 120px 130px 100px", gap:12, padding:"11px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)" }}>
+                    <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{r.id}</code>
+                    <div style={{ fontSize:13, color:"var(--ink)" }}>{r.title}</div>
+                    <Pill tone={severityTone(r.severity)}>{r.severity}</Pill>
+                    <Pill tone={statusTone(r.status)}>{r.status}</Pill>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{r.owner}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color: r.due.indexOf("1 day") >= 0 || r.due.indexOf("2 days") >= 0 ? "var(--coral)" : "var(--ink-3)", textAlign:"right" }}>{r.due}</span>
+                  </div>
+                );
+              })}
+            </Card>
+          </div>
+        )}
+
+        {/* ─── INCIDENTS ─── */}
+        {section === "incidents" && (
+          <div>
+            <SectionHeader
+              title="Incidents"
+              sub="Data incidents — anything from a sync interruption to a privacy breach. Each row links to the post-mortem and the remediation plan."
+              actions={<><button className="btn-ghost">Runbooks</button><button className="btn-dark">+ Declare incident</button></>}
+            />
+            <Card title="Incident log" sub={GOV_DATA.incidents.filter(function(x){ return x.status === "Open"; }).length + " open · last 90 days"}>
+              <div style={{ display:"grid", gridTemplateColumns:"90px 1.8fr 110px 110px 120px 120px", gap:12, padding:"10px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
+                <div>ID</div><div>Title</div><div>Severity</div><div>Status</div><div>Opened</div><div style={{ textAlign:"right" }}>Closed</div>
+              </div>
+              {GOV_DATA.incidents.map(function(it, i, a){
+                return (
+                  <div key={it.id} style={{ display:"grid", gridTemplateColumns:"90px 1.8fr 110px 110px 120px 120px", gap:12, padding:"11px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                    <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{it.id}</code>
+                    <span style={{ fontSize:13, color:"var(--ink)" }}>{it.title}</span>
+                    <Pill tone={severityTone(it.severity)}>{it.severity}</Pill>
+                    <Pill tone={statusTone(it.status)}>{it.status}</Pill>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{it.opened}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", textAlign:"right" }}>{it.closed}</span>
+                  </div>
+                );
+              })}
+            </Card>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
 function NodesView({ onSelect, onSwitchToCanvas, onAddNode }) {
   const [catFilter, setCatFilter] = useState("all");
   const [sortBy, setSortBy] = useState("instances");
@@ -16019,6 +16731,8 @@ function App() {
         <RecordsView />
       ) : tab === "Violations" ? (
         <StewardshipView initialRuleFilter={stewardshipRuleFilter} onClearRuleFilter={function(){ setStewardshipRuleFilter(null); }} />
+      ) : tab === "Governance" ? (
+        <GovernanceWorkspace />
       ) : tab !== "Graph" ? (
         <div className="placeholder-view">
           <div className="ph-eyebrow">SCHEMA · {tab.toUpperCase()}</div>
