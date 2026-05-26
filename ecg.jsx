@@ -19450,6 +19450,9 @@ function App() {
           setDetailId(null);
           setBlankGraphName(null);
           setNodes(NODES.filter(function(n){ return n.type !== "agent"; }));
+          // Always land in View mode when entering a graph from the landing.
+          setEditMode(false);
+          setSidebarOpen(true);
         }} />
       </div>
     );
