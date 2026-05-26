@@ -404,55 +404,105 @@ function colorForNode(n) {
 
 // ---------- ICONS (small inline SVG glyphs inside list items) ---------------
 
-// Semantic glyph library — each icon represents a real node type the user
-// is likely to model (account, contract, agreement, risk, ticket, etc).
+// Semantic glyph library — comprehensive enterprise icon set covering the
+// node types users actually model: people, documents, commerce, risk,
+// data, comms, automation, analytics, status, location.
 //
-// Design rules (consistent across all 28 glyphs):
-//   - Pure outline. No solid fills except tiny indicator dots.
-//   - Single stroke weight (0.7 in user space). With the picker's tight
-//     viewBox that lands at ~1.8px on screen — light enough to feel of-a-piece
-//     with the cream/paper aesthetic, heavy enough to read at small size.
-//   - strokeLinecap + strokeLinejoin: round. No sharp corners.
-//   - All glyphs drawn in the [-4..4] coordinate space so they sit balanced
-//     inside the picker tile and the canvas disc.
+// Design rules (consistent across the library):
+//   - Pure outline. Filled accent dots only.
+//   - Single stroke weight (0.5 in user space) — light, consistent with
+//     the cream/paper aesthetic.
+//   - strokeLinecap + strokeLinejoin: round.
+//   - All glyphs drawn in the [-4..4] coordinate space.
+//   - Each entry carries `aliases` for searchability.
 var NODE_GLYPHS = (function(){
-  // Wrap each glyph in a <g> that inherits styling — caller only sets stroke.
-  function S(c){ return { fill:"none", stroke:c.stroke, strokeWidth:0.7, strokeLinecap:"round", strokeLinejoin:"round" }; }
-  // A small filled dot used as an accent inside line-art icons.
-  function dot(c, x, y, r){ return <circle cx={x} cy={y} r={r || 0.45} fill={c.stroke} stroke="none" />; }
+  function S(c){ return { fill:"none", stroke:c.stroke, strokeWidth:0.5, strokeLinecap:"round", strokeLinejoin:"round" }; }
+  function dot(c, x, y, r){ return <circle cx={x} cy={y} r={r || 0.4} fill={c.stroke} stroke="none" />; }
   return [
-    // ── COMMERCIAL ────────────────────────────────────────────────────────
-    { id:"account",      label:"Account",      render:function(c){ return <g {...S(c)}><rect x="-3.2" y="-3" width="6.4" height="6" rx="0.6"/><line x1="-3.2" y1="-1.2" x2="3.2" y2="-1.2"/><circle cx="0" cy="0.6" r="1"/><line x1="-1.6" y1="2.4" x2="1.6" y2="2.4"/></g>; } },
-    { id:"person",       label:"Person",       render:function(c){ return <g {...S(c)}><circle cx="0" cy="-1.4" r="1.5"/><path d="M -2.8 3.2 a 2.8 2.8 0 0 1 5.6 0"/></g>; } },
-    { id:"team",         label:"Team",         render:function(c){ return <g {...S(c)}><circle cx="-1.6" cy="-1.4" r="1.2"/><circle cx="1.6" cy="-1.4" r="1.2"/><path d="M -3.6 3.2 a 2 2 0 0 1 4 0"/><path d="M -0.4 3.2 a 2 2 0 0 1 4 0"/></g>; } },
-    { id:"contract",     label:"Contract",     render:function(c){ return <g {...S(c)}><path d="M -2.2 -3.2 H 1 L 2.6 -1.6 V 3.2 H -2.2 Z"/><path d="M 1 -3.2 V -1.6 H 2.6"/><line x1="-1.2" y1="0.4" x2="1.6" y2="0.4"/><line x1="-1.2" y1="1.8" x2="0.6" y2="1.8"/></g>; } },
-    { id:"agreement",    label:"Agreement",    render:function(c){ return <g {...S(c)}><path d="M -3.4 -0.6 L -1.6 -2.4 L 0 -0.8 L 1.6 -2.4 L 3.4 -0.6"/><path d="M -3.4 -0.6 V 1.4 L -1.6 3 L 0 1.4"/><path d="M 3.4 -0.6 V 1.4 L 1.6 3 L 0 1.4"/></g>; } },
-    { id:"sow",          label:"SOW",          render:function(c){ return <g {...S(c)}><rect x="-2.6" y="-3.2" width="5.2" height="6.4" rx="0.5"/><polyline points="-1.6,-1.2 -1,-0.6 0,-1.8"/><line x1="0.6" y1="-1" x2="1.8" y2="-1"/><polyline points="-1.6,0.8 -1,1.4 0,0.2"/><line x1="0.6" y1="1" x2="1.8" y2="1"/></g>; } },
-    { id:"invoice",      label:"Invoice",      render:function(c){ return <g {...S(c)}><path d="M -2.2 -3.2 H 2.2 V 3.2 L 1.4 2.4 L 0.6 3.2 L -0.2 2.4 L -1 3.2 L -1.8 2.4 L -2.2 3 Z"/><line x1="-1.2" y1="-1.6" x2="1.2" y2="-1.6"/><line x1="-1.2" y1="-0.3" x2="1.2" y2="-0.3"/><line x1="-1.2" y1="1" x2="0.4" y2="1"/></g>; } },
-    { id:"payment",      label:"Payment",      render:function(c){ return <g {...S(c)}><rect x="-3.4" y="-2.2" width="6.8" height="4.4" rx="0.5"/><circle cx="0" cy="0" r="1.1"/><line x1="-2.6" y1="-1.4" x2="-2.6" y2="1.4"/><line x1="2.6" y1="-1.4" x2="2.6" y2="1.4"/></g>; } },
-    { id:"subscription", label:"Subscription", render:function(c){ return <g {...S(c)}><path d="M 3 0 a 3 3 0 1 1 -0.9 -2.1"/><polyline points="3,-2.6 3,-0.4 0.8,-0.4"/></g>; } },
-    { id:"order",        label:"Order",        render:function(c){ return <g {...S(c)}><path d="M -2.6 -1.2 L -2.2 3.2 H 2.2 L 2.6 -1.2 Z"/><path d="M -1.4 -1.2 V -1.8 a 1.4 1.4 0 0 1 2.8 0 V -1.2"/></g>; } },
+    // ── PEOPLE & ORG ─────────────────────────────────────────────────────
+    { id:"account",      label:"Account",      aliases:"account customer organization company business client", render:function(c){ return <g {...S(c)}><rect x="-3.2" y="-3" width="6.4" height="6" rx="0.6"/><line x1="-3.2" y1="-1.2" x2="3.2" y2="-1.2"/><circle cx="0" cy="0.6" r="1"/><line x1="-1.6" y1="2.4" x2="1.6" y2="2.4"/></g>; } },
+    { id:"person",       label:"Person",       aliases:"person user profile head individual", render:function(c){ return <g {...S(c)}><circle cx="0" cy="-1.4" r="1.5"/><path d="M -2.8 3.2 a 2.8 2.8 0 0 1 5.6 0"/></g>; } },
+    { id:"team",         label:"Team",         aliases:"team group people two users members", render:function(c){ return <g {...S(c)}><circle cx="-1.6" cy="-1.4" r="1.2"/><circle cx="1.6" cy="-1.4" r="1.2"/><path d="M -3.6 3.2 a 2 2 0 0 1 4 0"/><path d="M -0.4 3.2 a 2 2 0 0 1 4 0"/></g>; } },
+    { id:"contact",      label:"Contact",      aliases:"contact address book card", render:function(c){ return <g {...S(c)}><rect x="-3.2" y="-2.4" width="6.4" height="4.8" rx="0.5"/><circle cx="-1.2" cy="-0.4" r="0.9"/><path d="M -2.4 1.7 a 1.6 1.6 0 0 1 2.4 0"/><line x1="1" y1="-0.6" x2="2.6" y2="-0.6"/><line x1="1" y1="0.4" x2="2.6" y2="0.4"/></g>; } },
+    { id:"employee",     label:"Employee",     aliases:"employee staff worker badge id", render:function(c){ return <g {...S(c)}><rect x="-2.6" y="-3" width="5.2" height="6" rx="0.6"/><line x1="-1" y1="-3" x2="1" y2="-3"/><circle cx="0" cy="-0.6" r="1.1"/><path d="M -1.8 2.2 a 1.8 1.8 0 0 1 3.6 0"/></g>; } },
+    { id:"organization", label:"Organization", aliases:"organization building company office hq", render:function(c){ return <g {...S(c)}><rect x="-3" y="-2.8" width="6" height="5.8" rx="0.4"/><line x1="-3" y1="0" x2="3" y2="0"/><rect x="-2" y="-2" width="1" height="1"/><rect x="-0.5" y="-2" width="1" height="1"/><rect x="1" y="-2" width="1" height="1"/><rect x="-2" y="0.8" width="1" height="1"/><rect x="-0.5" y="0.8" width="1.4" height="2.2"/><rect x="1.4" y="0.8" width="1" height="1"/></g>; } },
+    // ── DOCUMENTS ────────────────────────────────────────────────────────
+    { id:"document",     label:"Document",     aliases:"document file page text", render:function(c){ return <g {...S(c)}><path d="M -2.2 -3.2 H 1 L 2.6 -1.6 V 3.2 H -2.2 Z"/><path d="M 1 -3.2 V -1.6 H 2.6"/><line x1="-1.2" y1="-0.3" x2="1.6" y2="-0.3"/><line x1="-1.2" y1="1" x2="1.6" y2="1"/><line x1="-1.2" y1="2.2" x2="0.6" y2="2.2"/></g>; } },
+    { id:"contract",     label:"Contract",     aliases:"contract document signed legal terms", render:function(c){ return <g {...S(c)}><path d="M -2.2 -3.2 H 1 L 2.6 -1.6 V 3.2 H -2.2 Z"/><path d="M 1 -3.2 V -1.6 H 2.6"/><line x1="-1.2" y1="0.4" x2="1.6" y2="0.4"/><line x1="-1.2" y1="1.8" x2="0.6" y2="1.8"/></g>; } },
+    { id:"agreement",    label:"Agreement",    aliases:"agreement deal pact mou folded", render:function(c){ return <g {...S(c)}><path d="M -3.4 -0.6 L -1.6 -2.4 L 0 -0.8 L 1.6 -2.4 L 3.4 -0.6"/><path d="M -3.4 -0.6 V 1.4 L -1.6 3 L 0 1.4"/><path d="M 3.4 -0.6 V 1.4 L 1.6 3 L 0 1.4"/></g>; } },
+    { id:"sow",          label:"SOW",          aliases:"sow statement work checklist scope", render:function(c){ return <g {...S(c)}><rect x="-2.6" y="-3.2" width="5.2" height="6.4" rx="0.5"/><polyline points="-1.6,-1.2 -1,-0.6 0,-1.8"/><line x1="0.6" y1="-1" x2="1.8" y2="-1"/><polyline points="-1.6,0.8 -1,1.4 0,0.2"/><line x1="0.6" y1="1" x2="1.8" y2="1"/></g>; } },
+    { id:"invoice",      label:"Invoice",      aliases:"invoice bill receipt zigzag", render:function(c){ return <g {...S(c)}><path d="M -2.2 -3.2 H 2.2 V 3.2 L 1.4 2.4 L 0.6 3.2 L -0.2 2.4 L -1 3.2 L -1.8 2.4 L -2.2 3 Z"/><line x1="-1.2" y1="-1.6" x2="1.2" y2="-1.6"/><line x1="-1.2" y1="-0.3" x2="1.2" y2="-0.3"/><line x1="-1.2" y1="1" x2="0.4" y2="1"/></g>; } },
+    { id:"receipt",      label:"Receipt",      aliases:"receipt invoice purchase", render:function(c){ return <g {...S(c)}><path d="M -2 -3.2 H 2 V 3.2 L 1.2 2.6 L 0 3.2 L -1.2 2.6 L -2 3.2 Z"/><line x1="-1" y1="-1.6" x2="1" y2="-1.6"/><line x1="-1" y1="-0.4" x2="1" y2="-0.4"/><line x1="-1" y1="0.8" x2="0.4" y2="0.8"/></g>; } },
+    { id:"report",       label:"Report",       aliases:"report analytics chart pdf", render:function(c){ return <g {...S(c)}><path d="M -2.2 -3.2 H 1 L 2.6 -1.6 V 3.2 H -2.2 Z"/><path d="M 1 -3.2 V -1.6 H 2.6"/><line x1="-1.4" y1="1.8" x2="-1.4" y2="1"/><line x1="-0.3" y1="1.8" x2="-0.3" y2="-0.2"/><line x1="0.8" y1="1.8" x2="0.8" y2="0.4"/></g>; } },
+    { id:"license",      label:"License",      aliases:"license certificate award medal", render:function(c){ return <g {...S(c)}><circle cx="0" cy="-0.8" r="1.7"/><path d="M -1.2 0.6 L -1.6 3 L 0 2 L 1.6 3 L 1.2 0.6"/><circle cx="0" cy="-0.8" r="0.7"/></g>; } },
+    { id:"note",         label:"Note",         aliases:"note sticky memo postit", render:function(c){ return <g {...S(c)}><path d="M -2.6 -2.6 H 1.4 L 2.6 -1.4 V 2.6 H -2.6 Z"/><path d="M 1.4 -2.6 V -1.4 H 2.6"/><line x1="-1.6" y1="0.4" x2="1.4" y2="0.4"/><line x1="-1.6" y1="1.6" x2="0.4" y2="1.6"/></g>; } },
+    // ── COMMERCE ─────────────────────────────────────────────────────────
+    { id:"order",        label:"Order",        aliases:"order purchase bag", render:function(c){ return <g {...S(c)}><path d="M -2.6 -1.2 L -2.2 3.2 H 2.2 L 2.6 -1.2 Z"/><path d="M -1.4 -1.2 V -1.8 a 1.4 1.4 0 0 1 2.8 0 V -1.2"/></g>; } },
+    { id:"cart",         label:"Cart",         aliases:"cart shopping basket buy", render:function(c){ return <g {...S(c)}><polyline points="-3,-2 -1.8,-2 -1,1.4 2,1.4 2.8,-0.8 -1.4,-0.8"/>{dot(c,-0.6,2.6,0.5)}{dot(c,1.8,2.6,0.5)}</g>; } },
+    { id:"payment",      label:"Payment",      aliases:"payment money cash bill banknote", render:function(c){ return <g {...S(c)}><rect x="-3.4" y="-2.2" width="6.8" height="4.4" rx="0.5"/><circle cx="0" cy="0" r="1.1"/><line x1="-2.6" y1="-1.4" x2="-2.6" y2="1.4"/><line x1="2.6" y1="-1.4" x2="2.6" y2="1.4"/></g>; } },
+    { id:"card",         label:"Card",         aliases:"card credit debit visa stripe", render:function(c){ return <g {...S(c)}><rect x="-3.2" y="-2.2" width="6.4" height="4.4" rx="0.5"/><line x1="-3.2" y1="-0.8" x2="3.2" y2="-0.8"/><line x1="-2.4" y1="1.2" x2="-0.6" y2="1.2"/><line x1="0.6" y1="1.2" x2="2" y2="1.2"/></g>; } },
+    { id:"subscription", label:"Subscription", aliases:"subscription recurring renewal cycle refresh", render:function(c){ return <g {...S(c)}><path d="M 3 0 a 3 3 0 1 1 -0.9 -2.1"/><polyline points="3,-2.6 3,-0.4 0.8,-0.4"/></g>; } },
+    { id:"coupon",       label:"Coupon",       aliases:"coupon discount voucher promo", render:function(c){ return <g {...S(c)}><path d="M -3 -1.6 H 3 V -0.4 a 0.8 0.8 0 0 0 0 1.6 V 2 H -3 V 1.2 a 0.8 0.8 0 0 0 0 -1.6 Z"/>{dot(c,-1,0.4,0.4)}<line x1="0.4" y1="-0.4" x2="2" y2="-0.4"/><line x1="0.4" y1="1.2" x2="2" y2="1.2"/></g>; } },
+    { id:"refund",       label:"Refund",       aliases:"refund return reverse money back", render:function(c){ return <g {...S(c)}><path d="M -3 0 a 3 3 0 1 0 0.9 -2.1"/><polyline points="-3,-2.6 -3,-0.4 -0.8,-0.4"/></g>; } },
     // ── RISK & GOVERNANCE ────────────────────────────────────────────────
-    { id:"ticket",       label:"Ticket",       render:function(c){ return <g {...S(c)}><path d="M -3.2 -2 H 3.2 V -0.6 a 0.7 0.7 0 0 0 0 1.4 V 2 H -3.2 V 0.8 a 0.7 0.7 0 0 0 0 -1.4 Z"/><line x1="-0.4" y1="-1" x2="-0.4" y2="1" strokeDasharray="0.5 0.5"/></g>; } },
-    { id:"incident",     label:"Incident",     render:function(c){ return <g {...S(c)}><path d="M 0 -3.2 L 3.4 2.8 H -3.4 Z"/><line x1="0" y1="-0.8" x2="0" y2="1.1"/>{dot(c,0,2.1,0.4)}</g>; } },
-    { id:"risk",         label:"Risk",         render:function(c){ return <g {...S(c)}><path d="M 0 -3.2 L 3 -2 V 0.8 Q 3 2.6 0 3.2 Q -3 2.6 -3 0.8 V -2 Z"/><line x1="0" y1="-1.2" x2="0" y2="0.6"/>{dot(c,0,1.6,0.4)}</g>; } },
-    { id:"flag",         label:"Flag",         render:function(c){ return <g {...S(c)}><line x1="-2.4" y1="-3.2" x2="-2.4" y2="3.2"/><path d="M -2.4 -2.6 L 2.6 -2.6 L 1.4 -0.8 L 2.6 1 L -2.4 1"/></g>; } },
-    { id:"policy",       label:"Policy",       render:function(c){ return <g {...S(c)}><path d="M 0 -3.2 L 3 -2 V 0.8 Q 3 2.6 0 3.2 Q -3 2.6 -3 0.8 V -2 Z"/><polyline points="-1.2,0.2 -0.2,1.2 1.4,-0.6"/></g>; } },
-    // ── PIPELINE & DATA ──────────────────────────────────────────────────
-    { id:"lead",         label:"Lead",         render:function(c){ return <g {...S(c)}><circle r="3"/><circle r="1.6"/>{dot(c,0,0,0.5)}</g>; } },
-    { id:"opportunity",  label:"Opportunity",  render:function(c){ return <g {...S(c)}><path d="M 0.8 -3.2 L -1.8 0.4 L 0 0.4 L -0.6 3.2 L 2 -0.2 L 0.2 -0.2 Z"/></g>; } },
-    { id:"product",      label:"Product",      render:function(c){ return <g {...S(c)}><path d="M 0 -3.2 L 3 -1.6 V 1.6 L 0 3.2 L -3 1.6 V -1.6 Z"/><path d="M 0 -3.2 V 0 L 3 -1.6"/><path d="M 0 0 L -3 -1.6"/><path d="M 0 0 V 3.2"/></g>; } },
-    { id:"metric",       label:"Metric",       render:function(c){ return <g {...S(c)}><line x1="-3" y1="3" x2="3" y2="3"/><line x1="-2" y1="3" x2="-2" y2="1"/><line x1="0" y1="3" x2="0" y2="-0.5"/><line x1="2" y1="3" x2="2" y2="-2"/></g>; } },
-    { id:"document",     label:"Document",     render:function(c){ return <g {...S(c)}><path d="M -2.2 -3.2 H 1 L 2.6 -1.6 V 3.2 H -2.2 Z"/><path d="M 1 -3.2 V -1.6 H 2.6"/><line x1="-1.2" y1="-0.3" x2="1.6" y2="-0.3"/><line x1="-1.2" y1="1" x2="1.6" y2="1"/><line x1="-1.2" y1="2.2" x2="0.6" y2="2.2"/></g>; } },
-    { id:"database",     label:"Database",     render:function(c){ return <g {...S(c)}><ellipse cx="0" cy="-2.2" rx="2.8" ry="0.9"/><path d="M -2.8 -2.2 V 2.2 Q 0 3.2 2.8 2.2 V -2.2"/><path d="M -2.8 0 Q 0 1 2.8 0"/></g>; } },
-    { id:"email",        label:"Email",        render:function(c){ return <g {...S(c)}><rect x="-3" y="-2.2" width="6" height="4.4" rx="0.5"/><polyline points="-3,-2 0,0.4 3,-2"/></g>; } },
-    { id:"event",        label:"Event",        render:function(c){ return <g {...S(c)}><rect x="-2.8" y="-2.4" width="5.6" height="5.4" rx="0.5"/><line x1="-2.8" y1="-0.6" x2="2.8" y2="-0.6"/><line x1="-1.4" y1="-3.2" x2="-1.4" y2="-1.6"/><line x1="1.4" y1="-3.2" x2="1.4" y2="-1.6"/>{dot(c,-1,1.4,0.4)}{dot(c,1,1.4,0.4)}</g>; } },
-    { id:"location",     label:"Location",     render:function(c){ return <g {...S(c)}><path d="M 0 3.4 C -2.4 1 -2.8 -0.4 -2.8 -1.2 a 2.8 2.8 0 0 1 5.6 0 C 2.8 -0.4 2.4 1 0 3.4 Z"/><circle cx="0" cy="-1.2" r="0.8"/></g>; } },
-    // ── AGENTS & AUTOMATION ──────────────────────────────────────────────
-    { id:"agent",        label:"Agent",        render:function(c){ return <g {...S(c)}><rect x="-2.6" y="-1.6" width="5.2" height="4.4" rx="1"/><line x1="0" y1="-3.4" x2="0" y2="-1.6"/>{dot(c,0,-3.4,0.4)}{dot(c,-1.1,0.4,0.45)}{dot(c,1.1,0.4,0.45)}<line x1="-1" y1="1.8" x2="1" y2="1.8"/></g>; } },
-    { id:"automation",   label:"Automation",   render:function(c){ return <g {...S(c)}><path d="M 0.8 -3.2 L -1.8 0.4 L 0 0.4 L -0.6 3.2 L 2 -0.2 L 0.2 -0.2 Z"/></g>; } },
-    { id:"workflow",     label:"Workflow",     render:function(c){ return <g {...S(c)}><circle cx="-2.4" cy="-1.8" r="1"/><circle cx="2.4" cy="-1.8" r="1"/><circle cx="0" cy="2.2" r="1"/><line x1="-1.6" y1="-1" x2="-0.6" y2="1.4"/><line x1="1.6" y1="-1" x2="0.6" y2="1.4"/><line x1="-1.4" y1="-1.8" x2="1.4" y2="-1.8"/></g>; } },
-    { id:"tag",          label:"Tag",          render:function(c){ return <g {...S(c)}><path d="M -3 -2.4 H 0.6 L 3.2 0.2 L 0.4 3 L -3 -0.4 Z"/><circle cx="-1.6" cy="-1" r="0.5"/></g>; } },
+    { id:"ticket",       label:"Ticket",       aliases:"ticket support issue zendesk", render:function(c){ return <g {...S(c)}><path d="M -3.2 -2 H 3.2 V -0.6 a 0.7 0.7 0 0 0 0 1.4 V 2 H -3.2 V 0.8 a 0.7 0.7 0 0 0 0 -1.4 Z"/><line x1="-0.4" y1="-1" x2="-0.4" y2="1" strokeDasharray="0.5 0.5"/></g>; } },
+    { id:"incident",     label:"Incident",     aliases:"incident alert warning triangle", render:function(c){ return <g {...S(c)}><path d="M 0 -3.2 L 3.4 2.8 H -3.4 Z"/><line x1="0" y1="-0.8" x2="0" y2="1.1"/>{dot(c,0,2.1,0.4)}</g>; } },
+    { id:"risk",         label:"Risk",         aliases:"risk threat hazard shield warning", render:function(c){ return <g {...S(c)}><path d="M 0 -3.2 L 3 -2 V 0.8 Q 3 2.6 0 3.2 Q -3 2.6 -3 0.8 V -2 Z"/><line x1="0" y1="-1.2" x2="0" y2="0.6"/>{dot(c,0,1.6,0.4)}</g>; } },
+    { id:"flag",         label:"Flag",         aliases:"flag mark important pin", render:function(c){ return <g {...S(c)}><line x1="-2.4" y1="-3.2" x2="-2.4" y2="3.2"/><path d="M -2.4 -2.6 L 2.6 -2.6 L 1.4 -0.8 L 2.6 1 L -2.4 1"/></g>; } },
+    { id:"policy",       label:"Policy",       aliases:"policy compliance shield check verified", render:function(c){ return <g {...S(c)}><path d="M 0 -3.2 L 3 -2 V 0.8 Q 3 2.6 0 3.2 Q -3 2.6 -3 0.8 V -2 Z"/><polyline points="-1.2,0.2 -0.2,1.2 1.4,-0.6"/></g>; } },
+    { id:"lock",         label:"Lock",         aliases:"lock secure private security key", render:function(c){ return <g {...S(c)}><rect x="-2.4" y="-0.4" width="4.8" height="3.6" rx="0.4"/><path d="M -1.6 -0.4 V -1.6 a 1.6 1.6 0 0 1 3.2 0 V -0.4"/><line x1="0" y1="1" x2="0" y2="2"/></g>; } },
+    { id:"shield",       label:"Shield",       aliases:"shield protect security defend", render:function(c){ return <g {...S(c)}><path d="M 0 -3.2 L 3 -2 V 0.8 Q 3 2.6 0 3.2 Q -3 2.6 -3 0.8 V -2 Z"/></g>; } },
+    { id:"audit",        label:"Audit",        aliases:"audit log history magnifying review", render:function(c){ return <g {...S(c)}><circle cx="-0.4" cy="-0.4" r="2.2"/><line x1="1.2" y1="1.2" x2="3" y2="3"/><line x1="-1.6" y1="-0.4" x2="0.8" y2="-0.4"/><line x1="-0.4" y1="-1.6" x2="-0.4" y2="0.8"/></g>; } },
+    // ── DATA & INFRA ─────────────────────────────────────────────────────
+    { id:"database",     label:"Database",     aliases:"database db storage data table", render:function(c){ return <g {...S(c)}><ellipse cx="0" cy="-2.2" rx="2.8" ry="0.9"/><path d="M -2.8 -2.2 V 2.2 Q 0 3.2 2.8 2.2 V -2.2"/><path d="M -2.8 0 Q 0 1 2.8 0"/></g>; } },
+    { id:"server",       label:"Server",       aliases:"server compute rack instance", render:function(c){ return <g {...S(c)}><rect x="-2.8" y="-2.6" width="5.6" height="2.4" rx="0.4"/><rect x="-2.8" y="0.2" width="5.6" height="2.4" rx="0.4"/>{dot(c,-1.8,-1.4,0.3)}{dot(c,-1.8,1.4,0.3)}<line x1="0" y1="-1.4" x2="1.6" y2="-1.4"/><line x1="0" y1="1.4" x2="1.6" y2="1.4"/></g>; } },
+    { id:"cloud",        label:"Cloud",        aliases:"cloud storage aws gcp azure", render:function(c){ return <g {...S(c)}><path d="M -2.6 1.8 a 1.6 1.6 0 0 1 0 -3 a 2 2 0 0 1 3.8 -0.6 a 1.5 1.5 0 0 1 1 3.6 Z"/></g>; } },
+    { id:"file",         label:"File",         aliases:"file document attachment paper", render:function(c){ return <g {...S(c)}><path d="M -2 -3.2 H 1 L 2.6 -1.6 V 3.2 H -2 Z"/><path d="M 1 -3.2 V -1.6 H 2.6"/></g>; } },
+    { id:"folder",       label:"Folder",       aliases:"folder directory group", render:function(c){ return <g {...S(c)}><path d="M -3 -2 H -0.4 L 0.6 -1 H 3 V 2.6 H -3 Z"/></g>; } },
+    { id:"archive",      label:"Archive",      aliases:"archive store box cold", render:function(c){ return <g {...S(c)}><rect x="-3" y="-2.6" width="6" height="1.6" rx="0.3"/><path d="M -2.6 -1 H 2.6 V 2.6 H -2.6 Z"/><line x1="-1" y1="0.4" x2="1" y2="0.4"/></g>; } },
+    { id:"api",          label:"API",          aliases:"api endpoint braces code", render:function(c){ return <g {...S(c)}><path d="M -1.2 -2.6 H -2 a 0.6 0.6 0 0 0 -0.6 0.6 V -0.6 a 0.6 0.6 0 0 1 -0.6 0.6 a 0.6 0.6 0 0 1 0.6 0.6 V 2 a 0.6 0.6 0 0 0 0.6 0.6 H -1.2"/><path d="M 1.2 -2.6 H 2 a 0.6 0.6 0 0 1 0.6 0.6 V -0.6 a 0.6 0.6 0 0 0 0.6 0.6 a 0.6 0.6 0 0 0 -0.6 0.6 V 2 a 0.6 0.6 0 0 1 -0.6 0.6 H 1.2"/></g>; } },
+    { id:"webhook",      label:"Webhook",      aliases:"webhook callback trigger event", render:function(c){ return <g {...S(c)}><circle cx="0" cy="-1" r="1.2"/><path d="M -0.6 -0.2 L -2.4 2.4"/><path d="M 0.6 -0.2 L 2.4 2.4"/><circle cx="-2.4" cy="2.4" r="0.7"/><circle cx="2.4" cy="2.4" r="0.7"/></g>; } },
+    { id:"sync",         label:"Sync",         aliases:"sync refresh reload repeat update", render:function(c){ return <g {...S(c)}><path d="M 2.8 -1 a 3 3 0 0 0 -5.6 0.4"/><polyline points="-2.8,-2.2 -2.8,-0.8 -1.4,-0.8"/><path d="M -2.8 1 a 3 3 0 0 0 5.6 -0.4"/><polyline points="2.8,2.2 2.8,0.8 1.4,0.8"/></g>; } },
+    // ── COMMS ────────────────────────────────────────────────────────────
+    { id:"email",        label:"Email",        aliases:"email mail message envelope", render:function(c){ return <g {...S(c)}><rect x="-3" y="-2.2" width="6" height="4.4" rx="0.5"/><polyline points="-3,-2 0,0.4 3,-2"/></g>; } },
+    { id:"chat",         label:"Chat",         aliases:"chat message bubble conversation", render:function(c){ return <g {...S(c)}><path d="M -3 -2.2 H 3 V 1.6 H 0.8 L -1 3 V 1.6 H -3 Z"/>{dot(c,-1.2,-0.3,0.4)}{dot(c,0,-0.3,0.4)}{dot(c,1.2,-0.3,0.4)}</g>; } },
+    { id:"message",      label:"Message",      aliases:"message dm direct notification", render:function(c){ return <g {...S(c)}><path d="M -3 -2.2 H 3 V 1.6 H -0.4 L -1.4 2.6 L -1.4 1.6 H -3 Z"/></g>; } },
+    { id:"bell",         label:"Bell",         aliases:"bell notification alert ping", render:function(c){ return <g {...S(c)}><path d="M -2.2 1.6 H 2.2 L 1.6 0.8 V -1 a 1.6 1.6 0 0 0 -3.2 0 V 0.8 Z"/><path d="M -0.6 2.6 a 1.2 1.2 0 0 0 2.4 0"/></g>; } },
+    { id:"phone",        label:"Phone",        aliases:"phone call ring telephone", render:function(c){ return <g {...S(c)}><path d="M -2.6 -2.6 L -1 -1 L -1.6 0 a 4 4 0 0 0 1.6 1.6 L 1 1 L 2.6 2.6 a 1 1 0 0 1 -1 1 a 5 5 0 0 1 -4.6 -4.6 a 1 1 0 0 1 1 -1 Z"/></g>; } },
+    // ── AUTOMATION & AI ──────────────────────────────────────────────────
+    { id:"agent",        label:"Agent",        aliases:"agent bot ai assistant robot", render:function(c){ return <g {...S(c)}><rect x="-2.6" y="-1.6" width="5.2" height="4.4" rx="1"/><line x1="0" y1="-3.4" x2="0" y2="-1.6"/>{dot(c,0,-3.4,0.4)}{dot(c,-1.1,0.4,0.45)}{dot(c,1.1,0.4,0.45)}<line x1="-1" y1="1.8" x2="1" y2="1.8"/></g>; } },
+    { id:"automation",   label:"Automation",   aliases:"automation zap bolt trigger workflow", render:function(c){ return <g {...S(c)}><path d="M 0.8 -3.2 L -1.8 0.4 L 0 0.4 L -0.6 3.2 L 2 -0.2 L 0.2 -0.2 Z"/></g>; } },
+    { id:"workflow",     label:"Workflow",     aliases:"workflow dag pipeline graph nodes", render:function(c){ return <g {...S(c)}><circle cx="-2.4" cy="-1.8" r="1"/><circle cx="2.4" cy="-1.8" r="1"/><circle cx="0" cy="2.2" r="1"/><line x1="-1.6" y1="-1" x2="-0.6" y2="1.4"/><line x1="1.6" y1="-1" x2="0.6" y2="1.4"/><line x1="-1.4" y1="-1.8" x2="1.4" y2="-1.8"/></g>; } },
+    { id:"settings",     label:"Settings",     aliases:"settings cog gear config preferences", render:function(c){ return <g {...S(c)}><circle r="1.2"/><path d="M 0 -3 V -2 M 0 2 V 3 M -3 0 H -2 M 2 0 H 3 M -2.1 -2.1 L -1.4 -1.4 M 1.4 -1.4 L 2.1 -2.1 M -2.1 2.1 L -1.4 1.4 M 1.4 1.4 L 2.1 2.1"/></g>; } },
+    { id:"schedule",     label:"Schedule",     aliases:"schedule clock time cron timer", render:function(c){ return <g {...S(c)}><circle r="3"/><polyline points="0,-1.8 0,0 1.6,0.8"/></g>; } },
+    { id:"trigger",      label:"Trigger",      aliases:"trigger lightning bolt event flash", render:function(c){ return <g {...S(c)}><path d="M 1 -3 L -1.6 0.2 H 0.2 L -1 3 L 1.8 0 H 0 Z"/></g>; } },
+    // ── PROJECT & EVENT ──────────────────────────────────────────────────
+    { id:"project",      label:"Project",      aliases:"project initiative epic workstream", render:function(c){ return <g {...S(c)}><rect x="-3" y="-2.4" width="6" height="5" rx="0.4"/><line x1="-3" y1="-0.8" x2="3" y2="-0.8"/><line x1="-2" y1="0.4" x2="-0.4" y2="0.4"/><line x1="-2" y1="1.4" x2="1.4" y2="1.4"/></g>; } },
+    { id:"task",         label:"Task",         aliases:"task todo checkbox done", render:function(c){ return <g {...S(c)}><rect x="-3" y="-3" width="6" height="6" rx="0.5"/><polyline points="-1.6,0 -0.4,1.2 1.6,-1"/></g>; } },
+    { id:"milestone",    label:"Milestone",    aliases:"milestone goal flag pin diamond", render:function(c){ return <g {...S(c)}><line x1="-2.4" y1="-3" x2="-2.4" y2="3"/><polygon points="-2.4,-2.4 2.4,-1.8 1,-0.4 2.4,1 -2.4,0.4"/></g>; } },
+    { id:"event",        label:"Event",        aliases:"event calendar date meeting", render:function(c){ return <g {...S(c)}><rect x="-2.8" y="-2.4" width="5.6" height="5.4" rx="0.5"/><line x1="-2.8" y1="-0.6" x2="2.8" y2="-0.6"/><line x1="-1.4" y1="-3.2" x2="-1.4" y2="-1.6"/><line x1="1.4" y1="-3.2" x2="1.4" y2="-1.6"/>{dot(c,-1,1.4,0.4)}{dot(c,1,1.4,0.4)}</g>; } },
+    // ── ANALYTICS ────────────────────────────────────────────────────────
+    { id:"metric",       label:"Metric",       aliases:"metric chart bar stats analytics", render:function(c){ return <g {...S(c)}><line x1="-3" y1="3" x2="3" y2="3"/><line x1="-2" y1="3" x2="-2" y2="1"/><line x1="0" y1="3" x2="0" y2="-0.5"/><line x1="2" y1="3" x2="2" y2="-2"/></g>; } },
+    { id:"trend",        label:"Trend",        aliases:"trend up arrow growth increase", render:function(c){ return <g {...S(c)}><polyline points="-3,2 -1.4,0 0.4,1.2 2.6,-1.6"/><polyline points="2.6,-1.6 2.6,-0.4 1.4,-0.4"/></g>; } },
+    { id:"pie",          label:"Pie chart",    aliases:"pie chart distribution share", render:function(c){ return <g {...S(c)}><circle r="2.8"/><line x1="0" y1="0" x2="0" y2="-2.8"/><line x1="0" y1="0" x2="2.4" y2="1.4"/></g>; } },
+    { id:"funnel",       label:"Funnel",       aliases:"funnel pipeline conversion stages", render:function(c){ return <g {...S(c)}><path d="M -3 -2.4 H 3 L 1.2 0.4 V 2.8 H -1.2 V 0.4 Z"/></g>; } },
+    { id:"dashboard",    label:"Dashboard",    aliases:"dashboard panel widgets layout", render:function(c){ return <g {...S(c)}><rect x="-3" y="-2.4" width="6" height="5" rx="0.4"/><line x1="-3" y1="-0.4" x2="3" y2="-0.4"/><line x1="0" y1="-0.4" x2="0" y2="2.6"/></g>; } },
+    { id:"target",       label:"Target",       aliases:"target goal kpi bullseye lead", render:function(c){ return <g {...S(c)}><circle r="3"/><circle r="1.6"/>{dot(c,0,0,0.5)}</g>; } },
+    // ── STATUS ───────────────────────────────────────────────────────────
+    { id:"star",         label:"Star",         aliases:"star favorite featured rating", render:function(c){ return <g {...S(c)}><polygon points="0,-3 0.9,-0.9 3,-0.6 1.4,0.8 1.8,3 0,1.9 -1.8,3 -1.4,0.8 -3,-0.6 -0.9,-0.9"/></g>; } },
+    { id:"heart",        label:"Heart",        aliases:"heart like love favorite", render:function(c){ return <g {...S(c)}><path d="M 0 3 C -3 1.4 -3 -0.8 -1.6 -1.8 a 1.6 1.6 0 0 1 1.6 0.6 a 1.6 1.6 0 0 1 1.6 -0.6 C 3 -0.8 3 1.4 0 3 Z"/></g>; } },
+    { id:"bookmark",     label:"Bookmark",     aliases:"bookmark save ribbon mark", render:function(c){ return <g {...S(c)}><path d="M -1.8 -3 H 1.8 V 3 L 0 1.6 L -1.8 3 Z"/></g>; } },
+    { id:"pin",          label:"Pin",          aliases:"pin tack pushpin attach", render:function(c){ return <g {...S(c)}><path d="M 1 -3 L 3 -1 L 2 0 L 0.4 -0.4 L -1.6 2.6 L -2.4 1.8 L 0.6 0 L 0 -1.6 Z"/></g>; } },
+    { id:"tag",          label:"Tag",          aliases:"tag label category badge", render:function(c){ return <g {...S(c)}><path d="M -3 -2.4 H 0.6 L 3.2 0.2 L 0.4 3 L -3 -0.4 Z"/><circle cx="-1.6" cy="-1" r="0.5"/></g>; } },
+    { id:"check",        label:"Check",        aliases:"check done complete tick approved", render:function(c){ return <g {...S(c)}><circle r="3"/><polyline points="-1.4,0 -0.2,1.2 1.6,-1"/></g>; } },
+    // ── LOCATION ─────────────────────────────────────────────────────────
+    { id:"location",     label:"Location",     aliases:"location pin place address marker", render:function(c){ return <g {...S(c)}><path d="M 0 3.4 C -2.4 1 -2.8 -0.4 -2.8 -1.2 a 2.8 2.8 0 0 1 5.6 0 C 2.8 -0.4 2.4 1 0 3.4 Z"/><circle cx="0" cy="-1.2" r="0.8"/></g>; } },
+    { id:"globe",        label:"Globe",        aliases:"globe earth world planet", render:function(c){ return <g {...S(c)}><circle r="3"/><ellipse cx="0" cy="0" rx="1.2" ry="3"/><line x1="-3" y1="0" x2="3" y2="0"/></g>; } },
+    { id:"map",          label:"Map",          aliases:"map territory region area", render:function(c){ return <g {...S(c)}><path d="M -3 -2 L -1 -2.6 L 1 -2 L 3 -2.6 V 2.6 L 1 3.2 L -1 2.6 L -3 3.2 Z"/><line x1="-1" y1="-2.6" x2="-1" y2="2.6"/><line x1="1" y1="-2" x2="1" y2="3.2"/></g>; } },
+    // ── MISC ─────────────────────────────────────────────────────────────
+    { id:"idea",         label:"Idea",         aliases:"idea lightbulb insight inspiration", render:function(c){ return <g {...S(c)}><path d="M 0 -3 a 2.4 2.4 0 0 1 1.6 4.2 V 1.6 H -1.6 V 1.2 A 2.4 2.4 0 0 1 0 -3 Z"/><line x1="-1.2" y1="2.4" x2="1.2" y2="2.4"/><line x1="-0.8" y1="3.2" x2="0.8" y2="3.2"/></g>; } },
+    { id:"eye",          label:"Eye",          aliases:"eye view watch visibility see", render:function(c){ return <g {...S(c)}><path d="M -3 0 C -1.4 -2 1.4 -2 3 0 C 1.4 2 -1.4 2 -3 0 Z"/><circle r="1"/></g>; } },
+    { id:"search",       label:"Search",       aliases:"search find query magnifier", render:function(c){ return <g {...S(c)}><circle cx="-0.6" cy="-0.6" r="2"/><line x1="0.8" y1="0.8" x2="2.8" y2="2.8"/></g>; } },
   ];
 })();
 
@@ -1253,6 +1303,7 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
               <path d="M0,0 L10,5 L0,10 z" fill={m.color} />
             </marker>
           ))}
+          <style>{"@keyframes ecgFadeIn { from { opacity: 0 } to { opacity: 1 } }"}</style>
         </defs>
 
         <rect x="0" y="0" width={size.w} height={size.h} fill="url(#dotgrid)" />
@@ -1362,25 +1413,41 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
                     {n.instances}
                   </text>
                 )}
-                {/* Edit-mode connector — visible on hover, persists while linking
-                    from this node. Handle hugs the node's right edge so the user
-                    never crosses empty space to reach it. A larger transparent
-                    hit ring around it makes the target generous to grab. */}
-                {editMode && (isHov || (drag?.kind === "link" && drag.id === n.id)) && (
-                  <g style={{ cursor: drag?.kind === "link" && drag.id === n.id ? "crosshair" : "grab" }}>
-                    {/* Generous invisible hit ring — bridges the gap between the
-                        node body and the visible handle so hover doesn't drop out
-                        as the user reaches for it. */}
-                    <circle cx={n.size + 3} cy="0" r="14" fill="transparent" pointerEvents="all"
-                      onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, n.id, true); }} />
-                    {/* Soft connector dot, sits just outside the node edge */}
-                    <circle cx={n.size + 3} cy="0" r="5"
-                      fill="var(--panel)" stroke="var(--ink-3)" strokeWidth="1"
-                      style={{ pointerEvents:"none" }} />
-                    <line x1={n.size - 0.4} y1="0" x2={n.size + 6.4} y2="0" stroke="var(--ink-2)" strokeWidth="1.1" strokeLinecap="round" style={{ pointerEvents:"none" }} />
-                    <line x1={n.size + 3} y1="-3" x2={n.size + 3} y2="3" stroke="var(--ink-2)" strokeWidth="1.1" strokeLinecap="round" style={{ pointerEvents:"none" }} />
-                  </g>
-                )}
+                {/* Edit-mode connector — premium feel.
+                    - Hugs the node's right edge (no empty gap to traverse)
+                    - Generous invisible hit ring (r=18) so the cursor doesn't lose it
+                    - Breathing halo while at rest (a quiet 1.8s pulse)
+                    - During a link drag the source handle stops pulsing and
+                      tightens — communicates "this is the live end".
+                    - Soft fade-in on appear so it doesn't snap in. */}
+                {editMode && (isHov || (drag?.kind === "link" && drag.id === n.id)) && (function(){
+                  var isLinking = drag?.kind === "link" && drag.id === n.id;
+                  var hx = n.size + 4; // handle centre x
+                  return (
+                    <g style={{ cursor: isLinking ? "crosshair" : "grab", animation:"ecgFadeIn 200ms cubic-bezier(0.34,1.56,0.64,1) both" }}>
+                      {/* Generous invisible hit ring — keeps hover sticky as the
+                          user reaches across the gap between body and handle. */}
+                      <circle cx={hx} cy="0" r="18" fill="transparent" pointerEvents="all"
+                        onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, n.id, true); }} />
+                      {/* Breathing halo — only at rest, signals "grab me" */}
+                      {!isLinking && (
+                        <circle cx={hx} cy="0" r="9" fill="none" stroke="var(--ink-3)" strokeWidth="0.55" opacity="0.45" style={{ pointerEvents:"none" }}>
+                          <animate attributeName="r" values="8.5;11.5;8.5" dur="1.8s" repeatCount="indefinite" />
+                          <animate attributeName="opacity" values="0.45;0.08;0.45" dur="1.8s" repeatCount="indefinite" />
+                        </circle>
+                      )}
+                      {/* Inner ring backdrop — soft cream halo that always sits
+                          behind the dot to lift it off the canvas dots */}
+                      <circle cx={hx} cy="0" r="7.2" fill="var(--bg-canvas)" stroke="var(--line)" strokeWidth="0.5" style={{ pointerEvents:"none" }} />
+                      {/* The dot itself — filled accent in ink-2 so it reads as
+                          deliberate without being pure black */}
+                      <circle cx={hx} cy="0" r={isLinking ? 6 : 5} fill="var(--ink-2)" style={{ pointerEvents:"none", transition:"r 160ms cubic-bezier(0.34,1.56,0.64,1)" }} />
+                      {/* + glyph in cream — clean, no overshoot */}
+                      <line x1={hx - 2.6} y1="0" x2={hx + 2.6} y2="0" stroke="var(--bg-canvas)" strokeWidth="1.1" strokeLinecap="round" style={{ pointerEvents:"none" }} />
+                      <line x1={hx} y1="-2.6" x2={hx} y2="2.6" stroke="var(--bg-canvas)" strokeWidth="1.1" strokeLinecap="round" style={{ pointerEvents:"none" }} />
+                    </g>
+                  );
+                })()}
               </g>
             );
           })}
@@ -16180,20 +16247,12 @@ function AddNodeFlow({ onClose, onCreate }) {
   var [catOpen, setCatOpen] = useState(false);
   // Icon (glyph) the user picks for this node type — surfaces in the node list view.
   // glyph: id of a built-in NODE_GLYPHS entry, or null for the empty/placeholder state.
-  // glyphImage: an uploaded data URL — when present, the disc renders this image
-  //             instead of the built-in glyph (and `glyph` is ignored).
+  // glyphImage retained on the data model only — uploads are no longer surfaced
+  // in the picker. Future surface (custom org library) will reintroduce it.
   var [glyph, setGlyph] = useState(null);
-  var [glyphImage, setGlyphImage] = useState(null);
+  var [glyphImage] = useState(null);
   var [glyphOpen, setGlyphOpen] = useState(false);
-  var glyphFileRef = useRef(null);
-  function handleGlyphUpload(e) {
-    var f = e.target.files && e.target.files[0];
-    if (!f) return;
-    var rd = new FileReader();
-    rd.onload = function(ev){ setGlyphImage(ev.target.result); setGlyph(null); setGlyphOpen(false); };
-    rd.readAsDataURL(f);
-    e.target.value = "";
-  }
+  var [glyphQuery, setGlyphQuery] = useState("");
 
   // Step 2 - properties + creation mode
   var [propMode, setPropMode] = useState(null); // manual / spreadsheet / sample / template
@@ -16466,7 +16525,7 @@ function AddNodeFlow({ onClose, onCreate }) {
                         return (
                           <div style={{ position:"relative" }}>
                             <button type="button" onClick={function(){ setGlyphOpen(function(o){ return !o; }); }}
-                              style={{ width:48, height:48, alignSelf:"center", borderRadius:"50%", border:"1px solid var(--line)", background:"var(--panel)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", padding:0, boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}
+                              style={{ width:48, height:48, alignSelf:"center", borderRadius:"50%", border:"1px solid " + (glyph ? "var(--ink-3)" : "var(--line)"), background: glyph ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", padding:0, boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)", outline:"none", transition:"background 140ms ease-out, border-color 140ms ease-out" }}
                               aria-label="Pick icon">
                               {glyphImage ? (
                                 <img src={glyphImage} alt="" style={{ width:28, height:28, objectFit:"contain", borderRadius:"50%" }} />
@@ -16487,60 +16546,56 @@ function AddNodeFlow({ onClose, onCreate }) {
                               <>
                                 <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setGlyphOpen(false); }} />
                                 <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:10, width:300 }}>
-                                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:8, padding:"0 2px" }}>Pick an icon</div>
-                                  <input ref={glyphFileRef} type="file" accept="image/png,image/svg+xml,image/jpeg,image/webp" onChange={handleGlyphUpload} style={{ display:"none" }} />
-                                  <div style={{ display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:6 }}>
-                                    {/* Slot 1: placeholder (clears the icon). Slot 2: upload custom image.
-                                        Remaining 28 slots: semantic icons for the common node types. */}
-                                    {(function(){
-                                      var slots = [
-                                        { id: null,     label: "No icon",      placeholder: true },
-                                        { id: "_upload", label: "Upload custom", upload: true }
-                                      ].concat(NODE_GLYPHS);
-                                      return slots.map(function(gOpt){
-                                        var isSel = (!glyphImage && glyph === gOpt.id) || (gOpt.placeholder && !glyphImage && glyph === null) || (gOpt.upload && !!glyphImage);
-                                        function onClick(){
-                                          if (gOpt.upload) { if (glyphFileRef.current) glyphFileRef.current.click(); return; }
-                                          setGlyph(gOpt.id);
-                                          setGlyphImage(null);
-                                          setGlyphOpen(false);
-                                        }
-                                        var borderStyle = gOpt.upload ? "dashed" : "solid";
-                                        var borderColor = isSel ? "var(--ink)" : (gOpt.upload ? "var(--ink-4)" : "var(--line-2)");
-                                        return (
-                                          <button key={gOpt.id || "none"} type="button" onClick={onClick} title={gOpt.label}
-                                            style={{ width:40, height:40, borderRadius:8, border:"1px " + borderStyle + " " + borderColor, background: isSel ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", padding:0, display:"flex", alignItems:"center", justifyContent:"center" }}
-                                            onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
-                                            onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel)"; }}>
-                                            {gOpt.placeholder ? (
-                                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ink-4)" strokeWidth="1.4" strokeLinecap="round">
-                                                <circle cx="12" cy="12" r="8" strokeDasharray="3 3" />
-                                                <line x1="12" y1="9" x2="12" y2="15" />
-                                                <line x1="9" y1="12" x2="15" y2="12" />
-                                              </svg>
-                                            ) : gOpt.upload ? (
-                                              glyphImage ? (
-                                                <img src={glyphImage} alt="" style={{ width:22, height:22, objectFit:"contain" }} />
-                                              ) : (
-                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                                  <polyline points="17 8 12 3 7 8"/>
-                                                  <line x1="12" y1="3" x2="12" y2="15"/>
-                                                </svg>
-                                              )
-                                            ) : (
-                                              // Bare glyph (no surrounding disc) rendered in a tight viewBox so
-                                              // the icon fills the picker tile. Stroke color is light enough to
-                                              // sit on the cream tile without feeling like a heavy badge.
-                                              <svg width="28" height="28" viewBox="-5 -5 10 10" style={{ display:"block" }}>
-                                                {gOpt.render({ fill: "none", stroke: "var(--ink-3)" })}
-                                              </svg>
-                                            )}
-                                          </button>
-                                        );
-                                      });
-                                    })()}
+                                  {/* Search — type to filter by name or aliases */}
+                                  <div style={{ position:"relative", marginBottom:8 }}>
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--ink-4)" strokeWidth="1.8" strokeLinecap="round" style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+                                      <circle cx="11" cy="11" r="6"/><path d="M20 20l-3.5-3.5"/>
+                                    </svg>
+                                    <input
+                                      autoFocus
+                                      value={glyphQuery}
+                                      onChange={function(e){ setGlyphQuery(e.target.value); }}
+                                      placeholder="Search icons"
+                                      style={{ width:"100%", padding:"6px 10px 6px 26px", fontSize:11.5, fontFamily:"JetBrains Mono", border:"1px solid var(--line)", borderRadius:6, background:"var(--bg-canvas)", color:"var(--ink-2)", outline:"none", boxSizing:"border-box" }}
+                                    />
                                   </div>
+                                  {(function(){
+                                    var q = glyphQuery.trim().toLowerCase();
+                                    var filtered = q ? NODE_GLYPHS.filter(function(g){
+                                      return g.label.toLowerCase().indexOf(q) >= 0 || (g.aliases || "").toLowerCase().indexOf(q) >= 0;
+                                    }) : NODE_GLYPHS;
+                                    // Placeholder (clears icon) is always shown first.
+                                    var slots = [{ id: null, label: "No icon", placeholder: true }].concat(filtered);
+                                    if (slots.length === 1 && q) {
+                                      return <div style={{ padding:"24px 8px", textAlign:"center", color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:11 }}>No icons match "{glyphQuery}"</div>;
+                                    }
+                                    return (
+                                      <div style={{ display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:6, maxHeight:260, overflowY:"auto", paddingRight:2 }}>
+                                        {slots.map(function(gOpt){
+                                          var isSel = glyph === gOpt.id || (gOpt.placeholder && glyph === null);
+                                          function onClick(){ setGlyph(gOpt.id); setGlyphOpen(false); setGlyphQuery(""); }
+                                          return (
+                                            <button key={gOpt.id || "none"} type="button" onClick={onClick} title={gOpt.label}
+                                              style={{ width:40, height:40, borderRadius:8, border:"1px solid " + (isSel ? "var(--ink-3)" : "var(--line-2)"), background: isSel ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", padding:0, display:"flex", alignItems:"center", justifyContent:"center", transition:"background 120ms ease-out, border-color 120ms ease-out" }}
+                                              onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                                              onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel)"; }}>
+                                              {gOpt.placeholder ? (
+                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ink-4)" strokeWidth="1.2" strokeLinecap="round">
+                                                  <circle cx="12" cy="12" r="8" strokeDasharray="3 3" />
+                                                  <line x1="12" y1="9" x2="12" y2="15" />
+                                                  <line x1="9" y1="12" x2="15" y2="12" />
+                                                </svg>
+                                              ) : (
+                                                <svg width="28" height="28" viewBox="-5 -5 10 10" style={{ display:"block" }}>
+                                                  {gOpt.render({ fill: "none", stroke: "var(--ink-3)" })}
+                                                </svg>
+                                              )}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               </>
                             )}
@@ -19477,21 +19532,9 @@ function App() {
             <Minimap nodes={nodes} viewport={viewport} size={{ w: 1100, h: 700 }} />
             <ZoomControls viewport={viewport} setViewport={setViewport} nodes={nodes} size={{ w: 1100, h: 700 }} />
           </div>
-          {/* Subtle floating edit-mode toggle — icon-only, top-right of the
-              canvas. Sits inside the canvas surface so it doesn't crowd the
-              toolbar. Hover reveals a small label tooltip. */}
-          <button
-            onClick={editMode ? exitEditMode : enterEditMode}
-            title={editMode ? "Exit edit mode" : "Enter edit mode"}
-            style={{ position:"absolute", top:64, right:14, width:30, height:30, borderRadius:6, border:"1px solid " + (editMode ? "var(--ink)" : "var(--line)"), background: editMode ? "var(--ink)" : "var(--panel)", color: editMode ? "var(--bg-canvas)" : "var(--ink-3)", display:"inline-flex", alignItems:"center", justifyContent:"center", cursor:"pointer", boxShadow:"0 1px 2px rgba(40,40,20,0.05)", padding:0, zIndex:5 }}
-            onMouseEnter={function(e){ if (!editMode) { e.currentTarget.style.color = "var(--ink)"; e.currentTarget.style.borderColor = "var(--ink-2)"; } }}
-            onMouseLeave={function(e){ if (!editMode) { e.currentTarget.style.color = "var(--ink-3)"; e.currentTarget.style.borderColor = "var(--line)"; } }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 20h9"/>
-              <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
-            </svg>
-          </button>
+          {/* View / Edit segmented toggle — floating pill, top-center of the
+              canvas. Active segment slides into the ink-filled state. */}
+          <ViewEditToggle editMode={editMode} onEnter={enterEditMode} onExit={exitEditMode} />
         </main>
         {selectedNode && <Inspector node={selectedNode} onClose={() => setSelected(null)} onOpenDetail={() => { setDetailId(selectedNode.id); setTab("Nodes"); }} />}
       </div>
@@ -19552,6 +19595,40 @@ function App() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ─── EDIT MODE — top-center View / Edit segmented toggle ────────────────────
+// Subtle floating pill, anchored top-center of the canvas. The active segment
+// uses a soft cream-on-ink-2 background instead of pure ink so it sits inside
+// the paper aesthetic rather than punching through it.
+function ViewEditToggle({ editMode, onEnter, onExit }) {
+  var seg = function(active){ return {
+    display:"inline-flex", alignItems:"center", gap:6,
+    padding:"6px 14px", borderRadius:6, border:"none",
+    background: active ? "var(--ink-2)" : "transparent",
+    color: active ? "var(--bg-canvas)" : "var(--ink-3)",
+    fontFamily:"JetBrains Mono", fontSize:10.5, cursor:"pointer",
+    letterSpacing:"0.4px", textTransform:"uppercase",
+    transition:"background 160ms ease-out, color 160ms ease-out"
+  }; };
+  return (
+    <div style={{ position:"absolute", top:14, left:"50%", transform:"translateX(-50%)", zIndex:10, display:"inline-flex", padding:3, borderRadius:8, background:"var(--panel)", border:"1px solid var(--line)", boxShadow:"0 1px 2px rgba(40,40,20,0.04), 0 6px 18px rgba(40,40,20,0.06)" }}>
+      <button onClick={onExit} style={seg(!editMode)}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+        View
+      </button>
+      <button onClick={onEnter} style={seg(editMode)}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 20h9"/>
+          <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+        </svg>
+        Edit
+      </button>
     </div>
   );
 }
