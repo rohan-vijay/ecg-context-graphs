@@ -18971,10 +18971,11 @@ function WorkspaceEmpty({ icon, eyebrow, title, desc, ctaLabel, onCta, secondary
 // on the canvas to drop their first node. We also render a ripple at the
 // click position so each click feels like a deliberate drop, not a swipe.
 function BlankCanvas({ onAddNode }) {
-  // Big cream node disc with a soft drop shadow and a confident + glyph.
-  // No dashed halo — the cursor itself is the affordance.
+  // Clean cream node disc with a quiet neutral border and a soft + glyph.
+  // No drop shadow, no heavy outline — the disc reads as part of the canvas
+  // palette, the + glyph carries the affordance.
   // SVG is 80×80; hotspot centred at 40,40.
-  var nodeCursor = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'><defs><filter id='s' x='-20%25' y='-20%25' width='140%25' height='140%25'><feGaussianBlur in='SourceAlpha' stdDeviation='1.2'/><feOffset dx='0' dy='1.5' result='o'/><feFlood flood-color='%23332f24' flood-opacity='0.18'/><feComposite in2='o' operator='in'/><feMerge><feMergeNode/><feMergeNode in='SourceGraphic'/></feMerge></filter></defs><g filter='url(%23s)'><circle cx='40' cy='40' r='22' fill='%23f6f1e5' stroke='%237a6e54' stroke-width='1.8'/></g><line x1='40' y1='29' x2='40' y2='51' stroke='%23332f24' stroke-width='2.4' stroke-linecap='round'/><line x1='29' y1='40' x2='51' y2='40' stroke='%23332f24' stroke-width='2.4' stroke-linecap='round'/></svg>\") 40 40, copy";
+  var nodeCursor = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'><circle cx='40' cy='40' r='22' fill='%23f3ede0' stroke='%23bdb39a' stroke-width='1.2'/><line x1='40' y1='30' x2='40' y2='50' stroke='%23645d4d' stroke-width='1.8' stroke-linecap='round'/><line x1='30' y1='40' x2='50' y2='40' stroke='%23645d4d' stroke-width='1.8' stroke-linecap='round'/></svg>\") 40 40, copy";
 
   var [ripples, setRipples] = React.useState([]);
   var rippleSeq = React.useRef(0);
@@ -19009,9 +19010,9 @@ function BlankCanvas({ onAddNode }) {
           {ripples.map(function(rp){
             return (
               <div key={rp.id} style={{ position:"absolute", left: rp.x, top: rp.y, width:0, height:0, pointerEvents:"none" }}>
-                <div style={{ position:"absolute", left:-48, top:-48, width:96, height:96, borderRadius:"50%", border:"2px solid #7a6e54", background:"transparent", animation:"ecg-ripple 480ms ease-out forwards" }} />
-                <div style={{ position:"absolute", left:-32, top:-32, width:64, height:64, borderRadius:"50%", border:"1.5px solid #7a6e54", background:"transparent", animation:"ecg-ripple 360ms ease-out forwards", animationDelay:"60ms" }} />
-                <div style={{ position:"absolute", left:-22, top:-22, width:44, height:44, borderRadius:"50%", background:"#f6f1e5", border:"1.8px solid #7a6e54", animation:"ecg-ripple-core 320ms ease-out forwards" }} />
+                <div style={{ position:"absolute", left:-48, top:-48, width:96, height:96, borderRadius:"50%", border:"1.4px solid #bdb39a", background:"transparent", animation:"ecg-ripple 480ms ease-out forwards" }} />
+                <div style={{ position:"absolute", left:-32, top:-32, width:64, height:64, borderRadius:"50%", border:"1px solid #bdb39a", background:"transparent", animation:"ecg-ripple 360ms ease-out forwards", animationDelay:"60ms" }} />
+                <div style={{ position:"absolute", left:-22, top:-22, width:44, height:44, borderRadius:"50%", background:"#f3ede0", border:"1.2px solid #bdb39a", animation:"ecg-ripple-core 320ms ease-out forwards" }} />
               </div>
             );
           })}
