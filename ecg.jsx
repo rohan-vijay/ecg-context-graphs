@@ -19599,22 +19599,24 @@ function App() {
   );
 }
 
-// ─── EDIT MODE — top-center View / Edit segmented toggle ────────────────────
-// Subtle floating pill, anchored top-center of the canvas. The active segment
-// uses a soft cream-on-ink-2 background instead of pure ink so it sits inside
-// the paper aesthetic rather than punching through it.
+// ─── EDIT MODE — View / Edit segmented toggle ───────────────────────────────
+// Floats on the canvas surface, top-right corner, below the canvas toolbar.
+// The active segment is a soft raised "tab" inside a recessed container —
+// like a macOS segmented control. No harsh ink-on-cream contrast.
 function ViewEditToggle({ editMode, onEnter, onExit }) {
   var seg = function(active){ return {
     display:"inline-flex", alignItems:"center", gap:6,
-    padding:"6px 14px", borderRadius:6, border:"none",
-    background: active ? "var(--ink-2)" : "transparent",
-    color: active ? "var(--bg-canvas)" : "var(--ink-3)",
-    fontFamily:"JetBrains Mono", fontSize:10.5, cursor:"pointer",
+    padding:"5px 12px", borderRadius:5, border:"none",
+    background: active ? "var(--bg-canvas)" : "transparent",
+    color: active ? "var(--ink)" : "var(--ink-3)",
+    fontFamily:"JetBrains Mono", fontSize:10, cursor:"pointer",
     letterSpacing:"0.4px", textTransform:"uppercase",
+    boxShadow: active ? "0 1px 2px rgba(40,40,20,0.06)" : "none",
+    fontWeight: active ? 600 : 400,
     transition:"background 160ms ease-out, color 160ms ease-out"
   }; };
   return (
-    <div style={{ position:"absolute", top:14, left:"50%", transform:"translateX(-50%)", zIndex:10, display:"inline-flex", padding:3, borderRadius:8, background:"var(--panel)", border:"1px solid var(--line)", boxShadow:"0 1px 2px rgba(40,40,20,0.04), 0 6px 18px rgba(40,40,20,0.06)" }}>
+    <div style={{ position:"absolute", top:64, right:14, zIndex:10, display:"inline-flex", padding:2, borderRadius:7, background:"var(--panel-2)", border:"1px solid var(--line)" }}>
       <button onClick={onExit} style={seg(!editMode)}>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
