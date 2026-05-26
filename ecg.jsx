@@ -1175,6 +1175,36 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
     }
   };
   const onPointerMove = (e) => {
+    // Edit-mode hover detection with a virtual buffer ring around each node.
+    // When the cursor is within (node.size + 28) of a node, treat it as still
+    // hovering — keeps the cursor as "grab" until the user really moves into
+    // empty space, then it transitions to the canvas/drop cursor.
+    if (editMode && !drag) {
+      const pt0 = svgRef.current.getBoundingClientRect();
+      const sx0 = e.clientX - pt0.left;
+      const sy0 = e.clientY - pt0.top;
+      const [wx0, wy0] = toWorld(sx0, sy0);
+      let nearestId = null;
+      let nearestDist = Infinity;
+      for (let i = 0; i < nodes.length; i++) {
+        const cn = nodes[i];
+        const dx = wx0 - cn.x, dy = wy0 - cn.y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        const buffer = (cn.size || 22) + 28;
+        if (d < buffer && d < nearestDist) { nearestId = cn.id; nearestDist = d; }
+      }
+      if (nearestId) {
+        if (hover !== nearestId) setHover(nearestId);
+        const nrn = nodes.find(n => n.id === nearestId);
+        if (nrn) {
+          const a = Math.atan2(wy0 - nrn.y, wx0 - nrn.x);
+          const snapped = Math.round(a / (Math.PI / 2)) * (Math.PI / 2);
+          if (snapped !== hoverAngle) setHoverAngle(snapped);
+        }
+      } else if (hover) {
+        setHover(null);
+      }
+    }
     if (!drag) return;
     const pt = svgRef.current.getBoundingClientRect();
     const sx = e.clientX - pt.left;
@@ -1302,7 +1332,9 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
         onPointerDown={e => onPointerDown(e)}
         onWheel={onWheel}
         style={{ cursor: drag?.kind === "link" ? "crosshair" : drag?.kind === "pan" ? "grabbing" : (editMode
-          ? "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'><circle cx='22' cy='22' r='15' fill='%23f3ede0' stroke='%23bdb39a' stroke-width='1.2' stroke-dasharray='3 3'/><line x1='22' y1='15' x2='22' y2='29' stroke='%23645d4d' stroke-width='1.6' stroke-linecap='round'/><line x1='15' y1='22' x2='29' y2='22' stroke='%23645d4d' stroke-width='1.6' stroke-linecap='round'/></svg>\") 22 22, copy"
+          ? (hover
+              ? "grab"  /* near a node (within buffer) — stay in grab mode */
+              : "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'><circle cx='22' cy='22' r='15' fill='%23f3ede0' stroke='%23bdb39a' stroke-width='1.2' stroke-dasharray='3 3'/><line x1='22' y1='15' x2='22' y2='29' stroke='%23645d4d' stroke-width='1.6' stroke-linecap='round'/><line x1='15' y1='22' x2='29' y2='22' stroke='%23645d4d' stroke-width='1.6' stroke-linecap='round'/></svg>\") 22 22, copy")
           : "grab") }}
       >
         <defs>
