@@ -552,10 +552,6 @@ function Header({ tab, onTab, onAddNode, onBackToLanding, graphName }) {
             <span className="dot-live" />
             <span className="sub-strong">LIVE</span>
             <span className="sub-muted">v2.14.0</span>
-            <span className="sub-sep">·</span>
-            <span className="sub-muted">branch </span><span className="sub-mono">main</span>
-            <span className="sub-sep">·</span>
-            <span className="sub-muted">4 drafts</span>
           </div>
         </div>
       </div>
@@ -2030,8 +2026,6 @@ function EditSchemaView({ node, properties: initProps, onClose }) {
           <span className="crumb-tail">
             <span className="dot-live" /> LIVE
             <span className="crumb-dot">·</span> v3.2
-            <span className="crumb-dot">·</span> branch <b>main</b>
-            <span className="crumb-dot">·</span> <span className="crumb-warn">draft in progress</span>
           </span>
         </div>
         <div className="detail-title-row">
@@ -2497,8 +2491,6 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
           <span className="crumb-tail">
             <span className="dot-live" /> LIVE
             <span className="crumb-dot">·</span> v3.2
-            <span className="crumb-dot">·</span> branch <b>main</b>
-            <span className="crumb-dot">·</span> <span className="crumb-warn">4 drafts</span>
           </span>
         </div>
 
