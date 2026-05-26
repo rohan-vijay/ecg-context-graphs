@@ -1032,7 +1032,7 @@ function Meter({ label, v, tail, tone }) {
 
 // ---------- CANVAS (graph) --------------------------------------------------
 
-function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover, setHover, filter, query, savedView, viewport, setViewport, sidebarOpen, showInferred, showEdgeLabels, showCounts, editMode, onEditAdd, onEditConnect, onEditOpenNode, onDeleteNode, onDeleteEdge }) {
+function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover, setHover, filter, query, savedView, viewport, setViewport, sidebarOpen, showInferred, showEdgeLabels, showCounts, editMode, onEditAdd, onEditConnect, onEditOpenNode, onEditEdge }) {
   // Defaults if props omitted by older callers.
   if (showInferred === undefined)  showInferred  = true;
   if (showEdgeLabels === undefined) showEdgeLabels = true;
@@ -1269,6 +1269,13 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
             const baseColor = markers[e.kind].color;
             return (
               <g key={i} opacity={lit ? 1 : (highlightId ? (visEdge ? 0.12 : 0.04) : (visEdge ? 0.7 : 0.06))}>
+                {/* Edit-mode invisible wide hit target — makes thin edges easy to click */}
+                {editMode && (
+                  <path d={path} fill="none" stroke="transparent" strokeWidth={Math.max(12 / zoom, 8)}
+                    style={{ cursor: "pointer", pointerEvents: "stroke" }}
+                    onClick={(ev) => { ev.stopPropagation(); if (onEditEdge) onEditEdge(i); }}
+                    onPointerDown={(ev) => ev.stopPropagation()} />
+                )}
                 <path
                   d={path}
                   fill="none"
@@ -1277,6 +1284,7 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
                   strokeDasharray={e.kind === "inferred" ? `${6/Math.max(zoom,0.6)} ${4/Math.max(zoom,0.6)}` : "none"}
                   markerEnd={`url(#arrow-${e.kind})`}
                   opacity={lit ? 1 : 0.7}
+                  style={{ pointerEvents: "none" }}
                 />
               </g>
             );
@@ -1311,7 +1319,7 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
               <g
                 key={n.id}
                 transform={`translate(${n.x} ${n.y})`}
-                style={{ cursor: drag?.kind === "node" && drag.id === n.id ? "grabbing" : "pointer" }}
+                style={{ cursor: drag?.kind === "node" && drag.id === n.id ? "grabbing" : (editMode ? "grab" : "pointer") }}
                 onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, n.id); }}
                 onPointerUp={(e) => { e.stopPropagation(); onPointerUp(e, n.id); }}
                 onMouseEnter={() => setHover(n.id)}
@@ -18231,9 +18239,9 @@ function NewGraphFlow({ onClose, onCreate }) {
 // come from. Four mutually-exclusive options keep it concrete (no Cypher).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function NewEdgeFlow({ onClose, onCreate, fromNode, toNode }) {
+function NewEdgeFlow({ onClose, onCreate, fromNode, toNode, initialLabel }) {
   var [step, setStep]                 = useState(1);
-  var [label, setLabel]               = useState("");
+  var [label, setLabel]               = useState(initialLabel || "");
   var [desc, setDesc]                 = useState("");
   var [fromId, setFromId]             = useState(fromNode ? fromNode.id : null);
   var [toId, setToId]                 = useState(toNode ? toNode.id : null);
@@ -19271,9 +19279,11 @@ function App() {
   // state so there's no separate Save / Discard step — exiting just turns the
   // edit affordances off.
   const [editMode, setEditMode] = useState(false);
-  const [pendingEdgeFrom, setPendingEdgeFrom] = useState(null); // { fromId, toId } when a drag completes
+  // { fromId, toId, editIdx?, initialLabel? } — set when a drag completes or
+  // when an existing edge is clicked for edit. editIdx tells the onCreate
+  // callback to splice the existing edge instead of appending.
+  const [pendingEdgeFrom, setPendingEdgeFrom] = useState(null);
   const [pendingAddPos, setPendingAddPos] = useState(null);     // { x, y } world coords for next created node
-  const [confirmDelete, setConfirmDelete] = useState(null);     // { kind:"node"|"edge", id?:..., idx?:..., name:..., edgeCount?:... }
 
   function enterEditMode() {
     setEditMode(true);
@@ -19456,14 +19466,10 @@ function App() {
             onEditAdd={function(worldX, worldY){ setPendingAddPos({ x: worldX, y: worldY }); setAddNodeOpen(true); }}
             onEditConnect={function(fromId, toId){ setPendingEdgeFrom({ fromId: fromId, toId: toId }); }}
             onEditOpenNode={function(id){ setDetailId(id); setTab("Nodes"); }}
-            onDeleteNode={function(id){
-              var n = nodes.find(function(x){ return x.id === id; });
-              var ec = edges.filter(function(e){ return e.s === id || e.t === id; }).length;
-              setConfirmDelete({ kind:"node", id: id, name: n ? n.label : id, edgeCount: ec });
-            }}
-            onDeleteEdge={function(idx){
+            onEditEdge={function(idx){
               var e = edges[idx];
-              setConfirmDelete({ kind:"edge", idx: idx, name: e ? (":" + e.label) : "edge" });
+              if (!e) return;
+              setPendingEdgeFrom({ fromId: e.s, toId: e.t, editIdx: idx, initialLabel: e.label || "" });
             }}
           />
           <Legend filter={filter} setFilter={setFilter} />
@@ -19519,45 +19525,30 @@ function App() {
         setSelected(newNode.id);
         setPendingAddPos(null);
       }} />}
-      {/* Edge-create flow triggered by an edit-mode drag from a node handle */}
+      {/* Edge-create / edge-edit flow.
+          Triggered by an edit-mode drag from a node handle (no editIdx) or by
+          clicking an existing edge in edit mode (editIdx set). The same flow
+          serves both — onCreate either appends a new edge or splices the
+          existing one in place. */}
       {pendingEdgeFrom && (
         <NewEdgeFlow
           fromNode={nodes.find(function(n){ return n.id === pendingEdgeFrom.fromId; })}
           toNode={nodes.find(function(n){ return n.id === pendingEdgeFrom.toId; })}
+          initialLabel={pendingEdgeFrom.initialLabel || ""}
           onClose={function(){ setPendingEdgeFrom(null); }}
           onCreate={function(spec){
             var s = spec && spec.from && spec.from.id;
             var t = spec && spec.to && spec.to.id;
+            var lbl = (spec.label || "RELATES").toUpperCase();
+            var editIdx = pendingEdgeFrom.editIdx;
             if (s && t) {
-              setEdges(function(es){ return es.concat([{ s: s, t: t, label: (spec.label || "RELATES").toUpperCase(), kind: "direct" }]); });
+              if (editIdx !== undefined && editIdx !== null) {
+                setEdges(function(es){ return es.map(function(edge, i){ return i === editIdx ? Object.assign({}, edge, { s: s, t: t, label: lbl }) : edge; }); });
+              } else {
+                setEdges(function(es){ return es.concat([{ s: s, t: t, label: lbl, kind: "direct" }]); });
+              }
             }
             setPendingEdgeFrom(null);
-          }}
-        />
-      )}
-      {/* Delete-confirm dialog */}
-      {confirmDelete && (
-        <ConfirmDialog
-          title={confirmDelete.kind === "node" ? "Delete this node?" : "Delete this edge?"}
-          body={confirmDelete.kind === "node"
-            ? (confirmDelete.edgeCount > 0
-                ? <>You're about to delete <strong>{confirmDelete.name}</strong> and the <strong>{confirmDelete.edgeCount}</strong> edge{confirmDelete.edgeCount === 1 ? "" : "s"} connected to it. This can't be undone from this session.</>
-                : <>You're about to delete <strong>{confirmDelete.name}</strong>. This can't be undone from this session.</>)
-            : <>You're about to delete <strong>{confirmDelete.name}</strong>. This can't be undone from this session.</>}
-          confirmLabel="Delete"
-          danger
-          onCancel={function(){ setConfirmDelete(null); }}
-          onConfirm={function(){
-            if (confirmDelete.kind === "node") {
-              var id = confirmDelete.id;
-              setEdges(function(es){ return es.filter(function(e){ return e.s !== id && e.t !== id; }); });
-              setNodes(function(ns){ return ns.filter(function(n){ return n.id !== id; }); });
-              if (selected === id) setSelected(null);
-            } else {
-              var idx = confirmDelete.idx;
-              setEdges(function(es){ return es.filter(function(_, i){ return i !== idx; }); });
-            }
-            setConfirmDelete(null);
           }}
         />
       )}
