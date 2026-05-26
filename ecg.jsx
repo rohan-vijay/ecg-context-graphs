@@ -11724,7 +11724,6 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                 <span>Graph</span>
                 <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                   <button className="btn-ghost" style={{ fontSize:11.5 }} onClick={function(){ setTwoHop(function(v){ return !v; }); }}>{twoHop ? "Collapse to 1-hop" : "Expand 2-hop"}</button>
-                  <button className="btn-ghost" style={{ fontSize:11.5 }}>Reset</button>
                   <button onClick={function(){ setGraphFullscreen(true); }} title="Expand graph"
                     style={{ width:30, height:30, borderRadius:6, border:"1px solid var(--line)", background:"var(--panel)", color:"var(--ink-2)", cursor:"pointer", display:"inline-flex", alignItems:"center", justifyContent:"center", padding:0 }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
