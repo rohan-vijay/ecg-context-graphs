@@ -11824,13 +11824,6 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                 var compColor = insp.completeness >= 90 ? "var(--green)" : insp.completeness >= 75 ? "var(--gold)" : "var(--coral)";
                 var confColor = insp.confidence >= 90 ? "var(--green)" : insp.confidence >= 75 ? "var(--gold)" : "var(--coral)";
 
-                // Local activity feed for the inspected record.
-                var localActivity = insp.isCentre ? activity.slice(0, 4) : [
-                  { when:"2h ago",  who: insp.sourceLabel,       action:"synced",   what:"all fields", kind:"sync" },
-                  { when:"1d ago",  who:"schema-bot",            action:"validated",what:"0 violations", kind:"validate" },
-                  { when:"3d ago",  who:"morgan.lee",            action:"viewed",   what:"record", kind:"manual" }
-                ];
-
                 return (
                   <div className="card" style={{ overflow:"hidden", display:"flex", flexDirection:"column" }}>
                     {/* HEADER */}
@@ -11900,25 +11893,6 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                               {pv.computed && <span title="Computed" style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--purple-fill)", color:"var(--purple)", fontWeight:700 }}>FX</span>}
                               <span title={"confidence " + pv.conf} style={{ width:6, height:6, borderRadius:"50%", background: pvConfColor, flexShrink:0 }} />
                             </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* RECENT ACTIVITY */}
-                    <div style={{ borderTop:"1px solid var(--line-2)", background:"var(--panel-2)" }}>
-                      <div style={{ padding:"10px 18px 4px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase" }}>Recent activity</div>
-                      {localActivity.map(function(a, i){
-                        var dotColor = a.kind === "create" ? "var(--green)" : a.kind === "sync" ? "var(--blue)" : a.kind === "agent" ? "var(--purple)" : a.kind === "manual" ? "var(--coral)" : a.kind === "merge" ? "var(--gold)" : "var(--ink-3)";
-                        return (
-                          <div key={i} style={{ display:"grid", gridTemplateColumns:"80px 10px 1fr", gap:10, alignItems:"center", padding:"7px 18px" }}>
-                            <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{a.when}</span>
-                            <span style={{ width:6, height:6, borderRadius:"50%", background:dotColor, justifySelf:"center" }} />
-                            <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
-                              <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)", fontWeight:600 }}>{a.who}</code>
-                              <span style={{ fontSize:11, color:"var(--ink-3)" }}>{a.action}</span>
-                              <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{a.what}</span>
-                            </div>
                           </div>
                         );
                       })}
