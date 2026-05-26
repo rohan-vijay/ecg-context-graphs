@@ -18426,7 +18426,7 @@ function NewGraphFlow({ onClose, onCreate }) {
           {view === "form" && startMode === "template" ? (
             <button className="btn-dark" disabled={graphName.trim().length < 2} onClick={function(){ setView("template"); }} style={{ opacity: graphName.trim().length >= 2 ? 1 : 0.45 }}>Choose template →</button>
           ) : (
-            <button className="btn-dark" disabled={!canActivate} onClick={function(){ if (onCreate) onCreate({ name: graphName }); onClose(); }} style={{ opacity: canActivate ? 1 : 0.45 }}>Create graph ↵</button>
+            <button className="btn-dark" disabled={!canActivate} onClick={function(){ if (onCreate) onCreate({ name: graphName, entities: entitiesToInclude, templateId: startId }); onClose(); }} style={{ opacity: canActivate ? 1 : 0.45 }}>Create graph ↵</button>
           )}
         </div>
 
@@ -19354,7 +19354,7 @@ function GraphLandingView({ onOpenGraph }) {
         </div>
       )}
 
-      {newGraphOpen && <NewGraphFlow onClose={function(){ setNewGraphOpen(false); }} onCreate={function(g){ setNewGraphOpen(false); if (g && g.id) { onOpenGraph(g.id); } else if (g && g.name && window.__openBlankGraph) { window.__openBlankGraph(g.name); } }} />}
+      {newGraphOpen && <NewGraphFlow onClose={function(){ setNewGraphOpen(false); }} onCreate={function(g){ setNewGraphOpen(false); if (g && g.id) { onOpenGraph(g.id); } else if (g && g.name && window.__openBlankGraph) { window.__openBlankGraph(g.name, g.entities || []); } }} />}
     </div>
   );
 }
@@ -19634,12 +19634,52 @@ function App() {
     setSidebarOpen(true);
   }
 
-  // Expose a global opener used by the landing-page NewGraphFlow.onCreate
-  // (so the user can land directly into an empty workspace they just created).
+  // Build a starter node for each entity name a template supplies. Each node
+  // lands with a sensible default property set (id / name / created_at /
+  // updated_at), positioned around the origin so it's easy to see the
+  // whole graph at a glance.
+  function buildTemplateNodes(entityNames) {
+    if (!entityNames || !entityNames.length) return [];
+    var N = entityNames.length;
+    var R = Math.max(160, N * 18);
+    var ts = Date.now().toString(36).slice(-4);
+    return entityNames.map(function(name, i){
+      var angle = (i / N) * 2 * Math.PI - Math.PI / 2;
+      var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || ("node_" + i);
+      var keyName = slug + "_id";
+      return {
+        id: slug + "-" + ts + "-" + i,
+        label: name,
+        type: "entity",
+        cat: "core",
+        x: Math.round(Math.cos(angle) * R),
+        y: Math.round(Math.sin(angle) * R),
+        props: 4,
+        edges: 0,
+        glyph: null,
+        glyphImage: null,
+        size: 22,
+        _userProps: [
+          { name: keyName,     type: "uuid",      required: true, indexed: true,  pii: false, pk: true,  fill: 100, conf: 100, source: "primary" },
+          { name: "name",       type: "string",    required: true, indexed: true,  pii: false,            fill: 100, conf: 100, source: "primary" },
+          { name: "created_at", type: "timestamp", required: true, indexed: true,  pii: false,            fill: 100, conf: 100, source: "primary" },
+          { name: "updated_at", type: "timestamp", required: true, indexed: false, pii: false,            fill: 100, conf: 100, source: "primary" },
+        ],
+        instances: "—", instancesN: 0,
+        fill: 0, conf: 0, pii: 0, fresh: "—", change: "LOW",
+      };
+    });
+  }
+
+  // Expose a global opener used by the landing-page NewGraphFlow.onCreate.
+  // When entities are supplied (template path) we pre-seed the graph with a
+  // ring of starter nodes; otherwise we land on a blank canvas.
   React.useEffect(function(){
-    window.__openBlankGraph = function(name){
+    window.__openBlankGraph = function(name, entities){
+      var seedNodes = buildTemplateNodes(entities || []);
       setBlankGraphName(name || "Untitled graph");
-      setNodes([]);
+      setNodes(seedNodes);
+      setEdges([]);
       setSelected(null);
       setDetailId(null);
       setTab("Graph");
