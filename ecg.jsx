@@ -11620,7 +11620,7 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
           <div style={{ display:"grid", gridTemplateColumns:"minmax(0, 1.4fr) minmax(420px, 1fr)", gap:18 }}>
             <div className="card" style={{ padding:0, overflow:"hidden" }}>
               <div className="card-head card-head-row">
-                <span>Relationship graph <span className="card-head-sub">center = this record · {twoHop ? "showing 2-hop neighbourhood" : "showing direct neighbours"}</span></span>
+                <span>Graph</span>
                 <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                   <button className="btn-ghost" style={{ fontSize:11.5 }} onClick={function(){ setTwoHop(function(v){ return !v; }); }}>{twoHop ? "Collapse to 1-hop" : "Expand 2-hop"}</button>
                   <button className="btn-ghost" style={{ fontSize:11.5 }}>Reset</button>
