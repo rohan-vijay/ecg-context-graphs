@@ -1285,9 +1285,9 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
       return;
     }
     if (drag?.kind === "node" && !drag.moved && nodeId) {
-      // Edit-mode click → open the node's detail editor; otherwise select for the inspector.
-      if (editMode && onEditOpenNode) onEditOpenNode(nodeId);
-      else setSelected(nodeId);
+      // Clicking a node opens the right-side Inspector in both view and edit
+      // mode — same affordance, no surprise full-page transition.
+      setSelected(nodeId);
       if (setMultiSelected) setMultiSelected([nodeId]);
     } else if (drag?.kind === "pan") {
       const pt = svgRef.current.getBoundingClientRect();
