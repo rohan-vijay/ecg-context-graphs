@@ -827,12 +827,14 @@ function Sidebar({ open, onToggle, filter, setFilter, query, setQuery, selected,
 
 // ---------- INSPECTOR (right panel) ----------------------------------------
 
-function Inspector({ node, onClose, onOpenDetail }) {
+function Inspector({ node, onClose, onOpenDetail, edges: liveEdges, nodes: liveNodes }) {
   const [tab, setTab] = useState("Overview");
   if (!node) return null;
   const c = colorForNode(node);
-  const incoming = EDGES.filter(e => e.t === node.id);
-  const outgoing = EDGES.filter(e => e.s === node.id);
+  // Fall back to the module-scope EDGES when the caller doesn't pass live state.
+  const _edges = liveEdges || EDGES;
+  const incoming = _edges.filter(e => e.t === node.id);
+  const outgoing = _edges.filter(e => e.s === node.id);
   const properties = generateProps(node);
   const sources = generateSources(node);
   const rules = generateRules(node);
@@ -1745,6 +1747,13 @@ const PROPS_BY_NODE = {
 };
 
 function generateProps(node) {
+  // User-defined properties (from the Add Node flow) take precedence over
+  // anything synthesized — that's what makes the new node feel real.
+  if (node._userProps && node._userProps.length) {
+    return node._userProps.map(function(p, i){
+      return Object.assign({ fill: 100, conf: 100, source: "primary" }, p);
+    });
+  }
   if (PROPS_BY_NODE[node.id]) return PROPS_BY_NODE[node.id];
   const out = [];
   const seed = node.id.charCodeAt(0) + node.id.length;
@@ -2836,8 +2845,12 @@ function EditSchemaView({ node, properties: initProps, onClose }) {
 // Quality tab temporarily hidden — content lives behind tab === "Quality" but the chip is omitted from this list.
 const DETAIL_TABS = ["Overview", "Properties", "Edges", "Sources", "Rules", "Computations", "History", "Sample"];
 
-function NodeDetailView({ nodeId, onBack, onCanvas }) {
-  const node = NODES.find(n => n.id === nodeId);
+function NodeDetailView({ nodeId, onBack, onCanvas, nodes: liveNodes, edges: liveEdges }) {
+  // Prefer live nodes/edges from App state when provided — needed for nodes
+  // and edges the user creates in edit mode (not in the module-scope NODES/EDGES).
+  const _nodes = liveNodes && liveNodes.length ? liveNodes : NODES;
+  const _edges = liveEdges && liveEdges.length ? liveEdges : EDGES;
+  const node = _nodes.find(n => n.id === nodeId);
   const [tab, setTab] = useState("Overview");
   const [editOpen, setEditOpen] = useState(false);
   const [violationRule, setViolationRule] = useState(null);
@@ -2862,8 +2875,8 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
   const consumers  = generateConsumers(node);
   const activity   = generateActivity(node);
   const issues     = generateIssues(node);
-  const outgoing   = EDGES.filter(e => e.s === node.id);
-  const incoming   = EDGES.filter(e => e.t === node.id);
+  const outgoing   = _edges.filter(e => e.s === node.id);
+  const incoming   = _edges.filter(e => e.t === node.id);
 
   const big = (
     <svg width="44" height="44" viewBox="-22 -22 44 44">
@@ -19664,6 +19677,8 @@ function App() {
       {detailId ? (
         <NodeDetailView
           nodeId={detailId}
+          nodes={nodes}
+          edges={edges}
           onBack={() => setDetailId(null)}
           onCanvas={() => { setSelected(detailId); setTab("Graph"); setDetailId(null); }}
         />
@@ -19813,7 +19828,7 @@ function App() {
             canDelete={multiSelected.length > 0 || !!selected}
           />
         </main>
-        {selectedNode && <Inspector node={selectedNode} onClose={() => setSelected(null)} onOpenDetail={() => { setDetailId(selectedNode.id); setTab("Nodes"); }} />}
+        {selectedNode && <Inspector node={selectedNode} edges={edges} nodes={nodes} onClose={() => setSelected(null)} onOpenDetail={() => { setDetailId(selectedNode.id); setTab("Nodes"); }} />}
       </div>
       )}
       {addNodeOpen && <AddNodeFlow onClose={function(){ setAddNodeOpen(false); setPendingAddPos(null); }} onCreate={function(spec){
@@ -19830,17 +19845,25 @@ function App() {
           px = (jitter % 400) - 200;
           py = Math.floor(jitter / 400) * 120 - 60;
         }
+        var userProps = (spec.properties && spec.properties.length) ? spec.properties.slice() : [];
         var newNode = {
           id: id + "-" + Date.now().toString(36).slice(-4),
           label: spec.name || "New node",
           type: spec.shape || "entity",
           x: px,
           y: py,
-          props: (spec.properties && spec.properties.length) || 0,
+          props: userProps.length,
           edges: 0,
           glyph: spec.glyph || null,
           glyphImage: spec.glyphImage || null,
           size: 22,
+          // Carry the full property definitions so the Inspector + NodeDetailView
+          // render them in the Properties tab instead of the synthesized fakes.
+          _userProps: userProps,
+          // Display the entered description in the detail/inspector view too.
+          _description: spec.description || "",
+          instances: "—",
+          instancesN: 0,
         };
         setNodes(function(ns){ return ns.concat([newNode]); });
         setSelected(newNode.id);
