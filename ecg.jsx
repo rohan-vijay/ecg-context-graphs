@@ -17151,14 +17151,6 @@ function AddNodeFlow({ onClose, onCreate }) {
             {/* ── STEP 3: Review — comprehensive, dashed summary rows like enterprise tools ── */}
             {step === 3 && (
               <div style={{ display:"flex", flexDirection:"column", gap:22, maxWidth:880 }}>
-                {/* Headline — bigger, more confident */}
-                <div>
-                  <div style={{ fontFamily:"Instrument Serif", fontSize:30, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>Last look before this node type lands in the schema</div>
-                  <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:600 }}>
-                    Once published it appears in the Node catalog with a full audit trail. You can roll back from History within the 30-day change window.
-                  </div>
-                </div>
-
                 {/* SUMMARY CARD — dashed-row table */}
                 <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
                   <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
