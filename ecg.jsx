@@ -11311,6 +11311,8 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
   // When a node in the graph is clicked, its record-preview shows on the right.
   // null = inspect the centre (current record).
   var [inspectedNode, setInspectedNode] = React.useState(null);
+  // Fullscreen overlay for the relationship graph.
+  var [graphFullscreen, setGraphFullscreen] = React.useState(false);
   var props = generateProps(node);
   var c = colorForNode(node);
   var tabs = ["Graph", "Overview", "Provenance", "Activity"];
@@ -11547,20 +11549,41 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
               </div>
             </div>
 
-            {/* RIGHT — related records summary + sources */}
+            {/* RIGHT — connections + sources */}
             <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
               <div className="card">
-                <div className="card-head">Related records <span className="card-head-sub">{totalRelated} across {related.length} edge types</span></div>
-                <div>
+                <div className="card-head card-head-row">
+                  <span>Connections <span className="card-head-sub">{totalRelated} across {related.length} edge types</span></span>
+                  <button className="btn-ghost" style={{ fontSize:11.5 }} onClick={function(){ setTab("Graph"); }}>See in graph →</button>
+                </div>
+                <div style={{ maxHeight:520, overflowY:"auto" }}>
                   {related.map(function(r, i) {
                     return (
-                      <div key={i} style={{ padding:"11px 18px", borderBottom: i < related.length-1 ? "1px solid var(--line-2)" : "none" }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <div key={i} style={{ padding:"10px 16px", borderBottom: i < related.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                        {/* Edge type header */}
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:7 }}>
                           <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)" }}>{r.isOut ? "→" : "←"}</span>
-                          <code style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)", fontWeight:500 }}>:{r.edge.label}</code>
-                          <NodeGlyph n={r.otherNode} size={14} />
-                          <span style={{ fontSize:12, color:"var(--ink)" }}>{r.otherNode.label}</span>
-                          <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>{r.count}</span>
+                          <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)", fontWeight:600 }}>:{r.edge.label}</code>
+                          <NodeGlyph n={r.otherNode} size={12} />
+                          <span style={{ fontSize:11.5, color:"var(--ink-2)" }}>{r.otherNode.label}</span>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 5px", borderRadius:3, background: r.edge.kind === "inferred" ? "var(--gold-fill)" : r.edge.kind === "agent" ? "var(--purple-fill)" : "var(--chip)", color: r.edge.kind === "inferred" ? "var(--gold)" : r.edge.kind === "agent" ? "var(--purple)" : "var(--ink-3)", textTransform:"uppercase", letterSpacing:"0.4px", fontWeight:700 }}>{r.edge.kind}</span>
+                          <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{r.count}</span>
+                        </div>
+                        {/* Individual related records — click navigates */}
+                        <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                          {r.related.map(function(rr, j) {
+                            return (
+                              <div key={j}
+                                onClick={function(){ navigateTo(rr.id, rr.nodeId); }}
+                                style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 6px", fontSize:11.5, cursor:"pointer", borderRadius:5, transition:"background 80ms" }}
+                                onMouseEnter={function(e){ e.currentTarget.style.background = "var(--bg-canvas)"; }}
+                                onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
+                                <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--blue)", flexShrink:0 }}>{rr.id}</code>
+                                <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>{rr.keyValue}</span>
+                                <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", flexShrink:0 }}>{rr.since}</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -11594,13 +11617,22 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
         )}
 
         {tab === "Graph" && (
-          <div style={{ display:"grid", gridTemplateColumns:"minmax(0, 2fr) minmax(300px, 1fr)", gap:18 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"minmax(0, 1.4fr) minmax(420px, 1fr)", gap:18 }}>
             <div className="card" style={{ padding:0, overflow:"hidden" }}>
               <div className="card-head card-head-row">
                 <span>Relationship graph <span className="card-head-sub">center = this record · {twoHop ? "showing 2-hop neighbourhood" : "showing direct neighbours"}</span></span>
-                <div style={{ display:"flex", gap:6 }}>
+                <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                   <button className="btn-ghost" style={{ fontSize:11.5 }} onClick={function(){ setTwoHop(function(v){ return !v; }); }}>{twoHop ? "Collapse to 1-hop" : "Expand 2-hop"}</button>
                   <button className="btn-ghost" style={{ fontSize:11.5 }}>Reset</button>
+                  <button onClick={function(){ setGraphFullscreen(true); }} title="Expand graph"
+                    style={{ width:30, height:30, borderRadius:6, border:"1px solid var(--line)", background:"var(--panel)", color:"var(--ink-2)", cursor:"pointer", display:"inline-flex", alignItems:"center", justifyContent:"center", padding:0 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="15 3 21 3 21 9"/>
+                      <polyline points="9 21 3 21 3 15"/>
+                      <line x1="21" y1="3" x2="14" y2="10"/>
+                      <line x1="3" y1="21" x2="10" y2="14"/>
+                    </svg>
+                  </button>
                 </div>
               </div>
               <div style={{ background:"var(--bg-canvas)", padding:"20px" }}>
@@ -11742,13 +11774,11 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
               </div>
             </div>
 
-            {/* RIGHT — inline inspector. Shows the centre record by default; clicking any
-                node in the graph re-targets it without leaving the page. The "Open full
-                record →" CTA preserves the old navigation path for deeper context. */}
+            {/* RIGHT — bigger inspector pane. Shows every prop with provenance,
+                identity stats, and recent activity so users don't have to leave the
+                Graph tab for routine inspection. Connections list moved to Overview. */}
             <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
               {(function(){
-                // Resolve what we're inspecting into a single shape: { headerId, headerLabel,
-                // headerNode, edgeBadge, status, propsList, relatedCount, isCentre }
                 var insp;
                 if (inspectedNode === null) {
                   insp = {
@@ -11758,8 +11788,13 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                     headerNode: node,
                     edgeBadge: null,
                     status: record.status,
-                    propsList: props.slice(0, 6).map(function(p){ return { name: p.name, value: record[p.name], pii: p.pii, pk: p.pk, computed: p.computed }; }),
+                    propsList: provenance.map(function(pv){ return { name: pv.prop.name, value: pv.value, pii: pv.prop.pii, pk: pv.prop.pk, computed: pv.prop.computed, type: pv.prop.type, source: pv.source, age: pv.age, conf: pv.conf }; }),
                     relatedCount: totalRelated,
+                    completeness: record._completeness,
+                    confidence: record._confidence,
+                    sourceLabel: record._source,
+                    updatedAgo: record._updatedAgo,
+                    createdAgo: record._createdAgo,
                     targetRecordId: record.id,
                     targetNodeId: node.id
                   };
@@ -11774,34 +11809,52 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                     headerNode: nObj,
                     edgeBadge: { dir: inspectedNode.isOut ? "out" : "in", label: inspectedNode.edgeLabel, kind: inspectedNode.kind, fromLabel: node.label, toLabel: nObj.label },
                     status: ["active","active","review","active","flagged"][Math.abs(inspSeed) % 5],
-                    propsList: inspProps.slice(0, 6).map(function(p, idx){ return { name: p.name, value: generateValueForProp(p, inspSeed + idx * 11), pii: p.pii, pk: p.pk, computed: p.computed }; }),
+                    propsList: inspProps.map(function(p, idx){ return { name: p.name, value: generateValueForProp(p, inspSeed + idx * 11), pii: p.pii, pk: p.pk, computed: p.computed, type: p.type, source: ["Salesforce CRM","NetSuite ERP","HubSpot Marketing","Manual / Admin"][(inspSeed + idx) % 4], age: ["2m","18m","1h","4h","12h","1d"][(inspSeed + idx) % 6], conf: 0.78 + ((Math.abs(inspSeed + idx) % 20) / 100) }; }),
                     relatedCount: 1 + (Math.abs(inspSeed) % 5),
+                    completeness: 78 + (Math.abs(inspSeed) % 22),
+                    confidence: 82 + (Math.abs(inspSeed) % 17),
+                    sourceLabel: ["Salesforce CRM","NetSuite ERP","HubSpot Marketing","Manual / Admin"][Math.abs(inspSeed) % 4],
+                    updatedAgo: ["2m ago","14m ago","1h ago","4h ago","1d ago","3d ago"][Math.abs(inspSeed) % 6],
+                    createdAgo: ["12d ago","34d ago","2mo ago","6mo ago","1y ago","2y ago"][Math.abs(inspSeed) % 6],
                     targetRecordId: inspectedNode.id,
                     targetNodeId: inspectedNode.nodeId
                   };
                 }
                 var inspCol = colorForNode(insp.headerNode);
+                var compColor = insp.completeness >= 90 ? "var(--green)" : insp.completeness >= 75 ? "var(--gold)" : "var(--coral)";
+                var confColor = insp.confidence >= 90 ? "var(--green)" : insp.confidence >= 75 ? "var(--gold)" : "var(--coral)";
+
+                // Local activity feed for the inspected record.
+                var localActivity = insp.isCentre ? activity.slice(0, 4) : [
+                  { when:"2h ago",  who: insp.sourceLabel,       action:"synced",   what:"all fields", kind:"sync" },
+                  { when:"1d ago",  who:"schema-bot",            action:"validated",what:"0 violations", kind:"validate" },
+                  { when:"3d ago",  who:"morgan.lee",            action:"viewed",   what:"record", kind:"manual" }
+                ];
+
                 return (
-                  <div className="card" style={{ overflow:"hidden" }}>
-                    <div style={{ padding:"14px 16px 12px", borderBottom:"1px solid var(--line-2)", background:"var(--panel-2)" }}>
-                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginBottom:8 }}>
+                  <div className="card" style={{ overflow:"hidden", display:"flex", flexDirection:"column" }}>
+                    {/* HEADER */}
+                    <div style={{ padding:"16px 18px 14px", borderBottom:"1px solid var(--line-2)", background:"var(--panel-2)" }}>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginBottom:10 }}>
                         <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-4)", textTransform:"uppercase" }}>{insp.isCentre ? "This record" : "Inspecting"}</span>
                         {!insp.isCentre && (
-                          <button onClick={function(){ setInspectedNode(null); }} style={{ background:"none", border:"none", padding:0, color:"var(--ink-3)", cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>Clear</button>
+                          <button onClick={function(){ setInspectedNode(null); }} style={{ background:"none", border:"none", padding:0, color:"var(--ink-3)", cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>Clear ✕</button>
                         )}
                       </div>
-                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                        <span style={{ width:36, height:36, borderRadius:"50%", background: inspCol.fill, border:"1.5px solid " + inspCol.stroke, flexShrink:0 }} />
+                      <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                        <span style={{ width:44, height:44, borderRadius:"50%", background: inspCol.fill, border:"1.5px solid " + inspCol.stroke, flexShrink:0 }} />
                         <div style={{ minWidth:0, flex:1 }}>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:600, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{insp.headerId}</div>
-                          <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:3 }}>
-                            <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", letterSpacing:"0.5px", fontWeight:700, textTransform:"uppercase" }}>{insp.headerNode.label}</span>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:15, fontWeight:600, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{insp.headerId}</div>
+                          <div style={{ fontSize:12.5, color:"var(--ink-2)", marginTop:3 }}>{insp.headerLabel}</div>
+                          <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:6 }}>
+                            <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", letterSpacing:"0.5px", fontWeight:700, textTransform:"uppercase" }}>{insp.headerNode.label}</span>
                             {statusPill(insp.status)}
+                            <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>· updated {insp.updatedAgo}</span>
                           </div>
                         </div>
                       </div>
                       {insp.edgeBadge && (
-                        <div style={{ marginTop:10, padding:"6px 8px", borderRadius:6, background:"var(--panel)", border:"1px solid var(--line-2)", display:"flex", alignItems:"center", gap:6, fontSize:11 }}>
+                        <div style={{ marginTop:12, padding:"7px 10px", borderRadius:7, background:"var(--panel)", border:"1px solid var(--line-2)", display:"flex", alignItems:"center", gap:6, fontSize:11 }}>
                           <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{insp.edgeBadge.dir === "out" ? insp.edgeBadge.fromLabel + " →" : insp.edgeBadge.fromLabel + " ←"}</span>
                           <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)", fontWeight:600 }}>:{insp.edgeBadge.label}</code>
                           <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 5px", borderRadius:3, background: insp.edgeBadge.kind === "inferred" ? "var(--gold-fill)" : insp.edgeBadge.kind === "agent" ? "var(--purple-fill)" : "var(--chip)", color: insp.edgeBadge.kind === "inferred" ? "var(--gold)" : insp.edgeBadge.kind === "agent" ? "var(--purple)" : "var(--ink-3)", textTransform:"uppercase", letterSpacing:"0.4px", fontWeight:700 }}>{insp.edgeBadge.kind}</span>
@@ -11809,68 +11862,199 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                         </div>
                       )}
                     </div>
-                    <div style={{ padding:"4px 0" }}>
-                      <div style={{ padding:"10px 16px 6px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase" }}>Key fields</div>
-                      {insp.propsList.map(function(pv, i){
+
+                    {/* MINI KPIs */}
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", borderBottom:"1px solid var(--line-2)" }}>
+                      {[
+                        { lbl:"PROPERTIES",   v: insp.propsList.length,        color:"var(--ink)" },
+                        { lbl:"COMPLETENESS", v: insp.completeness + "%",      color: compColor },
+                        { lbl:"CONFIDENCE",   v: insp.confidence + "%",        color: confColor },
+                        { lbl:"RELATED",      v: insp.relatedCount,            color:"var(--ink)" }
+                      ].map(function(k, i, a){
                         return (
-                          <div key={pv.name} style={{ display:"grid", gridTemplateColumns:"110px 1fr auto", gap:10, padding:"6px 16px", alignItems:"center" }}>
-                            <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{pv.name}</span>
-                            <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{String(pv.value)}</span>
-                            <span style={{ display:"flex", gap:3 }}>
+                          <div key={k.lbl} style={{ padding:"11px 14px", borderRight: i < a.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                            <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.5px", color:"var(--ink-4)" }}>{k.lbl}</div>
+                            <div style={{ fontFamily:"JetBrains Mono", fontSize:15, color: k.color, fontWeight:700, marginTop:3 }}>{k.v}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* PROPERTIES (scrollable list — ALL fields, not just 6) */}
+                    <div style={{ flex:1, minHeight:0, overflowY:"auto", maxHeight:480 }}>
+                      <div style={{ padding:"12px 18px 6px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase", display:"flex", justifyContent:"space-between" }}>
+                        <span>Properties</span>
+                        <span>{insp.propsList.length + " fields · " + insp.sourceLabel}</span>
+                      </div>
+                      {insp.propsList.map(function(pv, i){
+                        var pvConfColor = pv.conf >= 0.9 ? "var(--green)" : pv.conf >= 0.75 ? "var(--gold)" : "var(--coral)";
+                        return (
+                          <div key={pv.name} style={{ display:"grid", gridTemplateColumns:"130px 1fr auto", gap:10, padding:"7px 18px", alignItems:"center", borderBottom: i < insp.propsList.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:5, minWidth:0 }}>
                               {pv.pk && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700 }}>PK</span>}
-                              {pv.pii && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--coral-fill)", color:"var(--coral)", fontWeight:700 }}>PII</span>}
-                              {pv.computed && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--purple-fill)", color:"var(--purple)", fontWeight:700 }}>FX</span>}
+                              <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={pv.name}>{pv.name}</code>
+                            </div>
+                            <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={String(pv.value)}>{String(pv.value)}</span>
+                            <span style={{ display:"flex", gap:3, alignItems:"center" }}>
+                              {pv.pii && <span title="PII" style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--coral-fill)", color:"var(--coral)", fontWeight:700 }}>PII</span>}
+                              {pv.computed && <span title="Computed" style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--purple-fill)", color:"var(--purple)", fontWeight:700 }}>FX</span>}
+                              <span title={"confidence " + pv.conf} style={{ width:6, height:6, borderRadius:"50%", background: pvConfColor, flexShrink:0 }} />
                             </span>
                           </div>
                         );
                       })}
                     </div>
-                    <div style={{ padding:"10px 16px", borderTop:"1px solid var(--line-2)", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, background:"var(--panel-2)" }}>
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{insp.relatedCount + " connection" + (insp.relatedCount === 1 ? "" : "s")}</span>
+
+                    {/* RECENT ACTIVITY */}
+                    <div style={{ borderTop:"1px solid var(--line-2)", background:"var(--panel-2)" }}>
+                      <div style={{ padding:"10px 18px 4px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase" }}>Recent activity</div>
+                      {localActivity.map(function(a, i){
+                        var dotColor = a.kind === "create" ? "var(--green)" : a.kind === "sync" ? "var(--blue)" : a.kind === "agent" ? "var(--purple)" : a.kind === "manual" ? "var(--coral)" : a.kind === "merge" ? "var(--gold)" : "var(--ink-3)";
+                        return (
+                          <div key={i} style={{ display:"grid", gridTemplateColumns:"80px 10px 1fr", gap:10, alignItems:"center", padding:"7px 18px" }}>
+                            <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{a.when}</span>
+                            <span style={{ width:6, height:6, borderRadius:"50%", background:dotColor, justifySelf:"center" }} />
+                            <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
+                              <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)", fontWeight:600 }}>{a.who}</code>
+                              <span style={{ fontSize:11, color:"var(--ink-3)" }}>{a.action}</span>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{a.what}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* FOOTER ACTIONS */}
+                    <div style={{ padding:"10px 16px", borderTop:"1px solid var(--line-2)", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, background:"var(--panel)" }}>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>created {insp.createdAgo}</span>
                       {!insp.isCentre && (
-                        <button className="btn-dark" style={{ fontSize:11.5, padding:"6px 10px" }} onClick={function(){ navigateTo(insp.targetRecordId, insp.targetNodeId); }}>Open full record →</button>
+                        <button className="btn-dark" style={{ fontSize:11.5, padding:"6px 12px" }} onClick={function(){ navigateTo(insp.targetRecordId, insp.targetNodeId); }}>Open full record →</button>
                       )}
                     </div>
                   </div>
                 );
               })()}
-
-              {/* Compact connections list — clicking a record updates the inspector above. */}
-              <div className="card">
-                <div className="card-head">Connections <span className="card-head-sub">{totalRelated} · click to inspect</span></div>
-                <div style={{ maxHeight:340, overflowY:"auto" }}>
-                  {related.map(function(r, i) {
-                    return (
-                      <div key={i} style={{ padding:"8px 14px", borderBottom: i < related.length-1 ? "1px solid var(--line-2)" : "none" }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
-                          <code style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)" }}>{r.isOut ? "→" : "←"}</code>
-                          <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)", fontWeight:600 }}>:{r.edge.label}</code>
-                          <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 5px", borderRadius:3, background: r.edge.kind === "inferred" ? "var(--gold-fill)" : r.edge.kind === "agent" ? "var(--purple-fill)" : "var(--chip)", color: r.edge.kind === "inferred" ? "var(--gold)" : r.edge.kind === "agent" ? "var(--purple)" : "var(--ink-3)", textTransform:"uppercase", letterSpacing:"0.4px", fontWeight:700 }}>{r.edge.kind}</span>
-                        </div>
-                        <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                          {r.related.map(function(rr, j) {
-                            var isIns = inspectedNode && inspectedNode.id === rr.id;
-                            return (
-                              <div key={j}
-                                onClick={function(){ setInspectedNode(Object.assign({}, rr, { isOut: r.isOut })); }}
-                                style={{ display:"flex", alignItems:"center", gap:8, padding:"4px 6px", fontSize:11.5, cursor:"pointer", borderRadius:5, background: isIns ? "var(--bg-canvas)" : "transparent", border:"1px solid " + (isIns ? "var(--ink-3)" : "transparent") }}
-                                onMouseEnter={function(e){ if (!isIns) e.currentTarget.style.background = "var(--bg-canvas)"; }}
-                                onMouseLeave={function(e){ if (!isIns) e.currentTarget.style.background = "transparent"; }}>
-                                <NodeGlyph n={r.otherNode} size={11} />
-                                <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--blue)", flexShrink:0 }}>{rr.id}</code>
-                                <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>{rr.keyValue}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
             </div>
           </div>
         )}
+
+        {/* ── FULLSCREEN GRAPH MODAL ──
+            Opens when the user clicks the expand icon at the top of the relationship
+            graph card. Renders the same SVG bigger so it can be inspected in detail. */}
+        {graphFullscreen && (function(){
+          var W = 1440, H = 820;
+          var cx = W/2, cy = H/2;
+          var r1 = 240, r2 = 410;
+          var flat = [];
+          related.forEach(function(r, ri) {
+            r.related.forEach(function(rr) { flat.push({ rr: rr, parentIdx: ri, isOut: r.isOut }); });
+          });
+          var nFlat = flat.length || 1;
+          flat.forEach(function(f, i) {
+            var a = (i / nFlat) * Math.PI * 2 - Math.PI / 2;
+            f.x = cx + Math.cos(a) * r1; f.y = cy + Math.sin(a) * r1; f.angle = a;
+          });
+          var hops = [];
+          flat.forEach(function(f, i) {
+            var parentNodeObj = NODES.find(function(n){ return n.id === f.rr.nodeId; });
+            if (!parentNodeObj) return;
+            var pSeed = f.rr.id.length * 31 + i * 13;
+            var kids = buildSecondHop(f.rr, parentNodeObj, pSeed);
+            var k = kids.length;
+            var arcSpan = Math.PI / 6;
+            kids.forEach(function(kid, ki) {
+              var offset = k > 1 ? ((ki - (k-1)/2) / (k-1)) * arcSpan : 0;
+              var ang = f.angle + offset;
+              hops.push({ rr: kid, parent: f, x: cx + Math.cos(ang) * r2, y: cy + Math.sin(ang) * r2 });
+            });
+          });
+          return (
+            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.55)", zIndex:240, display:"flex", alignItems:"center", justifyContent:"center" }}
+              onClick={function(e){ if (e.target === e.currentTarget) setGraphFullscreen(false); }}>
+              <div style={{ width:"96vw", height:"94vh", background:"var(--bg-canvas)", borderRadius:14, border:"1px solid var(--line)", boxShadow:"0 32px 80px rgba(0,0,0,0.45)", display:"flex", flexDirection:"column", overflow:"hidden" }}>
+                <div style={{ flexShrink:0, padding:"14px 22px", borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
+                  <div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>{node.label} · {record.id}</div>
+                    <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", marginTop:2 }}>Relationship graph</div>
+                  </div>
+                  <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{flat.length} direct · {hops.length} second-hop</span>
+                    <button onClick={function(){ setGraphFullscreen(false); }} className="btn-ghost" style={{ fontSize:11.5 }}>Close ✕</button>
+                  </div>
+                </div>
+                <div style={{ flex:1, background:"var(--bg-canvas)", overflow:"auto", padding:30 }}>
+                  <svg width="100%" height="100%" viewBox={"0 0 "+W+" "+H} preserveAspectRatio="xMidYMid meet" style={{ display:"block" }}>
+                    <defs>
+                      <marker id="fs-arrow"   viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-3)"/></marker>
+                      <marker id="fs-arrow-2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-4)"/></marker>
+                    </defs>
+                    {hops.map(function(h, i) {
+                      var px = h.parent.x, py = h.parent.y;
+                      var dx = h.x - px, dy = h.y - py, len = Math.sqrt(dx*dx + dy*dy);
+                      var ux = dx/len, uy = dy/len;
+                      var sx = px + ux * 20, sy = py + uy * 20;
+                      var tx = h.x - ux * 18, ty = h.y - uy * 18;
+                      var midX = (sx + tx) / 2, midY = (sy + ty) / 2;
+                      return (
+                        <g key={"fh-e"+i}>
+                          <line x1={sx} y1={sy} x2={tx} y2={ty} stroke="var(--ink-4)" strokeWidth="1.2" opacity="0.5" strokeDasharray={h.rr.kind === "inferred" ? "4,3" : "none"} markerEnd="url(#fs-arrow-2)" />
+                          <g transform={"translate("+midX+" "+midY+")"} style={{ pointerEvents:"none" }}>
+                            <rect x="-44" y="-9" width="88" height="18" rx="3" fill="var(--panel)" stroke="var(--line-2)" />
+                            <text textAnchor="middle" y="3.5" style={{ fontFamily:"JetBrains Mono", fontSize:"10px", fill:"var(--ink-3)" }}>{":"+h.rr.edgeLabel}</text>
+                          </g>
+                        </g>
+                      );
+                    })}
+                    {flat.map(function(f, i) {
+                      var midX = (cx + f.x) / 2, midY = (cy + f.y) / 2;
+                      var dx = f.x - cx, dy = f.y - cy, len = Math.sqrt(dx*dx + dy*dy);
+                      var ux = dx/len, uy = dy/len;
+                      var sx = cx + ux * 42, sy = cy + uy * 42;
+                      var tx = f.x - ux * 26, ty = f.y - uy * 26;
+                      return (
+                        <g key={"fe"+i}>
+                          <line x1={sx} y1={sy} x2={tx} y2={ty} stroke="var(--ink-3)" strokeWidth="1.6" opacity="0.7" strokeDasharray={f.rr.kind === "inferred" ? "5,4" : "none"} markerEnd="url(#fs-arrow)" />
+                          <g transform={"translate("+midX+" "+midY+")"} style={{ pointerEvents:"none" }}>
+                            <rect x="-58" y="-12" width="116" height="24" rx="4" fill="var(--panel)" stroke="var(--line-2)" />
+                            <text textAnchor="middle" y="5" style={{ fontFamily:"JetBrains Mono", fontSize:"12px", fill:"var(--ink-2)" }}>{":"+f.rr.edgeLabel}</text>
+                          </g>
+                        </g>
+                      );
+                    })}
+                    {hops.map(function(h, i) {
+                      var nodeObj = NODES.find(function(n){ return n.id === h.rr.nodeId; });
+                      var col = colorForNode(nodeObj);
+                      var isInspected = inspectedNode && inspectedNode.id === h.rr.id;
+                      return (
+                        <g key={"fh-n"+i} style={{ cursor:"pointer" }} onClick={function(){ setInspectedNode(h.rr); }}>
+                          <circle cx={h.x} cy={h.y} r={isInspected ? 22 : 19} fill={col.fill} stroke={isInspected ? "var(--ink)" : col.stroke} strokeWidth={isInspected ? 2.6 : 1.6} />
+                          <text x={h.x} y={h.y - 26} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"10.5px", fontWeight:600, fill:"var(--ink)" }}>{h.rr.id}</text>
+                          <text x={h.x} y={h.y + 32} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"10px", fill:"var(--ink-4)" }}>{String(h.rr.keyValue).slice(0, 22)}</text>
+                        </g>
+                      );
+                    })}
+                    <g style={{ cursor:"pointer" }} onClick={function(){ setInspectedNode(null); }}>
+                      <circle cx={cx} cy={cy} r="42" fill={c.fill} stroke={inspectedNode === null ? "var(--ink)" : c.stroke} strokeWidth={inspectedNode === null ? 4 : 3} />
+                      <text x={cx} y={cy - 56} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"14px", fontWeight:600, fill:"var(--ink)" }}>{record.id}</text>
+                      <text x={cx} y={cy + 64} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"12px", fill:"var(--ink-3)" }}>{record[Object.keys(record).find(function(k){ return k === "name" || k === "company_name" || k === "title"; })] || node.label}</text>
+                    </g>
+                    {flat.map(function(f, i) {
+                      var otherCol = colorForNode(NODES.find(function(n){ return n.id === f.rr.nodeId; }));
+                      var isInspected = inspectedNode && inspectedNode.id === f.rr.id;
+                      return (
+                        <g key={"fn"+i} style={{ cursor:"pointer" }} onClick={function(){ setInspectedNode(f.rr); }}>
+                          <circle cx={f.x} cy={f.y} r={isInspected ? 32 : 28} fill={otherCol.fill} stroke={isInspected ? "var(--ink)" : otherCol.stroke} strokeWidth={isInspected ? 3 : 2} />
+                          <text x={f.x} y={f.y - 36} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"12.5px", fontWeight:600, fill:"var(--ink)" }}>{f.rr.id}</text>
+                          <text x={f.x} y={f.y + 44} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"11.5px", fill:"var(--ink-3)" }}>{f.rr.keyName + ": " + String(f.rr.keyValue).slice(0, 26)}</text>
+                        </g>
+                      );
+                    })}
+                  </svg>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {tab === "Provenance" && (
           <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
