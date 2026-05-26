@@ -1302,7 +1302,9 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
           const [wx, wy] = toWorld(sx, sy);
           onEditAdd(wx, wy);
         } else {
+          // Click empty canvas → clear selection (single and multi).
           setSelected(null);
+          if (setMultiSelected) setMultiSelected([]);
         }
       }
     }
@@ -20182,7 +20184,7 @@ function ViewEditToggle({ editMode, onEnter, onExit, cursorMode, setCursorMode, 
             </svg>
           </button>
           <button onClick={onDelete} disabled={!canDelete}
-            style={Object.assign({}, iconSeg(false), { opacity: canDelete ? 1 : 0.35, cursor: canDelete ? "pointer" : "not-allowed", color: canDelete ? "var(--coral)" : "var(--ink-4)" })}
+            style={Object.assign({}, iconSeg(false), { opacity: canDelete ? 1 : 0.35, cursor: canDelete ? "pointer" : "not-allowed" })}
             title={canDelete ? "Delete selected (Delete)" : "Select a node to delete"}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="3 6 5 6 21 6"/>
