@@ -503,6 +503,11 @@ var NODE_GLYPHS = (function(){
     { id:"idea",         label:"Idea",         aliases:"idea lightbulb insight inspiration", render:function(c){ return <g {...S(c)}><path d="M 0 -3 a 2.4 2.4 0 0 1 1.6 4.2 V 1.6 H -1.6 V 1.2 A 2.4 2.4 0 0 1 0 -3 Z"/><line x1="-1.2" y1="2.4" x2="1.2" y2="2.4"/><line x1="-0.8" y1="3.2" x2="0.8" y2="3.2"/></g>; } },
     { id:"eye",          label:"Eye",          aliases:"eye view watch visibility see", render:function(c){ return <g {...S(c)}><path d="M -3 0 C -1.4 -2 1.4 -2 3 0 C 1.4 2 -1.4 2 -3 0 Z"/><circle r="1"/></g>; } },
     { id:"search",       label:"Search",       aliases:"search find query magnifier", render:function(c){ return <g {...S(c)}><circle cx="-0.6" cy="-0.6" r="2"/><line x1="0.8" y1="0.8" x2="2.8" y2="2.8"/></g>; } },
+    { id:"briefcase",    label:"Briefcase",    aliases:"briefcase work job business case",  render:function(c){ return <g {...S(c)}><rect x="-3" y="-1.4" width="6" height="4.4" rx="0.4"/><path d="M -1.4 -1.4 V -2 a 0.6 0.6 0 0 1 0.6 -0.6 H 0.8 a 0.6 0.6 0 0 1 0.6 0.6 V -1.4"/><line x1="-3" y1="0.4" x2="3" y2="0.4"/></g>; } },
+    { id:"channel",      label:"Channel",      aliases:"channel hashtag tag slack room",     render:function(c){ return <g {...S(c)}><line x1="-1.4" y1="-3" x2="-2" y2="3"/><line x1="2" y1="-3" x2="1.4" y2="3"/><line x1="-3" y1="-1" x2="3" y2="-1"/><line x1="-3" y1="1.2" x2="3" y2="1.2"/></g>; } },
+    { id:"integration",  label:"Integration",  aliases:"integration link plug connect chain", render:function(c){ return <g {...S(c)}><path d="M -2.6 -0.6 a 1.2 1.2 0 0 1 0 -1.7 l 0.9 -0.9 a 1.2 1.2 0 0 1 1.7 0 l 0.6 0.6"/><path d="M 2.6 0.6 a 1.2 1.2 0 0 1 0 1.7 l -0.9 0.9 a 1.2 1.2 0 0 1 -1.7 0 l -0.6 -0.6"/><line x1="-1" y1="1" x2="1" y2="-1"/></g>; } },
+    { id:"bug",          label:"Bug",          aliases:"bug defect issue error",              render:function(c){ return <g {...S(c)}><ellipse cx="0" cy="0.4" rx="1.8" ry="2.4"/><line x1="-1.8" y1="-1.4" x2="-2.8" y2="-2.4"/><line x1="1.8" y1="-1.4" x2="2.8" y2="-2.4"/><line x1="-1.8" y1="0.4" x2="-3" y2="0.4"/><line x1="1.8" y1="0.4" x2="3" y2="0.4"/><line x1="-1.8" y1="2" x2="-2.8" y2="2.8"/><line x1="1.8" y1="2" x2="2.8" y2="2.8"/></g>; } },
+    { id:"help",         label:"Help",         aliases:"help question support faq",           render:function(c){ return <g {...S(c)}><circle r="2.8"/><path d="M -1 -0.6 a 1 1 0 0 1 2 0 c 0 0.7 -1 0.8 -1 1.5"/>{dot(c,0,2.2,0.4)}</g>; } },
   ];
 })();
 
@@ -1567,16 +1572,16 @@ function Legend({ filter, setFilter }) {
       </button>
       <button className={"legend-pill" + (filter === "source" || filter === "all" ? "" : " off")} onClick={() => setFilter(filter === "source" ? "all" : "source")}>
         <svg width="14" height="14" viewBox="-12 -12 24 24"><rect x="-8" y="-8" width="16" height="16" rx="1.5" fill="var(--green-fill)" stroke="var(--green)" strokeWidth="1.4" /></svg>
-        Data Sources
+        Sources
       </button>
       <div className="legend-sep" />
       <div className="legend-kind">
         <span className="legend-line legend-line-direct" />
-        Direct edge
+        Edge
       </div>
       <div className="legend-kind">
         <span className="legend-line legend-line-inferred" />
-        Inferred edge
+        Inferred
       </div>
     </div>
   );
@@ -16555,7 +16560,7 @@ function AddNodeFlow({ onClose, onCreate }) {
                                       autoFocus
                                       value={glyphQuery}
                                       onChange={function(e){ setGlyphQuery(e.target.value); }}
-                                      placeholder="Search icons"
+                                      placeholder="Search"
                                       style={{ width:"100%", padding:"6px 10px 6px 26px", fontSize:11.5, fontFamily:"JetBrains Mono", border:"1px solid var(--line)", borderRadius:6, background:"var(--bg-canvas)", color:"var(--ink-2)", outline:"none", boxSizing:"border-box" }}
                                     />
                                   </div>
@@ -16570,7 +16575,7 @@ function AddNodeFlow({ onClose, onCreate }) {
                                       return <div style={{ padding:"24px 8px", textAlign:"center", color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:11 }}>No icons match "{glyphQuery}"</div>;
                                     }
                                     return (
-                                      <div style={{ display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:6, maxHeight:260, overflowY:"auto", paddingRight:2 }}>
+                                      <div className="ecg-icon-grid" style={{ display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:6, maxHeight:260, overflowY:"auto", overflowX:"hidden" }}>
                                         {slots.map(function(gOpt){
                                           var isSel = glyph === gOpt.id || (gOpt.placeholder && glyph === null);
                                           function onClick(){ setGlyph(gOpt.id); setGlyphOpen(false); setGlyphQuery(""); }
@@ -19347,7 +19352,12 @@ function App() {
     setSelected(null);
     setSidebarOpen(false);
   }
-  function exitEditMode() { setEditMode(false); }
+  function exitEditMode() {
+    setEditMode(false);
+    // Re-open the node sidebar — users coming back to View mode usually want
+    // the navigator visible again.
+    setSidebarOpen(true);
+  }
 
   // Expose a global opener used by the landing-page NewGraphFlow.onCreate
   // (so the user can land directly into an empty workspace they just created).

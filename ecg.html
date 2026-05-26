@@ -138,6 +138,8 @@
 
   /* ---------- LEGEND ---------- */
   .legend { position: absolute; bottom: 18px; left: 18px; display: flex; gap: 12px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-size: 12px; box-shadow: 0 4px 14px rgba(40,40,20,0.05); }
+  .ecg-icon-grid { scrollbar-width: none; -ms-overflow-style: none; }
+  .ecg-icon-grid::-webkit-scrollbar { width: 0; height: 0; display: none; }
   .legend-pill { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; cursor: pointer; padding: 4px 6px; border-radius: 999px; font-family: inherit; color: var(--ink); font-size: 12px; }
   .legend-pill:hover { background: var(--chip); }
   .legend-pill.off { opacity: 0.4; }
@@ -1202,7 +1204,7 @@
 </head>
 <body>
 <div id="root"></div>
-<script type="text/babel" src="ecg.jsx?v=toggle-bc"></script>
+<script type="text/babel" src="ecg.jsx?v=legend-text"></script>
 <script type="text/babel" src="prop-source-flows.jsx"></script>
 <script type="text/babel" src="edge-flow.jsx"></script>
 <script type="text/babel" src="node-flow.jsx"></script>
