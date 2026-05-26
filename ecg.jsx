@@ -10634,13 +10634,19 @@ function buildRecordFromId(targetId, targetNode) {
 }
 
 function RecordDetailView({ record, node, onBack, onNavigate }) {
-  var [tab, setTab] = React.useState("Overview");
+  // Land on the Graph tab by default — the canvas is the primary surface for this
+  // page; clicking a related node populates the right-hand inspector inline so
+  // users can scan context without paging through.
+  var [tab, setTab] = React.useState("Graph");
   var [expandedProp, setExpandedProp] = React.useState(null);
   var [twoHop, setTwoHop] = React.useState(true);
   var [hoverNode, setHoverNode] = React.useState(null);
+  // When a node in the graph is clicked, its record-preview shows on the right.
+  // null = inspect the centre (current record).
+  var [inspectedNode, setInspectedNode] = React.useState(null);
   var props = generateProps(node);
   var c = colorForNode(node);
-  var tabs = ["Overview", "Graph", "Provenance", "Activity"];
+  var tabs = ["Graph", "Overview", "Provenance", "Activity"];
   var related = generateRelatedRecords(record, node);
   var totalRelated = related.reduce(function(s, r){ return s + r.count; }, 0);
 
@@ -11027,35 +11033,37 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                         var nodeObj = NODES.find(function(n){ return n.id === h.rr.nodeId; });
                         var col = colorForNode(nodeObj);
                         var isHover = hoverNode === h.rr.id;
+                        var isInspected = inspectedNode && inspectedNode.id === h.rr.id;
                         return (
-                          <g key={"h-n"+i} opacity={isHover ? 1 : 0.92} style={{ cursor:"pointer" }}
-                            onClick={function(){ navigateTo(h.rr.id, h.rr.nodeId); }}
+                          <g key={"h-n"+i} opacity={isHover || isInspected ? 1 : 0.92} style={{ cursor:"pointer" }}
+                            onClick={function(){ setInspectedNode(h.rr); }}
                             onMouseEnter={function(){ setHoverNode(h.rr.id); }}
                             onMouseLeave={function(){ setHoverNode(null); }}>
-                            <circle cx={h.x} cy={h.y} r={isHover ? 15 : 13} fill={col.fill} stroke={isHover ? "var(--ink)" : col.stroke} strokeWidth={isHover ? 2 : 1.2} />
-                            <text x={h.x} y={h.y - 19} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"7.5px", fontWeight:600, fill: isHover ? "var(--ink)" : "var(--ink-2)", pointerEvents:"none" }}>{h.rr.id}</text>
+                            <circle cx={h.x} cy={h.y} r={isInspected ? 16 : isHover ? 15 : 13} fill={col.fill} stroke={isInspected || isHover ? "var(--ink)" : col.stroke} strokeWidth={isInspected ? 2.4 : isHover ? 2 : 1.2} />
+                            <text x={h.x} y={h.y - 19} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"7.5px", fontWeight:600, fill: isHover || isInspected ? "var(--ink)" : "var(--ink-2)", pointerEvents:"none" }}>{h.rr.id}</text>
                             <text x={h.x} y={h.y + 23} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"7.5px", fill:"var(--ink-4)", pointerEvents:"none" }}>{String(h.rr.keyValue).slice(0, 18)}</text>
                           </g>
                         );
                       })}
 
-                      {/* Center node (not clickable — already here) */}
-                      <g>
-                        <circle cx={cx} cy={cy} r="28" fill={c.fill} stroke={c.stroke} strokeWidth="2.5" />
-                        <text x={cx} y={cy - 38} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"10.5px", fontWeight:600, fill:"var(--ink)" }}>{record.id}</text>
-                        <text x={cx} y={cy + 48} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9.5px", fill:"var(--ink-3)" }}>{record[Object.keys(record).find(function(k){ return k === "name" || k === "company_name" || k === "title"; })] || node.label}</text>
+                      {/* Centre — clickable to reset the inspector back to the current record. */}
+                      <g style={{ cursor:"pointer" }} onClick={function(){ setInspectedNode(null); }}>
+                        <circle cx={cx} cy={cy} r="28" fill={c.fill} stroke={inspectedNode === null ? "var(--ink)" : c.stroke} strokeWidth={inspectedNode === null ? 3.2 : 2.5} />
+                        <text x={cx} y={cy - 38} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"10.5px", fontWeight:600, fill:"var(--ink)", pointerEvents:"none" }}>{record.id}</text>
+                        <text x={cx} y={cy + 48} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9.5px", fill:"var(--ink-3)", pointerEvents:"none" }}>{record[Object.keys(record).find(function(k){ return k === "name" || k === "company_name" || k === "title"; })] || node.label}</text>
                       </g>
 
                       {/* 1-hop nodes — clickable, drawn last so they sit on top */}
                       {flat.map(function(f, i) {
                         var otherCol = colorForNode(NODES.find(function(n){ return n.id === f.rr.nodeId; }));
                         var isHover = hoverNode === f.rr.id;
+                        var isInspected = inspectedNode && inspectedNode.id === f.rr.id;
                         return (
                           <g key={"n"+i} style={{ cursor:"pointer" }}
-                            onClick={function(){ navigateTo(f.rr.id, f.rr.nodeId); }}
+                            onClick={function(){ setInspectedNode(f.rr); }}
                             onMouseEnter={function(){ setHoverNode(f.rr.id); }}
                             onMouseLeave={function(){ setHoverNode(null); }}>
-                            <circle cx={f.x} cy={f.y} r={isHover ? 21 : 18} fill={otherCol.fill} stroke={isHover ? "var(--ink)" : otherCol.stroke} strokeWidth={isHover ? 2.4 : 1.6} />
+                            <circle cx={f.x} cy={f.y} r={isInspected ? 23 : isHover ? 21 : 18} fill={otherCol.fill} stroke={isInspected || isHover ? "var(--ink)" : otherCol.stroke} strokeWidth={isInspected ? 2.8 : isHover ? 2.4 : 1.6} />
                             <text x={f.x} y={f.y - 24} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9px", fontWeight:600, fill:"var(--ink)", pointerEvents:"none" }}>{f.rr.id}</text>
                             <text x={f.x} y={f.y + 30} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"8.5px", fill:"var(--ink-3)", pointerEvents:"none" }}>{f.rr.keyName + ": " + String(f.rr.keyValue).slice(0, 20)}</text>
                           </g>
@@ -11067,37 +11075,131 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
               </div>
             </div>
 
-            {/* RIGHT — connection list */}
-            <div className="card">
-              <div className="card-head">Connections <span className="card-head-sub">{totalRelated} edges · values & timing</span></div>
-              <div style={{ maxHeight:560, overflowY:"auto" }}>
-                {related.map(function(r, i) {
-                  return (
-                    <div key={i} style={{ padding:"10px 16px", borderBottom: i < related.length-1 ? "1px solid var(--line-2)" : "none" }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-                        <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{r.isOut ? "→" : "←"}</code>
-                        <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)", fontWeight:600 }}>:{r.edge.label}</code>
-                        <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 5px", borderRadius:3, background: r.edge.kind === "inferred" ? "var(--gold-fill)" : r.edge.kind === "agent" ? "var(--purple-fill)" : "var(--chip)", color: r.edge.kind === "inferred" ? "var(--gold)" : r.edge.kind === "agent" ? "var(--purple)" : "var(--ink-3)", textTransform:"uppercase", letterSpacing:"0.4px", fontWeight:700 }}>{r.edge.kind}</span>
+            {/* RIGHT — inline inspector. Shows the centre record by default; clicking any
+                node in the graph re-targets it without leaving the page. The "Open full
+                record →" CTA preserves the old navigation path for deeper context. */}
+            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+              {(function(){
+                // Resolve what we're inspecting into a single shape: { headerId, headerLabel,
+                // headerNode, edgeBadge, status, propsList, relatedCount, isCentre }
+                var insp;
+                if (inspectedNode === null) {
+                  insp = {
+                    isCentre: true,
+                    headerId: record.id,
+                    headerLabel: record[Object.keys(record).find(function(k){ return k === "name" || k === "company_name" || k === "title"; })] || node.label,
+                    headerNode: node,
+                    edgeBadge: null,
+                    status: record.status,
+                    propsList: props.slice(0, 6).map(function(p){ return { name: p.name, value: record[p.name], pii: p.pii, pk: p.pk, computed: p.computed }; }),
+                    relatedCount: totalRelated,
+                    targetRecordId: record.id,
+                    targetNodeId: node.id
+                  };
+                } else {
+                  var nObj = NODES.find(function(n){ return n.id === inspectedNode.nodeId; }) || node;
+                  var inspProps = generateProps(nObj);
+                  var inspSeed = inspectedNode.id.length * 13 + inspectedNode.id.charCodeAt(inspectedNode.id.length - 1) * 7;
+                  insp = {
+                    isCentre: false,
+                    headerId: inspectedNode.id,
+                    headerLabel: inspectedNode.keyValue,
+                    headerNode: nObj,
+                    edgeBadge: { dir: inspectedNode.isOut ? "out" : "in", label: inspectedNode.edgeLabel, kind: inspectedNode.kind, fromLabel: node.label, toLabel: nObj.label },
+                    status: ["active","active","review","active","flagged"][Math.abs(inspSeed) % 5],
+                    propsList: inspProps.slice(0, 6).map(function(p, idx){ return { name: p.name, value: generateValueForProp(p, inspSeed + idx * 11), pii: p.pii, pk: p.pk, computed: p.computed }; }),
+                    relatedCount: 1 + (Math.abs(inspSeed) % 5),
+                    targetRecordId: inspectedNode.id,
+                    targetNodeId: inspectedNode.nodeId
+                  };
+                }
+                var inspCol = colorForNode(insp.headerNode);
+                return (
+                  <div className="card" style={{ overflow:"hidden" }}>
+                    <div style={{ padding:"14px 16px 12px", borderBottom:"1px solid var(--line-2)", background:"var(--panel-2)" }}>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginBottom:8 }}>
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-4)", textTransform:"uppercase" }}>{insp.isCentre ? "This record" : "Inspecting"}</span>
+                        {!insp.isCentre && (
+                          <button onClick={function(){ setInspectedNode(null); }} style={{ background:"none", border:"none", padding:0, color:"var(--ink-3)", cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>Clear</button>
+                        )}
                       </div>
-                      <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                        {r.related.map(function(rr, j) {
-                          return (
-                            <div key={j}
-                              onClick={function(){ navigateTo(rr.id, rr.nodeId); }}
-                              style={{ display:"flex", alignItems:"center", gap:8, padding:"4px 6px", fontSize:11.5, cursor:"pointer", borderRadius:5, transition:"background 80ms" }}
-                              onMouseEnter={function(e){ e.currentTarget.style.background = "var(--bg-canvas)"; }}
-                              onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
-                              <NodeGlyph n={r.otherNode} size={12} />
-                              <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--blue)", flexShrink:0 }}>{rr.id}</code>
-                              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>{rr.keyValue}</span>
-                              <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", flexShrink:0 }}>{rr.since}</span>
-                            </div>
-                          );
-                        })}
+                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                        <span style={{ width:36, height:36, borderRadius:"50%", background: inspCol.fill, border:"1.5px solid " + inspCol.stroke, flexShrink:0 }} />
+                        <div style={{ minWidth:0, flex:1 }}>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:600, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{insp.headerId}</div>
+                          <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:3 }}>
+                            <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", letterSpacing:"0.5px", fontWeight:700, textTransform:"uppercase" }}>{insp.headerNode.label}</span>
+                            {statusPill(insp.status)}
+                          </div>
+                        </div>
                       </div>
+                      {insp.edgeBadge && (
+                        <div style={{ marginTop:10, padding:"6px 8px", borderRadius:6, background:"var(--panel)", border:"1px solid var(--line-2)", display:"flex", alignItems:"center", gap:6, fontSize:11 }}>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{insp.edgeBadge.dir === "out" ? insp.edgeBadge.fromLabel + " →" : insp.edgeBadge.fromLabel + " ←"}</span>
+                          <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)", fontWeight:600 }}>:{insp.edgeBadge.label}</code>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 5px", borderRadius:3, background: insp.edgeBadge.kind === "inferred" ? "var(--gold-fill)" : insp.edgeBadge.kind === "agent" ? "var(--purple-fill)" : "var(--chip)", color: insp.edgeBadge.kind === "inferred" ? "var(--gold)" : insp.edgeBadge.kind === "agent" ? "var(--purple)" : "var(--ink-3)", textTransform:"uppercase", letterSpacing:"0.4px", fontWeight:700 }}>{insp.edgeBadge.kind}</span>
+                          <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>→ {insp.edgeBadge.toLabel}</span>
+                        </div>
+                      )}
                     </div>
-                  );
-                })}
+                    <div style={{ padding:"4px 0" }}>
+                      <div style={{ padding:"10px 16px 6px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase" }}>Key fields</div>
+                      {insp.propsList.map(function(pv, i){
+                        return (
+                          <div key={pv.name} style={{ display:"grid", gridTemplateColumns:"110px 1fr auto", gap:10, padding:"6px 16px", alignItems:"center" }}>
+                            <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{pv.name}</span>
+                            <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{String(pv.value)}</span>
+                            <span style={{ display:"flex", gap:3 }}>
+                              {pv.pk && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700 }}>PK</span>}
+                              {pv.pii && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--coral-fill)", color:"var(--coral)", fontWeight:700 }}>PII</span>}
+                              {pv.computed && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--purple-fill)", color:"var(--purple)", fontWeight:700 }}>FX</span>}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{ padding:"10px 16px", borderTop:"1px solid var(--line-2)", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, background:"var(--panel-2)" }}>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{insp.relatedCount + " connection" + (insp.relatedCount === 1 ? "" : "s")}</span>
+                      {!insp.isCentre && (
+                        <button className="btn-dark" style={{ fontSize:11.5, padding:"6px 10px" }} onClick={function(){ navigateTo(insp.targetRecordId, insp.targetNodeId); }}>Open full record →</button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Compact connections list — clicking a record updates the inspector above. */}
+              <div className="card">
+                <div className="card-head">Connections <span className="card-head-sub">{totalRelated} · click to inspect</span></div>
+                <div style={{ maxHeight:340, overflowY:"auto" }}>
+                  {related.map(function(r, i) {
+                    return (
+                      <div key={i} style={{ padding:"8px 14px", borderBottom: i < related.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
+                          <code style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)" }}>{r.isOut ? "→" : "←"}</code>
+                          <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)", fontWeight:600 }}>:{r.edge.label}</code>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 5px", borderRadius:3, background: r.edge.kind === "inferred" ? "var(--gold-fill)" : r.edge.kind === "agent" ? "var(--purple-fill)" : "var(--chip)", color: r.edge.kind === "inferred" ? "var(--gold)" : r.edge.kind === "agent" ? "var(--purple)" : "var(--ink-3)", textTransform:"uppercase", letterSpacing:"0.4px", fontWeight:700 }}>{r.edge.kind}</span>
+                        </div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                          {r.related.map(function(rr, j) {
+                            var isIns = inspectedNode && inspectedNode.id === rr.id;
+                            return (
+                              <div key={j}
+                                onClick={function(){ setInspectedNode(Object.assign({}, rr, { isOut: r.isOut })); }}
+                                style={{ display:"flex", alignItems:"center", gap:8, padding:"4px 6px", fontSize:11.5, cursor:"pointer", borderRadius:5, background: isIns ? "var(--bg-canvas)" : "transparent", border:"1px solid " + (isIns ? "var(--ink-3)" : "transparent") }}
+                                onMouseEnter={function(e){ if (!isIns) e.currentTarget.style.background = "var(--bg-canvas)"; }}
+                                onMouseLeave={function(e){ if (!isIns) e.currentTarget.style.background = "transparent"; }}>
+                                <NodeGlyph n={r.otherNode} size={11} />
+                                <code style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--blue)", flexShrink:0 }}>{rr.id}</code>
+                                <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>{rr.keyValue}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
