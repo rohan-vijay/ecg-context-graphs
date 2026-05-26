@@ -2572,12 +2572,13 @@ function NodeDetailView({ nodeId, onBack, onCanvas }) {
 
         <div className="detail-tabs">
           {DETAIL_TABS.map(t => {
-            const count = t === "Properties" ? node.props
-                       : t === "Edges"      ? outgoing.length + incoming.length
-                       : t === "Sources"    ? sources.length
-                       : t === "Rules"      ? rules.quality.length + rules.match.length + rules.survivorship.length
-                       : t === "Quality"    ? properties.filter(p=>p.fill<92||p.conf<92).length || null
-                       : t === "Governance" ? properties.filter(p=>p.pii).length || null
+            const count = t === "Properties"   ? node.props
+                       : t === "Edges"         ? outgoing.length + incoming.length
+                       : t === "Sources"       ? sources.length
+                       : t === "Rules"         ? rules.quality.length + rules.match.length + rules.survivorship.length
+                       : t === "Computations"  ? buildComputationsForNode(node, properties, rules).length
+                       : t === "Quality"       ? properties.filter(p=>p.fill<92||p.conf<92).length || null
+                       : t === "Governance"    ? properties.filter(p=>p.pii).length || null
                        : null;
             return (
               <button key={t} className={"detail-tab" + (tab === t ? " on" : "")} onClick={() => setTab(t)}>
@@ -12293,21 +12294,28 @@ function RecordsView() {
     />;
   }
 
-  // Build dynamic columns from the selected node type's properties
+  // Build dynamic columns from the selected node type's properties so each
+  // node type shows the fields that matter for it (Account → domain/tier/arr_usd;
+  // Ticket → priority/status/resolved_at; etc.).
+  // - PK leads
+  // - Skip `status` because we already render a dedicated Status column
+  //   (otherwise it would appear twice)
+  // - Sort remaining by importance (required + indexed; PII gets a small penalty)
+  // - Cap at 5 to leave room for Updated + Status
   var props = generateProps(selectedNodeObj);
-  // Pick the most useful columns: PK + up to 4 high-value props (required/indexed first)
   var pkProp = props.find(function(p){ return p.pk; }) || props[0];
-  var displayProps = props.filter(function(p){ return p !== pkProp; })
+  var displayProps = props.filter(function(p){ return p !== pkProp && p.name !== "status"; })
     .sort(function(a, b){
       var aw = (a.required ? 4 : 0) + (a.indexed ? 2 : 0) + (a.pii ? -1 : 0);
       var bw = (b.required ? 4 : 0) + (b.indexed ? 2 : 0) + (b.pii ? -1 : 0);
       return bw - aw;
     })
-    .slice(0, 4);
+    .slice(0, 5);
   var columns = [pkProp].concat(displayProps);
 
-  // 1.4fr for PK, 1fr for each value column, then fixed-width source/updated/status
-  var gridCols = "1.4fr " + displayProps.map(function(){ return "1.2fr"; }).join(" ") + " 1.2fr 100px 90px";
+  // 1.4fr for PK, 1.1fr per value column, then fixed-width updated + status.
+  // No Source column — system-of-record information lives in the record detail page.
+  var gridCols = "1.4fr " + displayProps.map(function(){ return "1.1fr"; }).join(" ") + " 110px 90px";
 
   function NodeGlyph({ n, size }) {
     var col = colorForNode(n);
@@ -12407,7 +12415,6 @@ function RecordsView() {
               </div>
             );
           })}
-          <div>Source</div>
           <div>Updated</div>
           <div>Status</div>
         </div>
@@ -12427,7 +12434,6 @@ function RecordsView() {
                   <div key={p.name} style={{ fontFamily:"JetBrains Mono", fontSize: ci === 0 ? 11.5 : 11, color: color, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{displayVal}</div>
                 );
               })}
-              <div style={{ fontSize:11.5, color:"var(--ink-3)" }}>{r._source}</div>
               <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>{r._updatedAgo}</div>
               <div><span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 7px", borderRadius:4, background:statusColor+"22", color:statusColor, fontWeight:700, textTransform:"uppercase", display:"inline-block" }}>{r.status}</span></div>
             </div>
@@ -13457,6 +13463,7 @@ var GOV_DATA = {
 function GovernanceWorkspace() {
   var [section, setSection] = useState("overview");
   var [createKind, setCreateKind] = useState(null); // policy | role | framework | retention | steward | risk | incident | classification
+  var [detail, setDetail] = useState(null); // { kind, id } — when set, renders GovernanceDetailView instead of the section content
 
   // Section registry. Counts surface in the sidebar so the nav feels alive.
   var sections = [
@@ -13546,7 +13553,7 @@ function GovernanceWorkspace() {
         {sections.map(function(s){
           var isOn = section === s.id;
           return (
-            <button key={s.id} onClick={function(){ setSection(s.id); }}
+            <button key={s.id} onClick={function(){ setSection(s.id); setDetail(null); }}
               style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 12px", borderRadius:7, border:"1px solid " + (isOn ? "var(--line)" : "transparent"), background: isOn ? "var(--panel)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", color: isOn ? "var(--ink)" : "var(--ink-2)" }}
               onMouseEnter={function(e){ if (!isOn) e.currentTarget.style.background = "rgba(0,0,0,0.025)"; }}
               onMouseLeave={function(e){ if (!isOn) e.currentTarget.style.background = "transparent"; }}>
@@ -13562,6 +13569,12 @@ function GovernanceWorkspace() {
 
       {/* MAIN ──────────────────────────────────────────────────────────── */}
       <div style={{ flex:1, overflowY:"auto", padding:"26px 32px 40px" }}>
+
+        {/* When a detail page is open, hide the section list and render the
+            detail view in its place. Clicking the back link clears the state. */}
+        {detail && <GovernanceDetailView detail={detail} onBack={function(){ setDetail(null); }} />}
+
+        {!detail && (<>
 
         {/* ─── OVERVIEW ─── */}
         {section === "overview" && (
@@ -13594,7 +13607,7 @@ function GovernanceWorkspace() {
                   { tone:"blue",  title:"HIPAA controls — 13 failing",           sub:"next audit in 88 days",  target:"compliance" }
                 ].map(function(item, i){
                   return (
-                    <div key={i} onClick={function(){ setSection(item.target); }}
+                    <div key={i} onClick={function(){ setSection(item.target); setDetail(null); }}
                       style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 18px", borderBottom: i < 6 ? "1px dashed var(--line-2)" : "none", cursor:"pointer" }}
                       onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
                       onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
@@ -13667,7 +13680,10 @@ function GovernanceWorkspace() {
               </div>
               {GOV_DATA.policies.map(function(p, i, a){
                 return (
-                  <div key={p.id} style={{ display:"grid", gridTemplateColumns:"70px 1.6fr 110px 1.4fr 130px 90px 90px 100px", gap:12, padding:"10px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)" }}>
+                  <div key={p.id} onClick={function(){ setDetail({ kind:"policy", id:p.id }); }}
+                    style={{ display:"grid", gridTemplateColumns:"70px 1.6fr 110px 1.4fr 130px 90px 90px 100px", gap:12, padding:"10px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)", cursor:"pointer" }}
+                    onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
+                    onMouseLeave={function(e){ e.currentTarget.style.background = i % 2 === 1 ? "transparent" : "var(--bg-canvas)"; }}>
                     <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{p.id}</code>
                     <div style={{ fontSize:13, color:"var(--ink)", fontWeight:500 }}>{p.name}</div>
                     <Pill tone={policyTypeTone(p.type)}>{p.type}</Pill>
@@ -13704,7 +13720,10 @@ function GovernanceWorkspace() {
               <Card title="Roles" sub="Click a role to view the permission grants">
                 {GOV_DATA.roles.map(function(r, i, a){
                   return (
-                    <div key={r.id} style={{ padding:"14px 18px", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none", display:"grid", gridTemplateColumns:"220px 70px 1fr", gap:18, alignItems:"center" }}>
+                    <div key={r.id} onClick={function(){ setDetail({ kind:"role", id:r.id }); }}
+                      style={{ padding:"14px 18px", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none", display:"grid", gridTemplateColumns:"220px 70px 1fr", gap:18, alignItems:"center", cursor:"pointer" }}
+                      onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
+                      onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
                       <div>
                         <div style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{r.name}</div>
                         <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:2 }}>{r.members + " member" + (r.members === 1 ? "" : "s")}</div>
@@ -13785,7 +13804,7 @@ function GovernanceWorkspace() {
                     </div>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingTop:12, borderTop:"1px dashed var(--line-2)" }}>
                       <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>last {f.lastAudit} · next {f.nextAudit}</div>
-                      <button className="btn-ghost" style={{ fontSize:11 }}>Open controls →</button>
+                      <button className="btn-ghost" style={{ fontSize:11 }} onClick={function(){ setDetail({ kind:"framework", id:f.id }); }}>Open controls →</button>
                     </div>
                   </div>
                 );
@@ -13859,7 +13878,10 @@ function GovernanceWorkspace() {
               {GOV_DATA.retention.map(function(r, i, a){
                 var dueColor = r.recordsDueAt > 1000 ? "var(--coral)" : r.recordsDueAt > 0 ? "var(--gold)" : "var(--ink-3)";
                 return (
-                  <div key={r.entity} style={{ display:"grid", gridTemplateColumns:"140px 1.6fr 1fr 110px 110px 110px", gap:12, padding:"12px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)" }}>
+                  <div key={r.entity} onClick={function(){ setDetail({ kind:"retention", id:r.entity }); }}
+                    style={{ display:"grid", gridTemplateColumns:"140px 1.6fr 1fr 110px 110px 110px", gap:12, padding:"12px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)", cursor:"pointer" }}
+                    onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
+                    onMouseLeave={function(e){ e.currentTarget.style.background = i % 2 === 1 ? "transparent" : "var(--bg-canvas)"; }}>
                     <span style={{ fontSize:13, color:"var(--ink)", fontWeight:500 }}>{r.entity}</span>
                     <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)" }}>{r.rule}</span>
                     <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{r.legal}</span>
@@ -13888,7 +13910,10 @@ function GovernanceWorkspace() {
               {GOV_DATA.stewards.map(function(s, i, a){
                 var initials = s.name.split(" ").map(function(p){ return p[0]; }).join("").slice(0,2);
                 return (
-                  <div key={s.name} style={{ display:"grid", gridTemplateColumns:"32px 1fr 130px 1.4fr 90px 120px 80px", gap:12, padding:"11px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                  <div key={s.name} onClick={function(){ setDetail({ kind:"steward", id:s.name }); }}
+                    style={{ display:"grid", gridTemplateColumns:"32px 1fr 130px 1.4fr 90px 120px 80px", gap:12, padding:"11px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none", cursor:"pointer" }}
+                    onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
+                    onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
                     <span style={{ width:28, height:28, borderRadius:"50%", background:"var(--ink-2)", color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10.5, fontWeight:700 }}>{initials}</span>
                     <span style={{ fontSize:13, color:"var(--ink)", fontWeight:500 }}>{s.name}</span>
                     <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{s.team}</span>
@@ -13991,7 +14016,10 @@ function GovernanceWorkspace() {
               </div>
               {GOV_DATA.risks.map(function(r, i, a){
                 return (
-                  <div key={r.id} style={{ display:"grid", gridTemplateColumns:"70px 1.8fr 100px 120px 130px 100px", gap:12, padding:"11px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)" }}>
+                  <div key={r.id} onClick={function(){ setDetail({ kind:"risk", id:r.id }); }}
+                    style={{ display:"grid", gridTemplateColumns:"70px 1.8fr 100px 120px 130px 100px", gap:12, padding:"11px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)", cursor:"pointer" }}
+                    onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
+                    onMouseLeave={function(e){ e.currentTarget.style.background = i % 2 === 1 ? "transparent" : "var(--bg-canvas)"; }}>
                     <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{r.id}</code>
                     <div style={{ fontSize:13, color:"var(--ink)" }}>{r.title}</div>
                     <Pill tone={severityTone(r.severity)}>{r.severity}</Pill>
@@ -14019,7 +14047,10 @@ function GovernanceWorkspace() {
               </div>
               {GOV_DATA.incidents.map(function(it, i, a){
                 return (
-                  <div key={it.id} style={{ display:"grid", gridTemplateColumns:"90px 1.8fr 110px 110px 120px 120px", gap:12, padding:"11px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                  <div key={it.id} onClick={function(){ setDetail({ kind:"incident", id:it.id }); }}
+                    style={{ display:"grid", gridTemplateColumns:"90px 1.8fr 110px 110px 120px 120px", gap:12, padding:"11px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none", cursor:"pointer" }}
+                    onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
+                    onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
                     <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{it.id}</code>
                     <span style={{ fontSize:13, color:"var(--ink)" }}>{it.title}</span>
                     <Pill tone={severityTone(it.severity)}>{it.severity}</Pill>
@@ -14033,6 +14064,8 @@ function GovernanceWorkspace() {
           </div>
         )}
 
+        </>)}
+        {/* ↑ closes !detail wrapper */}
       </div>
 
       {/* Multi-step creation modal — dispatches by kind. Mounted at the workspace
@@ -14168,15 +14201,69 @@ function GovernanceCreateFlow({ kind, onClose }) {
       </div>
     );
   }
-  function ChipMulti({ items, selected, onToggle, getLabel }) {
+  // ChipMulti was an inline chip strip — fine for 2–3 options, noisy beyond that.
+  // Replaced with a proper multi-select dropdown: trigger shows selected chips +
+  // placeholder, popover has a search box + scrollable checkbox list. Same prop
+  // signature so it's a drop-in swap everywhere.
+  function ChipMulti({ items, selected, onToggle, getLabel, placeholder }) {
+    var [open, setOpen] = useState(false);
+    var [query, setQuery] = useState("");
+    function keyOf(it){ return typeof it === "string" ? it : it.id; }
+    function labelOf(it){ return getLabel ? getLabel(it) : (typeof it === "string" ? it : it.label || it.id); }
+    var visible = !query ? items : items.filter(function(it){ return labelOf(it).toLowerCase().indexOf(query.toLowerCase()) >= 0; });
+    var selectedItems = items.filter(function(it){ return selected.indexOf(keyOf(it)) >= 0; });
     return (
-      <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-        {items.map(function(it){
-          var key = typeof it === "string" ? it : it.id;
-          var label = getLabel ? getLabel(it) : (typeof it === "string" ? it : it.label || it.id);
-          var on = selected.indexOf(key) >= 0;
-          return <button key={key} type="button" onClick={function(){ onToggle(key); }} style={{ padding:"6px 11px", borderRadius:6, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "var(--panel)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11, cursor:"pointer" }}>{label}</button>;
-        })}
+      <div style={{ position:"relative" }}>
+        <button type="button" onClick={function(){ setOpen(function(o){ return !o; }); }}
+          style={{ display:"flex", alignItems:"center", gap:6, width:"100%", padding:"8px 12px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", minHeight:40, boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+          <span style={{ display:"flex", flexWrap:"wrap", gap:5, flex:1, alignItems:"center" }}>
+            {selectedItems.length === 0 && <span style={{ fontSize:13, color:"var(--ink-4)" }}>{placeholder || "Select…"}</span>}
+            {selectedItems.slice(0, 4).map(function(it){
+              return <span key={keyOf(it)} style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 5px 3px 8px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:10.5, fontWeight:600 }}>
+                {labelOf(it)}
+                <button type="button" onClick={function(e){ e.stopPropagation(); onToggle(keyOf(it)); }} style={{ background:"none", border:"none", padding:0, color:"var(--ink-3)", cursor:"pointer", fontSize:12, lineHeight:1 }}>×</button>
+              </span>;
+            })}
+            {selectedItems.length > 4 && <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{"+" + (selectedItems.length - 4) + " more"}</span>}
+          </span>
+          <span style={{ color:"var(--ink-3)", fontSize:10, fontFamily:"JetBrains Mono" }}>{open ? "▴" : "▾"}</span>
+        </button>
+        {open && (
+          <>
+            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setOpen(false); setQuery(""); }} />
+            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", overflow:"hidden" }}>
+              <div style={{ padding:"8px 10px", borderBottom:"1px solid var(--line-2)" }}>
+                <input value={query} onChange={function(e){ setQuery(e.target.value); }} placeholder="Search" autoFocus
+                  style={{ width:"100%", border:"none", outline:"none", background:"transparent", fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", padding:"3px 0" }} />
+              </div>
+              <div style={{ maxHeight:280, overflowY:"auto", padding:4 }}>
+                {visible.length === 0 ? (
+                  <div style={{ padding:"16px", textAlign:"center", color:"var(--ink-3)", fontSize:12, fontFamily:"JetBrains Mono" }}>No matches</div>
+                ) : visible.map(function(it){
+                  var k = keyOf(it);
+                  var on = selected.indexOf(k) >= 0;
+                  return (
+                    <button key={k} type="button" onClick={function(){ onToggle(k); }}
+                      style={{ display:"flex", alignItems:"center", gap:9, width:"100%", padding:"7px 10px", borderRadius:6, border:"none", background: on ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
+                      onMouseEnter={function(e){ if (!on) e.currentTarget.style.background = "var(--panel-2)"; }}
+                      onMouseLeave={function(e){ if (!on) e.currentTarget.style.background = "transparent"; }}>
+                      <span style={{ width:14, height:14, borderRadius:3, border:"1.5px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "var(--panel)", display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                        {on && <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="var(--bg-canvas)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5"/></svg>}
+                      </span>
+                      <span style={{ flex:1, fontSize:12.5, color:"var(--ink)" }}>{labelOf(it)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {selected.length > 0 && (
+                <div style={{ padding:"6px 10px", borderTop:"1px solid var(--line-2)", display:"flex", justifyContent:"space-between", alignItems:"center", background:"var(--panel-2)" }}>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{selected.length + " selected"}</span>
+                  <button type="button" onClick={function(){ selected.slice().forEach(function(k){ onToggle(k); }); }} className="btn-ghost" style={{ fontSize:10.5 }}>Clear</button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     );
   }
@@ -14720,6 +14807,467 @@ function GovernanceCreateFlow({ kind, onClose }) {
       </div>
     </div>
   );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GOVERNANCE DETAIL VIEW — full-page detail for any Governance section row.
+//
+// Dispatches by `detail.kind` and pulls the row from GOV_DATA. Each kind has a
+// dedicated layout: policy, framework (controls), retention rule, role, risk,
+// steward, incident. The page replaces the section list (mounted inside the
+// main pane of GovernanceWorkspace) and the back link returns to the section.
+// ═══════════════════════════════════════════════════════════════════════════════
+function GovernanceDetailView({ detail, onBack }) {
+  function statusTone(s){
+    return /active|on-track|approved|ok|healthy/i.test(s) ? { bg:"var(--green-fill)", fg:"var(--green)" }
+         : /draft|pending|review|queued|mitigating/i.test(s) ? { bg:"var(--gold-fill)", fg:"var(--gold)" }
+         : /retired|closed|accepted|denied|rejected/i.test(s) ? { bg:"var(--chip)", fg:"var(--ink-3)" }
+         : /open|at-risk|failed|flagged/i.test(s) ? { bg:"var(--coral-fill)", fg:"var(--coral)" }
+         : { bg:"var(--chip)", fg:"var(--ink-3)" };
+  }
+  function severityTone(sev){
+    return sev === "Critical" || sev === "High" ? { bg:"var(--coral-fill)", fg:"var(--coral)" }
+         : sev === "Medium"   ? { bg:"var(--gold-fill)",  fg:"var(--gold)" }
+         :                       { bg:"var(--chip)",      fg:"var(--ink-3)" };
+  }
+  function Pill({ tone, children }) {
+    return <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background: tone.bg, color: tone.fg, fontWeight:700, letterSpacing:"0.4px", textTransform:"uppercase" }}>{children}</span>;
+  }
+  function KPI({ lbl, v, sub, color }) {
+    return (
+      <div style={{ padding:"14px 16px", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9 }}>
+        <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase" }}>{lbl}</div>
+        <div style={{ fontFamily:"Instrument Serif", fontSize:22, color: color || "var(--ink)", lineHeight:1.1, marginTop:5 }}>{v}</div>
+        {sub && <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:5 }}>{sub}</div>}
+      </div>
+    );
+  }
+  function Card({ title, sub, actions, children, dashed }) {
+    return (
+      <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2)", overflow:"hidden" }}>
+        {title && (
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 18px", borderBottom:"1px solid var(--line-2)", background:"var(--panel-2)" }}>
+            <div>
+              <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{title}</div>
+              {sub && <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3 }}>{sub}</div>}
+            </div>
+            {actions}
+          </div>
+        )}
+        <div>{children}</div>
+      </div>
+    );
+  }
+  function DashedRows({ rows }) {
+    return (
+      <div>
+        {rows.map(function(r, i, a){
+          return (
+            <div key={i} style={{ display:"grid", gridTemplateColumns:"170px 1fr", gap:14, padding:"10px 22px", borderBottom: i < a.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"baseline" }}>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>{r.k}</span>
+              <span style={{ fontSize:13, color:"var(--ink)", textAlign:"right" }}>{r.v}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  // Back-link + breadcrumb header used at the top of every detail page.
+  function BackHeader({ section, label, kindLabel }) {
+    return (
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16 }}>
+        <button onClick={onBack} className="btn-ghost" style={{ fontSize:11.5, display:"inline-flex", alignItems:"center", gap:5 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          {section}
+        </button>
+        <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>/</span>
+        <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.5px", textTransform:"uppercase" }}>{kindLabel}</span>
+        <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>/</span>
+        <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{label}</span>
+      </div>
+    );
+  }
+
+  // ────────────────────────── POLICY ──────────────────────────
+  if (detail.kind === "policy") {
+    var p = GOV_DATA.policies.find(function(x){ return x.id === detail.id; });
+    if (!p) return null;
+    return (
+      <div>
+        <BackHeader section="Policies" kindLabel="Policy" label={p.id} />
+        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:18, marginBottom:18 }}>
+          <div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", marginBottom:4 }}>{p.id} · {p.type}</div>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:28, color:"var(--ink)", lineHeight:1.1 }}>{p.name}</div>
+            <div style={{ fontSize:13, color:"var(--ink-3)", marginTop:8, maxWidth:680, lineHeight:1.55 }}>
+              {p.type === "Access" && "Defines who can read or modify the entities in scope, and what the audit trail looks like for that access."}
+              {p.type === "Retention" && "Sets how long records in scope are kept before being purged or archived. Holds and legal exceptions are respected."}
+              {p.type === "Sharing" && "Governs how data leaves the workspace — partner endpoints, DPAs in force, and approval workflows for new disclosures."}
+              {p.type === "Classification" && "Tags entities in scope with the sensitivity level that drives downstream masking, gating and retention."}
+              {p.type === "Quality" && "Defines the freshness, completeness and accuracy SLAs for the entities in scope, and what happens when they're breached."}
+              {p.type === "Residency" && "Constrains where records in scope may live and be processed."}
+              {p.type === "Change" && "Sets the review and approval gates for schema and access changes."}
+              {p.type === "Security" && "Covers encryption, key rotation, and access path requirements for the entities in scope."}
+              {p.type === "Compliance" && "Codifies a specific regulatory obligation (DSAR, breach notification, audit support)."}
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:8, flexShrink:0 }}>
+            <button className="btn-ghost">Export</button>
+            <button className="btn-ghost">Duplicate</button>
+            <button className="btn-dark">Edit policy</button>
+          </div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:10, marginBottom:18 }}>
+          <KPI lbl="Status" v={p.status} color={statusTone(p.status).fg} />
+          <KPI lbl="Version" v={p.version} sub={"effective " + (p.effective || "—")} />
+          <KPI lbl="Owner" v={p.owner} />
+          <KPI lbl="Last reviewed" v={p.reviewed} sub="quarterly cadence" />
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr", gap:18 }}>
+          <Card title="Scope" sub={p.scope.length + " entities covered"}>
+            <div style={{ padding:"14px 18px", display:"flex", flexWrap:"wrap", gap:6 }}>
+              {p.scope.map(function(e){ return <span key={e} style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"3px 8px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)" }}>{e}</span>; })}
+            </div>
+            <div style={{ padding:"12px 18px", borderTop:"1px dashed var(--line-2)", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>
+              The policy applies to every record under these entity types — including new records as they're created.
+            </div>
+          </Card>
+          <Card title="Enforcement">
+            <DashedRows rows={[
+              { k:"ON VIOLATION", v: "Block the action · log to audit" },
+              { k:"AUDIT TRAIL",  v: "Immutable · 3-year retention" },
+              { k:"REVIEW",       v: "Quarterly · auto-paged to owner" },
+              { k:"DELEGATION",   v: "Owner may delegate to a steward" }
+            ]} />
+          </Card>
+        </div>
+        <div style={{ marginTop:18 }}>
+          <Card title="Recent violations" sub="last 30 days">
+            {[
+              { ts:"2 d ago",  who:"jordan.s", what:"Tried to read Customer.email", result:"denied" },
+              { ts:"5 d ago",  who:"alex.r",   what:"Edited Account.tax_id outside review window", result:"warned" },
+              { ts:"11 d ago", who:"system",   what:"Auto-purge attempted on record on legal hold", result:"blocked" }
+            ].map(function(v, i, a){
+              return (
+                <div key={i} style={{ display:"grid", gridTemplateColumns:"110px 140px 1fr 90px", gap:12, padding:"10px 18px", borderBottom: i < a.length-1 ? "1px dashed var(--line-2)" : "none" }}>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{v.ts}</span>
+                  <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{v.who}</code>
+                  <span style={{ fontSize:12.5, color:"var(--ink)" }}>{v.what}</span>
+                  <Pill tone={statusTone(v.result)}>{v.result}</Pill>
+                </div>
+              );
+            })}
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // ────────────────────────── FRAMEWORK CONTROLS ──────────────────────────
+  if (detail.kind === "framework") {
+    var f = GOV_DATA.frameworks.find(function(x){ return x.id === detail.id; });
+    if (!f) return null;
+    var trafficColor = f.coverage >= 95 ? "var(--green)" : f.coverage >= 85 ? "var(--gold)" : "var(--coral)";
+    // Synthesise a few sample controls for the framework
+    var sampleControls = [
+      { id:"CC1.1", name:"Access reviews quarterly",          status:"passed",  evidence:14, owner:"morgan.lee" },
+      { id:"CC1.2", name:"Role separation for write paths",   status:"passed",  evidence:9,  owner:"morgan.lee" },
+      { id:"CC2.1", name:"Encryption at rest verified",       status:"passed",  evidence:6,  owner:"casey.m" },
+      { id:"CC3.1", name:"Vendor DPA on file",                status:"failed",  evidence:0,  owner:"sam.w" },
+      { id:"CC3.2", name:"Cross-border transfer log",         status:"passed",  evidence:18, owner:"sam.w" },
+      { id:"CC4.1", name:"Incident response tested annually", status:"passed",  evidence:4,  owner:"casey.m" },
+      { id:"CC5.1", name:"Backup restoration verified",       status:"failed",  evidence:1,  owner:"ramin.k" },
+      { id:"CC6.1", name:"PII inventory current",             status:"passed",  evidence:22, owner:"morgan.lee" },
+      { id:"CC6.2", name:"DSAR fulfilment under 30 days",     status:"passed",  evidence:8,  owner:"sam.w" },
+      { id:"CC7.1", name:"Logging & monitoring coverage",     status:"passed",  evidence:11, owner:"casey.m" }
+    ];
+    return (
+      <div>
+        <BackHeader section="Compliance" kindLabel="Framework" label={f.name} />
+        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:18, marginBottom:18 }}>
+          <div>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:30, color:"var(--ink)", lineHeight:1.1 }}>{f.name}</div>
+            <div style={{ display:"flex", gap:6, marginTop:8 }}>
+              <Pill tone={statusTone(f.status)}>{f.status}</Pill>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>owner · {f.owner}</span>
+            </div>
+          </div>
+          <div style={{ textAlign:"right" }}>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:36, color: trafficColor, lineHeight:1 }}>{f.coverage + "%"}</div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:3, textTransform:"uppercase", letterSpacing:"0.5px" }}>Coverage</div>
+          </div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:10, marginBottom:18 }}>
+          <KPI lbl="Controls passed" v={f.controls.passed + " / " + f.controls.total} color="var(--green)" />
+          <KPI lbl="Failed" v={f.controls.failed} color={f.controls.failed ? "var(--coral)" : "var(--ink)"} />
+          <KPI lbl="Evidence" v={f.evidence} sub="documents on file" />
+          <KPI lbl="Next audit" v={f.nextAudit} sub={"last " + f.lastAudit} />
+        </div>
+        <Card title="Controls" sub={sampleControls.length + " of " + f.controls.total + " shown · click for details"}>
+          <div style={{ display:"grid", gridTemplateColumns:"80px 1.8fr 100px 100px 130px", gap:12, padding:"10px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.5px", textTransform:"uppercase" }}>
+            <div>ID</div><div>Name</div><div>Status</div><div>Evidence</div><div>Owner</div>
+          </div>
+          {sampleControls.map(function(ctrl, i, a){
+            var sm = statusTone(ctrl.status === "passed" ? "ok" : "failed");
+            return (
+              <div key={ctrl.id} style={{ display:"grid", gridTemplateColumns:"80px 1.8fr 100px 100px 130px", gap:12, padding:"11px 18px", alignItems:"center", borderBottom: i < a.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)" }}>
+                <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{ctrl.id}</code>
+                <span style={{ fontSize:13, color:"var(--ink)" }}>{ctrl.name}</span>
+                <Pill tone={sm}>{ctrl.status}</Pill>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{ctrl.evidence}</span>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{ctrl.owner}</span>
+              </div>
+            );
+          })}
+        </Card>
+      </div>
+    );
+  }
+
+  // ────────────────────────── RETENTION RULE ──────────────────────────
+  if (detail.kind === "retention") {
+    var r = GOV_DATA.retention.find(function(x){ return x.entity === detail.id; });
+    if (!r) return null;
+    var dueColor = r.recordsDueAt > 1000 ? "var(--coral)" : r.recordsDueAt > 0 ? "var(--gold)" : "var(--green)";
+    return (
+      <div>
+        <BackHeader section="Retention" kindLabel="Rule" label={r.entity} />
+        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:18, marginBottom:18 }}>
+          <div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", marginBottom:4 }}>Retention rule</div>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:28, color:"var(--ink)", lineHeight:1.1 }}>{r.entity}</div>
+            <div style={{ fontSize:13, color:"var(--ink-3)", marginTop:8, maxWidth:680, lineHeight:1.55 }}>{r.rule}. Records under this rule are excluded from automated deletion if they're on legal hold.</div>
+          </div>
+          <div style={{ display:"flex", gap:8, flexShrink:0 }}>
+            <button className="btn-ghost">Preview purge</button>
+            <button className="btn-dark">Edit rule</button>
+          </div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:10, marginBottom:18 }}>
+          <KPI lbl="Records due" v={r.recordsDueAt > 0 ? r.recordsDueAt.toLocaleString() : "—"} color={dueColor} sub="within 30 days" />
+          <KPI lbl="Next purge" v={r.nextPurge} sub="nightly cadence" />
+          <KPI lbl="Last review" v={r.lastReview} sub="annual sign-off" />
+          <KPI lbl="On hold" v="0" sub="records excluded" />
+        </div>
+        <Card title="Rule definition">
+          <DashedRows rows={[
+            { k:"ENTITY",        v: r.entity },
+            { k:"DURATION",      v: r.rule },
+            { k:"LEGAL BASIS",   v: r.legal },
+            { k:"COUNTED FROM",  v: "Last activity timestamp" },
+            { k:"PURGE CADENCE", v: "Nightly · 02:00 UTC" },
+            { k:"HOLDS",         v: "Excluded — flag pauses the rule" }
+          ]} />
+        </Card>
+        <div style={{ marginTop:18 }}>
+          <Card title="Recent purge runs" sub="last 5 nightly windows">
+            {[1,2,3,4,5].map(function(d, i, a){
+              return (
+                <div key={d} style={{ display:"grid", gridTemplateColumns:"110px 100px 1fr 90px", gap:12, padding:"10px 18px", borderBottom: i < a.length-1 ? "1px dashed var(--line-2)" : "none" }}>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{d + " d ago"}</span>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{((d * 117 + 23) % 480) + " records"}</span>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>0 errors · all signed-off</span>
+                  <Pill tone={statusTone("ok")}>ok</Pill>
+                </div>
+              );
+            })}
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // ────────────────────────── ROLE ──────────────────────────
+  if (detail.kind === "role") {
+    var ro = GOV_DATA.roles.find(function(x){ return x.id === detail.id; });
+    if (!ro) return null;
+    return (
+      <div>
+        <BackHeader section="Access & roles" kindLabel="Role" label={ro.name} />
+        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:18, marginBottom:18 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+            <span style={{ width:48, height:48, borderRadius:9, background:"var(--" + ro.tone + "-fill)", color:"var(--" + ro.tone + ")", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:13, fontWeight:700 }}>{ro.name.split(" ").map(function(w){ return w[0]; }).join("").slice(0,2)}</span>
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", marginBottom:3 }}>{ro.id}</div>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1 }}>{ro.name}</div>
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <button className="btn-ghost">Audit role</button>
+            <button className="btn-dark">Edit role</button>
+          </div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:10, marginBottom:18 }}>
+          <KPI lbl="Members" v={ro.members} />
+          <KPI lbl="Active grants" v={ro.members * 3} sub="resources × members" />
+          <KPI lbl="Last review" v="14 days ago" sub="quarterly cadence" />
+        </div>
+        <Card title="Permissions">
+          <DashedRows rows={[
+            { k:"READ",  v: ro.perms.read },
+            { k:"WRITE", v: ro.perms.write },
+            { k:"ADMIN", v: ro.perms.admin }
+          ]} />
+        </Card>
+        <div style={{ marginTop:18 }}>
+          <Card title="Recent role activity" sub="last 30 days">
+            {[
+              { ts:"2 h ago",  who:"morgan.lee", what:"granted to alex.r"  },
+              { ts:"1 d ago",  who:"morgan.lee", what:"revoked from jordan.s after offboarding" },
+              { ts:"5 d ago",  who:"sam.w",      what:"audit review · 0 findings" }
+            ].map(function(e, i, a){
+              return (
+                <div key={i} style={{ display:"grid", gridTemplateColumns:"110px 140px 1fr", gap:12, padding:"10px 18px", borderBottom: i < a.length-1 ? "1px dashed var(--line-2)" : "none" }}>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{e.ts}</span>
+                  <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{e.who}</code>
+                  <span style={{ fontSize:12.5, color:"var(--ink)" }}>{e.what}</span>
+                </div>
+              );
+            })}
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // ────────────────────────── RISK ──────────────────────────
+  if (detail.kind === "risk") {
+    var rk = GOV_DATA.risks.find(function(x){ return x.id === detail.id; });
+    if (!rk) return null;
+    return (
+      <div>
+        <BackHeader section="Risk register" kindLabel="Risk" label={rk.id} />
+        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:18, marginBottom:18 }}>
+          <div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", marginBottom:4 }}>{rk.id}</div>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1 }}>{rk.title}</div>
+            <div style={{ display:"flex", gap:6, marginTop:10 }}>
+              <Pill tone={severityTone(rk.severity)}>{rk.severity}</Pill>
+              <Pill tone={statusTone(rk.status)}>{rk.status}</Pill>
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <button className="btn-ghost">Snooze</button>
+            <button className="btn-dark">Mark mitigated</button>
+          </div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:10, marginBottom:18 }}>
+          <KPI lbl="Impact" v={rk.impact} color={rk.impact === "high" ? "var(--coral)" : rk.impact === "medium" ? "var(--gold)" : "var(--ink)"} />
+          <KPI lbl="Likelihood" v={rk.likelihood} color={rk.likelihood === "high" ? "var(--coral)" : rk.likelihood === "medium" ? "var(--gold)" : "var(--ink)"} />
+          <KPI lbl="Owner" v={rk.owner} />
+          <KPI lbl="Due" v={rk.due} color={(/in 1 day|in 2 days/).test(rk.due) ? "var(--coral)" : "var(--ink)"} />
+        </div>
+        <Card title="Mitigation">
+          <DashedRows rows={[
+            { k:"CATEGORY",    v: "Privacy" },
+            { k:"IDENTIFIED",  v: "Internal review · 12 days ago" },
+            { k:"PLAN",        v: "Tag affected fields → rotate keys → notify owners → close within 7 days." },
+            { k:"BLOCKERS",    v: "Awaiting key-rotation window scheduled by security team" },
+            { k:"NEXT STEP",   v: "Casey M to sign off on remediation playbook by Friday" }
+          ]} />
+        </Card>
+      </div>
+    );
+  }
+
+  // ────────────────────────── STEWARD ──────────────────────────
+  if (detail.kind === "steward") {
+    var st = GOV_DATA.stewards.find(function(x){ return x.name === detail.id; });
+    if (!st) return null;
+    var initials = st.name.split(" ").map(function(p){ return p[0]; }).join("").slice(0,2);
+    return (
+      <div>
+        <BackHeader section="Stewardship" kindLabel="Steward" label={st.name} />
+        <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:18 }}>
+          <span style={{ width:54, height:54, borderRadius:"50%", background:"var(--ink-2)", color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:15, fontWeight:700 }}>{initials}</span>
+          <div style={{ flex:1 }}>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1 }}>{st.name}</div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", marginTop:4 }}>{st.team} · accountable for {st.domains.length + " domain" + (st.domains.length === 1 ? "" : "s")}</div>
+          </div>
+          <button className="btn-dark">Page steward</button>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:10, marginBottom:18 }}>
+          <KPI lbl="Domains" v={st.domains.length} />
+          <KPI lbl="Open tasks" v={st.openTasks || "—"} color={st.openTasks > 3 ? "var(--coral)" : st.openTasks > 0 ? "var(--gold)" : "var(--ink)"} />
+          <KPI lbl="Response SLA" v={st.sla} />
+          <KPI lbl="Last activity" v={st.lastActivity} />
+        </div>
+        <Card title="Domains owned">
+          <div style={{ padding:"14px 18px", display:"flex", flexWrap:"wrap", gap:6 }}>
+            {st.domains.map(function(d){ return <span key={d} style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"4px 10px", borderRadius:5, background:"var(--chip)", color:"var(--ink-2)" }}>{d}</span>; })}
+          </div>
+        </Card>
+        <div style={{ marginTop:18 }}>
+          <Card title="Recent activity" sub="last 7 days">
+            {[
+              { ts:"30 min ago", what:"Resolved 2 :GOVERNED_BY violations on Account" },
+              { ts:"3 h ago",    what:"Approved schema change AP-1022 (Customer.opt_in)" },
+              { ts:"1 d ago",    what:"Closed Incident INC-09 with post-mortem" }
+            ].map(function(e, i, a){
+              return (
+                <div key={i} style={{ display:"grid", gridTemplateColumns:"110px 1fr", gap:12, padding:"10px 18px", borderBottom: i < a.length-1 ? "1px dashed var(--line-2)" : "none" }}>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{e.ts}</span>
+                  <span style={{ fontSize:12.5, color:"var(--ink)" }}>{e.what}</span>
+                </div>
+              );
+            })}
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // ────────────────────────── INCIDENT ──────────────────────────
+  if (detail.kind === "incident") {
+    var it = GOV_DATA.incidents.find(function(x){ return x.id === detail.id; });
+    if (!it) return null;
+    return (
+      <div>
+        <BackHeader section="Incidents" kindLabel="Incident" label={it.id} />
+        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:18, marginBottom:18 }}>
+          <div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", marginBottom:4 }}>{it.id}</div>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1 }}>{it.title}</div>
+            <div style={{ display:"flex", gap:6, marginTop:10 }}>
+              <Pill tone={severityTone(it.severity)}>{it.severity}</Pill>
+              <Pill tone={statusTone(it.status)}>{it.status}</Pill>
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <button className="btn-ghost">Notify stakeholders</button>
+            {it.status === "Open" && <button className="btn-dark">Resolve incident</button>}
+          </div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:10, marginBottom:18 }}>
+          <KPI lbl="Opened" v={it.opened} />
+          <KPI lbl={it.status === "Open" ? "Open since" : "Closed"} v={it.closed || "ongoing"} />
+          <KPI lbl="Commander" v="casey.m" />
+          <KPI lbl="Data subjects" v="—" sub="under investigation" />
+        </div>
+        <Card title="Timeline" sub="newest first">
+          {(it.status === "Closed" ? [
+            { ts: it.closed, who:"casey.m", what:"Incident closed · post-mortem published", kind:"close" },
+            { ts:"1 d before closure", who:"morgan.lee", what:"Confirmed all affected records back in sync", kind:"verify" },
+            { ts: it.opened, who:"schema-bot", what:"Detected anomaly → declared incident", kind:"open" }
+          ] : [
+            { ts:"30 min ago", who:"casey.m",  what:"Assigned as commander · paged owners", kind:"assign" },
+            { ts: it.opened,   who:"system",   what:"Auto-declared from monitoring alert",  kind:"open" }
+          ]).map(function(e, i, a){
+            return (
+              <div key={i} style={{ display:"grid", gridTemplateColumns:"120px 140px 1fr 90px", gap:12, padding:"10px 18px", borderBottom: i < a.length-1 ? "1px dashed var(--line-2)" : "none" }}>
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{e.ts}</span>
+                <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{e.who}</code>
+                <span style={{ fontSize:12.5, color:"var(--ink)" }}>{e.what}</span>
+                <Pill tone={statusTone(e.kind === "close" ? "ok" : e.kind === "open" ? "open" : "pending")}>{e.kind}</Pill>
+              </div>
+            );
+          })}
+        </Card>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function NodesView({ onSelect, onSwitchToCanvas, onAddNode }) {
@@ -15439,7 +15987,7 @@ var PROP_TYPE_META = {
 };
 var PROP_TYPE_OPTIONS = ["uuid", "string", "string[]", "decimal", "float", "bool", "timestamp", "date", "datetime", "enum", "struct"];
 
-function AddNodeFlow({ onClose }) {
+function AddNodeFlow({ onClose, onCreate }) {
   var [step, setStep] = useState(1);
 
   // Step 1
@@ -16297,7 +16845,7 @@ function AddNodeFlow({ onClose }) {
             <button className="btn-ghost" onClick={onClose}>Cancel</button>
             {step < 4
               ? <button className="btn-dark" disabled={!canContinue()} onClick={function(){ setStep(function(s){ return s + 1; }); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Continue →</button>
-              : <button className="btn-dark" onClick={onClose}>{activate ? "Create node type ↵" : "Save draft ↵"}</button>
+              : <button className="btn-dark" onClick={function(){ if (onCreate) onCreate({ name: name, category: category, properties: properties, shape: shape, description: description }); onClose(); }}>{activate ? "Create node type ↵" : "Save draft ↵"}</button>
             }
           </div>
         </div>
@@ -18326,7 +18874,58 @@ function GraphLandingView({ onOpenGraph }) {
         </div>
       )}
 
-      {newGraphOpen && <NewGraphFlow onClose={function(){ setNewGraphOpen(false); }} onCreate={function(g){ setNewGraphOpen(false); if (g && g.id) onOpenGraph(g.id); }} />}
+      {newGraphOpen && <NewGraphFlow onClose={function(){ setNewGraphOpen(false); }} onCreate={function(g){ setNewGraphOpen(false); if (g && g.id) { onOpenGraph(g.id); } else if (g && g.name && window.__openBlankGraph) { window.__openBlankGraph(g.name); } }} />}
+    </div>
+  );
+}
+
+// Per-tab empty state — used when the current graph is blank (no nodes yet).
+function WorkspaceEmpty({ icon, eyebrow, title, desc, ctaLabel, onCta, secondaryLabel, onSecondary }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", padding:"40px 24px", minHeight:"calc(100vh - 200px)" }}>
+      <div style={{ maxWidth: 460, textAlign:"center" }}>
+        {icon && (
+          <div style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:64, height:64, borderRadius:14, background:"var(--panel)", border:"1px dashed var(--line)", marginBottom:18 }}>
+            {icon}
+          </div>
+        )}
+        {eyebrow && <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, letterSpacing:"0.6px", color:"var(--ink-3)", marginBottom:6 }}>{eyebrow}</div>}
+        <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:34, lineHeight:1.1, color:"var(--ink)" }}>{title}</div>
+        {desc && <div style={{ fontSize:13.5, color:"var(--ink-3)", marginTop:12, lineHeight:1.55 }}>{desc}</div>}
+        {(ctaLabel || secondaryLabel) && (
+          <div style={{ marginTop:22, display:"inline-flex", gap:10 }}>
+            {ctaLabel && <button onClick={onCta} className="btn-dark" style={{ padding:"10px 18px", fontSize:13 }}>{ctaLabel}</button>}
+            {secondaryLabel && <button onClick={onSecondary} className="btn-ghost" style={{ padding:"10px 16px", fontSize:13, border:"1px solid var(--line)", borderRadius:8 }}>{secondaryLabel}</button>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Click-to-create blank canvas — shown when a graph has no nodes yet.
+// Clicking anywhere opens AddNodeFlow.
+function BlankCanvas({ onAddNode }) {
+  return (
+    <div className="body">
+      <main className="main" style={{ position:"relative" }}>
+        <div
+          onClick={onAddNode}
+          style={{ position:"absolute", inset:0, cursor:"crosshair", display:"flex", alignItems:"center", justifyContent:"center", background:"var(--bg-canvas)", backgroundImage:"radial-gradient(circle, #c8c0a8 0.7px, transparent 0.7px)", backgroundSize:"24px 24px" }}
+        >
+          <div style={{ textAlign:"center", maxWidth:460, pointerEvents:"none" }}>
+            <div style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:72, height:72, borderRadius:"50%", background:"var(--panel)", border:"2px dashed var(--line)", marginBottom:18 }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="1.6">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </div>
+            <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:38, lineHeight:1.05, color:"var(--ink)" }}>Start your context graph</div>
+            <div style={{ fontSize:13.5, color:"var(--ink-3)", marginTop:12, lineHeight:1.55 }}>Click anywhere on the canvas to add your first node. Nodes can be entities, data sources, or agents — connect them with edges to model your domain.</div>
+            <div style={{ marginTop:18, fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)", letterSpacing:"0.4px" }}>CLICK CANVAS · OR PRESS  +  NEW NODE</div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
@@ -18359,7 +18958,23 @@ function App() {
   const [showCounts,    setShowCounts]    = useState(true);
   const [viewport, setViewport] = useState({ zoom: 0.95, panX: 0, panY: 0 });
   const [nodes, setNodes] = useState(NODES.filter(n => n.type !== "agent"));
+  const [blankGraphName, setBlankGraphName] = useState(null); // when set, this graph is in blank-mode
+  const isBlank = blankGraphName !== null;
   const canvasSize = useRef({ w: 1000, h: 700 });
+
+  // Expose a global opener used by the landing-page NewGraphFlow.onCreate
+  // (so the user can land directly into an empty workspace they just created).
+  React.useEffect(function(){
+    window.__openBlankGraph = function(name){
+      setBlankGraphName(name || "Untitled graph");
+      setNodes([]);
+      setSelected(null);
+      setDetailId(null);
+      setTab("Graph");
+      setCurrentGraphId("blank-" + Date.now());
+    };
+    return function(){ delete window.__openBlankGraph; };
+  }, []);
 
   const selectedNode = nodes.find(n => n.id === selected);
 
@@ -18377,13 +18992,19 @@ function App() {
   if (!currentGraphId) {
     return (
       <div className="app">
-        <GraphLandingView onOpenGraph={function(id){ setCurrentGraphId(id); setTab("Graph"); setDetailId(null); }} />
+        <GraphLandingView onOpenGraph={function(id){
+          setCurrentGraphId(id);
+          setTab("Graph");
+          setDetailId(null);
+          setBlankGraphName(null);
+          setNodes(NODES.filter(function(n){ return n.type !== "agent"; }));
+        }} />
       </div>
     );
   }
 
   var currentGraph = CONTEXT_GRAPHS.find(function(g){ return g.id === currentGraphId; });
-  var graphName = currentGraph ? currentGraph.name : (IS_PS_GRAPH ? "Product Specialist Graph" : "Enterprise Context Graph");
+  var graphName = currentGraph ? currentGraph.name : (isBlank ? blankGraphName : (IS_PS_GRAPH ? "Product Specialist Graph" : "Enterprise Context Graph"));
 
   return (
     <div className="app">
@@ -18394,22 +19015,80 @@ function App() {
           onBack={() => setDetailId(null)}
           onCanvas={() => { setSelected(detailId); setTab("Graph"); setDetailId(null); }}
         />
+      ) : isBlank && tab === "Nodes" ? (
+        <WorkspaceEmpty
+          eyebrow="NODES"
+          title="No nodes yet"
+          desc="Nodes represent entities, data sources, or agents in your graph. Add the first one to start modelling your domain."
+          ctaLabel="+ Add node"
+          onCta={function(){ setAddNodeOpen(true); }}
+          secondaryLabel="Open canvas"
+          onSecondary={function(){ setTab("Graph"); }}
+          icon={<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="1.5"><circle cx="12" cy="12" r="6"/></svg>}
+        />
       ) : tab === "Nodes" ? (
         <NodesView
           onSelect={(id) => { setDetailId(id); }}
           onSwitchToCanvas={() => setTab("Graph")}
           onAddNode={() => setAddNodeOpen(true)}
         />
+      ) : isBlank && tab === "Edges" ? (
+        <WorkspaceEmpty
+          eyebrow="EDGES"
+          title="No edges yet"
+          desc="Edges define relationships between nodes — :WORKS_AT, :GOVERNED_BY, :OBSERVED_ON. Add nodes first, then connect them."
+          ctaLabel="+ Add node"
+          onCta={function(){ setAddNodeOpen(true); }}
+          icon={<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="1.5"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="12" r="3"/><line x1="9" y1="12" x2="15" y2="12" strokeDasharray="2 2"/></svg>}
+        />
       ) : tab === "Edges" ? (
         <GlobalEdgesView />
+      ) : isBlank && tab === "Sources" ? (
+        <WorkspaceEmpty
+          eyebrow="SOURCES"
+          title="No sources connected"
+          desc="Connect data sources — Salesforce, NetSuite, Snowflake, Okta — to populate nodes with real records and lineage."
+          ctaLabel="+ Connect source"
+          onCta={function(){ setAddNodeOpen(true); }}
+          icon={<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="1.5"><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6"/><path d="M5 12v6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-6"/></svg>}
+        />
       ) : tab === "Sources" ? (
         <GlobalSourcesView />
+      ) : isBlank && tab === "Records" ? (
+        <WorkspaceEmpty
+          eyebrow="RECORDS"
+          title="No records to browse"
+          desc="Records are the actual rows behind each node. They appear here once you connect a source and let it sync."
+          ctaLabel="+ Add node"
+          onCta={function(){ setAddNodeOpen(true); }}
+          icon={<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="1.5"><rect x="4" y="5" width="16" height="14" rx="2"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="9" y1="10" x2="9" y2="19"/></svg>}
+        />
       ) : tab === "Records" ? (
         <RecordsView />
+      ) : isBlank && tab === "Violations" ? (
+        <WorkspaceEmpty
+          eyebrow="VIOLATIONS"
+          title="No violations — no rules yet"
+          desc="Once you define quality, match, or survivorship rules on your nodes, any failing rows will show up here for stewards to action."
+          ctaLabel="+ Add node"
+          onCta={function(){ setAddNodeOpen(true); }}
+          icon={<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="1.5"><path d="M12 3l9 16H3l9-16z"/><line x1="12" y1="9" x2="12" y2="14"/><circle cx="12" cy="17" r="0.8" fill="var(--ink-3)"/></svg>}
+        />
       ) : tab === "Violations" ? (
         <StewardshipView initialRuleFilter={stewardshipRuleFilter} onClearRuleFilter={function(){ setStewardshipRuleFilter(null); }} />
+      ) : isBlank && tab === "Governance" ? (
+        <WorkspaceEmpty
+          eyebrow="GOVERNANCE"
+          title="Governance starts with nodes"
+          desc="Policies, retention rules, roles, and compliance frameworks attach to entities. Add your first node to begin governing it."
+          ctaLabel="+ Add node"
+          onCta={function(){ setAddNodeOpen(true); }}
+          icon={<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="1.5"><path d="M12 3l8 4v6c0 4.5-3.5 7.5-8 8-4.5-.5-8-3.5-8-8V7l8-4z"/></svg>}
+        />
       ) : tab === "Governance" ? (
         <GovernanceWorkspace />
+      ) : isBlank && tab === "Graph" ? (
+        <BlankCanvas onAddNode={function(){ setAddNodeOpen(true); }} />
       ) : tab !== "Graph" ? (
         <div className="placeholder-view">
           <div className="ph-eyebrow">SCHEMA · {tab.toUpperCase()}</div>
@@ -18464,7 +19143,23 @@ function App() {
         {selectedNode && <Inspector node={selectedNode} onClose={() => setSelected(null)} onOpenDetail={() => { setDetailId(selectedNode.id); setTab("Nodes"); }} />}
       </div>
       )}
-      {addNodeOpen && <AddNodeFlow onClose={() => setAddNodeOpen(false)} />}
+      {addNodeOpen && <AddNodeFlow onClose={() => setAddNodeOpen(false)} onCreate={function(spec){
+        // Build a minimal node from the flow output. Position it near canvas centre,
+        // jittered so multiple additions don't pile on top of each other.
+        var id = (spec.name || "node").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || ("node-" + Date.now());
+        var jitter = nodes.length * 80;
+        var newNode = {
+          id: id + "-" + Date.now().toString(36).slice(-4),
+          label: spec.name || "New node",
+          type: spec.shape || "entity",
+          x: (jitter % 400) - 200,
+          y: Math.floor(jitter / 400) * 120 - 60,
+          props: (spec.properties && spec.properties.length) || 0,
+          edges: 0,
+        };
+        setNodes(function(ns){ return ns.concat([newNode]); });
+        setSelected(newNode.id);
+      }} />}
     </div>
   );
 }
