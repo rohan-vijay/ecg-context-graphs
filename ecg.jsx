@@ -16435,8 +16435,8 @@ function AddNodeFlow({ onClose, onCreate }) {
                                   <img src={glyphImage} alt="" style={{ width:20, height:20, objectFit:"contain" }} />
                                 </span>
                               ) : gDef ? (
-                                <svg width="26" height="26" viewBox="-12 -12 24 24">
-                                  <circle r="9" fill={previewC.fill} stroke={previewC.stroke} strokeWidth="1.2" />
+                                <svg width="28" height="28" viewBox="-6 -6 12 12">
+                                  <circle r="5.6" fill={previewC.fill} stroke={previewC.stroke} strokeWidth="0.6" />
                                   {gDef.render(previewC)}
                                 </svg>
                               ) : (
@@ -16469,9 +16469,11 @@ function AddNodeFlow({ onClose, onCreate }) {
                                           setGlyphImage(null);
                                           setGlyphOpen(false);
                                         }
+                                        var borderStyle = gOpt.upload ? "dashed" : "solid";
+                                        var borderColor = isSel ? "var(--ink)" : (gOpt.upload ? "var(--ink-4)" : "var(--line-2)");
                                         return (
                                           <button key={gOpt.id || "none"} type="button" onClick={onClick} title={gOpt.label}
-                                            style={{ width:40, height:40, borderRadius:8, border:"1px solid " + (isSel ? "var(--ink)" : "var(--line-2)"), background: isSel ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", padding:0, display:"flex", alignItems:"center", justifyContent:"center" }}
+                                            style={{ width:40, height:40, borderRadius:8, border:"1px " + borderStyle + " " + borderColor, background: isSel ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", padding:0, display:"flex", alignItems:"center", justifyContent:"center" }}
                                             onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
                                             onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel)"; }}>
                                             {gOpt.placeholder ? (
@@ -16482,20 +16484,19 @@ function AddNodeFlow({ onClose, onCreate }) {
                                               </svg>
                                             ) : gOpt.upload ? (
                                               glyphImage ? (
-                                                <span style={{ width:22, height:22, borderRadius:"50%", overflow:"hidden", display:"inline-flex", alignItems:"center", justifyContent:"center", background: previewC.fill, border:"1px solid " + previewC.stroke }}>
-                                                  <img src={glyphImage} alt="" style={{ width:16, height:16, objectFit:"contain" }} />
-                                                </span>
+                                                <img src={glyphImage} alt="" style={{ width:22, height:22, objectFit:"contain" }} />
                                               ) : (
-                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                                                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                                                   <polyline points="17 8 12 3 7 8"/>
                                                   <line x1="12" y1="3" x2="12" y2="15"/>
                                                 </svg>
                                               )
                                             ) : (
-                                              <svg width="24" height="24" viewBox="-12 -12 24 24">
-                                                <circle r="9" fill={previewC.fill} stroke={previewC.stroke} strokeWidth="1.2" />
-                                                {gOpt.render(previewC)}
+                                              // Render the bare glyph (no surrounding disc) at a larger scale so
+                                              // it reads cleanly inside the 40×40 picker tile.
+                                              <svg width="28" height="28" viewBox="-5.4 -5.4 10.8 10.8" style={{ display:"block" }}>
+                                                {gOpt.render({ fill: "none", stroke: "var(--ink-2)" })}
                                               </svg>
                                             )}
                                           </button>
