@@ -1102,6 +1102,9 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
   // Angle (radians) of the cursor relative to the hovered node centre — drives
   // where the connector handle pops out. Default 0 = east.
   const [hoverAngle, setHoverAngle] = useState(0);
+  // Whether the cursor is currently inside the connector handle's hit ring —
+  // used to grow the handle a touch on hover for affordance.
+  const [handleHover, setHandleHover] = useState(false);
   const [size, setSize] = useState({ w: 1200, h: 800 });
 
   useEffect(() => {
@@ -1202,6 +1205,7 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
         }
       } else if (hover) {
         setHover(null);
+        setHandleHover(false);
       }
     }
     if (!drag) return;
@@ -1484,26 +1488,32 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
                   var hx = Math.cos(angle) * R;
                   var hy = Math.sin(angle) * R;
                   var nc = colorForNode(n);
+                  // Grow the disc when the user hovers the handle itself — clear
+                  // affordance that this is a target to grab.
+                  var dotR = isLinking ? 9 : (handleHover ? 10 : 7);
+                  var glyphR = isLinking ? 3.6 : (handleHover ? 4 : 3);
+                  var glyphW = handleHover || isLinking ? 1.6 : 1.4;
                   return (
                     <g style={{ cursor: isLinking ? "crosshair" : "grab", animation:"ecgFadeIn 180ms ease-out both" }}>
-                      {/* Generous invisible hit ring */}
+                      {/* Generous invisible hit ring — also tracks handle hover */}
                       <circle cx={hx} cy={hy} r="20" fill="transparent" pointerEvents="all"
-                        onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, n.id, true, angle); }} />
+                        onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, n.id, true, angle); }}
+                        onMouseEnter={() => setHandleHover(true)}
+                        onMouseLeave={() => setHandleHover(false)} />
                       {/* Breathing halo in the node's stroke color */}
                       {!isLinking && (
-                        <circle cx={hx} cy={hy} r="11" fill="none" stroke={nc.stroke} strokeWidth="0.7" opacity="0.45" style={{ pointerEvents:"none" }}>
-                          <animate attributeName="r" values="10;13;10" dur="1.8s" repeatCount="indefinite" />
-                          <animate attributeName="opacity" values="0.5;0.1;0.5" dur="1.8s" repeatCount="indefinite" />
+                        <circle cx={hx} cy={hy} r="11" fill="none" stroke={nc.stroke} strokeWidth="0.7" opacity={handleHover ? 0.7 : 0.45} style={{ pointerEvents:"none", transition:"opacity 140ms ease-out" }}>
+                          <animate attributeName="r" values={handleHover ? "12;14.5;12" : "10;13;10"} dur="1.4s" repeatCount="indefinite" />
+                          <animate attributeName="opacity" values={handleHover ? "0.7;0.25;0.7" : "0.5;0.1;0.5"} dur="1.4s" repeatCount="indefinite" />
                         </circle>
                       )}
-                      {/* The dot — same fill + stroke as the node body, so it
-                          reads as a port that belongs to the node. */}
-                      <circle cx={hx} cy={hy} r={isLinking ? 8 : 7}
-                        fill={nc.fill} stroke={nc.stroke} strokeWidth="1.3"
+                      {/* The dot — same fill + stroke as the node body. Grows on hover. */}
+                      <circle cx={hx} cy={hy} r={dotR}
+                        fill={nc.fill} stroke={nc.stroke} strokeWidth="1.4"
                         style={{ pointerEvents:"none", transition:"r 140ms cubic-bezier(0.34,1.56,0.64,1)" }} />
                       {/* + glyph in the node's stroke color */}
-                      <line x1={hx - 3} y1={hy} x2={hx + 3} y2={hy} stroke={nc.stroke} strokeWidth="1.4" strokeLinecap="round" style={{ pointerEvents:"none" }} />
-                      <line x1={hx} y1={hy - 3} x2={hx} y2={hy + 3} stroke={nc.stroke} strokeWidth="1.4" strokeLinecap="round" style={{ pointerEvents:"none" }} />
+                      <line x1={hx - glyphR} y1={hy} x2={hx + glyphR} y2={hy} stroke={nc.stroke} strokeWidth={glyphW} strokeLinecap="round" style={{ pointerEvents:"none", transition:"all 140ms ease-out" }} />
+                      <line x1={hx} y1={hy - glyphR} x2={hx} y2={hy + glyphR} stroke={nc.stroke} strokeWidth={glyphW} strokeLinecap="round" style={{ pointerEvents:"none", transition:"all 140ms ease-out" }} />
                     </g>
                   );
                 })()}
