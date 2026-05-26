@@ -11764,15 +11764,13 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                 onDoubleClick={function(){ setGraphPan({ x:0, y:0 }); }}
                 style={{ background:"var(--bg-canvas)", padding:0, flex:1, minHeight:0, overflow:"hidden", cursor:"grab", position:"relative", userSelect:"none" }}>
                 {(function() {
-                  // Drag-to-pan canvas — viewBox stays anchored, and the entire content
-                  // group is translated by (graphPan.x, graphPan.y). Same model as the
-                  // main workspace canvas; double-click anywhere blank to recentre.
-                  // Layout coordinates are anchored on the 1-hop centre regardless of
-                  // mode so toggling 2-hop never reshuffles the existing nodes.
-                  var BASE_W = 1100, BASE_H = 760;
-                  var W = twoHop ? 1900 : BASE_W;
-                  var H = twoHop ? 1300 : BASE_H;
-                  var cx = BASE_W/2, cy = BASE_H/2; // anchored on 1-hop centre
+                  // viewBox is locked to the 1-hop dimensions regardless of mode.
+                  // Toggling Expand 2-hop never grows the viewBox or resizes the
+                  // nodes — second-hop nodes just appear *outside* the visible
+                  // area, and the user pans to reach them. Same model as the main
+                  // workspace canvas; double-click anywhere blank to recentre.
+                  var W = 1100, H = 760;
+                  var cx = W/2, cy = H/2;
                   var r1 = 280;
                   var r2 = 540;
 
