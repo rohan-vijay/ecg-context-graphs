@@ -19807,6 +19807,8 @@ function App() {
             onRedo={redo}
             onDuplicate={duplicateSelected}
             canDuplicate={multiSelected.length > 0 || !!selected}
+            onDelete={deleteSelected}
+            canDelete={multiSelected.length > 0 || !!selected}
           />
         </main>
         {selectedNode && <Inspector node={selectedNode} onClose={() => setSelected(null)} onOpenDetail={() => { setDetailId(selectedNode.id); setTab("Nodes"); }} />}
@@ -20100,7 +20102,7 @@ function DeleteImpactDialog({ ids, nodes, edges, onCancel, onConfirm }) {
 // edit mode, a second smaller pill appears to the right with two cursor
 // options: "add" (dashed-plus drop cursor, click adds a node) and "select"
 // (plain grab, click empty canvas just deselects).
-function ViewEditToggle({ editMode, onEnter, onExit, cursorMode, setCursorMode, canUndo, canRedo, onUndo, onRedo, onDuplicate, canDuplicate }) {
+function ViewEditToggle({ editMode, onEnter, onExit, cursorMode, setCursorMode, canUndo, canRedo, onUndo, onRedo, onDuplicate, canDuplicate, onDelete, canDelete }) {
   var seg = function(active){ return {
     display:"inline-flex", alignItems:"center", gap:7,
     padding:"7px 16px", borderRadius:999, border:"none",
@@ -20173,10 +20175,20 @@ function ViewEditToggle({ editMode, onEnter, onExit, cursorMode, setCursorMode, 
               <path d="M20 9H9a5 5 0 0 0 0 10h3"/>
             </svg>
           </button>
-          <button onClick={onDuplicate} disabled={!canDuplicate} style={Object.assign({}, iconSeg(false), { opacity: canDuplicate ? 1 : 0.35, cursor: canDuplicate ? "pointer" : "not-allowed" })} title="Duplicate selected (⌘D)">
+          <button onClick={onDuplicate} disabled={!canDuplicate} style={Object.assign({}, iconSeg(false), { opacity: canDuplicate ? 1 : 0.35, cursor: canDuplicate ? "pointer" : "not-allowed" })} title={canDuplicate ? "Duplicate selected (⌘D)" : "Select a node to duplicate"}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
               <rect x="8" y="8" width="12" height="12" rx="2"/>
               <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>
+            </svg>
+          </button>
+          <button onClick={onDelete} disabled={!canDelete}
+            style={Object.assign({}, iconSeg(false), { opacity: canDelete ? 1 : 0.35, cursor: canDelete ? "pointer" : "not-allowed", color: canDelete ? "var(--coral)" : "var(--ink-4)" })}
+            title={canDelete ? "Delete selected (Delete)" : "Select a node to delete"}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6l-1.2 13.2A2 2 0 0 1 15.8 21H8.2a2 2 0 0 1-2-1.8L5 6"/>
+              <path d="M10 11v6M14 11v6"/>
+              <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
             </svg>
           </button>
         </div>
