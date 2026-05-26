@@ -603,10 +603,11 @@ function NodeShape({ node, selected, highlighted, dimmed, hover }) {
       <img src={node.glyphImage} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }} />
     </foreignObject>;
   }
-  // Picked glyph wins over heuristics — scaled up to match the canvas node radius.
+  // Picked glyph wins over heuristics — scaled to sit comfortably inside the
+  // node body without filling it edge-to-edge.
   else if (node.glyph) {
     var gDef = glyphById(node.glyph);
-    if (gDef) inner = <g transform={`scale(${(r * 0.55) / 3.4})`}>{gDef.render(c)}</g>;
+    if (gDef) inner = <g transform={`scale(${(r * 0.42) / 3.4})`}>{gDef.render(c)}</g>;
   }
   if (inner) { /* already set */ }
   else if (node.state === "signal") {
