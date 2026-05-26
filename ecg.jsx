@@ -19473,7 +19473,10 @@ function App() {
   const [nodes, setNodes] = useState(NODES.filter(n => n.type !== "agent"));
   const [edges, setEdges] = useState(EDGES);
   const [blankGraphName, setBlankGraphName] = useState(null); // when set, this graph is in blank-mode
-  const isBlank = blankGraphName !== null;
+  // Blank mode is only "on" while the graph really is empty. Once the user
+  // creates their first node, we exit the empty-state shell and render the
+  // real canvas + workspace tabs.
+  const isBlank = blankGraphName !== null && nodes.length === 0;
   const canvasSize = useRef({ w: 1000, h: 700 });
 
   // ─── EDIT MODE ─────────────────────────────────────────────────────────────
