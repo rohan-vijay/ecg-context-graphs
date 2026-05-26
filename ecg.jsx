@@ -19671,15 +19671,127 @@ function App() {
     });
   }
 
+  // Common entity relationships — when both endpoints exist in a template,
+  // we drop a starter edge between them so the user sees a connected graph
+  // instead of a ring of unrelated nodes.
+  var TEMPLATE_EDGES = [
+    // Commerce / pipeline
+    { from:"Customer", to:"Account",        label:"OWNS" },
+    { from:"Customer", to:"Contact",        label:"HAS_CONTACT" },
+    { from:"Customer", to:"Order",          label:"PLACED" },
+    { from:"Customer", to:"Case",           label:"RAISED" },
+    { from:"Customer", to:"Subscription",   label:"SUBSCRIBES_TO" },
+    { from:"Account",  to:"Subscription",   label:"HAS_SUBSCRIPTION" },
+    { from:"Account",  to:"Contract",       label:"GOVERNED_BY" },
+    { from:"Account",  to:"Opportunity",    label:"HAS_OPPORTUNITY" },
+    { from:"Lead",     to:"Opportunity",    label:"CONVERTS_TO" },
+    { from:"Lead",     to:"Contact",        label:"MATCHES" },
+    { from:"Opportunity", to:"Quote",       label:"PRODUCES" },
+    { from:"Quote",    to:"Order",          label:"BECOMES" },
+    { from:"Order",    to:"Product",        label:"INCLUDES" },
+    { from:"Order",    to:"Shipment",       label:"SHIPS_AS" },
+    { from:"Order",    to:"Invoice",        label:"BILLED_AS" },
+    { from:"Order",    to:"Return",         label:"RETURNED_AS" },
+    { from:"Subscription", to:"Invoice",    label:"BILLS" },
+    { from:"Invoice",  to:"Payment",        label:"PAID_BY" },
+    { from:"Product",  to:"Inventory",      label:"TRACKED_IN" },
+    { from:"Product",  to:"Price List Item",label:"PRICED_AS" },
+    // Retail
+    { from:"Store",    to:"Inventory",      label:"STOCKS" },
+    { from:"Store",    to:"Employee",       label:"EMPLOYS" },
+    { from:"Loyalty Account", to:"Customer", label:"REWARDS" },
+    { from:"Promotion",to:"Product",        label:"APPLIES_TO" },
+    // Service
+    { from:"Case",     to:"Case Resolution", label:"RESOLVED_BY" },
+    { from:"Case",     to:"Entitlement",    label:"COVERS" },
+    { from:"Case",     to:"Knowledge Article",label:"REFERENCES" },
+    { from:"Case",     to:"Queue",          label:"QUEUED_IN" },
+    { from:"Case",     to:"SLA",            label:"GOVERNED_BY" },
+    { from:"Contact",  to:"Account",        label:"WORKS_AT" },
+    { from:"Renewal",  to:"Account",        label:"RENEWS" },
+    { from:"Health Score", to:"Customer",   label:"SCORES" },
+    // HR / org
+    { from:"Employee", to:"Team",           label:"BELONGS_TO" },
+    { from:"Employee", to:"Role",           label:"HAS_ROLE" },
+    { from:"Employee", to:"Position",       label:"FILLS" },
+    { from:"Employee", to:"Department",     label:"REPORTS_TO" },
+    { from:"Employee", to:"Compensation",   label:"PAID_AS" },
+    { from:"Employee", to:"Manager Chain",  label:"REPORTS_VIA" },
+    { from:"Worker",   to:"Position",       label:"HOLDS" },
+    { from:"Position", to:"Job",            label:"DEFINED_BY" },
+    { from:"Employee", to:"Tenure",         label:"ACCRUES" },
+    { from:"Employee", to:"Device",         label:"ASSIGNED" },
+    { from:"Employee", to:"Access Grant",   label:"GRANTED" },
+    { from:"Employee", to:"Pay Cycle",      label:"PAID_VIA" },
+    // Marketing
+    { from:"Campaign", to:"Marketing List", label:"TARGETS" },
+    { from:"Campaign", to:"Marketing Email",label:"SENDS" },
+    { from:"Campaign", to:"Customer Journey", label:"TRIGGERS" },
+    { from:"Customer Journey", to:"Segment",label:"BELONGS_TO" },
+    { from:"Marketing List", to:"Lead",     label:"INCLUDES" },
+    { from:"Marketing Form", to:"Lead",     label:"CAPTURES" },
+    { from:"Interaction", to:"Customer",    label:"INVOLVES" },
+    // Finance
+    { from:"Journal Entry", to:"GL Account",label:"POSTS_TO" },
+    { from:"Invoice",  to:"GL Account",     label:"BOOKED_TO" },
+    { from:"Payment",  to:"GL Account",     label:"SETTLED_TO" },
+    { from:"Policy",   to:"Control",        label:"ENFORCES" },
+    // Supply chain
+    { from:"Purchase Order", to:"Supplier", label:"ISSUED_TO" },
+    { from:"Purchase Order", to:"Item",     label:"ORDERS" },
+    { from:"Item",     to:"BOM",            label:"COMPOSED_OF" },
+    { from:"Item",     to:"Inventory",      label:"TRACKED_IN" },
+    { from:"Plant",    to:"Inventory",      label:"HOLDS" },
+    // Healthcare
+    { from:"Patient",  to:"Encounter",      label:"ATTENDED" },
+    { from:"Encounter",to:"Condition",      label:"DIAGNOSED" },
+    { from:"Encounter",to:"Procedure",      label:"PERFORMED" },
+    { from:"Encounter",to:"Observation",    label:"OBSERVED" },
+    { from:"Patient",  to:"Medication",     label:"PRESCRIBED" },
+    { from:"Patient",  to:"Allergy Intolerance", label:"HAS" },
+    { from:"Patient",  to:"Care Plan",      label:"FOLLOWS" },
+    { from:"Encounter",to:"Diagnostic Report", label:"REPORTED" },
+    { from:"Provider", to:"Practitioner Role",label:"HAS_ROLE" },
+    { from:"Encounter",to:"Provider",       label:"ATTENDED_BY" },
+    { from:"Claim",    to:"Encounter",      label:"SUBMITTED_FOR" },
+    // Banking
+    { from:"Customer", to:"Bank",           label:"BANKS_WITH" },
+    { from:"Customer", to:"Financial Product", label:"HOLDS" },
+    { from:"Customer", to:"KYC Case",       label:"SUBJECT_OF" },
+    { from:"Account",  to:"Branch",         label:"OPENED_AT" },
+    { from:"Account",  to:"Transaction",    label:"RECORDS" },
+    { from:"Transaction", to:"Hold",        label:"HAS_HOLD" },
+    { from:"Mortgage Application", to:"Collateral", label:"BACKED_BY" },
+    { from:"Mortgage Application", to:"Customer", label:"FILED_BY" },
+    { from:"Compliance Case", to:"Customer", label:"INVESTIGATES" },
+  ];
+
+  function buildTemplateEdges(entityNames, nodes) {
+    if (!entityNames || !entityNames.length) return [];
+    // Map entity label → node id for quick lookup
+    var byLabel = {};
+    nodes.forEach(function(n){ byLabel[n.label] = n.id; });
+    var present = {};
+    entityNames.forEach(function(name){ present[name] = true; });
+    var out = [];
+    TEMPLATE_EDGES.forEach(function(e){
+      if (present[e.from] && present[e.to] && byLabel[e.from] && byLabel[e.to]) {
+        out.push({ s: byLabel[e.from], t: byLabel[e.to], label: e.label, kind: "direct" });
+      }
+    });
+    return out;
+  }
+
   // Expose a global opener used by the landing-page NewGraphFlow.onCreate.
   // When entities are supplied (template path) we pre-seed the graph with a
-  // ring of starter nodes; otherwise we land on a blank canvas.
+  // ring of starter nodes + canonical edges between them.
   React.useEffect(function(){
     window.__openBlankGraph = function(name, entities){
       var seedNodes = buildTemplateNodes(entities || []);
+      var seedEdges = buildTemplateEdges(entities || [], seedNodes);
       setBlankGraphName(name || "Untitled graph");
       setNodes(seedNodes);
-      setEdges([]);
+      setEdges(seedEdges);
       setSelected(null);
       setDetailId(null);
       setTab("Graph");
