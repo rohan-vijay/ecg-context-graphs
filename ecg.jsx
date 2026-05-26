@@ -2740,10 +2740,14 @@ function ComputationsPane({ node, properties, rules }) {
   });
 
   function kindMeta(k){
+    // Inline icons used for the kind chip in the catalog row. Tiny — 12px —
+    // because the chip itself is only 24x20.
+    var AGENT_SVG = <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="7" width="16" height="12" rx="3"/><line x1="12" y1="3" x2="12" y2="7"/><circle cx="9" cy="13" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="13" r="1.2" fill="currentColor" stroke="none"/><path d="M9.5 17h5"/></svg>;
+    var AUTO_SVG  = <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 4 14 11 14 10 22 20 9 13 9 13 2"/></svg>;
     return k === "formula"    ? { label:"Formula",    glyph:"fx", color:"var(--gold)",   bg:"var(--gold-fill)"   }
          : k === "sql"        ? { label:"SQL",        glyph:"SQL",color:"var(--blue)",   bg:"var(--blue-fill)"   }
-         : k === "agent"      ? { label:"Agent",      glyph:"A",  color:"var(--purple)", bg:"var(--purple-fill)" }
-         : k === "automation" ? { label:"Automation", glyph:"WF", color:"var(--green)",  bg:"var(--green-fill)"  }
+         : k === "agent"      ? { label:"Agent",      glyph:AGENT_SVG, color:"var(--purple)", bg:"var(--purple-fill)" }
+         : k === "automation" ? { label:"Automation", glyph:AUTO_SVG,  color:"var(--green)",  bg:"var(--green-fill)"  }
          :                       { label:k,           glyph:"?",  color:"var(--ink-3)",  bg:"var(--chip)"        };
   }
   function statusMeta(s){
@@ -2837,10 +2841,12 @@ function ComputationsPane({ node, properties, rules }) {
 // / disable actions that used to live in the inline expansion.
 // ───────────────────────────────────────────────────────────────────────────────
 function ComputationDetailModal({ comp, node, onClose }) {
+  var AGENT_SVG_LG = <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="7" width="16" height="12" rx="3"/><line x1="12" y1="3" x2="12" y2="7"/><circle cx="9" cy="13" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="13" r="1.2" fill="currentColor" stroke="none"/><path d="M9.5 17h5"/></svg>;
+  var AUTO_SVG_LG  = <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 4 14 11 14 10 22 20 9 13 9 13 2"/></svg>;
   var km = comp.kind === "formula"    ? { label:"Formula",    glyph:"fx", color:"var(--gold)",   bg:"var(--gold-fill)"   }
          : comp.kind === "sql"        ? { label:"SQL",        glyph:"SQL",color:"var(--blue)",   bg:"var(--blue-fill)"   }
-         : comp.kind === "agent"      ? { label:"Agent",      glyph:"A",  color:"var(--purple)", bg:"var(--purple-fill)" }
-         : comp.kind === "automation" ? { label:"Automation", glyph:"WF", color:"var(--green)",  bg:"var(--green-fill)"  }
+         : comp.kind === "agent"      ? { label:"Agent",      glyph:AGENT_SVG_LG, color:"var(--purple)", bg:"var(--purple-fill)" }
+         : comp.kind === "automation" ? { label:"Automation", glyph:AUTO_SVG_LG,  color:"var(--green)",  bg:"var(--green-fill)"  }
          :                                { label:comp.kind,  glyph:"?",  color:"var(--ink-3)",  bg:"var(--chip)"        };
   var sm = comp.status === "healthy" ? { label:"Healthy", color:"var(--green)", bg:"var(--green-fill)" }
          : comp.status === "stale"   ? { label:"Stale",   color:"var(--gold)",  bg:"var(--gold-fill)"  }
@@ -3007,11 +3013,46 @@ function NewComputationFlow({ node, properties, onClose }) {
   var [onFailure, setOnFailure] = useState("retain_last");
 
   // ── Reference data
+  // Inline SVG icons for kind chips — use proper shapes for agent (bot face) and
+  // automation (workflow / zap), and keep the typographic "fx" / "SQL" glyphs
+  // for Formula and SQL since they read cleanly.
+  var ICON_AGENT = (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="7" width="16" height="12" rx="3"/>
+      <line x1="12" y1="3" x2="12" y2="7"/>
+      <circle cx="9" cy="13" r="1.2" fill="currentColor" stroke="none"/>
+      <circle cx="15" cy="13" r="1.2" fill="currentColor" stroke="none"/>
+      <path d="M9.5 17h5"/>
+      <line x1="2" y1="13" x2="4" y2="13"/>
+      <line x1="20" y1="13" x2="22" y2="13"/>
+    </svg>
+  );
+  var ICON_AUTOMATION = (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="13 2 4 14 11 14 10 22 20 9 13 9 13 2" />
+    </svg>
+  );
+  var ICON_FORMULA = (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 4h6a2 2 0 0 1 2 2v2"/>
+      <path d="M15 20H9a2 2 0 0 1-2-2v-2"/>
+      <path d="M7 12h10"/>
+      <path d="M9 9l6 6"/>
+      <path d="M9 15l6-6"/>
+    </svg>
+  );
+  var ICON_SQL = (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <ellipse cx="12" cy="5" rx="8" ry="2.4"/>
+      <path d="M4 5v6c0 1.3 3.6 2.4 8 2.4s8-1.1 8-2.4V5"/>
+      <path d="M4 11v6c0 1.3 3.6 2.4 8 2.4s8-1.1 8-2.4v-6"/>
+    </svg>
+  );
   var KINDS = [
-    { id:"formula",    l:"Formula",         d:"Derive this value from other properties on the same record.", color:"var(--gold)",   bg:"var(--gold-fill)",   glyph:"fx" },
-    { id:"sql",        l:"SQL / Cypher",    d:"Aggregate or roll up from another entity. Runs on a registered connection.", color:"var(--blue)", bg:"var(--blue-fill)", glyph:"SQL" },
-    { id:"agent",      l:"Agent",           d:"Invoke a pre-built agent that scores or classifies this record.", color:"var(--purple)", bg:"var(--purple-fill)", glyph:"A" },
-    { id:"automation", l:"Automation",      d:"Materialise a value from a scheduled workflow — Airflow, Workato, custom webhook.", color:"var(--green)", bg:"var(--green-fill)", glyph:"WF" }
+    { id:"formula",    l:"Formula",         d:"Derive this value from other properties on the same record.", color:"var(--gold)",   bg:"var(--gold-fill)",   glyph: ICON_FORMULA },
+    { id:"sql",        l:"SQL / Cypher",    d:"Aggregate or roll up from another entity. Runs on a registered connection.", color:"var(--blue)", bg:"var(--blue-fill)", glyph: ICON_SQL },
+    { id:"agent",      l:"Agent",           d:"Invoke a pre-built agent that scores or classifies this record.", color:"var(--purple)", bg:"var(--purple-fill)", glyph: ICON_AGENT },
+    { id:"automation", l:"Automation",      d:"Materialise a value from a scheduled workflow — Airflow, Workato, custom webhook.", color:"var(--green)", bg:"var(--green-fill)", glyph: ICON_AUTOMATION }
   ];
   var TYPE_META = {
     "string":    { color:"var(--blue)",   glyph:"T",   d:"UTF-8 text of arbitrary length." },
