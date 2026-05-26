@@ -1086,7 +1086,7 @@ function Meter({ label, v, tail, tone }) {
 
 // ---------- CANVAS (graph) --------------------------------------------------
 
-function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover, setHover, filter, query, savedView, viewport, setViewport, sidebarOpen, showInferred, showEdgeLabels, showCounts, editMode, cursorMode, onEditAdd, onEditConnect, onEditOpenNode, onEditEdge }) {
+function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover, setHover, filter, query, savedView, viewport, setViewport, sidebarOpen, showInferred, showEdgeLabels, showCounts, editMode, cursorMode, multiSelected, setMultiSelected, pushHistory, onEditAdd, onEditConnect, onEditOpenNode, onEditEdge }) {
   // Defaults if props omitted by older callers.
   if (showInferred === undefined)  showInferred  = true;
   if (showEdgeLabels === undefined) showEdgeLabels = true;
@@ -1105,6 +1105,11 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
   // Whether the cursor is currently inside the connector handle's hit ring —
   // used to grow the handle a touch on hover for affordance.
   const [handleHover, setHandleHover] = useState(false);
+  // Marquee selection rectangle in world coords (set while dragging in select cursorMode).
+  const [marquee, setMarquee] = useState(null); // { x0, y0, x1, y1 }
+  // Defaults if optional props omitted.
+  if (!multiSelected) multiSelected = [];
+  const inMulti = (id) => multiSelected.indexOf(id) >= 0;
   const [size, setSize] = useState({ w: 1200, h: 800 });
 
   useEffect(() => {
@@ -1170,8 +1175,17 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
     }
     if (nodeId) {
       const n = nodes.find(n => n.id === nodeId);
-      setDrag({ kind: "node", id: nodeId, startX: sx, startY: sy, origX: n.x, origY: n.y, moved: false });
+      // Capture each multi-selected node's origin so we can move them together.
+      const multiOrigins = (multiSelected && multiSelected.length > 0 && multiSelected.indexOf(nodeId) >= 0)
+        ? multiSelected.map(function(id){ var nn = nodes.find(function(x){ return x.id === id; }); return nn ? { id: id, x: nn.x, y: nn.y } : null; }).filter(Boolean)
+        : null;
+      setDrag({ kind: "node", id: nodeId, startX: sx, startY: sy, origX: n.x, origY: n.y, moved: false, multiOrigins: multiOrigins });
       e.target.setPointerCapture?.(e.pointerId);
+    } else if (editMode && cursorMode === "select") {
+      // Marquee selection — drag a rectangle to multi-select.
+      const [wx, wy] = toWorld(sx, sy);
+      setDrag({ kind: "marquee", startX: sx, startY: sy, wx0: wx, wy0: wy, moved: false });
+      setMarquee({ x0: wx, y0: wy, x1: wx, y1: wy });
     } else {
       setDrag({ kind: "pan", startX: sx, startY: sy, origPanX: panX, origPanY: panY });
     }
@@ -1215,8 +1229,21 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
     if (drag.kind === "node") {
       const dx = (sx - drag.startX) / zoom;
       const dy = (sy - drag.startY) / zoom;
-      if (Math.abs(dx) + Math.abs(dy) > 1) drag.moved = true;
-      setNodes(ns => ns.map(n => n.id === drag.id ? { ...n, x: drag.origX + dx, y: drag.origY + dy } : n));
+      if (Math.abs(dx) + Math.abs(dy) > 1) {
+        if (!drag.moved && pushHistory) pushHistory();
+        drag.moved = true;
+      }
+      if (drag.multiOrigins) {
+        const origMap = {};
+        drag.multiOrigins.forEach(function(o){ origMap[o.id] = o; });
+        setNodes(ns => ns.map(n => origMap[n.id] ? { ...n, x: origMap[n.id].x + dx, y: origMap[n.id].y + dy } : n));
+      } else {
+        setNodes(ns => ns.map(n => n.id === drag.id ? { ...n, x: drag.origX + dx, y: drag.origY + dy } : n));
+      }
+    } else if (drag.kind === "marquee") {
+      const [wx, wy] = toWorld(sx, sy);
+      drag.moved = true;
+      setMarquee({ x0: drag.wx0, y0: drag.wy0, x1: wx, y1: wy });
     } else if (drag.kind === "pan") {
       setViewport(v => ({ ...v, panX: drag.origPanX + (sx - drag.startX), panY: drag.origPanY + (sy - drag.startY) }));
     } else if (drag.kind === "link") {
@@ -1242,10 +1269,26 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
       setDrag(null);
       return;
     }
+    if (drag?.kind === "marquee") {
+      // Commit marquee → compute which nodes fall inside the box.
+      if (marquee && setMultiSelected) {
+        const x0 = Math.min(marquee.x0, marquee.x1);
+        const x1 = Math.max(marquee.x0, marquee.x1);
+        const y0 = Math.min(marquee.y0, marquee.y1);
+        const y1 = Math.max(marquee.y0, marquee.y1);
+        const picked = nodes.filter(function(n){ return n.x >= x0 && n.x <= x1 && n.y >= y0 && n.y <= y1; }).map(function(n){ return n.id; });
+        setMultiSelected(picked);
+        if (picked.length === 0) setSelected(null);
+      }
+      setMarquee(null);
+      setDrag(null);
+      return;
+    }
     if (drag?.kind === "node" && !drag.moved && nodeId) {
       // Edit-mode click → open the node's detail editor; otherwise select for the inspector.
       if (editMode && onEditOpenNode) onEditOpenNode(nodeId);
       else setSelected(nodeId);
+      if (setMultiSelected) setMultiSelected([nodeId]);
     } else if (drag?.kind === "pan") {
       const pt = svgRef.current.getBoundingClientRect();
       const dx = Math.abs(e.clientX - pt.left - drag.startX);
@@ -1520,6 +1563,20 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
               </g>
             );
           })}
+          {/* Multi-select rings — soft green dashed circle around each selected node */}
+          {multiSelected && multiSelected.length > 0 && multiSelected.map(function(id){
+            var nn = nodes.find(function(x){ return x.id === id; });
+            if (!nn) return null;
+            return <circle key={"ms-" + id} cx={nn.x} cy={nn.y} r={(nn.size || 22) + 6} fill="none" stroke="var(--green)" strokeWidth="1.4" strokeDasharray="3 3" opacity="0.85" style={{ pointerEvents:"none" }} />;
+          })}
+          {/* Marquee selection rectangle */}
+          {marquee && (function(){
+            var x0 = Math.min(marquee.x0, marquee.x1);
+            var y0 = Math.min(marquee.y0, marquee.y1);
+            var w = Math.abs(marquee.x1 - marquee.x0);
+            var h = Math.abs(marquee.y1 - marquee.y0);
+            return <rect x={x0} y={y0} width={w} height={h} fill="var(--ink-2)" fillOpacity="0.06" stroke="var(--ink-3)" strokeWidth="1" strokeDasharray="3 3" style={{ pointerEvents:"none" }} />;
+          })()}
           {/* Rubber-band edge while linking from a node handle.
               Uses a smooth quadratic curve that bows slightly, plus a halo
               ring around the target node when the cursor finds one. */}
@@ -19409,6 +19466,119 @@ function App() {
   //   "select" — regular grab/pointer, click empty space just deselects (pan).
   // Users who want to pan/inspect without adding nodes flip this to "select".
   const [cursorMode, setCursorMode] = useState("add");
+  // Multi-selected node ids — populated by marquee select or shift-click.
+  const [multiSelected, setMultiSelected] = useState([]);
+  // Undo / redo history. Each entry: { nodes, edges }. We snapshot before any
+  // mutating action; refs mirror current nodes/edges so undo/redo callbacks
+  // can read the latest values without going stale.
+  const historyRef = useRef({ past: [], future: [] });
+  const nodesRef = useRef(nodes);
+  const edgesRef = useRef(edges);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { edgesRef.current = edges; }, [edges]);
+  // Bump to force re-render of undo/redo button enabled states.
+  const [historyTick, setHistoryTick] = useState(0);
+
+  function pushHistory() {
+    historyRef.current.past.push({
+      nodes: nodesRef.current.map(function(n){ return Object.assign({}, n); }),
+      edges: edgesRef.current.map(function(e){ return Object.assign({}, e); }),
+    });
+    if (historyRef.current.past.length > 60) historyRef.current.past.shift();
+    historyRef.current.future = [];
+    setHistoryTick(function(t){ return t + 1; });
+  }
+  function undo() {
+    var past = historyRef.current.past;
+    if (past.length === 0) return;
+    historyRef.current.future.push({
+      nodes: nodesRef.current.map(function(n){ return Object.assign({}, n); }),
+      edges: edgesRef.current.map(function(e){ return Object.assign({}, e); }),
+    });
+    var snap = past.pop();
+    setNodes(snap.nodes);
+    setEdges(snap.edges);
+    setHistoryTick(function(t){ return t + 1; });
+  }
+  function redo() {
+    var future = historyRef.current.future;
+    if (future.length === 0) return;
+    historyRef.current.past.push({
+      nodes: nodesRef.current.map(function(n){ return Object.assign({}, n); }),
+      edges: edgesRef.current.map(function(e){ return Object.assign({}, e); }),
+    });
+    var snap = future.pop();
+    setNodes(snap.nodes);
+    setEdges(snap.edges);
+    setHistoryTick(function(t){ return t + 1; });
+  }
+  function duplicateSelected() {
+    var ids = multiSelected.length > 0 ? multiSelected
+            : (selected ? [selected] : []);
+    if (ids.length === 0) return;
+    pushHistory();
+    var newIds = [];
+    setNodes(function(ns){
+      var existingIds = ns.map(function(n){ return n.id; });
+      var out = ns.slice();
+      ids.forEach(function(id){
+        var src = ns.find(function(n){ return n.id === id; });
+        if (!src) return;
+        // Unique id by appending -copy / -copyN
+        var base = src.id + "-copy";
+        var nid = base, k = 2;
+        while (existingIds.indexOf(nid) >= 0) { nid = base + k; k++; }
+        existingIds.push(nid);
+        var clone = Object.assign({}, src, {
+          id: nid,
+          x: (src.x || 0) + 40,
+          y: (src.y || 0) + 40,
+          label: src.label,
+        });
+        newIds.push(nid);
+        out.push(clone);
+      });
+      return out;
+    });
+    setMultiSelected(newIds);
+  }
+  function deleteSelected() {
+    var ids = multiSelected.length > 0 ? multiSelected
+            : (selected ? [selected] : []);
+    if (ids.length === 0) return;
+    pushHistory();
+    var idSet = {};
+    ids.forEach(function(id){ idSet[id] = true; });
+    setNodes(function(ns){ return ns.filter(function(n){ return !idSet[n.id]; }); });
+    setEdges(function(es){ return es.filter(function(e){ return !idSet[e.s] && !idSet[e.t]; }); });
+    setMultiSelected([]);
+    if (selected && idSet[selected]) setSelected(null);
+  }
+
+  // Edit-mode keyboard shortcuts.
+  useEffect(function(){
+    if (!editMode) return;
+    function onKey(e){
+      // Skip when the user is typing in an input/textarea/contenteditable.
+      var tag = e.target && e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target && e.target.isContentEditable)) return;
+      var meta = e.metaKey || e.ctrlKey;
+      if (meta && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+      } else if (meta && (e.key === "y" || e.key === "Y")) {
+        e.preventDefault(); redo();
+      } else if (meta && (e.key === "d" || e.key === "D")) {
+        e.preventDefault(); duplicateSelected();
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        if (multiSelected.length > 0 || selected) {
+          e.preventDefault(); deleteSelected();
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return function(){ window.removeEventListener("keydown", onKey); };
+  }, [editMode, multiSelected, selected]);
   // { fromId, toId, editIdx?, initialLabel? } — set when a drag completes or
   // when an existing edge is clicked for edit. editIdx tells the onCreate
   // callback to splice the existing edge instead of appending.
@@ -19596,6 +19766,9 @@ function App() {
             showInferred={showInferred} showEdgeLabels={showEdgeLabels} showCounts={showCounts}
             editMode={editMode}
             cursorMode={cursorMode}
+            multiSelected={multiSelected}
+            setMultiSelected={setMultiSelected}
+            pushHistory={pushHistory}
             onEditAdd={function(worldX, worldY){ setPendingAddPos({ x: worldX, y: worldY }); setAddNodeOpen(true); }}
             onEditConnect={function(fromId, toId){ setPendingEdgeFrom({ fromId: fromId, toId: toId }); }}
             onEditOpenNode={function(id){ setDetailId(id); setTab("Nodes"); }}
@@ -19612,12 +19785,25 @@ function App() {
           </div>
           {/* View / Edit segmented toggle — floating pill, top-center of the
               canvas. Active segment slides into the ink-filled state. */}
-          <ViewEditToggle editMode={editMode} onEnter={enterEditMode} onExit={exitEditMode} cursorMode={cursorMode} setCursorMode={setCursorMode} />
+          <ViewEditToggle
+            editMode={editMode}
+            onEnter={enterEditMode}
+            onExit={exitEditMode}
+            cursorMode={cursorMode}
+            setCursorMode={setCursorMode}
+            canUndo={historyRef.current.past.length > 0}
+            canRedo={historyRef.current.future.length > 0}
+            onUndo={undo}
+            onRedo={redo}
+            onDuplicate={duplicateSelected}
+            canDuplicate={multiSelected.length > 0 || !!selected}
+          />
         </main>
         {selectedNode && <Inspector node={selectedNode} onClose={() => setSelected(null)} onOpenDetail={() => { setDetailId(selectedNode.id); setTab("Nodes"); }} />}
       </div>
       )}
       {addNodeOpen && <AddNodeFlow onClose={function(){ setAddNodeOpen(false); setPendingAddPos(null); }} onCreate={function(spec){
+        pushHistory();
         // Build a minimal node from the flow output. If the user clicked the
         // canvas at a specific world position (edit-mode add), drop the node
         // there; otherwise jitter near the centre.
@@ -19663,6 +19849,7 @@ function App() {
             var lbl = (spec.label || "RELATES").toUpperCase();
             var editIdx = pendingEdgeFrom.editIdx;
             if (s && t) {
+              pushHistory();
               if (editIdx !== undefined && editIdx !== null) {
                 setEdges(function(es){ return es.map(function(edge, i){ return i === editIdx ? Object.assign({}, edge, { s: s, t: t, label: lbl }) : edge; }); });
               } else {
@@ -19682,7 +19869,7 @@ function App() {
 // edit mode, a second smaller pill appears to the right with two cursor
 // options: "add" (dashed-plus drop cursor, click adds a node) and "select"
 // (plain grab, click empty canvas just deselects).
-function ViewEditToggle({ editMode, onEnter, onExit, cursorMode, setCursorMode }) {
+function ViewEditToggle({ editMode, onEnter, onExit, cursorMode, setCursorMode, canUndo, canRedo, onUndo, onRedo, onDuplicate, canDuplicate }) {
   var seg = function(active){ return {
     display:"inline-flex", alignItems:"center", gap:7,
     padding:"7px 16px", borderRadius:999, border:"none",
@@ -19726,7 +19913,7 @@ function ViewEditToggle({ editMode, onEnter, onExit, cursorMode, setCursorMode }
       {/* Cursor mode toggle — only in edit mode */}
       {editMode && (
         <div style={pill}>
-          <button onClick={function(){ setCursorMode("select"); }} style={iconSeg(cursorMode === "select")} title="Select cursor — click empty canvas to deselect / pan">
+          <button onClick={function(){ setCursorMode("select"); }} style={iconSeg(cursorMode === "select")} title="Select cursor — click empty canvas to deselect / pan / marquee">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 3 L19 11 L13 13 L11 19 Z"/>
             </svg>
@@ -19736,6 +19923,29 @@ function ViewEditToggle({ editMode, onEnter, onExit, cursorMode, setCursorMode }
               <circle cx="12" cy="12" r="8" strokeDasharray="3 3"/>
               <line x1="12" y1="8" x2="12" y2="16"/>
               <line x1="8" y1="12" x2="16" y2="12"/>
+            </svg>
+          </button>
+        </div>
+      )}
+      {/* Undo / Redo / Duplicate — only in edit mode */}
+      {editMode && (
+        <div style={pill}>
+          <button onClick={onUndo} disabled={!canUndo} style={Object.assign({}, iconSeg(false), { opacity: canUndo ? 1 : 0.35, cursor: canUndo ? "pointer" : "not-allowed" })} title="Undo (⌘Z)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 14 4 9 9 4"/>
+              <path d="M4 9h11a5 5 0 0 1 0 10h-3"/>
+            </svg>
+          </button>
+          <button onClick={onRedo} disabled={!canRedo} style={Object.assign({}, iconSeg(false), { opacity: canRedo ? 1 : 0.35, cursor: canRedo ? "pointer" : "not-allowed" })} title="Redo (⌘⇧Z)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 14 20 9 15 4"/>
+              <path d="M20 9H9a5 5 0 0 0 0 10h3"/>
+            </svg>
+          </button>
+          <button onClick={onDuplicate} disabled={!canDuplicate} style={Object.assign({}, iconSeg(false), { opacity: canDuplicate ? 1 : 0.35, cursor: canDuplicate ? "pointer" : "not-allowed" })} title="Duplicate selected (⌘D)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="8" y="8" width="12" height="12" rx="2"/>
+              <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>
             </svg>
           </button>
         </div>
