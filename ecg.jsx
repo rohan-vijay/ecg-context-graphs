@@ -404,10 +404,45 @@ function colorForNode(n) {
 
 // ---------- ICONS (small inline SVG glyphs inside list items) ---------------
 
+// Curated set of inner glyphs the user can pick from when creating a node type.
+// `id` is stored on the node (node.glyph); each renderer returns SVG drawn in
+// the [-5..5] coordinate space so it composes cleanly inside both the small
+// ListGlyph circle and the larger Canvas node body.
+var NODE_GLYPHS = [
+  { id: "dot",      label: "Dot",      render: function(c){ return <circle r="1.6" fill={c.stroke} />; } },
+  { id: "ring",     label: "Ring",     render: function(c){ return <circle r="3" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
+  { id: "diamond",  label: "Diamond",  render: function(c){ return <polygon points="0,-3.6 3.6,0 0,3.6 -3.6,0" fill={c.stroke} />; } },
+  { id: "square",   label: "Square",   render: function(c){ return <rect x="-3" y="-3" width="6" height="6" rx="0.6" fill="none" stroke={c.stroke} strokeWidth="1.1" />; } },
+  { id: "triangle", label: "Triangle", render: function(c){ return <polygon points="0,-3.4 3.2,2.6 -3.2,2.6" fill="none" stroke={c.stroke} strokeWidth="1.1" />; } },
+  { id: "hex",      label: "Hex",      render: function(c){ return <polygon points="-3,-1.7 0,-3.4 3,-1.7 3,1.7 0,3.4 -3,1.7" fill="none" stroke={c.stroke} strokeWidth="1.1" />; } },
+  { id: "bar",      label: "Bar",      render: function(c){ return <rect x="-3.6" y="-1" width="7.2" height="2" rx="1" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
+  { id: "doc",      label: "Doc",      render: function(c){ return <rect x="-2.6" y="-3.6" width="5.2" height="7.2" rx="0.6" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
+  { id: "wave",     label: "Wave",     render: function(c){ return <path d="M -4 0 q 1.5 -2.4 3 0 t 3 0" fill="none" stroke={c.stroke} strokeWidth="1.1" />; } },
+  { id: "moon",     label: "Moon",     render: function(c){ return <g><circle r="3.4" fill="none" stroke={c.stroke} strokeWidth="1" /><path d="M 0 -3.4 A 3.4 3.4 0 0 1 0 3.4 Z" fill={c.stroke} /></g>; } },
+  { id: "cross",    label: "Cross",    render: function(c){ return <g><line x1="-3" y1="0" x2="3" y2="0" stroke={c.stroke} strokeWidth="1.2" strokeLinecap="round" /><line x1="0" y1="-3" x2="0" y2="3" stroke={c.stroke} strokeWidth="1.2" strokeLinecap="round" /></g>; } },
+  { id: "grid",     label: "Grid",     render: function(c){ return <g><rect x="-3" y="-3" width="3" height="3" fill="none" stroke={c.stroke} strokeWidth="0.9" /><rect x="0" y="-3" width="3" height="3" fill="none" stroke={c.stroke} strokeWidth="0.9" /><rect x="-3" y="0" width="3" height="3" fill="none" stroke={c.stroke} strokeWidth="0.9" /><rect x="0" y="0" width="3" height="3" fill="none" stroke={c.stroke} strokeWidth="0.9" /></g>; } },
+  { id: "bolt",     label: "Bolt",     render: function(c){ return <polygon points="-1.6,-3.4 1.8,-0.8 -0.4,-0.4 1.6,3.4 -1.8,0.6 0.2,0.2" fill={c.stroke} />; } },
+  { id: "star",     label: "Star",     render: function(c){ return <polygon points="0,-3.6 1.1,-1.1 3.6,-0.8 1.7,0.9 2.2,3.4 0,2.1 -2.2,3.4 -1.7,0.9 -3.6,-0.8 -1.1,-1.1" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
+  { id: "arrow",    label: "Arrow",    render: function(c){ return <g><line x1="-3" y1="0" x2="3" y2="0" stroke={c.stroke} strokeWidth="1.2" strokeLinecap="round" /><polyline points="1,-1.5 3,0 1,1.5" fill="none" stroke={c.stroke} strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" /></g>; } },
+  { id: "alert",    label: "Alert",    render: function(c){ return <g><line x1="0" y1="-2.4" x2="0" y2="1.2" stroke={c.stroke} strokeWidth="1.3" strokeLinecap="round" /><circle cx="0" cy="2.6" r="0.7" fill={c.stroke} /></g>; } },
+];
+
+// Look up a glyph renderer by id. Returns null if not found.
+function glyphById(id) {
+  for (var i = 0; i < NODE_GLYPHS.length; i++) if (NODE_GLYPHS[i].id === id) return NODE_GLYPHS[i];
+  return null;
+}
+
 function ListGlyph({ node, size = 18 }) {
   const c = colorForNode(node);
   // inner glyph based on node state/type (matches canvas)
   let inner = null;
+  // If the node has an explicit picked glyph, use that — overrides default heuristics.
+  if (node.glyph) {
+    var g = glyphById(node.glyph);
+    if (g) inner = g.render(c);
+  }
+  if (inner === null) {
   if (node.state === "signal") {
     inner = <polygon points="0,-3.6 3.6,0 0,3.6 -3.6,0" fill={c.stroke} />;
   } else if (node.state === "risk") {
@@ -433,6 +468,7 @@ function ListGlyph({ node, size = 18 }) {
   } else {
     inner = <circle r="1.6" fill={c.stroke} />;
   }
+  } // end of fallback heuristics — only runs when node.glyph wasn't supplied
 
   // outer shape — match canvas (circle/hex/square)
   let outer;
@@ -464,7 +500,13 @@ function NodeShape({ node, selected, highlighted, dimmed, hover }) {
   const common = { fill: c.fill, stroke, strokeWidth: strokeW, style: { filter: shadow, transition: "stroke-width 120ms" }, opacity };
 
   let inner = null;
-  if (node.state === "signal") {
+  // Picked glyph wins over heuristics — scaled up to match the canvas node radius.
+  if (node.glyph) {
+    var gDef = glyphById(node.glyph);
+    if (gDef) inner = <g transform={`scale(${(r * 0.55) / 3.4})`}>{gDef.render(c)}</g>;
+  }
+  if (inner) { /* already set */ }
+  else if (node.state === "signal") {
     inner = <polygon points="0,-7 7,0 0,7 -7,0" fill={c.stroke} opacity="0.85" />;
   } else if (node.state === "risk") {
     inner = <polygon points="0,-7 6.5,5 -6.5,5" fill="none" stroke={c.stroke} strokeWidth="1.4" />;
@@ -3115,13 +3157,13 @@ function NewComputationFlow({ node, properties, onClose }) {
   // renderPropPick. Keeps its own open state so callers don't have to thread
   // setOpen handlers (the previous version did, but ended up wired to a noop
   // function which made the dropdowns appear dead).
-  function RichPicker({ value, onChange, options, placeholder, initialOpen }) {
+  function RichPicker({ value, onChange, options, placeholder, initialOpen, disabled }) {
     var [open, setOpen] = useState(!!initialOpen);
     var sel = options.find(function(o){ return o.id === value; });
     return (
       <div style={{ position:"relative" }}>
-        <button onClick={function(){ setOpen(!open); }} type="button"
-          style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+        <button onClick={function(){ if (!disabled) setOpen(!open); }} type="button" disabled={!!disabled}
+          style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background: disabled ? "var(--chip)" : "var(--panel)", cursor: disabled ? "not-allowed" : "pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)", opacity: disabled ? 0.7 : 1 }}>
           {sel ? (
             <>
               {sel.color && (
@@ -3297,31 +3339,14 @@ function NewComputationFlow({ node, properties, onClose }) {
                   </div>
                 )}
 
-                {/* SQL — System + Connection in one composable shell, then Query */}
+                {/* SQL — System + Connection as two compact inline dropdowns, then Query */}
                 {kind === "sql" && (
                   <>
                     <div>
                       <label style={lbl}>Source</label>
-                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)", overflow:"visible" }}>
-                        {/* System segment */}
-                        <div style={{ borderRight:"1px solid var(--line-2)" }}>
-                          <div style={{ padding:"8px 14px 0", fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-4)", textTransform:"uppercase", fontWeight:600 }}>System</div>
-                          <RichPicker value={sqlSystem} onChange={function(v){ setSqlSystem(v); setSqlConn(""); }} options={SQL_SYSTEMS} placeholder="Pick a system" />
-                        </div>
-                        {/* Connection segment */}
-                        <div>
-                          <div style={{ padding:"8px 14px 0", fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-4)", textTransform:"uppercase", fontWeight:600 }}>Connection</div>
-                          {sqlSystem ? (
-                            <RichPicker value={sqlConn} onChange={function(v){ setSqlConn(v); }} options={systemConnections} placeholder={"Pick a " + (selectedSystem && selectedSystem.l) + " connection"} />
-                          ) : (
-                            <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px" }}>
-                              <span style={{ width:34, height:34, borderRadius:7, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>·</span>
-                              <div style={{ flex:1 }}>
-                                <div style={{ fontSize:13, color:"var(--ink-3)" }}>Pick a system first</div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                        <RichPicker value={sqlSystem} onChange={function(v){ setSqlSystem(v); setSqlConn(""); }} options={SQL_SYSTEMS} placeholder="Pick a system" />
+                        <RichPicker value={sqlConn} onChange={function(v){ setSqlConn(v); }} options={systemConnections} placeholder={sqlSystem ? ("Pick a " + (selectedSystem && selectedSystem.l) + " connection") : "Pick a system first"} disabled={!sqlSystem} />
                       </div>
                     </div>
                     <div>
@@ -5466,62 +5491,43 @@ function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, onClo
                 };
                 var systemConnections = CONNECTIONS_BY_SYSTEM[pSqlSystem] || [];
                 var selectedConn = systemConnections.find(function(c){ return c.id === pSqlConnection; });
-                // Inner segment styling — each half is borderless on its own; the outer
-                // shell provides the single connected border so the two halves read as
-                // one composable unit.
-                var segBtn = { display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxSizing:"border-box" };
-                var segLabel = { fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:4, fontWeight:600 };
+                // Compact two-dropdown layout — system on the left, connection on the right.
+                // Each is a single-line trigger with a small brand chip, label, and chevron.
+                // The connection picker is disabled-styled until a system is chosen.
+                var dropBtn = function(extra){ return Object.assign({ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)", fontSize:13, color:"var(--ink)" }, extra || {}); };
                 return (
                   <div>
                     <label style={lbl}>Source</label>
-                    {/* ONE connected component — single bordered shell with two segments inside.
-                        Left: System picker. Right: Connection picker. They share the same border so
-                        they read as a composable unit, but each half is independently clickable and
-                        opens its own popover. The system icon appears once (left half) — the right
-                        half stays clean since "the system" context is established to its left. */}
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)", overflow:"visible", position:"relative" }}>
-                      {/* ── LEFT SEGMENT — SYSTEM ── */}
-                      <div style={{ position:"relative", borderRight:"1px solid var(--line-2)" }}>
-                        <div style={Object.assign({}, segBtn, { padding:"8px 14px 4px", cursor:"default", paddingBottom:0 })}>
-                          <div style={segLabel}>System</div>
-                        </div>
-                        <button onClick={function(){ setPSqlSystemOpen(function(o){ return !o; }); setPSqlConnectionOpen(false); }}
-                          style={Object.assign({}, segBtn, { paddingTop:4 })}>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                      {/* ── SYSTEM ── */}
+                      <div style={{ position:"relative" }}>
+                        <button type="button" onClick={function(){ setPSqlSystemOpen(function(o){ return !o; }); setPSqlConnectionOpen(false); }} style={dropBtn()}>
                           {selectedSystem ? (
                             <>
-                              <span style={{ width:32, height:32, borderRadius:6, background:selectedSystem.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{selectedSystem.icon}</span>
-                              <div style={{ flex:1, minWidth:0 }}>
-                                <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{selectedSystem.l}</div>
-                                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selectedSystem.d}</div>
-                              </div>
+                              <span style={{ width:22, height:22, borderRadius:5, background:selectedSystem.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{selectedSystem.icon}</span>
+                              <span style={{ flex:1, minWidth:0, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", fontWeight:500 }}>{selectedSystem.l}</span>
                             </>
                           ) : (
                             <>
-                              <span style={{ width:32, height:32, borderRadius:6, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>+</span>
-                              <div style={{ flex:1, minWidth:0 }}>
-                                <div style={{ fontSize:14, color:"var(--ink-3)" }}>Pick a system</div>
-                                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>{SQL_SYSTEMS.length + " available"}</div>
-                              </div>
+                              <span style={{ width:8, height:8, borderRadius:"50%", background:"var(--ink-4)", flexShrink:0 }} />
+                              <span style={{ flex:1, minWidth:0, color:"var(--ink-3)" }}>Pick a system</span>
                             </>
                           )}
-                          <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>{pSqlSystemOpen ? "▴" : "▾"}</span>
+                          <span style={{ color:"var(--ink-3)", fontSize:10.5, fontFamily:"JetBrains Mono" }}>{pSqlSystemOpen ? "▴" : "▾"}</span>
                         </button>
                         {pSqlSystemOpen && (
                           <>
                             <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPSqlSystemOpen(false); }} />
-                            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:400, overflowY:"auto" }}>
+                            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:400, overflowY:"auto", minWidth:280 }}>
                               {SQL_SYSTEMS.map(function(sys, i){
                                 var isSel = pSqlSystem === sys.id;
                                 return (
                                   <button key={sys.id} onClick={function(){ setPSqlSystem(sys.id); setPSqlConnection(""); setPSqlRunState(null); setPSqlSystemOpen(false); }}
-                                    style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"9px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < SQL_SYSTEMS.length-1 ? 2 : 0 }}
+                                    style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"8px 10px", borderRadius:6, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < SQL_SYSTEMS.length-1 ? 1 : 0 }}
                                     onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
                                     onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
-                                    <span style={{ width:30, height:30, borderRadius:6, background:sys.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{sys.icon}</span>
-                                    <div style={{ flex:1, minWidth:0 }}>
-                                      <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{sys.l}</div>
-                                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, lineHeight:1.4 }}>{sys.d}</div>
-                                    </div>
+                                    <span style={{ width:22, height:22, borderRadius:5, background:sys.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{sys.icon}</span>
+                                    <span style={{ flex:1, minWidth:0, fontSize:13, fontWeight:500, color:"var(--ink)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{sys.l}</span>
                                     {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
                                   </button>
                                 );
@@ -5530,69 +5536,49 @@ function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, onClo
                           </>
                         )}
                       </div>
-
-                      {/* ── RIGHT SEGMENT — CONNECTION ── */}
+                      {/* ── CONNECTION ── */}
                       <div style={{ position:"relative" }}>
-                        <div style={Object.assign({}, segBtn, { padding:"8px 14px 4px", cursor:"default", paddingBottom:0 })}>
-                          <div style={segLabel}>Connection</div>
-                        </div>
-                        {pSqlSystem ? (
+                        <button type="button"
+                          onClick={function(){ if (pSqlSystem) { setPSqlConnectionOpen(function(o){ return !o; }); setPSqlSystemOpen(false); } }}
+                          disabled={!pSqlSystem}
+                          style={dropBtn({ background: pSqlSystem ? "var(--panel)" : "var(--chip)", cursor: pSqlSystem ? "pointer" : "not-allowed", opacity: pSqlSystem ? 1 : 0.65 })}>
+                          {selectedConn ? (
+                            <>
+                              <span style={{ width:8, height:8, borderRadius:"50%", background: selectedSystem ? selectedSystem.color : "var(--ink-4)", flexShrink:0 }} />
+                              <span style={{ flex:1, minWidth:0, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", fontFamily:"JetBrains Mono", fontSize:12.5, fontWeight:500 }}>{selectedConn.l}</span>
+                            </>
+                          ) : (
+                            <>
+                              <span style={{ width:8, height:8, borderRadius:"50%", background:"var(--ink-4)", flexShrink:0 }} />
+                              <span style={{ flex:1, minWidth:0, color:"var(--ink-3)" }}>{pSqlSystem ? "Pick a connection" : "Pick a system first"}</span>
+                            </>
+                          )}
+                          <span style={{ color:"var(--ink-3)", fontSize:10.5, fontFamily:"JetBrains Mono" }}>{pSqlConnectionOpen ? "▴" : "▾"}</span>
+                        </button>
+                        {pSqlConnectionOpen && pSqlSystem && (
                           <>
-                            <button onClick={function(){ setPSqlConnectionOpen(function(o){ return !o; }); setPSqlSystemOpen(false); }}
-                              style={Object.assign({}, segBtn, { paddingTop:4 })}>
-                              {selectedConn ? (
-                                <>
-                                  <div style={{ flex:1, minWidth:0 }}>
-                                    <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:600, color:"var(--ink)" }}>{selectedConn.l}</div>
-                                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selectedConn.sub}</div>
-                                  </div>
-                                </>
-                              ) : (
-                                <>
-                                  <div style={{ flex:1, minWidth:0 }}>
-                                    <div style={{ fontSize:14, color:"var(--gold)" }}>Pick a connection</div>
-                                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>{systemConnections.length + " available"}</div>
-                                  </div>
-                                </>
-                              )}
-                              <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>{pSqlConnectionOpen ? "▴" : "▾"}</span>
-                            </button>
-                            {pSqlConnectionOpen && (
-                              <>
-                                <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPSqlConnectionOpen(false); }} />
-                                <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:360, overflowY:"auto" }}>
-                                  {systemConnections.length === 0 ? (
-                                    <div style={{ padding:"12px 14px", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)" }}>No connections configured. Add one in <code style={{ color:"var(--ink-2)" }}>Sources →</code> first.</div>
-                                  ) : systemConnections.map(function(c, i){
-                                    var isSel = pSqlConnection === c.id;
-                                    return (
-                                      <button key={c.id} onClick={function(){ setPSqlConnection(c.id); setPSqlRunState(null); setPSqlConnectionOpen(false); }}
-                                        style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"9px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < systemConnections.length-1 ? 2 : 0 }}
-                                        onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
-                                        onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
-                                        {/* Small brand-coloured chip — no system icon here since the left segment already shows it */}
-                                        <span style={{ width:10, height:10, borderRadius:"50%", background:selectedSystem ? selectedSystem.color : "var(--ink-4)", flexShrink:0 }} />
-                                        <div style={{ flex:1, minWidth:0 }}>
-                                          <div style={{ fontFamily:"JetBrains Mono", fontSize:13, fontWeight:600, color:"var(--ink)" }}>{c.l}</div>
-                                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2 }}>{c.sub}</div>
-                                        </div>
-                                        {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </>
-                            )}
-                          </>
-                        ) : (
-                          // Disabled placeholder — same height as the active version
-                          <div style={Object.assign({}, segBtn, { paddingTop:4, cursor:"not-allowed" })}>
-                            <div style={{ flex:1, minWidth:0 }}>
-                              <div style={{ fontSize:14, color:"var(--ink-4)" }}>Pick a system first</div>
-                              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>Connections appear once a system is chosen</div>
+                            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setPSqlConnectionOpen(false); }} />
+                            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:360, overflowY:"auto", minWidth:240 }}>
+                              {systemConnections.length === 0 ? (
+                                <div style={{ padding:"12px 14px", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)" }}>No connections configured.</div>
+                              ) : systemConnections.map(function(c, i){
+                                var isSel = pSqlConnection === c.id;
+                                return (
+                                  <button key={c.id} onClick={function(){ setPSqlConnection(c.id); setPSqlRunState(null); setPSqlConnectionOpen(false); }}
+                                    style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"8px 10px", borderRadius:6, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < systemConnections.length-1 ? 1 : 0 }}
+                                    onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                                    onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+                                    <span style={{ width:8, height:8, borderRadius:"50%", background: selectedSystem ? selectedSystem.color : "var(--ink-4)", flexShrink:0 }} />
+                                    <div style={{ flex:1, minWidth:0 }}>
+                                      <div style={{ fontFamily:"JetBrains Mono", fontSize:12.5, fontWeight:500, color:"var(--ink)" }}>{c.l}</div>
+                                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:1 }}>{c.sub}</div>
+                                    </div>
+                                    {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
+                                  </button>
+                                );
+                              })}
                             </div>
-                            <span style={{ color:"var(--ink-4)", fontSize:11, fontFamily:"JetBrains Mono" }}>▾</span>
-                          </div>
+                          </>
                         )}
                       </div>
                     </div>
@@ -15996,6 +15982,9 @@ function AddNodeFlow({ onClose, onCreate }) {
   var [description, setDescription] = useState("");
   var [shape, setShape] = useState("entity"); // entity / agent / source — kept for downstream code
   var [catOpen, setCatOpen] = useState(false);
+  // Icon (glyph) the user picks for this node type — surfaces in the node list view.
+  var [glyph, setGlyph] = useState(null);
+  var [glyphOpen, setGlyphOpen] = useState(false);
 
   // Step 2 - properties + creation mode
   var [propMode, setPropMode] = useState(null); // manual / spreadsheet / sample / template
@@ -16244,9 +16233,68 @@ function AddNodeFlow({ onClose, onCreate }) {
               var sel = NODE_CATEGORIES_CONFIG.find(function(c){ return c.id === category; });
               return (
                 <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
+                  {/* Icon + Name as one composable row. The icon picker on the left
+                      lets users choose the glyph that shows up next to the node name
+                      in the Nodes list and on the canvas. */}
                   <div>
-                    <label style={lbl}>NAME</label>
-                    <input value={name} onChange={function(e){ setName(e.target.value); }} placeholder="e.g. Contract" style={inp} />
+                    <label style={lbl}>ICON & NAME</label>
+                    <div style={{ display:"flex", gap:8, alignItems:"stretch", position:"relative" }}>
+                      {(function(){
+                        var previewNode = { type: shape, state: null, glyph: glyph };
+                        var previewC = colorForNode(previewNode);
+                        var gDef = glyph ? glyphById(glyph) : null;
+                        return (
+                          <div style={{ position:"relative" }}>
+                            <button type="button" onClick={function(){ setGlyphOpen(function(o){ return !o; }); }}
+                              style={{ width:48, height:"100%", minHeight:46, borderRadius:9, border:"1px solid var(--line)", background:"var(--panel)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", padding:0, boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}
+                              aria-label="Pick icon">
+                              {gDef ? (
+                                <svg width="26" height="26" viewBox="-12 -12 24 24">
+                                  <circle r="9" fill={previewC.fill} stroke={previewC.stroke} strokeWidth="1.2" />
+                                  {gDef.render(previewC)}
+                                </svg>
+                              ) : (
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ink-4)" strokeWidth="1.4" strokeLinecap="round">
+                                  <circle cx="12" cy="12" r="8" strokeDasharray="3 3" />
+                                  <line x1="12" y1="9" x2="12" y2="15" />
+                                  <line x1="9" y1="12" x2="15" y2="12" />
+                                </svg>
+                              )}
+                            </button>
+                            {glyphOpen && (
+                              <>
+                                <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setGlyphOpen(false); }} />
+                                <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:10, width:288 }}>
+                                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:8, padding:"0 2px" }}>Pick an icon</div>
+                                  <div style={{ display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:6 }}>
+                                    {NODE_GLYPHS.map(function(gOpt){
+                                      var isSel = glyph === gOpt.id;
+                                      return (
+                                        <button key={gOpt.id} type="button"
+                                          onClick={function(){ setGlyph(gOpt.id); setGlyphOpen(false); }}
+                                          title={gOpt.label}
+                                          style={{ width:40, height:40, borderRadius:8, border:"1px solid " + (isSel ? "var(--ink)" : "var(--line-2)"), background: isSel ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", padding:0, display:"flex", alignItems:"center", justifyContent:"center" }}
+                                          onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                                          onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel)"; }}>
+                                          <svg width="24" height="24" viewBox="-12 -12 24 24">
+                                            <circle r="9" fill={previewC.fill} stroke={previewC.stroke} strokeWidth="1.2" />
+                                            {gOpt.render(previewC)}
+                                          </svg>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                  {glyph && (
+                                    <button type="button" onClick={function(){ setGlyph(null); setGlyphOpen(false); }} className="btn-ghost" style={{ marginTop:8, padding:"6px 10px", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>Clear icon</button>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
+                      <input value={name} onChange={function(e){ setName(e.target.value); }} placeholder="e.g. Contract" style={Object.assign({}, inp, { flex:1 })} />
+                    </div>
                     <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color: name && !nameOk ? "var(--coral)" : "var(--ink-4)", marginTop:6 }}>
                       {name && !nameOk ? "Must start with a capital letter and be ≥ 2 chars" : "Singular noun. Will appear in :Cypher patterns and the catalog."}
                     </div>
@@ -16845,7 +16893,7 @@ function AddNodeFlow({ onClose, onCreate }) {
             <button className="btn-ghost" onClick={onClose}>Cancel</button>
             {step < 4
               ? <button className="btn-dark" disabled={!canContinue()} onClick={function(){ setStep(function(s){ return s + 1; }); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Continue →</button>
-              : <button className="btn-dark" onClick={function(){ if (onCreate) onCreate({ name: name, category: category, properties: properties, shape: shape, description: description }); onClose(); }}>{activate ? "Create node type ↵" : "Save draft ↵"}</button>
+              : <button className="btn-dark" onClick={function(){ if (onCreate) onCreate({ name: name, category: category, properties: properties, shape: shape, description: description, glyph: glyph }); onClose(); }}>{activate ? "Create node type ↵" : "Save draft ↵"}</button>
             }
           </div>
         </div>
@@ -18904,24 +18952,21 @@ function WorkspaceEmpty({ icon, eyebrow, title, desc, ctaLabel, onCta, secondary
 }
 
 // Click-to-create blank canvas — shown when a graph has no nodes yet.
-// Clicking anywhere opens AddNodeFlow.
+// The cursor itself becomes a node placeholder so the user can pick anywhere
+// on the canvas to drop their first node.
 function BlankCanvas({ onAddNode }) {
+  // SVG cursor — a dashed circle with a + glyph, matching the centre placeholder.
+  var nodeCursor = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'><circle cx='22' cy='22' r='17' fill='%23f3ede0' stroke='%23bdb39a' stroke-width='1.5' stroke-dasharray='3 3'/><line x1='22' y1='14' x2='22' y2='30' stroke='%23645d4d' stroke-width='1.6' stroke-linecap='round'/><line x1='14' y1='22' x2='30' y2='22' stroke='%23645d4d' stroke-width='1.6' stroke-linecap='round'/></svg>\") 22 22, copy";
   return (
     <div className="body">
       <main className="main" style={{ position:"relative" }}>
         <div
           onClick={onAddNode}
-          style={{ position:"absolute", inset:0, cursor:"crosshair", display:"flex", alignItems:"center", justifyContent:"center", background:"var(--bg-canvas)", backgroundImage:"radial-gradient(circle, #c8c0a8 0.7px, transparent 0.7px)", backgroundSize:"24px 24px" }}
+          style={{ position:"absolute", inset:0, cursor: nodeCursor, display:"flex", alignItems:"center", justifyContent:"center", background:"var(--bg-canvas)", backgroundImage:"radial-gradient(circle, #c8c0a8 0.7px, transparent 0.7px)", backgroundSize:"24px 24px" }}
         >
           <div style={{ textAlign:"center", maxWidth:460, pointerEvents:"none" }}>
-            <div style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:72, height:72, borderRadius:"50%", background:"var(--panel)", border:"2px dashed var(--line)", marginBottom:18 }}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="1.6">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-            </div>
             <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:38, lineHeight:1.05, color:"var(--ink)" }}>Start your context graph</div>
-            <div style={{ fontSize:13.5, color:"var(--ink-3)", marginTop:12, lineHeight:1.55 }}>Click anywhere on the canvas to add your first node. Nodes can be entities, data sources, or agents — connect them with edges to model your domain.</div>
+            <div style={{ fontSize:13.5, color:"var(--ink-3)", marginTop:12, lineHeight:1.55 }}>Click anywhere on the canvas to drop your first node. Nodes can be entities, data sources, or agents — connect them with edges to model your domain.</div>
             <div style={{ marginTop:18, fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)", letterSpacing:"0.4px" }}>CLICK CANVAS · OR PRESS  +  NEW NODE</div>
           </div>
         </div>
@@ -19059,8 +19104,6 @@ function App() {
           eyebrow="RECORDS"
           title="No records to browse"
           desc="Records are the actual rows behind each node. They appear here once you connect a source and let it sync."
-          ctaLabel="+ Add node"
-          onCta={function(){ setAddNodeOpen(true); }}
           icon={<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="1.5"><rect x="4" y="5" width="16" height="14" rx="2"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="9" y1="10" x2="9" y2="19"/></svg>}
         />
       ) : tab === "Records" ? (
@@ -19070,8 +19113,6 @@ function App() {
           eyebrow="VIOLATIONS"
           title="No violations — no rules yet"
           desc="Once you define quality, match, or survivorship rules on your nodes, any failing rows will show up here for stewards to action."
-          ctaLabel="+ Add node"
-          onCta={function(){ setAddNodeOpen(true); }}
           icon={<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="1.5"><path d="M12 3l9 16H3l9-16z"/><line x1="12" y1="9" x2="12" y2="14"/><circle cx="12" cy="17" r="0.8" fill="var(--ink-3)"/></svg>}
         />
       ) : tab === "Violations" ? (
@@ -19156,6 +19197,8 @@ function App() {
           y: Math.floor(jitter / 400) * 120 - 60,
           props: (spec.properties && spec.properties.length) || 0,
           edges: 0,
+          glyph: spec.glyph || null,
+          size: 22,
         };
         setNodes(function(ns){ return ns.concat([newNode]); });
         setSelected(newNode.id);
