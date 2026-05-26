@@ -19560,12 +19560,6 @@ function App() {
               <span className="ctb-chip">SELECTION</span>
               <span className="ctb-val">{selectedNode ? selectedNode.label : "—"}</span>
               <span className="ctb-tag">{selectedNode ? TYPE_META[selectedNode.type].tag.toLowerCase() : "none"}</span>
-              <span className="ctb-sep">|</span>
-              <span className="ctb-chip">LAYOUT</span>
-              <span className="ctb-val">force</span>
-              <span className="ctb-sep">|</span>
-              <span className="ctb-chip">VIEW</span>
-              <span className="ctb-val">{savedView}</span>
             </div>
             <div className="ctb-right">
               <label className="ctb-toggle"><input type="checkbox" checked={showInferred} onChange={(e) => setShowInferred(e.target.checked)} /> <span>Inferred</span></label>
