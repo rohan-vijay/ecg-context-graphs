@@ -11327,11 +11327,15 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                 {(function() {
                   // Canvas renders at its natural size and the container scrolls — same
                   // behaviour as the main workspace graph. Node radii are constant across
-                  // 1-hop and 2-hop; we only grow the viewBox / orbit radii when expanding,
-                  // so individual nodes never shrink.
-                  var W = twoHop ? 1900 : 1100;
-                  var H = twoHop ? 1300 : 760;
-                  var cx = W/2, cy = H/2;
+                  // 1-hop and 2-hop; we only grow the viewBox when expanding so the new
+                  // 2-hop nodes have room. CRITICALLY the centre (cx, cy) is anchored to
+                  // the 1-hop layout regardless of mode, so every 1-hop node stays in
+                  // exactly the same position when the user toggles "Expand 2-hop" — only
+                  // the new 2-hop nodes show up around the edges.
+                  var BASE_W = 1100, BASE_H = 760;
+                  var W = twoHop ? 1900 : BASE_W;
+                  var H = twoHop ? 1300 : BASE_H;
+                  var cx = BASE_W/2, cy = BASE_H/2; // anchored on 1-hop centre
                   var r1 = 280;
                   var r2 = 540;
 
