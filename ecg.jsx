@@ -404,35 +404,45 @@ function colorForNode(n) {
 
 // ---------- ICONS (small inline SVG glyphs inside list items) ---------------
 
-// Curated set of inner glyphs the user can pick from when creating a node type.
-// `id` is stored on the node (node.glyph); each renderer returns SVG drawn in
-// the [-5..5] coordinate space so it composes cleanly inside both the small
-// ListGlyph circle and the larger Canvas node body.
-// 24 entries — 6 columns × 4 rows in the picker grid. Distinct silhouettes.
+// Semantic glyph library — each icon represents a real node type the user
+// is likely to model (account, contract, agreement, risk, ticket, etc).
+// All glyphs are drawn in the [-5..5] coordinate space so they compose into
+// both the small ListGlyph circle and the larger Canvas node body.
+// 28 entries — 6 columns × 5 rows in the picker grid (placeholder + upload
+// occupy the first two slots, leaving 28 for semantic icons).
 var NODE_GLYPHS = [
-  { id: "dot",       label: "Dot",       render: function(c){ return <circle r="1.6" fill={c.stroke} />; } },
-  { id: "ring",      label: "Ring",      render: function(c){ return <circle r="3" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
-  { id: "diamond",   label: "Diamond",   render: function(c){ return <polygon points="0,-3.6 3.6,0 0,3.6 -3.6,0" fill={c.stroke} />; } },
-  { id: "square",    label: "Square",    render: function(c){ return <rect x="-3" y="-3" width="6" height="6" rx="0.6" fill="none" stroke={c.stroke} strokeWidth="1.1" />; } },
-  { id: "triangle",  label: "Triangle",  render: function(c){ return <polygon points="0,-3.4 3.2,2.6 -3.2,2.6" fill="none" stroke={c.stroke} strokeWidth="1.1" />; } },
-  { id: "hex",       label: "Hex",       render: function(c){ return <polygon points="-3,-1.7 0,-3.4 3,-1.7 3,1.7 0,3.4 -3,1.7" fill="none" stroke={c.stroke} strokeWidth="1.1" />; } },
-  { id: "bar",       label: "Bar",       render: function(c){ return <rect x="-3.6" y="-1" width="7.2" height="2" rx="1" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
-  { id: "doc",       label: "Doc",       render: function(c){ return <rect x="-2.6" y="-3.6" width="5.2" height="7.2" rx="0.6" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
-  { id: "wave",      label: "Wave",      render: function(c){ return <path d="M -4 0 q 1.5 -2.4 3 0 t 3 0" fill="none" stroke={c.stroke} strokeWidth="1.1" />; } },
-  { id: "moon",      label: "Moon",      render: function(c){ return <g><circle r="3.4" fill="none" stroke={c.stroke} strokeWidth="1" /><path d="M 0 -3.4 A 3.4 3.4 0 0 1 0 3.4 Z" fill={c.stroke} /></g>; } },
-  { id: "cross",     label: "Cross",     render: function(c){ return <g><line x1="-3" y1="0" x2="3" y2="0" stroke={c.stroke} strokeWidth="1.2" strokeLinecap="round" /><line x1="0" y1="-3" x2="0" y2="3" stroke={c.stroke} strokeWidth="1.2" strokeLinecap="round" /></g>; } },
-  { id: "grid",      label: "Grid",      render: function(c){ return <g><rect x="-3" y="-3" width="3" height="3" fill="none" stroke={c.stroke} strokeWidth="0.9" /><rect x="0" y="-3" width="3" height="3" fill="none" stroke={c.stroke} strokeWidth="0.9" /><rect x="-3" y="0" width="3" height="3" fill="none" stroke={c.stroke} strokeWidth="0.9" /><rect x="0" y="0" width="3" height="3" fill="none" stroke={c.stroke} strokeWidth="0.9" /></g>; } },
-  { id: "bolt",      label: "Bolt",      render: function(c){ return <polygon points="-1.6,-3.4 1.8,-0.8 -0.4,-0.4 1.6,3.4 -1.8,0.6 0.2,0.2" fill={c.stroke} />; } },
-  { id: "star",      label: "Star",      render: function(c){ return <polygon points="0,-3.6 1.1,-1.1 3.6,-0.8 1.7,0.9 2.2,3.4 0,2.1 -2.2,3.4 -1.7,0.9 -3.6,-0.8 -1.1,-1.1" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
-  { id: "arrow",     label: "Arrow",     render: function(c){ return <g><line x1="-3" y1="0" x2="3" y2="0" stroke={c.stroke} strokeWidth="1.2" strokeLinecap="round" /><polyline points="1,-1.5 3,0 1,1.5" fill="none" stroke={c.stroke} strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" /></g>; } },
-  { id: "alert",     label: "Alert",     render: function(c){ return <g><line x1="0" y1="-2.4" x2="0" y2="1.2" stroke={c.stroke} strokeWidth="1.3" strokeLinecap="round" /><circle cx="0" cy="2.6" r="0.7" fill={c.stroke} /></g>; } },
-  { id: "target",    label: "Target",    render: function(c){ return <g><circle r="3.2" fill="none" stroke={c.stroke} strokeWidth="1" /><circle r="1.2" fill={c.stroke} /></g>; } },
-  { id: "check",     label: "Check",     render: function(c){ return <polyline points="-2.6,0.2 -0.5,2.3 2.8,-1.6" fill="none" stroke={c.stroke} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />; } },
-  { id: "spark",     label: "Spark",     render: function(c){ return <g><line x1="0" y1="-3.4" x2="0" y2="3.4" stroke={c.stroke} strokeWidth="1.1" strokeLinecap="round" /><line x1="-3.4" y1="0" x2="3.4" y2="0" stroke={c.stroke} strokeWidth="1.1" strokeLinecap="round" /><line x1="-2.4" y1="-2.4" x2="2.4" y2="2.4" stroke={c.stroke} strokeWidth="1" strokeLinecap="round" /><line x1="2.4" y1="-2.4" x2="-2.4" y2="2.4" stroke={c.stroke} strokeWidth="1" strokeLinecap="round" /></g>; } },
-  { id: "pin",       label: "Pin",       render: function(c){ return <path d="M 0 -3.6 a 2 2 0 0 1 2 2 c 0 1.6 -2 3.8 -2 3.8 s -2 -2.2 -2 -3.8 a 2 2 0 0 1 2 -2 z" fill="none" stroke={c.stroke} strokeWidth="1" />; } },
-  { id: "eye",       label: "Eye",       render: function(c){ return <g><path d="M -3.8 0 q 3.8 -3 7.6 0 q -3.8 3 -7.6 0 z" fill="none" stroke={c.stroke} strokeWidth="1" /><circle r="1.1" fill={c.stroke} /></g>; } },
-  { id: "tag",       label: "Tag",       render: function(c){ return <g><path d="M -3.2 -2.6 L 0.6 -2.6 L 3.4 0 L 0.6 2.6 L -3.2 2.6 Z" fill="none" stroke={c.stroke} strokeWidth="1" /><circle cx="-1.6" cy="0" r="0.7" fill={c.stroke} /></g>; } },
-  { id: "play",      label: "Play",      render: function(c){ return <polygon points="-2.2,-3 -2.2,3 3.2,0" fill={c.stroke} />; } },
+  // ── COMMERCIAL ──────────────────────────────────────────────────────────
+  { id: "account",      label: "Account",      render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><rect x="-3" y="-2.6" width="6" height="5.4" rx="0.3"/><line x1="-1" y1="-2.6" x2="-1" y2="2.8"/><line x1="1" y1="-2.6" x2="1" y2="2.8"/><line x1="-3" y1="-0.4" x2="3" y2="-0.4"/></g>; } },
+  { id: "person",       label: "Person",       render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95"><circle cx="0" cy="-1.6" r="1.4"/><path d="M -2.6 3 q 2.6 -2.6 5.2 0"/></g>; } },
+  { id: "team",         label: "Team",         render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.8"><circle cx="-1.7" cy="-1.2" r="1.1"/><circle cx="1.7"  cy="-1.2" r="1.1"/><path d="M -3.6 3 q 1.8 -2 3.6 -0.8 q 1.8 -1.2 3.6 0.8"/></g>; } },
+  { id: "contract",     label: "Contract",     render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><path d="M -2 -3 L 1 -3 L 2.4 -1.6 L 2.4 3 L -2 3 Z"/><polyline points="1,-3 1,-1.6 2.4,-1.6"/><path d="M -1.2 1.7 q 0.6 -0.8 1.2 0 t 1.2 0 t 1.2 0"/></g>; } },
+  { id: "agreement",    label: "Agreement",    render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95" strokeLinecap="round" strokeLinejoin="round"><path d="M -3.6 0.4 L -1.6 -1.6 L 0 0 L 1.6 -1.6 L 3.6 0.4"/><path d="M -1.6 -1.6 L 0.4 0.4"/><path d="M -3.6 0.4 L -3.6 2"/><path d="M 3.6 0.4 L 3.6 2"/></g>; } },
+  { id: "sow",          label: "SOW",          render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><rect x="-2.4" y="-3.2" width="4.8" height="6.4" rx="0.3"/><polyline points="-1.5,-1.5 -0.9,-0.9 0.4,-2"/><line x1="-1.5" y1="0.3" x2="1.5" y2="0.3"/><line x1="-1.5" y1="1.7" x2="1.5" y2="1.7"/></g>; } },
+  { id: "invoice",      label: "Invoice",      render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><path d="M -2.2 -3.2 H 2.2 V 3.2 L 1.1 2.5 L 0 3.2 L -1.1 2.5 L -2.2 3.2 Z"/><line x1="-1.2" y1="-1.6" x2="1.2" y2="-1.6"/><line x1="-1.2" y1="-0.3" x2="1.2" y2="-0.3"/><line x1="-1.2" y1="1" x2="0.4" y2="1"/></g>; } },
+  { id: "payment",      label: "Payment",      render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.9"><circle r="3.2"/><path d="M 0 -2 q -1.4 0 -1.4 1 t 1.4 1 t 1.4 1 t -1.4 1"/><line x1="0" y1="-2.7" x2="0" y2="2.7"/></g>; } },
+  { id: "subscription", label: "Subscription", render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95" strokeLinecap="round"><path d="M 3 -1 a 3 3 0 1 0 0.6 1.7"/><polyline points="3,-2.4 3,-1 1.6,-1"/></g>; } },
+  { id: "order",        label: "Order",        render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85" strokeLinecap="round"><polyline points="-3.2,-2 -2,-2 -1.2,1.2 2.4,1.2 3.2,-1.4 -1.6,-1.4"/><circle cx="-0.8" cy="2.4" r="0.55" fill={c.stroke} stroke="none"/><circle cx="2" cy="2.4" r="0.55" fill={c.stroke} stroke="none"/></g>; } },
+  // ── RISK & GOVERNANCE ───────────────────────────────────────────────────
+  { id: "ticket",       label: "Ticket",       render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><path d="M -3 -2 H 3 V -0.6 a 0.8 0.8 0 0 0 0 1.6 V 2 H -3 V 1 a 0.8 0.8 0 0 0 0 -1.6 Z"/><line x1="-0.6" y1="-1" x2="-0.6" y2="1" strokeDasharray="0.6 0.6"/></g>; } },
+  { id: "incident",     label: "Incident",     render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95" strokeLinejoin="round"><path d="M 0 -3.2 L 3.4 2.8 L -3.4 2.8 Z"/><line x1="0" y1="-1" x2="0" y2="1.1" strokeLinecap="round"/><circle cx="0" cy="2.2" r="0.55" fill={c.stroke} stroke="none"/></g>; } },
+  { id: "risk",         label: "Risk",         render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95" strokeLinejoin="round"><path d="M 0 -3.2 L 3 -2 V 0.8 Q 3 2.8 0 3.4 Q -3 2.8 -3 0.8 V -2 Z"/><line x1="0" y1="-1.2" x2="0" y2="0.8" strokeLinecap="round"/><circle cx="0" cy="1.8" r="0.5" fill={c.stroke} stroke="none"/></g>; } },
+  { id: "flag",         label: "Flag",         render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95" strokeLinejoin="round" strokeLinecap="round"><line x1="-2.4" y1="-3.2" x2="-2.4" y2="3.2"/><path d="M -2.4 -3 H 2.6 L 1.2 -1.4 L 2.6 0.2 H -2.4"/></g>; } },
+  { id: "policy",       label: "Policy",       render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95" strokeLinejoin="round"><path d="M 0 -3.2 L 3 -2 V 0.8 Q 3 2.8 0 3.4 Q -3 2.8 -3 0.8 V -2 Z"/><polyline points="-1.4,0.4 -0.3,1.5 1.5,-0.6" strokeLinecap="round"/></g>; } },
+  // ── PIPELINE & DATA ─────────────────────────────────────────────────────
+  { id: "lead",         label: "Lead",         render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><circle r="3.2"/><circle r="1.8"/><circle r="0.5" fill={c.stroke} stroke="none"/></g>; } },
+  { id: "opportunity",  label: "Opportunity",  render: function(c){ return <g fill={c.stroke} stroke="none"><polygon points="-1.6,-3.4 1.8,-0.6 -0.4,-0.2 1.4,3.4 -2,0.6 0.2,0.2"/></g>; } },
+  { id: "product",      label: "Product",      render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85" strokeLinejoin="round"><polygon points="-3,-1.4 0,-3 3,-1.4 3,2 0,3.6 -3,2"/><polyline points="-3,-1.4 0,0.2 3,-1.4"/><line x1="0" y1="0.2" x2="0" y2="3.6"/></g>; } },
+  { id: "metric",       label: "Metric",       render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95" strokeLinecap="round"><line x1="-3" y1="3" x2="3" y2="3"/><rect x="-2.6" y="0.6" width="1.4" height="2"/><rect x="-0.7" y="-1" width="1.4" height="3.6"/><rect x="1.2" y="-2.4" width="1.4" height="5"/></g>; } },
+  { id: "document",     label: "Document",     render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><path d="M -2 -3.2 H 1 L 2.4 -1.8 V 3.2 H -2 Z"/><polyline points="1,-3.2 1,-1.8 2.4,-1.8"/><line x1="-1.2" y1="-0.3" x2="1.6" y2="-0.3"/><line x1="-1.2" y1="1" x2="1.6" y2="1"/><line x1="-1.2" y1="2.2" x2="0.6" y2="2.2"/></g>; } },
+  { id: "database",     label: "Database",     render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><ellipse cx="0" cy="-2.4" rx="2.6" ry="0.9"/><path d="M -2.6 -2.4 V 2.4 Q 0 3.4 2.6 2.4 V -2.4"/><path d="M -2.6 -0.4 Q 0 0.6 2.6 -0.4"/></g>; } },
+  { id: "email",        label: "Email",        render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><rect x="-3" y="-2.2" width="6" height="4.4" rx="0.3"/><polyline points="-3,-2.2 0,0.6 3,-2.2"/></g>; } },
+  { id: "event",        label: "Event",        render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85"><rect x="-2.8" y="-2.4" width="5.6" height="5.4" rx="0.3"/><line x1="-2.8" y1="-0.6" x2="2.8" y2="-0.6"/><line x1="-1.2" y1="-3.2" x2="-1.2" y2="-1.6"/><line x1="1.2" y1="-3.2" x2="1.2" y2="-1.6"/><rect x="-0.7" y="0.4" width="1.4" height="1.4" fill={c.stroke} stroke="none"/></g>; } },
+  { id: "location",     label: "Location",     render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.95"><path d="M 0 3.6 C -2.6 1 -3 -0.4 -3 -1.4 a 3 3 0 0 1 6 0 c 0 1 -0.4 2.4 -3 5 z"/><circle cx="0" cy="-1.2" r="0.9"/></g>; } },
+  // ── AGENTS & AUTOMATION ─────────────────────────────────────────────────
+  { id: "agent",        label: "Agent",        render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.85" strokeLinecap="round"><rect x="-2.6" y="-1.6" width="5.2" height="4.4" rx="1"/><line x1="0" y1="-3.4" x2="0" y2="-1.6"/><circle cx="0" cy="-3.4" r="0.4" fill={c.stroke} stroke="none"/><circle cx="-1.1" cy="0.3" r="0.55" fill={c.stroke} stroke="none"/><circle cx="1.1"  cy="0.3" r="0.55" fill={c.stroke} stroke="none"/><line x1="-1" y1="1.8" x2="1" y2="1.8"/></g>; } },
+  { id: "automation",   label: "Automation",   render: function(c){ return <g fill={c.stroke} stroke="none"><polygon points="0.4,-3.4 -2.4,0.6 -0.2,0.6 -0.6,3.4 2.4,-0.4 0.2,-0.4"/></g>; } },
+  { id: "workflow",     label: "Workflow",     render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.9" strokeLinecap="round"><circle cx="-2.4" cy="-1.6" r="0.9"/><circle cx="2.4"  cy="-1.6" r="0.9"/><circle cx="0"    cy="2.2" r="0.9"/><line x1="-1.7" y1="-0.9" x2="-0.5" y2="1.5"/><line x1="1.7"  y1="-0.9" x2="0.5"  y2="1.5"/><line x1="-1.5" y1="-1.6" x2="1.5"  y2="-1.6"/></g>; } },
+  { id: "tag",          label: "Tag",          render: function(c){ return <g fill="none" stroke={c.stroke} strokeWidth="0.9"><path d="M -3 -2.6 H 0.6 L 3.4 0.2 L 0.4 3.2 L -3 -0.4 Z"/><circle cx="-1.6" cy="-1" r="0.55" fill={c.stroke} stroke="none"/></g>; } },
 ];
 
 // Look up a glyph renderer by id. Returns null if not found.
@@ -488,6 +498,18 @@ function ListGlyph({ node, size = 18 }) {
     outer = <circle r="9" fill={c.fill} stroke={c.stroke} strokeWidth="1.3" />;
   }
 
+  // If the node carries an uploaded image, drop it into the body using
+  // foreignObject so we can render the HTML <img> with object-fit centred.
+  if (node.glyphImage) {
+    return (
+      <svg width={size} height={size} viewBox="-12 -12 24 24" style={{ flexShrink: 0 }}>
+        {outer}
+        <foreignObject x="-7" y="-7" width="14" height="14">
+          <img src={node.glyphImage} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }} />
+        </foreignObject>
+      </svg>
+    );
+  }
   return (
     <svg width={size} height={size} viewBox="-12 -12 24 24" style={{ flexShrink: 0 }}>
       {outer}
@@ -508,8 +530,15 @@ function NodeShape({ node, selected, highlighted, dimmed, hover }) {
   const common = { fill: c.fill, stroke, strokeWidth: strokeW, style: { filter: shadow, transition: "stroke-width 120ms" }, opacity };
 
   let inner = null;
+  // Uploaded image trumps everything else.
+  if (node.glyphImage) {
+    const imgR = r * 0.62;
+    inner = <foreignObject x={-imgR} y={-imgR} width={imgR * 2} height={imgR * 2}>
+      <img src={node.glyphImage} alt="" style={{ width:"100%", height:"100%", objectFit:"contain" }} />
+    </foreignObject>;
+  }
   // Picked glyph wins over heuristics — scaled up to match the canvas node radius.
-  if (node.glyph) {
+  else if (node.glyph) {
     var gDef = glyphById(node.glyph);
     if (gDef) inner = <g transform={`scale(${(r * 0.55) / 3.4})`}>{gDef.render(c)}</g>;
   }
@@ -16112,8 +16141,21 @@ function AddNodeFlow({ onClose, onCreate }) {
   var [shape, setShape] = useState("entity"); // entity / agent / source — kept for downstream code
   var [catOpen, setCatOpen] = useState(false);
   // Icon (glyph) the user picks for this node type — surfaces in the node list view.
+  // glyph: id of a built-in NODE_GLYPHS entry, or null for the empty/placeholder state.
+  // glyphImage: an uploaded data URL — when present, the disc renders this image
+  //             instead of the built-in glyph (and `glyph` is ignored).
   var [glyph, setGlyph] = useState(null);
+  var [glyphImage, setGlyphImage] = useState(null);
   var [glyphOpen, setGlyphOpen] = useState(false);
+  var glyphFileRef = useRef(null);
+  function handleGlyphUpload(e) {
+    var f = e.target.files && e.target.files[0];
+    if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function(ev){ setGlyphImage(ev.target.result); setGlyph(null); setGlyphOpen(false); };
+    rd.readAsDataURL(f);
+    e.target.value = "";
+  }
 
   // Step 2 - properties + creation mode
   var [propMode, setPropMode] = useState(null); // manual / spreadsheet / sample / template
@@ -16297,13 +16339,19 @@ function AddNodeFlow({ onClose, onCreate }) {
     var gDef = glyph ? glyphById(glyph) : null;
     var glyphScale = (r * 0.55) / 3.4;
     var glyphC = { fill: catDef.fill, stroke: catDef.color };
+    var imgSize = r * 1.2;
     return (
-      <svg width={size} height={size} viewBox={"-"+(size/2)+" -"+(size/2)+" "+size+" "+size}>
-        {shape === "agent" ? <polygon points={[0,1,2,3,4,5].map(function(i){ var a=(Math.PI/3)*i-Math.PI/2; return (r*Math.cos(a)).toFixed(1)+","+(r*Math.sin(a)).toFixed(1); }).join(" ")} fill={catDef.fill} stroke={catDef.color} strokeWidth="1.6"/>
-         : shape === "source" ? <rect x={-r} y={-r} width={2*r} height={2*r} rx="2.5" fill={catDef.fill} stroke={catDef.color} strokeWidth="1.6"/>
-         : <circle r={r} fill={catDef.fill} stroke={catDef.color} strokeWidth="1.6"/>}
-        {gDef && <g transform={"scale(" + glyphScale + ")"}>{gDef.render(glyphC)}</g>}
-      </svg>
+      <span style={{ display:"inline-flex", position:"relative", width:size, height:size, alignItems:"center", justifyContent:"center" }}>
+        <svg width={size} height={size} viewBox={"-"+(size/2)+" -"+(size/2)+" "+size+" "+size}>
+          {shape === "agent" ? <polygon points={[0,1,2,3,4,5].map(function(i){ var a=(Math.PI/3)*i-Math.PI/2; return (r*Math.cos(a)).toFixed(1)+","+(r*Math.sin(a)).toFixed(1); }).join(" ")} fill={catDef.fill} stroke={catDef.color} strokeWidth="1.6"/>
+           : shape === "source" ? <rect x={-r} y={-r} width={2*r} height={2*r} rx="2.5" fill={catDef.fill} stroke={catDef.color} strokeWidth="1.6"/>
+           : <circle r={r} fill={catDef.fill} stroke={catDef.color} strokeWidth="1.6"/>}
+          {!glyphImage && gDef && <g transform={"scale(" + glyphScale + ")"}>{gDef.render(glyphC)}</g>}
+        </svg>
+        {glyphImage && (
+          <img src={glyphImage} alt="" style={{ position:"absolute", width:imgSize, height:imgSize, objectFit:"contain" }} />
+        )}
+      </span>
     );
   }
 
@@ -16382,7 +16430,11 @@ function AddNodeFlow({ onClose, onCreate }) {
                             <button type="button" onClick={function(){ setGlyphOpen(function(o){ return !o; }); }}
                               style={{ width:48, height:"100%", minHeight:46, borderRadius:9, border:"1px solid var(--line)", background:"var(--panel)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", padding:0, boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}
                               aria-label="Pick icon">
-                              {gDef ? (
+                              {glyphImage ? (
+                                <span style={{ position:"relative", width:30, height:30, borderRadius:"50%", background: previewC.fill, border: "1.2px solid " + previewC.stroke, display:"inline-flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
+                                  <img src={glyphImage} alt="" style={{ width:20, height:20, objectFit:"contain" }} />
+                                </span>
+                              ) : gDef ? (
                                 <svg width="26" height="26" viewBox="-12 -12 24 24">
                                   <circle r="9" fill={previewC.fill} stroke={previewC.stroke} strokeWidth="1.2" />
                                   {gDef.render(previewC)}
@@ -16398,19 +16450,27 @@ function AddNodeFlow({ onClose, onCreate }) {
                             {glyphOpen && (
                               <>
                                 <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setGlyphOpen(false); }} />
-                                <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:10, width:294 }}>
+                                <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:10, width:300 }}>
                                   <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:8, padding:"0 2px" }}>Pick an icon</div>
+                                  <input ref={glyphFileRef} type="file" accept="image/png,image/svg+xml,image/jpeg,image/webp" onChange={handleGlyphUpload} style={{ display:"none" }} />
                                   <div style={{ display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:6 }}>
-                                    {/* First slot is the dashed placeholder — selecting it clears any picked glyph
-                                        so the node has the empty-state icon. The remaining 23 tiles are unique glyphs. */}
+                                    {/* Slot 1: placeholder (clears the icon). Slot 2: upload custom image.
+                                        Remaining 28 slots: semantic icons for the common node types. */}
                                     {(function(){
-                                      var slots = [{ id: null, label: "No icon", placeholder: true }].concat(NODE_GLYPHS);
-                                      return slots.map(function(gOpt, i){
-                                        var isSel = glyph === gOpt.id || (gOpt.placeholder && glyph === null);
+                                      var slots = [
+                                        { id: null,     label: "No icon",      placeholder: true },
+                                        { id: "_upload", label: "Upload custom", upload: true }
+                                      ].concat(NODE_GLYPHS);
+                                      return slots.map(function(gOpt){
+                                        var isSel = (!glyphImage && glyph === gOpt.id) || (gOpt.placeholder && !glyphImage && glyph === null) || (gOpt.upload && !!glyphImage);
+                                        function onClick(){
+                                          if (gOpt.upload) { if (glyphFileRef.current) glyphFileRef.current.click(); return; }
+                                          setGlyph(gOpt.id);
+                                          setGlyphImage(null);
+                                          setGlyphOpen(false);
+                                        }
                                         return (
-                                          <button key={gOpt.id || "none"} type="button"
-                                            onClick={function(){ setGlyph(gOpt.id); setGlyphOpen(false); }}
-                                            title={gOpt.label}
+                                          <button key={gOpt.id || "none"} type="button" onClick={onClick} title={gOpt.label}
                                             style={{ width:40, height:40, borderRadius:8, border:"1px solid " + (isSel ? "var(--ink)" : "var(--line-2)"), background: isSel ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", padding:0, display:"flex", alignItems:"center", justifyContent:"center" }}
                                             onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
                                             onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel)"; }}>
@@ -16420,6 +16480,18 @@ function AddNodeFlow({ onClose, onCreate }) {
                                                 <line x1="12" y1="9" x2="12" y2="15" />
                                                 <line x1="9" y1="12" x2="15" y2="12" />
                                               </svg>
+                                            ) : gOpt.upload ? (
+                                              glyphImage ? (
+                                                <span style={{ width:22, height:22, borderRadius:"50%", overflow:"hidden", display:"inline-flex", alignItems:"center", justifyContent:"center", background: previewC.fill, border:"1px solid " + previewC.stroke }}>
+                                                  <img src={glyphImage} alt="" style={{ width:16, height:16, objectFit:"contain" }} />
+                                                </span>
+                                              ) : (
+                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                                  <polyline points="17 8 12 3 7 8"/>
+                                                  <line x1="12" y1="3" x2="12" y2="15"/>
+                                                </svg>
+                                              )
                                             ) : (
                                               <svg width="24" height="24" viewBox="-12 -12 24 24">
                                                 <circle r="9" fill={previewC.fill} stroke={previewC.stroke} strokeWidth="1.2" />
@@ -17008,7 +17080,7 @@ function AddNodeFlow({ onClose, onCreate }) {
             <button className="btn-ghost" onClick={onClose}>Cancel</button>
             {step < 3
               ? <button className="btn-dark" disabled={!canContinue()} onClick={function(){ setStep(function(s){ return s + 1; }); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Continue →</button>
-              : <button className="btn-dark" onClick={function(){ if (onCreate) onCreate({ name: name, category: category, properties: properties, shape: shape, description: description, glyph: glyph }); onClose(); }}>{activate ? "Create node type ↵" : "Save draft ↵"}</button>
+              : <button className="btn-dark" onClick={function(){ if (onCreate) onCreate({ name: name, category: category, properties: properties, shape: shape, description: description, glyph: glyph, glyphImage: glyphImage }); onClose(); }}>{activate ? "Create node type ↵" : "Save draft ↵"}</button>
             }
           </div>
         </div>
@@ -19435,6 +19507,7 @@ function App() {
           props: (spec.properties && spec.properties.length) || 0,
           edges: 0,
           glyph: spec.glyph || null,
+          glyphImage: spec.glyphImage || null,
           size: 22,
         };
         setNodes(function(ns){ return ns.concat([newNode]); });
