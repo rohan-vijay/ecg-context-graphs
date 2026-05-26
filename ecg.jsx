@@ -2721,11 +2721,11 @@ function buildComputationsForNode(node, properties, rules) {
 }
 
 function ComputationsPane({ node, properties, rules }) {
-  var [expanded, setExpanded] = React.useState(null);
+  var [inspected, setInspected] = React.useState(null); // selected computation for the detail modal
+  var [createOpen, setCreateOpen] = React.useState(false);
   var [filter, setFilter]     = React.useState("all"); // all | formula | sql | agent | automation
   var [statusFilter, setStatusFilter] = React.useState("all"); // all | healthy | failing | stale
   var [search, setSearch]     = React.useState("");
-  var [section, setSection]   = React.useState("catalog"); // catalog | pipeline | runs | templates
 
   var comps = React.useMemo(function(){ return buildComputationsForNode(node, properties, rules); }, [node, properties, rules]);
 
@@ -2739,14 +2739,6 @@ function ComputationsPane({ node, properties, rules }) {
     return true;
   });
 
-  var total = comps.length;
-  var healthy = comps.filter(function(c){ return c.status === "healthy"; }).length;
-  var failing = comps.filter(function(c){ return c.status === "failing"; }).length;
-  var stale   = comps.filter(function(c){ return c.status === "stale"; }).length;
-  var avgLat = total ? Math.round(comps.reduce(function(s,c){ return s+c.avgLatency; }, 0)/total) : 0;
-  var totalRecords = comps.reduce(function(s,c){ return s+c.recordsAffected; }, 0);
-
-  // ── Mini helpers ──────────────────────────────────────────────────────────
   function kindMeta(k){
     return k === "formula"    ? { label:"Formula",    glyph:"fx", color:"var(--gold)",   bg:"var(--gold-fill)"   }
          : k === "sql"        ? { label:"SQL",        glyph:"SQL",color:"var(--blue)",   bg:"var(--blue-fill)"   }
@@ -2761,16 +2753,6 @@ function ComputationsPane({ node, properties, rules }) {
          :                    { label:s,        color:"var(--ink-3)", bg:"var(--chip)"       };
   }
   function fmtMs(ms){ return ms < 1000 ? ms + "ms" : (ms/1000).toFixed(1) + "s"; }
-
-  function KPI({ lbl, v, sub, color }) {
-    return (
-      <div style={{ padding:"14px 16px", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 1px 0 var(--line-2)" }}>
-        <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-4)", textTransform:"uppercase" }}>{lbl}</div>
-        <div style={{ fontFamily:"Instrument Serif", fontSize:24, color: color || "var(--ink)", lineHeight:1.1, marginTop:5 }}>{v}</div>
-        {sub && <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:5 }}>{sub}</div>}
-      </div>
-    );
-  }
   function Spark({ data }){
     var W = 60, H = 16;
     var min = Math.min.apply(null, data), max = Math.max.apply(null, data);
@@ -2779,327 +2761,521 @@ function ComputationsPane({ node, properties, rules }) {
     return <svg width={W} height={H}><polyline points={pts} fill="none" stroke="var(--ink-3)" strokeWidth="1.4" /></svg>;
   }
 
-  // ── Templates ─────────────────────────────────────────────────────────────
-  var TEMPLATES = [
-    { id:"t-bucket",       kind:"formula",    name:"Tier from numeric bands",        desc:"Bucket a number into named tiers (e.g. SMB / MM / ENT).", body:"tier := bucket(arr_usd, [1000, 10000, 100000], ['SMB','MM','ENT','STR'])" },
-    { id:"t-coalesce",     kind:"formula",    name:"Coalesce nullable fields",       desc:"Fall back through a list of fields, returning the first non-null.", body:"display_name := coalesce(legal_name, brand_name, 'Unknown')" },
-    { id:"t-age-days",     kind:"formula",    name:"Age in days",                    desc:"Days since a timestamp until now.",                       body:"record_age_days := days_between(created_at, now())" },
-    { id:"t-sql-rollup",   kind:"sql",        name:"Roll-up from child entity",      desc:"Aggregate a numeric field from a related entity.",         body:"arr_usd := SELECT SUM(mrr_usd * 12) FROM Subscription WHERE account_id = :id AND status = 'active'" },
-    { id:"t-sql-max",      kind:"sql",        name:"Most recent related event",      desc:"Surface the latest timestamp from a related stream.",      body:"last_activity_at := SELECT MAX(ts) FROM Interaction WHERE account_id = :id" },
-    { id:"t-agent-score",  kind:"agent",      name:"Agent-derived score",            desc:"Call a pre-built scoring agent.",                          body:"health_score := agent:cust_health.score(arr_usd, ticket_volume, last_login)" },
-    { id:"t-agent-class",  kind:"agent",      name:"Agent classifier",               desc:"Classify a record into a fixed label set.",                body:"intent := agent:support_intent.classify(ticket_subject, ticket_body)" },
-    { id:"t-auto-sync",    kind:"automation", name:"Sync from an external system",   desc:"Materialise a field from a scheduled workflow.",           body:"billing_status := Airflow · billing_sync_dag" },
-    { id:"t-auto-webhook", kind:"automation", name:"Custom webhook computation",     desc:"POST the record to your endpoint and use the response.",   body:"churn_band := POST /compute/property → response.band" }
-  ];
-
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
 
       {/* HEADER */}
       <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:14 }}>
         <div>
           <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.7px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:4 }}>{node.label} · Computations</div>
           <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1 }}>Derived logic for {node.label}</div>
-          <div style={{ fontSize:13, color:"var(--ink-3)", marginTop:6, lineHeight:1.55, maxWidth:680 }}>Every formula, query, agent and workflow that writes a field on this node — with run health, dependencies, latency, and edit history.</div>
+          <div style={{ fontSize:13, color:"var(--ink-3)", marginTop:6, lineHeight:1.55, maxWidth:680 }}>Every formula, query, agent and workflow that writes a field on this node. Click a row to see the full definition and run health.</div>
         </div>
         <div style={{ display:"flex", gap:8 }}>
-          <button className="btn-ghost">Test all</button>
-          <button className="btn-dark">+ New computation</button>
+          <button className="btn-dark" onClick={function(){ setCreateOpen(true); }}>+ New computation</button>
         </div>
       </div>
 
-      {/* KPI STRIP */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:10 }}>
-        <KPI lbl="Total"    v={total} sub={total + " of " + (properties.length) + " fields derived"} />
-        <KPI lbl="Healthy"  v={healthy} sub={total ? Math.round(healthy/total*100) + "% of catalog" : "—"} color="var(--green)" />
-        <KPI lbl="Failing"  v={failing} sub={failing ? "needs attention" : "all clear"} color={failing ? "var(--coral)" : "var(--ink)"} />
-        <KPI lbl="Stale"    v={stale}   sub={stale ? "input drift?" : "fresh"} color={stale ? "var(--gold)" : "var(--ink)"} />
-        <KPI lbl="Avg latency" v={fmtMs(avgLat)} sub="across all kinds" />
-        <KPI lbl="Records computed" v={totalRecords.toLocaleString()} sub="last 24h" />
+      {/* FILTER BAR */}
+      <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+        <div style={{ position:"relative", flex:"0 1 320px" }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"var(--ink-3)", pointerEvents:"none" }}>
+            <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+          </svg>
+          <input value={search} onChange={function(e){ setSearch(e.target.value); }} placeholder="Search by name, output, or expression" style={{ border:"1px solid var(--line)", borderRadius:7, padding:"8px 10px 8px 30px", fontSize:12.5, fontFamily:"inherit", background:"var(--panel)", width:"100%", boxSizing:"border-box" }} />
+        </div>
+        <div style={{ display:"flex", gap:4 }}>
+          {[{ id:"all", l:"All" }, { id:"formula", l:"Formula" }, { id:"sql", l:"SQL" }, { id:"agent", l:"Agent" }, { id:"automation", l:"Automation" }].map(function(f){
+            var on = filter === f.id;
+            return <button key={f.id} onClick={function(){ setFilter(f.id); }} style={{ padding:"6px 10px", borderRadius:5, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "var(--panel)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:10.5, cursor:"pointer", letterSpacing:"0.3px" }}>{f.l}</button>;
+          })}
+        </div>
+        <div style={{ marginLeft:"auto", display:"flex", gap:4 }}>
+          {[{ id:"all", l:"Any status" }, { id:"healthy", l:"Healthy" }, { id:"stale", l:"Stale" }, { id:"failing", l:"Failing" }].map(function(f){
+            var on = statusFilter === f.id;
+            return <button key={f.id} onClick={function(){ setStatusFilter(f.id); }} style={{ padding:"6px 10px", borderRadius:5, border:"1px solid " + (on ? "var(--ink-3)" : "var(--line)"), background: on ? "var(--bg-canvas)" : "var(--panel)", color:"var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:10.5, cursor:"pointer", letterSpacing:"0.3px" }}>{f.l}</button>;
+          })}
+        </div>
       </div>
 
-      {/* INNER NAV: Catalog · Pipeline · Runs · Templates */}
-      <div style={{ display:"flex", gap:6, borderBottom:"1px solid var(--line-2)" }}>
-        {[
-          { id:"catalog",   label:"Catalog",   sub: visible.length + " of " + total },
-          { id:"pipeline",  label:"Pipeline",  sub:"dependency graph" },
-          { id:"runs",      label:"Runs",      sub:"execution telemetry" },
-          { id:"templates", label:"Templates", sub: TEMPLATES.length + " patterns" }
-        ].map(function(s){
-          var isOn = section === s.id;
+      {/* CATALOG TABLE — click a row to open the detail modal */}
+      <div className="card" style={{ overflow:"hidden" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"30px 220px 130px 100px 120px 100px 90px 110px 80px", gap:8, padding:"10px 14px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.5px", textTransform:"uppercase" }}>
+          <div/><div>Output → name</div><div>Kind</div><div>Status</div><div>Trigger</div><div>Latency</div><div>Records</div><div>Success</div><div>Last run</div>
+        </div>
+        {visible.length === 0 ? (
+          <div style={{ padding:"60px 14px", textAlign:"center", color:"var(--ink-3)" }}>
+            <div style={{ fontSize:13, marginBottom:6 }}>No computations match these filters.</div>
+            <button className="btn-ghost" onClick={function(){ setFilter("all"); setStatusFilter("all"); setSearch(""); }} style={{ fontSize:11.5 }}>Clear filters</button>
+          </div>
+        ) : visible.map(function(c, i){
+          var km = kindMeta(c.kind);
+          var sm = statusMeta(c.status);
           return (
-            <button key={s.id} onClick={function(){ setSection(s.id); }}
-              style={{ padding:"10px 14px", background:"transparent", border:"none", borderBottom: isOn ? "2px solid var(--ink)" : "2px solid transparent", marginBottom:"-1px", cursor:"pointer", fontFamily:"inherit", color: isOn ? "var(--ink)" : "var(--ink-3)", display:"flex", alignItems:"center", gap:7 }}>
-              <span style={{ fontSize:13, fontWeight: isOn ? 600 : 500 }}>{s.label}</span>
-              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"1px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)" }}>{s.sub}</span>
-            </button>
+            <div key={c.id} onClick={function(){ setInspected(c); }}
+              style={{ display:"grid", gridTemplateColumns:"30px 220px 130px 100px 120px 100px 90px 110px 80px", gap:8, padding:"11px 14px", alignItems:"center", borderBottom: i < visible.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)", cursor:"pointer", transition:"background 80ms" }}
+              onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
+              onMouseLeave={function(e){ e.currentTarget.style.background = i % 2 === 1 ? "transparent" : "var(--bg-canvas)"; }}>
+              <span style={{ width:24, height:20, borderRadius:4, background: km.bg, color: km.color, display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700 }}>{km.glyph}</span>
+              <div style={{ minWidth:0 }}>
+                <code style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink)", fontWeight:600 }}>{c.output}</code>
+                <div style={{ fontSize:11, color:"var(--ink-3)", marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.name}</div>
+              </div>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color: km.color, fontWeight:600 }}>{km.label}</span>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background: sm.bg, color: sm.color, fontWeight:700, letterSpacing:"0.4px", textTransform:"uppercase", justifySelf:"start" }}>{sm.label}</span>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{c.trigger.label}</span>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{fmtMs(c.avgLatency)}</span>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{c.recordsAffected.toLocaleString()}</span>
+              <span style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <Spark data={c.spark} />
+                <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color: c.successRate >= 99 ? "var(--green)" : c.successRate >= 95 ? "var(--gold)" : "var(--coral)", fontWeight:700 }}>{c.successRate + "%"}</span>
+              </span>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{c.lastRun}</span>
+            </div>
           );
         })}
       </div>
 
-      {/* ─── CATALOG ─── */}
-      {section === "catalog" && (
-        <>
-          {/* Filter bar */}
-          <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-            <div style={{ position:"relative", flex:"0 1 320px" }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"var(--ink-3)", pointerEvents:"none" }}>
-                <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-              </svg>
-              <input value={search} onChange={function(e){ setSearch(e.target.value); }} placeholder="Search by name, output, or expression" style={{ border:"1px solid var(--line)", borderRadius:7, padding:"8px 10px 8px 30px", fontSize:12.5, fontFamily:"inherit", background:"var(--panel)", width:"100%", boxSizing:"border-box" }} />
+      {/* DETAIL MODAL */}
+      {inspected && <ComputationDetailModal comp={inspected} node={node} onClose={function(){ setInspected(null); }} />}
+
+      {/* CREATE FLOW */}
+      {createOpen && <NewComputationFlow node={node} properties={properties} onClose={function(){ setCreateOpen(false); }} />}
+
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────────────────
+// COMPUTATION DETAIL MODAL — opens when a catalog row is clicked. Surfaces the
+// definition, dependency graph, run history, and the same edit / test / backfill
+// / disable actions that used to live in the inline expansion.
+// ───────────────────────────────────────────────────────────────────────────────
+function ComputationDetailModal({ comp, node, onClose }) {
+  var km = comp.kind === "formula"    ? { label:"Formula",    glyph:"fx", color:"var(--gold)",   bg:"var(--gold-fill)"   }
+         : comp.kind === "sql"        ? { label:"SQL",        glyph:"SQL",color:"var(--blue)",   bg:"var(--blue-fill)"   }
+         : comp.kind === "agent"      ? { label:"Agent",      glyph:"A",  color:"var(--purple)", bg:"var(--purple-fill)" }
+         : comp.kind === "automation" ? { label:"Automation", glyph:"WF", color:"var(--green)",  bg:"var(--green-fill)"  }
+         :                                { label:comp.kind,  glyph:"?",  color:"var(--ink-3)",  bg:"var(--chip)"        };
+  var sm = comp.status === "healthy" ? { label:"Healthy", color:"var(--green)", bg:"var(--green-fill)" }
+         : comp.status === "stale"   ? { label:"Stale",   color:"var(--gold)",  bg:"var(--gold-fill)"  }
+         : comp.status === "failing" ? { label:"Failing", color:"var(--coral)", bg:"var(--coral-fill)" }
+         :                              { label:comp.status, color:"var(--ink-3)", bg:"var(--chip)" };
+  function fmtMs(ms){ return ms < 1000 ? ms + "ms" : (ms/1000).toFixed(1) + "s"; }
+
+  // Synthesise a short recent-runs feed for this computation.
+  var seed = (comp.id || comp.output).length * 13 + 5;
+  function rng(n){ return Math.abs(Math.sin(n) * 10000) % 1; }
+  var recentRuns = [];
+  for (var i = 0; i < 8; i++) {
+    var rs = seed + i * 11;
+    var ok = comp.status === "healthy" ? (rng(rs) > 0.04) : comp.status === "stale" ? (rng(rs) > 0.12) : (rng(rs) > 0.35);
+    recentRuns.push({ when: i === 0 ? "just now" : (i * 7 + Math.floor(rng(rs) * 13)) + "m ago", ok: ok, latency: comp.avgLatency + Math.floor((rng(rs + 1) - 0.5) * 20), records: comp.recordsAffected });
+  }
+
+  return (
+    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
+      onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ width:"92vw", maxWidth:880, maxHeight:"94vh", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
+
+        {/* HEADER */}
+        <div style={{ flexShrink:0, padding:"18px 22px 16px", borderBottom:"1px solid var(--line)", background:"var(--panel)" }}>
+          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:14 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:12, minWidth:0 }}>
+              <span style={{ width:38, height:32, borderRadius:7, background: km.bg, color: km.color, display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:12, fontWeight:700, flexShrink:0 }}>{km.glyph}</span>
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:3 }}>{node.label} · {km.label} computation</div>
+                <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                  <code style={{ fontFamily:"JetBrains Mono", fontSize:19, color:"var(--ink)", fontWeight:600 }}>{comp.output}</code>
+                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background: sm.bg, color: sm.color, fontWeight:700, letterSpacing:"0.5px", textTransform:"uppercase" }}>{sm.label}</span>
+                </div>
+                <div style={{ fontSize:12.5, color:"var(--ink-3)", marginTop:5 }}>{comp.name}</div>
+              </div>
             </div>
-            <div style={{ display:"flex", gap:4 }}>
-              {[{ id:"all", l:"All" }, { id:"formula", l:"Formula" }, { id:"sql", l:"SQL" }, { id:"agent", l:"Agent" }, { id:"automation", l:"Automation" }].map(function(f){
-                var on = filter === f.id;
-                return <button key={f.id} onClick={function(){ setFilter(f.id); }} style={{ padding:"6px 10px", borderRadius:5, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "var(--panel)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:10.5, cursor:"pointer", letterSpacing:"0.3px" }}>{f.l}</button>;
-              })}
+            <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", flexShrink:0 }}>✕</button>
+          </div>
+        </div>
+
+        {/* BODY */}
+        <div style={{ flex:1, overflowY:"auto", padding:"20px 22px", display:"flex", flexDirection:"column", gap:18 }}>
+
+          {/* Definition */}
+          <div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:6 }}>Definition</div>
+            <pre style={{ margin:0, padding:"13px 14px", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:8, fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", whiteSpace:"pre-wrap", wordBreak:"break-word", lineHeight:1.6 }}>{comp.body}</pre>
+          </div>
+
+          {/* Two-column metadata */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:18 }}>
+            <div className="card" style={{ overflow:"hidden" }}>
+              <div style={{ padding:"10px 14px", borderBottom:"1px solid var(--line-2)", background:"var(--panel-2)", fontSize:12.5, fontWeight:600 }}>Inputs & output</div>
+              <div style={{ padding:"4px 0" }}>
+                {[
+                  { k:"INPUTS",  v: comp.inputs.length ? comp.inputs.map(function(i){ return <code key={i} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"2px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-2)", marginRight:4, display:"inline-block" }}>{i}</code>; }) : <span style={{ color:"var(--ink-4)" }}>—</span> },
+                  { k:"OUTPUT",  v: <code style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink)" }}>{comp.output}</code> },
+                  { k:"SOURCE",  v: comp.sourceSystem || <span style={{ color:"var(--ink-4)" }}>local</span> },
+                  { k:"OWNER",   v: comp.owner }
+                ].map(function(row, j, arr){
+                  return (
+                    <div key={j} style={{ display:"grid", gridTemplateColumns:"100px 1fr", gap:14, padding:"9px 14px", borderBottom: j < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"baseline" }}>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase" }}>{row.k}</span>
+                      <span style={{ fontSize:12, color:"var(--ink-2)", lineHeight:1.5 }}>{row.v}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <div style={{ marginLeft:"auto", display:"flex", gap:4 }}>
-              {[{ id:"all", l:"Any status" }, { id:"healthy", l:"Healthy" }, { id:"stale", l:"Stale" }, { id:"failing", l:"Failing" }].map(function(f){
-                var on = statusFilter === f.id;
-                return <button key={f.id} onClick={function(){ setStatusFilter(f.id); }} style={{ padding:"6px 10px", borderRadius:5, border:"1px solid " + (on ? "var(--ink-3)" : "var(--line)"), background: on ? "var(--bg-canvas)" : "var(--panel)", color:"var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:10.5, cursor:"pointer", letterSpacing:"0.3px" }}>{f.l}</button>;
+
+            <div className="card" style={{ overflow:"hidden" }}>
+              <div style={{ padding:"10px 14px", borderBottom:"1px solid var(--line-2)", background:"var(--panel-2)", fontSize:12.5, fontWeight:600 }}>Trigger & telemetry</div>
+              <div style={{ padding:"4px 0" }}>
+                {[
+                  { k:"TRIGGER",  v: comp.trigger.label + " (" + comp.trigger.schedule + ")" },
+                  { k:"LATENCY",  v: fmtMs(comp.avgLatency) + " avg" },
+                  { k:"SUCCESS",  v: comp.successRate + "% over 7 days" },
+                  { k:"COVERAGE", v: comp.coverage + "% of records have a value" },
+                  { k:"RECORDS",  v: comp.recordsAffected.toLocaleString() + " computed · 24h" }
+                ].map(function(row, j, arr){
+                  return (
+                    <div key={j} style={{ display:"grid", gridTemplateColumns:"100px 1fr", gap:14, padding:"9px 14px", borderBottom: j < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"baseline" }}>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase" }}>{row.k}</span>
+                      <span style={{ fontSize:12, color:"var(--ink-2)", lineHeight:1.5 }}>{row.v}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Recent runs */}
+          <div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:6 }}>Recent runs</div>
+            <div className="card" style={{ overflow:"hidden" }}>
+              {recentRuns.map(function(r, i, a){
+                return (
+                  <div key={i} style={{ display:"grid", gridTemplateColumns:"100px 14px 1fr 90px 90px", gap:12, padding:"9px 14px", alignItems:"center", borderBottom: i < a.length-1 ? "1px dashed var(--line-2)" : "none" }}>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{r.when}</span>
+                    <span style={{ width:7, height:7, borderRadius:"50%", background: r.ok ? "var(--green)" : "var(--coral)", justifySelf:"center" }} />
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{r.records.toLocaleString() + " records"}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)" }}>{fmtMs(Math.max(1, r.latency))}</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"1.5px 7px", borderRadius:3, background: r.ok ? "var(--green-fill)" : "var(--coral-fill)", color: r.ok ? "var(--green)" : "var(--coral)", fontWeight:700, letterSpacing:"0.4px", textTransform:"uppercase", justifySelf:"end" }}>{r.ok ? "ok" : "fail"}</span>
+                  </div>
+                );
               })}
             </div>
           </div>
 
-          {/* Catalog table */}
-          <div className="card" style={{ overflow:"hidden" }}>
-            <div style={{ display:"grid", gridTemplateColumns:"30px 200px 130px 100px 110px 90px 80px 90px 70px 32px", gap:8, padding:"10px 14px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.5px", textTransform:"uppercase" }}>
-              <div/><div>Output → name</div><div>Kind</div><div>Status</div><div>Trigger</div><div>Latency</div><div>Records</div><div>Success</div><div>Last run</div><div/>
-            </div>
-            {visible.length === 0 ? (
-              <div style={{ padding:"40px 14px", textAlign:"center", color:"var(--ink-3)", fontSize:12.5 }}>No computations match these filters.</div>
-            ) : visible.map(function(c, i){
-              var km = kindMeta(c.kind);
-              var sm = statusMeta(c.status);
-              var isOpen = expanded === c.id;
-              return (
-                <div key={c.id}>
-                  <div onClick={function(){ setExpanded(isOpen ? null : c.id); }}
-                    style={{ display:"grid", gridTemplateColumns:"30px 200px 130px 100px 110px 90px 80px 90px 70px 32px", gap:8, padding:"10px 14px", alignItems:"center", borderBottom: "1px solid var(--line-2)", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)", cursor:"pointer" }}>
-                    <span style={{ width:24, height:20, borderRadius:4, background: km.bg, color: km.color, display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700 }}>{km.glyph}</span>
-                    <div style={{ minWidth:0 }}>
-                      <code style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink)", fontWeight:600 }}>{c.output}</code>
-                      <div style={{ fontSize:11, color:"var(--ink-3)", marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.name}</div>
-                    </div>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color: km.color, fontWeight:600 }}>{km.label}</span>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background: sm.bg, color: sm.color, fontWeight:700, letterSpacing:"0.4px", textTransform:"uppercase", justifySelf:"start" }}>{sm.label}</span>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{c.trigger.label}</span>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{fmtMs(c.avgLatency)}</span>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{c.recordsAffected.toLocaleString()}</span>
-                    <span style={{ display:"flex", alignItems:"center", gap:6 }}>
-                      <Spark data={c.spark} />
-                      <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color: c.successRate >= 99 ? "var(--green)" : c.successRate >= 95 ? "var(--gold)" : "var(--coral)", fontWeight:700 }}>{c.successRate + "%"}</span>
-                    </span>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{c.lastRun}</span>
-                    <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:11, justifySelf:"center" }}>{isOpen ? "▴" : "▾"}</span>
-                  </div>
+        </div>
 
-                  {/* Expanded detail */}
-                  {isOpen && (
-                    <div style={{ background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", padding:"16px 18px" }}>
-                      <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr", gap:18 }}>
-                        {/* LEFT: body + run history */}
-                        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-                          <div>
-                            <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:6 }}>Definition</div>
-                            <pre style={{ margin:0, padding:"12px 14px", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:7, fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink)", whiteSpace:"pre-wrap", wordBreak:"break-word", lineHeight:1.55 }}>{c.body}</pre>
-                          </div>
-                          <div>
-                            <div style={{ fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-4)", textTransform:"uppercase", marginBottom:6 }}>Recent runs (7-day success rate)</div>
-                            <div style={{ display:"flex", alignItems:"flex-end", gap:6, padding:"12px 14px", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:7, height:80 }}>
-                              {c.spark.map(function(v, j){
-                                var col = v >= 99 ? "var(--green)" : v >= 95 ? "var(--gold)" : "var(--coral)";
-                                return (
-                                  <div key={j} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:3, justifyContent:"flex-end" }}>
-                                    <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color: col, fontWeight:700 }}>{v.toFixed(0)}</span>
-                                    <div style={{ width:"100%", maxWidth:36, height: ((v - 60)/40) * 48 + "px", background: col, borderRadius:"2px 2px 0 0", opacity:0.85 }} />
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                        {/* RIGHT: metadata */}
-                        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                          {[
-                            { k:"INPUTS",     v: c.inputs.length ? c.inputs.map(function(i){ return <code key={i} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"2px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-2)", marginRight:4 }}>{i}</code>; }) : <span style={{ color:"var(--ink-4)" }}>—</span> },
-                            { k:"OUTPUT",     v: <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink)" }}>{c.output}</code> },
-                            { k:"TRIGGER",    v: c.trigger.label + " (" + c.trigger.schedule + ")" },
-                            { k:"SOURCE",     v: c.sourceSystem || <span style={{ color:"var(--ink-4)" }}>—</span> },
-                            { k:"OWNER",      v: c.owner },
-                            { k:"COVERAGE",   v: c.coverage + "% of records have a value" },
-                            { k:"RECORDS",    v: c.recordsAffected.toLocaleString() + " computed in 24h" }
-                          ].map(function(row, j, arr){
-                            return (
-                              <div key={j} style={{ display:"grid", gridTemplateColumns:"110px 1fr", gap:14, padding:"7px 0", borderBottom: j < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"baseline" }}>
-                                <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-4)", textTransform:"uppercase" }}>{row.k}</span>
-                                <span style={{ fontSize:12, color:"var(--ink-2)", lineHeight:1.5 }}>{row.v}</span>
-                              </div>
-                            );
-                          })}
-                          <div style={{ display:"flex", gap:6, marginTop:6 }}>
-                            <button className="btn-dark" style={{ fontSize:11.5, padding:"6px 10px" }}>Edit</button>
-                            <button className="btn-ghost" style={{ fontSize:11.5, padding:"6px 10px" }}>Test on 3 records</button>
-                            <button className="btn-ghost" style={{ fontSize:11.5, padding:"6px 10px" }}>Backfill</button>
-                            <button className="btn-ghost" style={{ fontSize:11.5, padding:"6px 10px", color:"var(--coral)" }}>Disable</button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+        {/* FOOTER */}
+        <div style={{ flexShrink:0, padding:"12px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
+          <button className="btn-ghost" style={{ fontSize:11.5, color:"var(--coral)" }}>Disable</button>
+          <div style={{ display:"flex", gap:6 }}>
+            <button className="btn-ghost" style={{ fontSize:11.5 }}>Backfill</button>
+            <button className="btn-ghost" style={{ fontSize:11.5 }}>Test on 3 records</button>
+            <button className="btn-dark" style={{ fontSize:11.5 }}>Edit computation</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────────────────
+// NEW COMPUTATION FLOW — 4-step modal that mirrors the AddPropertyFlow shape:
+// Output → Kind → Definition → Behaviour & review.
+// ───────────────────────────────────────────────────────────────────────────────
+function NewComputationFlow({ node, properties, onClose }) {
+  var [step, setStep] = useState(1);
+
+  // OUTPUT — new field or existing
+  var [outMode, setOutMode]       = useState("new");     // new | existing
+  var [outName, setOutName]       = useState("");
+  var [outType, setOutType]       = useState("string");
+  var [outExisting, setOutExist]  = useState(null);
+  // KIND
+  var [kind, setKind]             = useState(null);      // formula | sql | agent | automation
+  // DEFINITION
+  var [formulaBody, setFormulaBody]   = useState("");
+  var [sqlConn, setSqlConn]           = useState(null);
+  var [sqlQuery, setSqlQuery]         = useState("");
+  var [agentId, setAgentId]           = useState(null);
+  var [automationId, setAutomationId] = useState(null);
+  // BEHAVIOUR
+  var [trigger, setTrigger]       = useState("on_change");
+  var [schedule, setSchedule]     = useState("hourly");
+  var [backfill, setBackfill]     = useState("forward_only");
+  var [onFailure, setOnFailure]   = useState("retain_last");
+  var [owner, setOwner]           = useState("morgan.lee");
+
+  var TYPES = ["string","decimal","float","bool","timestamp","date","uuid","enum"];
+  var KIND_CARDS = [
+    { id:"formula",    title:"Formula",    desc:"Combine fields with simple operators and functions — sum, bucket, coalesce, if/then.",                  glyph:"fx",  color:"var(--gold)",   bg:"var(--gold-fill)"  },
+    { id:"sql",        title:"SQL / Cypher",desc:"Aggregate or roll up from another entity. Runs on a registered warehouse connection.",                glyph:"SQL", color:"var(--blue)",   bg:"var(--blue-fill)"  },
+    { id:"agent",      title:"Agent",      desc:"Call a pre-built scoring or classification agent — health score, churn risk, intent.",                   glyph:"A",   color:"var(--purple)", bg:"var(--purple-fill)"},
+    { id:"automation", title:"Automation", desc:"Materialise a value from a scheduled workflow — Airflow DAG, Workato recipe, custom webhook.",          glyph:"WF",  color:"var(--green)",  bg:"var(--green-fill)" }
+  ];
+  var AGENTS = [
+    { id:"cust_health",   label:"cust_health.score",         desc:"Customer Health Scorer · 0–1 confidence" },
+    { id:"churn_risk",    label:"churn_risk.predict",        desc:"Churn Risk Predictor · 90-day window" },
+    { id:"support_intent",label:"support_intent.classify",   desc:"Support Intent Classifier · 12 intents" },
+    { id:"fraud_detect",  label:"fraud.detect",              desc:"Fraud Detector · transaction-level signal" },
+    { id:"sentiment",     label:"sentiment.analyze",         desc:"Sentiment Analyzer · 5-band score" }
+  ];
+  var AUTOMATIONS = [
+    { id:"compute_tier",    label:"compute_customer_tier",  desc:"Bucket accounts into Bronze / Silver / Gold tiers from ARR and engagement signals." },
+    { id:"refresh_health",  label:"refresh_health_score",   desc:"Recalculate the customer health score from usage, support load and renewal posture." },
+    { id:"arr_rollup",      label:"ARR Rollup → Account",   desc:"Aggregate active subscription MRR into an account-level ARR figure." },
+    { id:"renewal_sync",    label:"Renewal Stage Sync",     desc:"Mirror the renewal-opportunity stage from the CRM onto the account record." }
+  ];
+  var SQL_CONNECTIONS = [
+    { id:"snow-prod",  system:"Snowflake",  label:"ANALYTICS_PROD",      sub:"data-platform · US-WEST-2" },
+    { id:"snow-raw",   system:"Snowflake",  label:"RAW_INGEST",          sub:"ingest · US-EAST-1" },
+    { id:"bq-metrics", system:"BigQuery",   label:"metrics-prod",        sub:"data-platform" },
+    { id:"databricks", system:"Databricks", label:"analytics-warehouse", sub:"prod · us-east-1" }
+  ];
+  var DIRECTORY = [
+    { id:"morgan.lee", label:"Morgan Lee · data-platform" },
+    { id:"ramin.k",    label:"Ramin K · data-platform" },
+    { id:"jordan.s",   label:"Jordan S · customer-ops" },
+    { id:"alex.r",     label:"Alex R · finance-ops" }
+  ];
+
+  var inp = { border:"1px solid var(--line)", borderRadius:7, padding:"10px 12px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", outline:"none", boxSizing:"border-box", width:"100%", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" };
+  var lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:6 };
+
+  function canContinue(s){
+    if (s === 1) return outMode === "existing" ? !!outExisting : outName.trim().length > 0;
+    if (s === 2) return !!kind;
+    if (s === 3) {
+      if (kind === "formula")    return formulaBody.trim().length > 0;
+      if (kind === "sql")        return !!sqlConn && sqlQuery.trim().length > 0;
+      if (kind === "agent")      return !!agentId;
+      if (kind === "automation") return !!automationId;
+    }
+    return true;
+  }
+  var disabled = !canContinue(step);
+
+  var outDisplay = outMode === "existing" ? outExisting : outName;
+
+  var steps = [
+    { label:"Output field",  sub: outDisplay || "Where the value lands",       desc:"Pick an existing field to write into, or create a new one. The computation writes its result here." },
+    { label:"Computation type", sub: kind || "Pick a kind",                   desc:"Choose how the value is derived." },
+    { label:"Definition",     sub: kind ? kind + " body" : "—",               desc:"Write the actual logic — formula, query, agent call, or automation reference." },
+    { label:"Behaviour",      sub: trigger + " · " + backfill,                desc:"When does the computation run, how should past records be filled, and what happens if it fails." }
+  ];
+
+  return (
+    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
+      onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ width:"94vw", maxWidth:1080, height:"92vh", maxHeight:820, background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
+
+        {/* HEADER */}
+        <div style={{ flexShrink:0, height:58, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 22px", background:"var(--panel)" }}>
+          <div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>{node.label} · New computation</div>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:20, color:"var(--ink)", marginTop:2 }}>{outDisplay ? "Computing " + outDisplay : "New computation"}</div>
+          </div>
+          <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)" }}>✕</button>
+        </div>
+
+        {/* BODY */}
+        <div style={{ flex:1, display:"grid", gridTemplateColumns:"240px 1fr", minHeight:0 }}>
+          <div style={{ background:"var(--panel-2)", borderRight:"1px solid var(--line)", padding:"20px 14px", display:"flex", flexDirection:"column", gap:4, overflowY:"auto" }}>
+            {steps.map(function(s, i){
+              var n = i + 1;
+              var isOn = step === n;
+              var isDone = step > n;
+              return (
+                <button key={n} onClick={function(){ if (n <= step) setStep(n); }}
+                  style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor: n <= step ? "pointer" : "default", fontFamily:"inherit", textAlign:"left", alignItems:"center" }}>
+                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:12, fontWeight:700, flexShrink:0 }}>{isDone ? <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg> : n}</span>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400 }}>{s.label}</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.sub}</div>
+                  </div>
+                </button>
               );
             })}
           </div>
-        </>
-      )}
-
-      {/* ─── PIPELINE ─── */}
-      {section === "pipeline" && (
-        <div className="card" style={{ overflow:"hidden" }}>
-          <div style={{ padding:"13px 18px", borderBottom:"1px solid var(--line-2)", background:"var(--panel-2)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-            <div>
-              <div style={{ fontSize:13.5, fontWeight:600 }}>Dependency pipeline</div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3 }}>Inputs (left) → computations (centre) → output fields (right). Click a node to filter the catalog.</div>
+          <div style={{ padding:"24px 32px 28px", overflowY:"auto" }}>
+            <div style={{ marginBottom:20 }}>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / " + steps.length}</div>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:28, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>{steps[step-1].label}</div>
+              <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:680 }}>{steps[step-1].desc}</div>
             </div>
-            <button className="btn-ghost" style={{ fontSize:11.5 }}>Export DAG</button>
-          </div>
-          <div style={{ background:"var(--bg-canvas)", padding:24, minHeight:380 }}>
-            {(function(){
-              // Build a simple 3-column DAG: input fields | computation nodes | output fields.
-              var inputSet = {};
-              comps.forEach(function(c){ c.inputs.forEach(function(i){ inputSet[i] = (inputSet[i] || 0) + 1; }); });
-              var inputs = Object.keys(inputSet);
-              var rowH = 38;
-              var H = Math.max(comps.length, inputs.length) * rowH + 40;
-              var W = 760;
-              var x1 = 140, x2 = W/2, x3 = W - 140;
-              function yFor(idx, total){ return 20 + ((idx + 0.5) * (H - 40) / total); }
-              return (
-                <svg width="100%" height={H} viewBox={"0 0 " + W + " " + H} style={{ display:"block" }}>
-                  {/* Edges */}
-                  {comps.map(function(c, ci){
-                    var cy = yFor(ci, comps.length);
-                    return c.inputs.map(function(inp, ii){
-                      var iIdx = inputs.indexOf(inp);
-                      if (iIdx < 0) return null;
-                      var iy = yFor(iIdx, inputs.length);
-                      return <path key={c.id+"-"+inp} d={"M " + (x1 + 60) + " " + iy + " C " + ((x1 + x2)/2) + " " + iy + ", " + ((x1 + x2)/2) + " " + cy + ", " + (x2 - 80) + " " + cy} fill="none" stroke="var(--ink-4)" strokeWidth="1" opacity="0.5" />;
-                    });
-                  })}
-                  {comps.map(function(c, ci){
-                    var cy = yFor(ci, comps.length);
-                    var oy = yFor(ci, comps.length);
-                    return <path key={"o-" + c.id} d={"M " + (x2 + 80) + " " + cy + " C " + ((x2 + x3)/2) + " " + cy + ", " + ((x2 + x3)/2) + " " + oy + ", " + (x3 - 60) + " " + oy} fill="none" stroke="var(--ink-3)" strokeWidth="1.2" opacity="0.8" />;
-                  })}
-                  {/* Input nodes */}
-                  {inputs.map(function(inp, ii){
-                    var y = yFor(ii, inputs.length);
-                    return (
-                      <g key={"in-" + inp}>
-                        <rect x={x1 - 60} y={y - 11} width="120" height="22" rx="4" fill="var(--panel)" stroke="var(--line)" />
-                        <text x={x1} y={y + 3.5} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:10, fill:"var(--ink-2)" }}>{inp}</text>
-                      </g>
-                    );
-                  })}
-                  {/* Computation nodes */}
-                  {comps.map(function(c, ci){
-                    var y = yFor(ci, comps.length);
-                    var km = kindMeta(c.kind);
-                    return (
-                      <g key={c.id} style={{ cursor:"pointer" }} onClick={function(){ setSection("catalog"); setExpanded(c.id); }}>
-                        <rect x={x2 - 80} y={y - 14} width="160" height="28" rx="6" fill={km.bg} stroke={km.color} strokeWidth="1.2" />
-                        <text x={x2} y={y - 1} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:10.5, fontWeight:700, fill: km.color }}>{km.glyph}</text>
-                        <text x={x2} y={y + 11} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:9.5, fill:"var(--ink-2)" }}>{c.output}</text>
-                      </g>
-                    );
-                  })}
-                  {/* Output nodes */}
-                  {comps.map(function(c, ci){
-                    var y = yFor(ci, comps.length);
-                    return (
-                      <g key={"out-" + c.id}>
-                        <rect x={x3 - 60} y={y - 11} width="120" height="22" rx="4" fill="var(--panel)" stroke="var(--ink-3)" strokeWidth="1.2" />
-                        <text x={x3} y={y + 3.5} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:10, fill:"var(--ink)" }}>{c.output}</text>
-                      </g>
-                    );
-                  })}
-                  {/* Column labels */}
-                  <text x={x1} y="14" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:9, fill:"var(--ink-4)", letterSpacing:"0.5px" }}>INPUTS</text>
-                  <text x={x2} y="14" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:9, fill:"var(--ink-4)", letterSpacing:"0.5px" }}>COMPUTATIONS</text>
-                  <text x={x3} y="14" textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:9, fill:"var(--ink-4)", letterSpacing:"0.5px" }}>OUTPUTS</text>
-                </svg>
-              );
-            })()}
-          </div>
-        </div>
-      )}
 
-      {/* ─── RUNS ─── */}
-      {section === "runs" && (
-        <div className="card" style={{ overflow:"hidden" }}>
-          <div style={{ padding:"13px 18px", borderBottom:"1px solid var(--line-2)", background:"var(--panel-2)" }}>
-            <div style={{ fontSize:13.5, fontWeight:600 }}>Run history</div>
-            <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3 }}>Every computation execution in the last 24h — newest first.</div>
-          </div>
-          <div style={{ display:"grid", gridTemplateColumns:"110px 30px 200px 130px 110px 80px 80px 90px", gap:10, padding:"10px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.5px", textTransform:"uppercase" }}>
-            <div>When</div><div/><div>Computation</div><div>Kind</div><div>Trigger</div><div>Records</div><div>Latency</div><div style={{ textAlign:"right" }}>Status</div>
-          </div>
-          {(function(){
-            // Synthesise a run feed from comps · 24 entries.
-            var feedSeed = node.id.charCodeAt(0) * 7 + node.id.length;
-            var feed = [];
-            for (var i = 0; i < 24; i++) {
-              var c = comps[i % comps.length];
-              var s = feedSeed + i * 11;
-              var when = i === 0 ? "just now" : i + "m ago";
-              var ok = c.status === "healthy" ? (s % 50 !== 0) : c.status === "stale" ? (s % 7 !== 0) : (s % 3 !== 0);
-              feed.push({ when: when, comp: c, ok: ok, records: c.recordsAffected, latency: c.avgLatency + Math.floor((s % 11) - 5) });
-            }
-            return feed.map(function(e, i){
-              var km = kindMeta(e.comp.kind);
-              return (
-                <div key={i} style={{ display:"grid", gridTemplateColumns:"110px 30px 200px 130px 110px 80px 80px 90px", gap:10, padding:"9px 18px", alignItems:"center", borderBottom: i < 23 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)" }}>
-                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{e.when}</span>
-                  <span style={{ width:7, height:7, borderRadius:"50%", background: e.ok ? "var(--green)" : "var(--coral)", justifySelf:"center" }} />
-                  <code style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink)" }}>{e.comp.output}</code>
-                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color: km.color, fontWeight:600 }}>{km.label}</span>
-                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{e.comp.trigger.label}</span>
-                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)" }}>{e.records.toLocaleString()}</span>
-                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)" }}>{fmtMs(Math.max(1, e.latency))}</span>
-                  <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"1.5px 7px", borderRadius:3, background: e.ok ? "var(--green-fill)" : "var(--coral-fill)", color: e.ok ? "var(--green)" : "var(--coral)", fontWeight:700, letterSpacing:"0.4px", textTransform:"uppercase", justifySelf:"end" }}>{e.ok ? "ok" : "fail"}</span>
+            {/* STEP 1: OUTPUT */}
+            {step === 1 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  {[
+                    { id:"new",      title:"New field",      desc:"Create a fresh property on " + node.label + " to hold this value." },
+                    { id:"existing", title:"Existing field", desc:"Overwrite a property that's already on " + node.label + ". The computation becomes its source of truth." }
+                  ].map(function(opt){
+                    var on = outMode === opt.id;
+                    return <button key={opt.id} type="button" onClick={function(){ setOutMode(opt.id); }} style={{ padding:"14px 16px", borderRadius:9, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background:"var(--panel)", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
+                      <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{opt.title}</div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:5, lineHeight:1.5 }}>{opt.desc}</div>
+                    </button>;
+                  })}
                 </div>
-              );
-            });
-          })()}
-        </div>
-      )}
+                {outMode === "new" ? (
+                  <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:14 }}>
+                    <div><label style={lbl}>Field key</label><input value={outName} onChange={function(e){ setOutName(e.target.value); }} placeholder="e.g. tier · churn_score · last_activity_at" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono" })} /></div>
+                    <div><label style={lbl}>Type</label><select value={outType} onChange={function(e){ setOutType(e.target.value); }} style={inp}>{TYPES.map(function(t){ return <option key={t} value={t}>{t}</option>; })}</select></div>
+                  </div>
+                ) : (
+                  <div>
+                    <label style={lbl}>Existing field</label>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                      {(properties || []).map(function(p){
+                        var on = outExisting === p.name;
+                        return <button key={p.name} type="button" onClick={function(){ setOutExist(p.name); }} style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"7px 11px", borderRadius:6, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "var(--panel)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11, cursor:"pointer" }}>
+                          <span>{p.name}</span>
+                          <span style={{ opacity:0.7, fontSize:10 }}>· {p.type}</span>
+                        </button>;
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
-      {/* ─── TEMPLATES ─── */}
-      {section === "templates" && (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-          {TEMPLATES.map(function(t){
-            var km = kindMeta(t.kind);
-            return (
-              <div key={t.id} style={{ padding:"16px 18px", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2)" }}>
-                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                  <span style={{ width:30, height:24, borderRadius:5, background: km.bg, color: km.color, display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700 }}>{km.glyph}</span>
-                  <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{t.name}</span>
-                  <span style={{ marginLeft:"auto", fontFamily:"JetBrains Mono", fontSize:9.5, color: km.color, padding:"1px 6px", borderRadius:3, background: km.bg, fontWeight:700, letterSpacing:"0.4px", textTransform:"uppercase" }}>{km.label}</span>
+            {/* STEP 2: KIND */}
+            {step === 2 && (
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                {KIND_CARDS.map(function(k){
+                  var on = kind === k.id;
+                  return <button key={k.id} type="button" onClick={function(){ setKind(k.id); }} style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"16px 18px", borderRadius:10, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background:"var(--panel)", boxShadow: on ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "none", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
+                    <span style={{ width:38, height:32, borderRadius:7, background: k.bg, color: k.color, display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:12, fontWeight:700, flexShrink:0 }}>{k.glyph}</span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{k.title}</div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:5, lineHeight:1.5 }}>{k.desc}</div>
+                    </div>
+                  </button>;
+                })}
+              </div>
+            )}
+
+            {/* STEP 3: DEFINITION */}
+            {step === 3 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                {kind === "formula" && (
+                  <div>
+                    <label style={lbl}>Formula</label>
+                    <textarea value={formulaBody} onChange={function(e){ setFormulaBody(e.target.value); }} rows={8} placeholder={"e.g. " + (outDisplay || "tier") + " := bucket(arr_usd, [1000, 10000, 100000], ['SMB','MM','ENT','STR'])"} style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", lineHeight:1.55, resize:"vertical" })} />
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>Available functions: <code>bucket · coalesce · if · sum · avg · min · max · days_between · concat · lower · upper · round · lookup</code></div>
+                  </div>
+                )}
+                {kind === "sql" && (
+                  <>
+                    <div>
+                      <label style={lbl}>Connection</label>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                        {SQL_CONNECTIONS.map(function(c){
+                          var on = sqlConn === c.id;
+                          return <button key={c.id} type="button" onClick={function(){ setSqlConn(c.id); }} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:8, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background:"var(--panel)", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
+                            <span style={{ width:30, height:24, borderRadius:5, background:"var(--blue-fill)", color:"var(--blue)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, flexShrink:0 }}>{c.system.slice(0,3).toUpperCase()}</span>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", fontWeight:600 }}>{c.label}</div>
+                              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{c.system + " · " + c.sub}</div>
+                            </div>
+                          </button>;
+                        })}
+                      </div>
+                    </div>
+                    <div>
+                      <label style={lbl}>Query</label>
+                      <textarea value={sqlQuery} onChange={function(e){ setSqlQuery(e.target.value); }} rows={8} placeholder={"e.g. SELECT SUM(mrr_usd * 12) FROM Subscription WHERE account_id = :id AND status = 'active'"} style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", lineHeight:1.55, resize:"vertical" })} />
+                    </div>
+                  </>
+                )}
+                {kind === "agent" && (
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {AGENTS.map(function(a){
+                      var on = agentId === a.id;
+                      return <button key={a.id} type="button" onClick={function(){ setAgentId(a.id); }} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", borderRadius:8, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background:"var(--panel)", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
+                        <span style={{ width:30, height:30, borderRadius:6, background:"var(--purple-fill)", color:"var(--purple)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0 }}>A</span>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", fontWeight:600 }}>{a.label}</code>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:2 }}>{a.desc}</div>
+                        </div>
+                        {on && <span style={{ color:"var(--green)", fontWeight:700 }}>✓</span>}
+                      </button>;
+                    })}
+                  </div>
+                )}
+                {kind === "automation" && (
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {AUTOMATIONS.map(function(a){
+                      var on = automationId === a.id;
+                      return <button key={a.id} type="button" onClick={function(){ setAutomationId(a.id); }} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", borderRadius:8, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background:"var(--panel)", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
+                        <span style={{ width:30, height:30, borderRadius:6, background:"var(--green-fill)", color:"var(--green)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0 }}>WF</span>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", fontWeight:600 }}>{a.label}</code>
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:2 }}>{a.desc}</div>
+                        </div>
+                        {on && <span style={{ color:"var(--green)", fontWeight:700 }}>✓</span>}
+                      </button>;
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* STEP 4: BEHAVIOUR & REVIEW */}
+            {step === 4 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+                  <div><label style={lbl}>Recompute when</label><select value={trigger} onChange={function(e){ setTrigger(e.target.value); }} style={inp}><option value="on_change">On input change (reactive)</option><option value="scheduled">On a schedule</option><option value="manual">Manual only</option></select></div>
+                  <div><label style={lbl}>Schedule</label><select value={schedule} onChange={function(e){ setSchedule(e.target.value); }} disabled={trigger !== "scheduled"} style={Object.assign({}, inp, { opacity: trigger !== "scheduled" ? 0.45 : 1 })}><option value="hourly">Hourly</option><option value="daily">Daily · 02:00 UTC</option><option value="weekly">Weekly</option><option value="custom">Custom (cron)</option></select></div>
                 </div>
-                <div style={{ fontSize:12, color:"var(--ink-3)", lineHeight:1.55, marginBottom:10 }}>{t.desc}</div>
-                <pre style={{ margin:0, padding:"10px 12px", background:"var(--panel-2)", border:"1px solid var(--line-2)", borderRadius:6, fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)", whiteSpace:"pre-wrap", wordBreak:"break-word", lineHeight:1.55 }}>{t.body}</pre>
-                <div style={{ display:"flex", gap:6, marginTop:10 }}>
-                  <button className="btn-dark" style={{ fontSize:11.5, padding:"6px 10px" }}>Use template →</button>
-                  <button className="btn-ghost" style={{ fontSize:11.5, padding:"6px 10px" }}>Preview</button>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+                  <div><label style={lbl}>Backfill</label><select value={backfill} onChange={function(e){ setBackfill(e.target.value); }} style={inp}><option value="forward_only">Forward only — new writes</option><option value="all_records">Backfill all existing records</option><option value="last_90d">Backfill last 90 days</option></select></div>
+                  <div><label style={lbl}>On failure</label><select value={onFailure} onChange={function(e){ setOnFailure(e.target.value); }} style={inp}><option value="retain_last">Retain last good value</option><option value="set_null">Set to null</option><option value="raise">Raise error & alert</option></select></div>
+                </div>
+                <div><label style={lbl}>Owner</label><select value={owner} onChange={function(e){ setOwner(e.target.value); }} style={Object.assign({}, inp, { maxWidth:400 })}>{DIRECTORY.map(function(d){ return <option key={d.id} value={d.id}>{d.label}</option>; })}</select></div>
+                <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, overflow:"hidden" }}>
+                  <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}><span style={{ fontSize:14, fontWeight:600 }}>Summary</span></div>
+                  <div>
+                    {[
+                      { k:"OUTPUT",     v: outDisplay + (outMode === "new" ? " · " + outType + " (new)" : " · existing") },
+                      { k:"KIND",       v: kind || <span style={{ color:"var(--coral)" }}>not chosen</span> },
+                      { k:"DEFINITION", v: kind === "formula" ? formulaBody : kind === "sql" ? sqlQuery : kind === "agent" ? "agent:" + agentId : kind === "automation" ? automationId : "—" },
+                      { k:"RECOMPUTE",  v: trigger + (trigger === "scheduled" ? " · " + schedule : "") },
+                      { k:"BACKFILL",   v: backfill.replace(/_/g, " ") },
+                      { k:"ON FAILURE", v: onFailure.replace(/_/g, " ") },
+                      { k:"OWNER",      v: owner }
+                    ].map(function(row, j, arr){
+                      return (
+                        <div key={j} style={{ display:"grid", gridTemplateColumns:"160px 1fr", gap:14, padding:"10px 22px", borderBottom: j < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"baseline" }}>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>{row.k}</span>
+                          <span style={{ fontSize:12.5, color:"var(--ink)", textAlign:"right", fontFamily: row.k === "DEFINITION" ? "JetBrains Mono" : "inherit", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{row.v}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      )}
+            )}
 
+          </div>
+        </div>
+
+        {/* FOOTER */}
+        <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
+          <button className="btn-ghost" onClick={function(){ if (step > 1) setStep(step - 1); }} disabled={step === 1} style={{ opacity: step === 1 ? 0.4 : 1 }}>← Back</button>
+          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of " + steps.length + " · " + steps[step-1].label}</span>
+          <div style={{ display:"flex", gap:8 }}>
+            <button className="btn-ghost" onClick={onClose}>Cancel</button>
+            <button className="btn-dark" disabled={disabled} onClick={function(){ if (step < steps.length) setStep(step + 1); else onClose(); }} style={{ opacity: disabled ? 0.45 : 1 }}>{step < steps.length ? "Continue →" : "Create computation ↵"}</button>
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }
