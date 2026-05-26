@@ -1469,43 +1469,39 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
                     {n.instances}
                   </text>
                 )}
-                {/* Edit-mode connector — premium feel.
-                    Now position-aware: the handle pops out on whichever side
-                    of the node the cursor is closest to. Tracks `hoverAngle`
-                    updated by onMouseMove on the node g. While linking, the
-                    handle freezes at the angle it was grabbed from.
-                    Larger size + softer color (cream disc + ink-3 + glyph)
-                    so it reads as an inviting affordance, not a heavy badge. */}
+                {/* Edit-mode connector — morphs onto the node's edge.
+                    The handle's centre sits exactly on the node's circumference,
+                    so half is inside the body and half pokes out — feels like a
+                    port that belongs to the node rather than a chip pasted on
+                    top. Its palette mirrors the node's own fill + stroke. */}
                 {editMode && (isHov || (drag?.kind === "link" && drag.id === n.id)) && (function(){
                   var isLinking = drag?.kind === "link" && drag.id === n.id;
-                  // While linking from this node, keep the handle where the
-                  // drag started (drag.angle). Otherwise follow the cursor.
                   var angle = isLinking && drag.angle != null ? drag.angle : hoverAngle;
-                  var R = n.size + 8;
+                  // Centre the handle on the node's circumference.
+                  var R = n.size;
                   var hx = Math.cos(angle) * R;
                   var hy = Math.sin(angle) * R;
+                  var nc = colorForNode(n);
                   return (
                     <g style={{ cursor: isLinking ? "crosshair" : "grab", animation:"ecgFadeIn 180ms ease-out both" }}>
-                      {/* Generous invisible hit ring — keeps hover sticky as the
-                          user reaches the handle. */}
+                      {/* Generous invisible hit ring */}
                       <circle cx={hx} cy={hy} r="20" fill="transparent" pointerEvents="all"
                         onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, n.id, true, angle); }} />
-                      {/* Breathing halo — only at rest, gentle attention pull */}
+                      {/* Breathing halo in the node's stroke color */}
                       {!isLinking && (
-                        <circle cx={hx} cy={hy} r="11" fill="none" stroke="var(--ink-3)" strokeWidth="0.6" opacity="0.4" style={{ pointerEvents:"none" }}>
+                        <circle cx={hx} cy={hy} r="11" fill="none" stroke={nc.stroke} strokeWidth="0.7" opacity="0.45" style={{ pointerEvents:"none" }}>
                           <animate attributeName="r" values="10;13;10" dur="1.8s" repeatCount="indefinite" />
-                          <animate attributeName="opacity" values="0.4;0.08;0.4" dur="1.8s" repeatCount="indefinite" />
+                          <animate attributeName="opacity" values="0.5;0.1;0.5" dur="1.8s" repeatCount="indefinite" />
                         </circle>
                       )}
-                      {/* The dot — soft cream disc, slim border. Cream-on-cream
-                          with the + glyph carrying the affordance, not a hard
-                          dark badge. */}
-                      <circle cx={hx} cy={hy} r={isLinking ? 9 : 8}
-                        fill="var(--panel)" stroke="var(--ink-3)" strokeWidth="1"
+                      {/* The dot — same fill + stroke as the node body, so it
+                          reads as a port that belongs to the node. */}
+                      <circle cx={hx} cy={hy} r={isLinking ? 8 : 7}
+                        fill={nc.fill} stroke={nc.stroke} strokeWidth="1.3"
                         style={{ pointerEvents:"none", transition:"r 140ms cubic-bezier(0.34,1.56,0.64,1)" }} />
-                      {/* + glyph — ink-3 so it reads dark on cream without being pure black */}
-                      <line x1={hx - 3.8} y1={hy} x2={hx + 3.8} y2={hy} stroke="var(--ink-2)" strokeWidth="1.3" strokeLinecap="round" style={{ pointerEvents:"none" }} />
-                      <line x1={hx} y1={hy - 3.8} x2={hx} y2={hy + 3.8} stroke="var(--ink-2)" strokeWidth="1.3" strokeLinecap="round" style={{ pointerEvents:"none" }} />
+                      {/* + glyph in the node's stroke color */}
+                      <line x1={hx - 3} y1={hy} x2={hx + 3} y2={hy} stroke={nc.stroke} strokeWidth="1.4" strokeLinecap="round" style={{ pointerEvents:"none" }} />
+                      <line x1={hx} y1={hy - 3} x2={hx} y2={hy + 3} stroke={nc.stroke} strokeWidth="1.4" strokeLinecap="round" style={{ pointerEvents:"none" }} />
                     </g>
                   );
                 })()}
@@ -1518,11 +1514,12 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
           {drag?.kind === "link" && linkCursor && (function(){
             var from = nodes.find(function(x){ return x.id === drag.id; });
             if (!from) return null;
-            // Origin matches the angle the user grabbed from, not always the right side.
-            var R = (from.size || 22) + 8;
+            // Origin matches the handle position — on the node's circumference.
+            var R = (from.size || 22);
             var a = drag.angle != null ? drag.angle : 0;
             var sx = from.x + Math.cos(a) * R;
             var sy = from.y + Math.sin(a) * R;
+            var fromC = colorForNode(from);
             var ex = linkCursor.x;
             var ey = linkCursor.y;
             var dx = ex - sx, dy = ey - sy;
@@ -1540,11 +1537,12 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
                     <circle cx={t.x} cy={t.y} r={(t.size || 22) + 5}  fill="none" stroke="var(--green)" strokeWidth="1.4" opacity="0.85" />
                   </g>
                 )}
-                {/* The connecting line — soft, curved, no dashes */}
+                {/* The connecting line — uses the source node's stroke color so
+                    it reads as an extension of the node. Turns green when over a target. */}
                 <path d={`M ${sx} ${sy} Q ${mx} ${my} ${ex} ${ey}`}
-                      fill="none" stroke={t ? "var(--green)" : "var(--ink-2)"} strokeWidth="1.4" strokeLinecap="round" opacity="0.9" />
+                      fill="none" stroke={t ? "var(--green)" : fromC.stroke} strokeWidth="1.4" strokeLinecap="round" opacity="0.9" />
                 {/* Arrival dot at the cursor */}
-                <circle cx={ex} cy={ey} r="3.2" fill={t ? "var(--green)" : "var(--ink-2)"} />
+                <circle cx={ex} cy={ey} r="3.2" fill={t ? "var(--green)" : fromC.stroke} />
               </g>
             );
           })()}
