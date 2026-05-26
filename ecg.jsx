@@ -12009,7 +12009,6 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                         <span>{insp.propsList.length + " fields · " + insp.sourceLabel}</span>
                       </div>
                       {insp.propsList.map(function(pv, i){
-                        var pvConfColor = pv.conf >= 0.9 ? "var(--green)" : pv.conf >= 0.75 ? "var(--gold)" : "var(--coral)";
                         return (
                           <div key={pv.name} style={{ display:"grid", gridTemplateColumns:"130px 1fr auto", gap:10, padding:"7px 18px", alignItems:"center", borderBottom: i < insp.propsList.length-1 ? "1px solid var(--line-2)" : "none" }}>
                             <div style={{ display:"flex", alignItems:"center", gap:5, minWidth:0 }}>
@@ -12020,7 +12019,6 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                             <span style={{ display:"flex", gap:3, alignItems:"center" }}>
                               {pv.pii && <span title="PII" style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--coral-fill)", color:"var(--coral)", fontWeight:700 }}>PII</span>}
                               {pv.computed && <span title="Computed" style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--purple-fill)", color:"var(--purple)", fontWeight:700 }}>FX</span>}
-                              <span title={"confidence " + pv.conf} style={{ width:6, height:6, borderRadius:"50%", background: pvConfColor, flexShrink:0 }} />
                             </span>
                           </div>
                         );
@@ -12200,34 +12198,6 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                     </button>
                   </div>
 
-                  {/* ── Viewport mini-map (bottom-right) ──
-                      Renders simplified circles for every node + a rectangle
-                      showing the visible region of the main canvas. */}
-                  {(function(){
-                    var mmW = 200, mmH = 130;
-                    // The main canvas viewBox is 0..W × 0..H. The visible region in
-                    // viewBox coordinates is W/zoom × H/zoom centred on (cx − panX/zoom,
-                    // cy − panY/zoom). Scale that to the mini-map dimensions.
-                    var sX = mmW / W, sY = mmH / H;
-                    var viewW = (W / graphZoom) * sX;
-                    var viewH = (H / graphZoom) * sY;
-                    var viewCX = (W/2 - graphPan.x / graphZoom) * sX;
-                    var viewCY = (H/2 - graphPan.y / graphZoom) * sY;
-                    return (
-                      <div style={{ position:"absolute", right:18, bottom:18, width:mmW, height:mmH, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:8, boxShadow:"0 4px 14px rgba(40,40,20,0.10)", overflow:"hidden" }}
-                        onMouseDown={function(e){ e.stopPropagation(); }}
-                        onDoubleClick={function(e){ e.stopPropagation(); }}>
-                        <svg width={mmW} height={mmH} viewBox={"0 0 "+W+" "+H} preserveAspectRatio="xMidYMid meet" style={{ display:"block", background:"var(--bg-canvas)" }}>
-                          {/* All nodes as tiny dots */}
-                          {hops.map(function(h, i){ var nObj = NODES.find(function(n){ return n.id === h.rr.nodeId; }); var col = colorForNode(nObj); return <circle key={"mm-h"+i} cx={h.x} cy={h.y} r="14" fill={col.fill} stroke={col.stroke} strokeWidth="3" opacity="0.85" />; })}
-                          {flat.map(function(f, i){ var col = colorForNode(NODES.find(function(n){ return n.id === f.rr.nodeId; })); return <circle key={"mm-f"+i} cx={f.x} cy={f.y} r="18" fill={col.fill} stroke={col.stroke} strokeWidth="3" />; })}
-                          <circle cx={cx} cy={cy} r="22" fill={c.fill} stroke="var(--ink)" strokeWidth="4" />
-                        </svg>
-                        {/* Viewport rectangle overlay */}
-                        <div style={{ position:"absolute", left: Math.max(0, viewCX - viewW/2), top: Math.max(0, viewCY - viewH/2), width: Math.min(mmW, viewW), height: Math.min(mmH, viewH), border:"1.5px solid var(--ink)", background:"rgba(0,0,0,0.06)", pointerEvents:"none" }} />
-                      </div>
-                    );
-                  })()}
                 </div>
               </div>
             </div>
