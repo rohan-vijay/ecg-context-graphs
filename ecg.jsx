@@ -18967,55 +18967,62 @@ function WorkspaceEmpty({ icon, eyebrow, title, desc, ctaLabel, onCta, secondary
 }
 
 // Click-to-create blank canvas — shown when a graph has no nodes yet.
-// The cursor itself becomes a node placeholder so the user can pick anywhere
-// on the canvas to drop their first node. We also render a ripple at the
-// click position so each click feels like a deliberate drop, not a swipe.
+// We hide the system cursor and render our own node-disc cursor that
+// follows the pointer and scales up when the user presses and holds —
+// so the "drop a node here" affordance has live press feedback, not just
+// a release-time ripple.
 function BlankCanvas({ onAddNode }) {
-  // Clean cream node disc with a quiet neutral border and a soft + glyph.
-  // No drop shadow, no heavy outline — the disc reads as part of the canvas
-  // palette, the + glyph carries the affordance.
-  // SVG is 80×80; hotspot centred at 40,40.
-  var nodeCursor = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'><circle cx='40' cy='40' r='22' fill='%23f3ede0' stroke='%23bdb39a' stroke-width='1.2'/><line x1='40' y1='30' x2='40' y2='50' stroke='%23645d4d' stroke-width='1.8' stroke-linecap='round'/><line x1='30' y1='40' x2='50' y2='40' stroke='%23645d4d' stroke-width='1.8' stroke-linecap='round'/></svg>\") 40 40, copy";
-
-  var [ripples, setRipples] = React.useState([]);
-  var rippleSeq = React.useRef(0);
+  var [pos, setPos]         = React.useState({ x: 0, y: 0, inside: false });
+  var [pressed, setPressed] = React.useState(false);
   var ref = React.useRef(null);
 
-  function handleClick(e){
+  function onMove(e){
     var r = ref.current.getBoundingClientRect();
-    var x = e.clientX - r.left;
-    var y = e.clientY - r.top;
-    var id = ++rippleSeq.current;
-    setRipples(function(arr){ return arr.concat([{ id: id, x: x, y: y }]); });
-    setTimeout(function(){ setRipples(function(arr){ return arr.filter(function(rp){ return rp.id !== id; }); }); }, 520);
-    // Give the ripple a beat to expand before the modal opens.
-    setTimeout(function(){ onAddNode(); }, 140);
+    setPos({ x: e.clientX - r.left, y: e.clientY - r.top, inside: true });
   }
+  function onLeave(){ setPos(function(p){ return { x: p.x, y: p.y, inside: false }; }); setPressed(false); }
+  function onDown(){ setPressed(true); }
+  function onUp(){
+    if (pressed) {
+      setPressed(false);
+      // Hold the press a beat after release so the expanded disc registers,
+      // then open the AddNodeFlow.
+      setTimeout(function(){ onAddNode(); }, 120);
+    }
+  }
+
+  // Scale + visual props transition from rest → press.
+  var restScale = 1;
+  var pressScale = 1.35;
+  var scale = pressed ? pressScale : restScale;
 
   return (
     <div className="body">
       <main className="main" style={{ position:"relative" }}>
-        <style>{"@keyframes ecg-ripple { 0% { transform: scale(0.4); opacity:0.55; } 70% { opacity:0.18; } 100% { transform: scale(2.4); opacity:0; } } @keyframes ecg-ripple-core { 0% { transform: scale(0.6); opacity:0.85; } 100% { transform: scale(1.4); opacity:0; } }"}</style>
         <div
           ref={ref}
-          onClick={handleClick}
-          style={{ position:"absolute", inset:0, cursor: nodeCursor, display:"flex", alignItems:"center", justifyContent:"center", background:"var(--bg-canvas)", backgroundImage:"radial-gradient(circle, #c8c0a8 0.7px, transparent 0.7px)", backgroundSize:"24px 24px" }}
+          onMouseMove={onMove}
+          onMouseLeave={onLeave}
+          onMouseDown={onDown}
+          onMouseUp={onUp}
+          style={{ position:"absolute", inset:0, cursor:"none", display:"flex", alignItems:"center", justifyContent:"center", background:"var(--bg-canvas)", backgroundImage:"radial-gradient(circle, #c8c0a8 0.7px, transparent 0.7px)", backgroundSize:"24px 24px", userSelect:"none" }}
         >
           <div style={{ textAlign:"center", maxWidth:460, pointerEvents:"none" }}>
             <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:38, lineHeight:1.05, color:"var(--ink)" }}>Start your context graph</div>
             <div style={{ fontSize:13.5, color:"var(--ink-3)", marginTop:12, lineHeight:1.55 }}>Click anywhere on the canvas to drop your first node. Nodes can be entities, data sources, or agents — connect them with edges to model your domain.</div>
             <div style={{ marginTop:18, fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)", letterSpacing:"0.4px" }}>CLICK CANVAS · OR PRESS  +  NEW NODE</div>
           </div>
-          {/* Click ripples — two concentric rings plus a solid pulse core */}
-          {ripples.map(function(rp){
-            return (
-              <div key={rp.id} style={{ position:"absolute", left: rp.x, top: rp.y, width:0, height:0, pointerEvents:"none" }}>
-                <div style={{ position:"absolute", left:-48, top:-48, width:96, height:96, borderRadius:"50%", border:"1.4px solid #bdb39a", background:"transparent", animation:"ecg-ripple 480ms ease-out forwards" }} />
-                <div style={{ position:"absolute", left:-32, top:-32, width:64, height:64, borderRadius:"50%", border:"1px solid #bdb39a", background:"transparent", animation:"ecg-ripple 360ms ease-out forwards", animationDelay:"60ms" }} />
-                <div style={{ position:"absolute", left:-22, top:-22, width:44, height:44, borderRadius:"50%", background:"#f3ede0", border:"1.2px solid #bdb39a", animation:"ecg-ripple-core 320ms ease-out forwards" }} />
+          {/* Custom cursor — follows the pointer, scales up on press */}
+          {pos.inside && (
+            <div style={{ position:"absolute", left: pos.x, top: pos.y, width:0, height:0, pointerEvents:"none" }}>
+              <div style={{ position:"absolute", left:-22, top:-22, width:44, height:44, borderRadius:"50%", background:"var(--panel)", border:"1.2px solid #bdb39a", transform: "scale(" + scale + ")", transformOrigin:"center", transition:"transform 140ms cubic-bezier(0.34, 1.56, 0.64, 1), background 140ms ease-out, border-color 140ms ease-out", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                <svg width="20" height="20" viewBox="0 0 20 20" style={{ display:"block" }}>
+                  <line x1="10" y1="5" x2="10" y2="15" stroke="#645d4d" strokeWidth="1.8" strokeLinecap="round" />
+                  <line x1="5"  y1="10" x2="15" y2="10" stroke="#645d4d" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
               </div>
-            );
-          })}
+            </div>
+          )}
         </div>
       </main>
     </div>
