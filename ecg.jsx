@@ -16552,7 +16552,7 @@ function AddNodeFlow({ onClose, onCreate }) {
                             {glyphOpen && (
                               <>
                                 <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setGlyphOpen(false); }} />
-                                <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:10, width:300 }}>
+                                <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:10, width:494 }}>
                                   {/* Search — type to filter by name or aliases */}
                                   <div style={{ position:"relative", marginBottom:8 }}>
                                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--ink-4)" strokeWidth="1.8" strokeLinecap="round" style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
@@ -16577,23 +16577,23 @@ function AddNodeFlow({ onClose, onCreate }) {
                                       return <div style={{ padding:"24px 8px", textAlign:"center", color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:11 }}>No icons match "{glyphQuery}"</div>;
                                     }
                                     return (
-                                      <div className="ecg-icon-grid" style={{ display:"grid", gridTemplateColumns:"repeat(6, 1fr)", gap:6, maxHeight:260, overflowY:"auto", overflowX:"hidden" }}>
+                                      <div style={{ display:"grid", gridTemplateColumns:"repeat(13, 32px)", gap:4, justifyContent:"start" }}>
                                         {slots.map(function(gOpt){
                                           var isSel = glyph === gOpt.id || (gOpt.placeholder && glyph === null);
                                           function onClick(){ setGlyph(gOpt.id); setGlyphOpen(false); setGlyphQuery(""); }
                                           return (
                                             <button key={gOpt.id || "none"} type="button" onClick={onClick} title={gOpt.label}
-                                              style={{ width:40, height:40, borderRadius:8, border:"1px solid " + (isSel ? "var(--ink-3)" : "var(--line-2)"), background: isSel ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", padding:0, display:"flex", alignItems:"center", justifyContent:"center", transition:"background 120ms ease-out, border-color 120ms ease-out" }}
+                                              style={{ width:32, height:32, borderRadius:6, border:"1px solid " + (isSel ? "var(--ink-3)" : "var(--line-2)"), background: isSel ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", padding:0, display:"flex", alignItems:"center", justifyContent:"center", transition:"background 120ms ease-out, border-color 120ms ease-out" }}
                                               onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
                                               onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel)"; }}>
                                               {gOpt.placeholder ? (
-                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ink-4)" strokeWidth="1.2" strokeLinecap="round">
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ink-4)" strokeWidth="1.3" strokeLinecap="round">
                                                   <circle cx="12" cy="12" r="8" strokeDasharray="3 3" />
                                                   <line x1="12" y1="9" x2="12" y2="15" />
                                                   <line x1="9" y1="12" x2="15" y2="12" />
                                                 </svg>
                                               ) : (
-                                                <svg width="28" height="28" viewBox="-5 -5 10 10" style={{ display:"block" }}>
+                                                <svg width="22" height="22" viewBox="-5 -5 10 10" style={{ display:"block" }}>
                                                   {gOpt.render({ fill: "none", stroke: "var(--ink-3)" })}
                                                 </svg>
                                               )}
