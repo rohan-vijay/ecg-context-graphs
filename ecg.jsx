@@ -18968,17 +18968,36 @@ function WorkspaceEmpty({ icon, eyebrow, title, desc, ctaLabel, onCta, secondary
 
 // Click-to-create blank canvas — shown when a graph has no nodes yet.
 // The cursor itself becomes a node placeholder so the user can pick anywhere
-// on the canvas to drop their first node.
+// on the canvas to drop their first node. We also render a ripple at the
+// click position so each click feels like a deliberate drop, not a swipe.
 function BlankCanvas({ onAddNode }) {
-  // SVG cursor — a soft cream "node" disc with a faint outer halo and a clear +
-  // glyph in the centre. Bigger than the previous version (60px hotspot) so it
-  // reads as a real affordance rather than a system cursor.
-  var nodeCursor = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'><circle cx='30' cy='30' r='27' fill='none' stroke='%23bdb39a' stroke-width='1' stroke-dasharray='2 4' opacity='0.7'/><circle cx='30' cy='30' r='20' fill='%23f3ede0' stroke='%238a8068' stroke-width='1.6'/><line x1='30' y1='20' x2='30' y2='40' stroke='%23332f24' stroke-width='2' stroke-linecap='round'/><line x1='20' y1='30' x2='40' y2='30' stroke='%23332f24' stroke-width='2' stroke-linecap='round'/></svg>\") 30 30, copy";
+  // Big cream node disc with a soft drop shadow and a confident + glyph.
+  // No dashed halo — the cursor itself is the affordance.
+  // SVG is 80×80; hotspot centred at 40,40.
+  var nodeCursor = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'><defs><filter id='s' x='-20%25' y='-20%25' width='140%25' height='140%25'><feGaussianBlur in='SourceAlpha' stdDeviation='1.2'/><feOffset dx='0' dy='1.5' result='o'/><feFlood flood-color='%23332f24' flood-opacity='0.18'/><feComposite in2='o' operator='in'/><feMerge><feMergeNode/><feMergeNode in='SourceGraphic'/></feMerge></filter></defs><g filter='url(%23s)'><circle cx='40' cy='40' r='22' fill='%23f6f1e5' stroke='%237a6e54' stroke-width='1.8'/></g><line x1='40' y1='29' x2='40' y2='51' stroke='%23332f24' stroke-width='2.4' stroke-linecap='round'/><line x1='29' y1='40' x2='51' y2='40' stroke='%23332f24' stroke-width='2.4' stroke-linecap='round'/></svg>\") 40 40, copy";
+
+  var [ripples, setRipples] = React.useState([]);
+  var rippleSeq = React.useRef(0);
+  var ref = React.useRef(null);
+
+  function handleClick(e){
+    var r = ref.current.getBoundingClientRect();
+    var x = e.clientX - r.left;
+    var y = e.clientY - r.top;
+    var id = ++rippleSeq.current;
+    setRipples(function(arr){ return arr.concat([{ id: id, x: x, y: y }]); });
+    setTimeout(function(){ setRipples(function(arr){ return arr.filter(function(rp){ return rp.id !== id; }); }); }, 520);
+    // Give the ripple a beat to expand before the modal opens.
+    setTimeout(function(){ onAddNode(); }, 140);
+  }
+
   return (
     <div className="body">
       <main className="main" style={{ position:"relative" }}>
+        <style>{"@keyframes ecg-ripple { 0% { transform: scale(0.4); opacity:0.55; } 70% { opacity:0.18; } 100% { transform: scale(2.4); opacity:0; } } @keyframes ecg-ripple-core { 0% { transform: scale(0.6); opacity:0.85; } 100% { transform: scale(1.4); opacity:0; } }"}</style>
         <div
-          onClick={onAddNode}
+          ref={ref}
+          onClick={handleClick}
           style={{ position:"absolute", inset:0, cursor: nodeCursor, display:"flex", alignItems:"center", justifyContent:"center", background:"var(--bg-canvas)", backgroundImage:"radial-gradient(circle, #c8c0a8 0.7px, transparent 0.7px)", backgroundSize:"24px 24px" }}
         >
           <div style={{ textAlign:"center", maxWidth:460, pointerEvents:"none" }}>
@@ -18986,6 +19005,16 @@ function BlankCanvas({ onAddNode }) {
             <div style={{ fontSize:13.5, color:"var(--ink-3)", marginTop:12, lineHeight:1.55 }}>Click anywhere on the canvas to drop your first node. Nodes can be entities, data sources, or agents — connect them with edges to model your domain.</div>
             <div style={{ marginTop:18, fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)", letterSpacing:"0.4px" }}>CLICK CANVAS · OR PRESS  +  NEW NODE</div>
           </div>
+          {/* Click ripples — two concentric rings plus a solid pulse core */}
+          {ripples.map(function(rp){
+            return (
+              <div key={rp.id} style={{ position:"absolute", left: rp.x, top: rp.y, width:0, height:0, pointerEvents:"none" }}>
+                <div style={{ position:"absolute", left:-48, top:-48, width:96, height:96, borderRadius:"50%", border:"2px solid #7a6e54", background:"transparent", animation:"ecg-ripple 480ms ease-out forwards" }} />
+                <div style={{ position:"absolute", left:-32, top:-32, width:64, height:64, borderRadius:"50%", border:"1.5px solid #7a6e54", background:"transparent", animation:"ecg-ripple 360ms ease-out forwards", animationDelay:"60ms" }} />
+                <div style={{ position:"absolute", left:-22, top:-22, width:44, height:44, borderRadius:"50%", background:"#f6f1e5", border:"1.8px solid #7a6e54", animation:"ecg-ripple-core 320ms ease-out forwards" }} />
+              </div>
+            );
+          })}
         </div>
       </main>
     </div>
