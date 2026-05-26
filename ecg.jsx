@@ -2759,6 +2759,7 @@ function ComputationsPane({ node, properties, rules }) {
   var [inspected, setInspected] = React.useState(null); // selected computation for the detail modal
   var [createOpen, setCreateOpen] = React.useState(false);
   var [filter, setFilter]     = React.useState("all"); // all | formula | sql | agent | automation
+  var [filterOpen, setFilterOpen] = React.useState(false);
   var [statusFilter, setStatusFilter] = React.useState("all"); // all | healthy | failing | stale
   var [search, setSearch]     = React.useState("");
 
@@ -2813,19 +2814,54 @@ function ComputationsPane({ node, properties, rules }) {
           </svg>
           <input value={search} onChange={function(e){ setSearch(e.target.value); }} placeholder="Search computations" style={{ border:"1px solid var(--line)", borderRadius:7, padding:"8px 10px 8px 30px", fontSize:12.5, fontFamily:"inherit", background:"var(--panel)", width:"100%", boxSizing:"border-box" }} />
         </div>
-        <div style={{ display:"flex", gap:4 }}>
-          {[{ id:"all", l:"All" }, { id:"formula", l:"Formula" }, { id:"sql", l:"SQL" }, { id:"agent", l:"Agent" }, { id:"automation", l:"Automation" }].map(function(f){
-            var on = filter === f.id;
-            return <button key={f.id} onClick={function(){ setFilter(f.id); }} style={{ padding:"6px 10px", borderRadius:5, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "var(--panel)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:10.5, cursor:"pointer", letterSpacing:"0.3px" }}>{f.l}</button>;
-          })}
-        </div>
+        {(function(){
+          // Kind filter — collapsed into a single dropdown so the toolbar reads cleanly
+          // even when more kinds get added later.
+          var KIND_FILTERS = [
+            { id:"all",        l:"All kinds" },
+            { id:"formula",    l:"Formula" },
+            { id:"sql",        l:"SQL" },
+            { id:"agent",      l:"Agent" },
+            { id:"automation", l:"Automation" }
+          ];
+          var cur = KIND_FILTERS.find(function(f){ return f.id === filter; }) || KIND_FILTERS[0];
+          return (
+            <div style={{ position:"relative" }}>
+              <button onClick={function(){ setFilterOpen(function(o){ return !o; }); }}
+                style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"7px 12px", borderRadius:7, border:"1px solid var(--line)", background:"var(--panel)", color:"var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11, cursor:"pointer", letterSpacing:"0.3px" }}>
+                <span style={{ width:6, height:6, borderRadius:"50%", background: filter === "all" ? "var(--ink-4)" : "var(--ink-2)" }} />
+                <span>{cur.l}</span>
+                <span style={{ color:"var(--ink-3)", fontSize:10 }}>{filterOpen ? "▴" : "▾"}</span>
+              </button>
+              {filterOpen && (
+                <>
+                  <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setFilterOpen(false); }} />
+                  <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:8, boxShadow:"0 14px 38px rgba(0,0,0,0.14)", padding:4, minWidth:160 }}>
+                    {KIND_FILTERS.map(function(f){
+                      var on = filter === f.id;
+                      return (
+                        <button key={f.id} onClick={function(){ setFilter(f.id); setFilterOpen(false); }}
+                          style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 10px", borderRadius:5, border:"none", background: on ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)", letterSpacing:"0.3px", textAlign:"left" }}
+                          onMouseEnter={function(e){ if (!on) e.currentTarget.style.background = "var(--panel-2)"; }}
+                          onMouseLeave={function(e){ if (!on) e.currentTarget.style.background = "transparent"; }}>
+                          {f.l}
+                          {on && <span style={{ marginLeft:"auto", color:"var(--green)", fontWeight:700 }}>✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })()}
         <button className="btn-dark" onClick={function(){ setCreateOpen(true); }} style={{ marginLeft:"auto" }}>+ New computation</button>
       </div>
 
       {/* CATALOG TABLE — click a row to open the detail modal */}
       <div className="card" style={{ overflow:"hidden" }}>
         <div style={{ display:"grid", gridTemplateColumns:"30px 220px 130px 100px 120px 100px 90px 110px 80px", gap:8, padding:"10px 14px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", letterSpacing:"0.5px", textTransform:"uppercase" }}>
-          <div/><div>Output → name</div><div>Kind</div><div>Status</div><div>Trigger</div><div>Latency</div><div>Records</div><div>Success</div><div>Last run</div>
+          <div/><div>Computation</div><div>Kind</div><div>Status</div><div>Trigger</div><div>Latency</div><div>Records</div><div>Success</div><div>Last run</div>
         </div>
         {visible.length === 0 ? (
           <div style={{ padding:"60px 14px", textAlign:"center", color:"var(--ink-3)" }}>
@@ -2842,8 +2878,8 @@ function ComputationsPane({ node, properties, rules }) {
               onMouseLeave={function(e){ e.currentTarget.style.background = i % 2 === 1 ? "transparent" : "var(--bg-canvas)"; }}>
               <span style={{ width:24, height:20, borderRadius:4, background: km.bg, color: km.color, display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700 }}>{km.glyph}</span>
               <div style={{ minWidth:0 }}>
-                <code style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink)", fontWeight:600 }}>{c.output}</code>
-                <div style={{ fontSize:11, color:"var(--ink-3)", marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.name}</div>
+                <div style={{ fontSize:12.5, fontWeight:600, color:"var(--ink)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{c.name}</div>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>→ {c.output}</div>
               </div>
               <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color: km.color, fontWeight:600 }}>{km.label}</span>
               <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background: sm.bg, color: sm.color, fontWeight:700, letterSpacing:"0.4px", textTransform:"uppercase", justifySelf:"start" }}>{sm.label}</span>
@@ -18934,8 +18970,10 @@ function WorkspaceEmpty({ icon, eyebrow, title, desc, ctaLabel, onCta, secondary
 // The cursor itself becomes a node placeholder so the user can pick anywhere
 // on the canvas to drop their first node.
 function BlankCanvas({ onAddNode }) {
-  // SVG cursor — a dashed circle with a + glyph, matching the centre placeholder.
-  var nodeCursor = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'><circle cx='22' cy='22' r='17' fill='%23f3ede0' stroke='%23bdb39a' stroke-width='1.5' stroke-dasharray='3 3'/><line x1='22' y1='14' x2='22' y2='30' stroke='%23645d4d' stroke-width='1.6' stroke-linecap='round'/><line x1='14' y1='22' x2='30' y2='22' stroke='%23645d4d' stroke-width='1.6' stroke-linecap='round'/></svg>\") 22 22, copy";
+  // SVG cursor — a soft cream "node" disc with a faint outer halo and a clear +
+  // glyph in the centre. Bigger than the previous version (60px hotspot) so it
+  // reads as a real affordance rather than a system cursor.
+  var nodeCursor = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'><circle cx='30' cy='30' r='27' fill='none' stroke='%23bdb39a' stroke-width='1' stroke-dasharray='2 4' opacity='0.7'/><circle cx='30' cy='30' r='20' fill='%23f3ede0' stroke='%238a8068' stroke-width='1.6'/><line x1='30' y1='20' x2='30' y2='40' stroke='%23332f24' stroke-width='2' stroke-linecap='round'/><line x1='20' y1='30' x2='40' y2='30' stroke='%23332f24' stroke-width='2' stroke-linecap='round'/></svg>\") 30 30, copy";
   return (
     <div className="body">
       <main className="main" style={{ position:"relative" }}>
