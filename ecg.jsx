@@ -12045,9 +12045,13 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
             Opens when the user clicks the expand icon at the top of the relationship
             graph card. Renders the same SVG bigger so it can be inspected in detail. */}
         {graphFullscreen && (function(){
-          var W = 1440, H = 820;
+          // Use the same coordinate system, viewBox, radii and pan model as the
+          // embedded graph so the two views are visually consistent. The
+          // fullscreen modal just gives the user more pixels to pan into.
+          var W = 1100, H = 760;
           var cx = W/2, cy = H/2;
-          var r1 = 240, r2 = 410;
+          var r1 = 280;
+          var r2 = 540;
           var flat = [];
           related.forEach(function(r, ri) {
             r.related.forEach(function(rr) { flat.push({ rr: rr, parentIdx: ri, isOut: r.isOut }); });
@@ -12081,22 +12085,40 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                     <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", marginTop:2 }}>Relationship graph</div>
                   </div>
                   <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{flat.length} direct · {hops.length} second-hop</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{flat.length} direct · {hops.length} second-hop · drag to pan</span>
                     <button onClick={function(){ setGraphFullscreen(false); }} className="btn-ghost" style={{ fontSize:11.5 }}>Close ✕</button>
                   </div>
                 </div>
-                <div style={{ flex:1, background:"var(--bg-canvas)", overflow:"auto", padding:30 }}>
+                {/* Drag-to-pan canvas — same interactions as the embedded graph.
+                    overflow:hidden, mouse-down/move/up drives graphPan, dbl-click recentres. */}
+                <div
+                  onMouseDown={function(e){
+                    if (e.target.tagName === "circle") return;
+                    graphDrag.current = { startX: e.clientX, startY: e.clientY, origX: graphPan.x, origY: graphPan.y, moved: false };
+                    e.currentTarget.style.cursor = "grabbing";
+                  }}
+                  onMouseMove={function(e){
+                    var d = graphDrag.current; if (!d) return;
+                    var dx = e.clientX - d.startX, dy = e.clientY - d.startY;
+                    if (!d.moved && Math.hypot(dx, dy) > 3) d.moved = true;
+                    if (d.moved) setGraphPan({ x: d.origX + dx, y: d.origY + dy });
+                  }}
+                  onMouseUp={function(e){ graphDrag.current = null; e.currentTarget.style.cursor = "grab"; }}
+                  onMouseLeave={function(e){ graphDrag.current = null; e.currentTarget.style.cursor = "grab"; }}
+                  onDoubleClick={function(){ setGraphPan({ x:0, y:0 }); }}
+                  style={{ flex:1, background:"var(--bg-canvas)", overflow:"hidden", cursor:"grab", userSelect:"none" }}>
                   <svg width="100%" height="100%" viewBox={"0 0 "+W+" "+H} preserveAspectRatio="xMidYMid meet" style={{ display:"block" }}>
                     <defs>
                       <marker id="fs-arrow"   viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-3)"/></marker>
                       <marker id="fs-arrow-2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-4)"/></marker>
                     </defs>
+                    <g transform={"translate(" + graphPan.x + "," + graphPan.y + ")"}>
                     {hops.map(function(h, i) {
                       var px = h.parent.x, py = h.parent.y;
                       var dx = h.x - px, dy = h.y - py, len = Math.sqrt(dx*dx + dy*dy);
                       var ux = dx/len, uy = dy/len;
-                      var sx = px + ux * 20, sy = py + uy * 20;
-                      var tx = h.x - ux * 18, ty = h.y - uy * 18;
+                      var sx = px + ux * 28, sy = py + uy * 28;
+                      var tx = h.x - ux * 28, ty = h.y - uy * 28;
                       var midX = (sx + tx) / 2, midY = (sy + ty) / 2;
                       return (
                         <g key={"fh-e"+i}>
@@ -12112,8 +12134,8 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                       var midX = (cx + f.x) / 2, midY = (cy + f.y) / 2;
                       var dx = f.x - cx, dy = f.y - cy, len = Math.sqrt(dx*dx + dy*dy);
                       var ux = dx/len, uy = dy/len;
-                      var sx = cx + ux * 42, sy = cy + uy * 42;
-                      var tx = f.x - ux * 26, ty = f.y - uy * 26;
+                      var sx = cx + ux * 40, sy = cy + uy * 40;
+                      var tx = f.x - ux * 28, ty = f.y - uy * 28;
                       return (
                         <g key={"fe"+i}>
                           <line x1={sx} y1={sy} x2={tx} y2={ty} stroke="var(--ink-3)" strokeWidth="1.6" opacity="0.7" strokeDasharray={f.rr.kind === "inferred" ? "5,4" : "none"} markerEnd="url(#fs-arrow)" />
@@ -12129,29 +12151,31 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                       var col = colorForNode(nodeObj);
                       var isInspected = inspectedNode && inspectedNode.id === h.rr.id;
                       return (
-                        <g key={"fh-n"+i} style={{ cursor:"pointer" }} onClick={function(){ setInspectedNode(h.rr); }}>
-                          <circle cx={h.x} cy={h.y} r={isInspected ? 22 : 19} fill={col.fill} stroke={isInspected ? "var(--ink)" : col.stroke} strokeWidth={isInspected ? 2.6 : 1.6} />
-                          <text x={h.x} y={h.y - 26} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"10.5px", fontWeight:600, fill:"var(--ink)" }}>{h.rr.id}</text>
-                          <text x={h.x} y={h.y + 32} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"10px", fill:"var(--ink-4)" }}>{String(h.rr.keyValue).slice(0, 22)}</text>
+                        <g key={"fh-n"+i} style={{ cursor:"pointer" }} onClick={function(){ if (graphDrag.current && graphDrag.current.moved) return; setInspectedNode(h.rr); }}>
+                          <circle cx={h.x} cy={h.y} r={isInspected ? 30 : 26} fill={col.fill} stroke={isInspected ? "var(--ink)" : col.stroke} strokeWidth={isInspected ? 3 : 1.8} />
+                          <text x={h.x} y={h.y - 34} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"11.5px", fontWeight:600, fill:"var(--ink)", pointerEvents:"none" }}>{h.rr.id}</text>
+                          <text x={h.x} y={h.y + 42} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"10.5px", fill:"var(--ink-3)", pointerEvents:"none" }}>{String(h.rr.keyValue).slice(0, 22)}</text>
                         </g>
                       );
                     })}
-                    <g style={{ cursor:"pointer" }} onClick={function(){ setInspectedNode(null); }}>
-                      <circle cx={cx} cy={cy} r="42" fill={c.fill} stroke={inspectedNode === null ? "var(--ink)" : c.stroke} strokeWidth={inspectedNode === null ? 4 : 3} />
-                      <text x={cx} y={cy - 56} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"14px", fontWeight:600, fill:"var(--ink)" }}>{record.id}</text>
-                      <text x={cx} y={cy + 64} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"12px", fill:"var(--ink-3)" }}>{record[Object.keys(record).find(function(k){ return k === "name" || k === "company_name" || k === "title"; })] || node.label}</text>
+                    <g style={{ cursor:"pointer" }} onClick={function(){ if (graphDrag.current && graphDrag.current.moved) return; setInspectedNode(null); }}>
+                      <circle cx={cx} cy={cy} r="38" fill={c.fill} stroke={inspectedNode === null ? "var(--ink)" : c.stroke} strokeWidth={inspectedNode === null ? 3.6 : 2.8} />
+                      <text x={cx} y={cy - 50} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"12px", fontWeight:600, fill:"var(--ink)", pointerEvents:"none" }}>{record.id}</text>
+                      <text x={cx} y={cy + 60} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"11px", fill:"var(--ink-3)", pointerEvents:"none" }}>{record[Object.keys(record).find(function(k){ return k === "name" || k === "company_name" || k === "title"; })] || node.label}</text>
                     </g>
                     {flat.map(function(f, i) {
                       var otherCol = colorForNode(NODES.find(function(n){ return n.id === f.rr.nodeId; }));
                       var isInspected = inspectedNode && inspectedNode.id === f.rr.id;
                       return (
-                        <g key={"fn"+i} style={{ cursor:"pointer" }} onClick={function(){ setInspectedNode(f.rr); }}>
-                          <circle cx={f.x} cy={f.y} r={isInspected ? 32 : 28} fill={otherCol.fill} stroke={isInspected ? "var(--ink)" : otherCol.stroke} strokeWidth={isInspected ? 3 : 2} />
-                          <text x={f.x} y={f.y - 36} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"12.5px", fontWeight:600, fill:"var(--ink)" }}>{f.rr.id}</text>
-                          <text x={f.x} y={f.y + 44} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"11.5px", fill:"var(--ink-3)" }}>{f.rr.keyName + ": " + String(f.rr.keyValue).slice(0, 26)}</text>
+                        <g key={"fn"+i} style={{ cursor:"pointer" }} onClick={function(){ if (graphDrag.current && graphDrag.current.moved) return; setInspectedNode(f.rr); }}>
+                          <circle cx={f.x} cy={f.y} r={isInspected ? 30 : 26} fill={otherCol.fill} stroke={isInspected ? "var(--ink)" : otherCol.stroke} strokeWidth={isInspected ? 3 : 1.8} />
+                          <text x={f.x} y={f.y - 34} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"11.5px", fontWeight:600, fill:"var(--ink)", pointerEvents:"none" }}>{f.rr.id}</text>
+                          <text x={f.x} y={f.y + 42} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"10.5px", fill:"var(--ink-3)", pointerEvents:"none" }}>{f.rr.keyName + ": " + String(f.rr.keyValue).slice(0, 26)}</text>
                         </g>
                       );
                     })}
+                    </g>
+                    {/* ↑ pan transform group */}
                   </svg>
                 </div>
               </div>
