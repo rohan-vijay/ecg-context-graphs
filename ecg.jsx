@@ -2840,12 +2840,7 @@ function ComputationsPane({ node, properties, rules }) {
       {inspected && <ComputationDetailModal comp={inspected} node={node} onClose={function(){ setInspected(null); }} />}
 
       {/* CREATE FLOW */}
-      {/* "+ New computation" reuses the property-creation modal with the Computed
-          toggle pre-set so users get the exact same interactions (computation type
-          dropdown, formula editor with property pills, SQL source picker, agent /
-          automation pickers, recompute trigger, backfill, on-failure) instead of a
-          parallel implementation. */}
-      {createOpen && <AddPropertyFlowModal node={node} mode="manual" seedComputed={true} onClose={function(){ setCreateOpen(false); }} />}
+      {createOpen && <NewComputationFlow node={node} properties={properties} onClose={function(){ setCreateOpen(false); }} />}
 
     </div>
   );
@@ -2979,6 +2974,411 @@ function ComputationDetailModal({ comp, node, onClose }) {
             <button className="btn-ghost" style={{ fontSize:11.5 }}>Backfill</button>
             <button className="btn-ghost" style={{ fontSize:11.5 }}>Test on 3 records</button>
             <button className="btn-dark" style={{ fontSize:11.5 }}>Edit computation</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────────────────
+// NEW COMPUTATION FLOW — 3 steps · Basics → Computation → Review
+//
+// Step 1 leads with the Computation Type dropdown (open by default). No other
+// fields are revealed until a type is chosen — picking the kind is the primary
+// decision and everything downstream depends on it. Once a type is picked, the
+// rest of Basics appears: Key, Display Name, Type, Default Value, Nest Under
+// Parent Field.
+//
+// Step 2 is the kind-specific authoring surface (formula / SQL / agent /
+// automation) plus the runtime controls (recompute trigger, backfill,
+// on-failure). Reuses the visual primitives from AddPropertyFlowModal.
+//
+// Step 3 is a clean summary review card.
+// ───────────────────────────────────────────────────────────────────────────────
+function NewComputationFlow({ node, properties, onClose }) {
+  var [step, setStep] = useState(1);
+
+  // ── Step 1 state — Computation type leads, everything else gated behind it
+  var [kind, setKind] = useState(""); // formula | sql | agent | automation
+  var [kindOpen, setKindOpen] = useState(true); // open by default
+  var [pName, setPName] = useState("");
+  var [pDisplay, setPDisplay] = useState("");
+  var [pType, setPType] = useState("string");
+  var [pTypeOpen, setPTypeOpen] = useState(false);
+  var [pDefault, setPDefault] = useState("");
+  var [pNest, setPNest] = useState("");
+
+  // ── Step 2 state — kind-specific authoring + runtime
+  var [formulaBody, setFormulaBody] = useState("");
+  var [sqlSystem, setSqlSystem] = useState("");
+  var [sqlConn, setSqlConn] = useState("");
+  var [sqlQuery, setSqlQuery] = useState("");
+  var [agentId, setAgentId] = useState("");
+  var [automationId, setAutomationId] = useState("");
+  var [recompute, setRecompute] = useState("on_change");
+  var [backfill, setBackfill] = useState("forward_only");
+  var [onFailure, setOnFailure] = useState("retain_last");
+
+  // ── Reference data
+  var KINDS = [
+    { id:"formula",    l:"Formula",         d:"Derive this value from other properties on the same record.", color:"var(--gold)",   bg:"var(--gold-fill)",   glyph:"fx" },
+    { id:"sql",        l:"SQL / Cypher",    d:"Aggregate or roll up from another entity. Runs on a registered connection.", color:"var(--blue)", bg:"var(--blue-fill)", glyph:"SQL" },
+    { id:"agent",      l:"Agent",           d:"Invoke a pre-built agent that scores or classifies this record.", color:"var(--purple)", bg:"var(--purple-fill)", glyph:"A" },
+    { id:"automation", l:"Automation",      d:"Materialise a value from a scheduled workflow — Airflow, Workato, custom webhook.", color:"var(--green)", bg:"var(--green-fill)", glyph:"WF" }
+  ];
+  var TYPE_META = {
+    "string":    { color:"var(--blue)",   glyph:"T",   d:"UTF-8 text of arbitrary length." },
+    "decimal":   { color:"var(--gold)",   glyph:"#",   d:"Exact numeric — monetary values." },
+    "float":     { color:"var(--gold)",   glyph:".5",  d:"Floating-point numeric — scores and ratios." },
+    "bool":      { color:"var(--coral)",  glyph:"01",  d:"True / false flag." },
+    "timestamp": { color:"var(--green)",  glyph:"TS",  d:"Date and time with timezone (ISO 8601)." },
+    "date":      { color:"var(--green)",  glyph:"DT",  d:"Calendar date without time." },
+    "uuid":      { color:"var(--purple)", glyph:"ID",  d:"Universally unique identifier." },
+    "enum":      { color:"var(--purple)", glyph:"E",   d:"Pick exactly one from a defined list." }
+  };
+  var TYPE_OPTIONS = ["string","decimal","float","bool","timestamp","date","uuid","enum"];
+  var SQL_SYSTEMS = [
+    { id:"snowflake",  l:"Snowflake",  d:"Cloud data warehouse" },
+    { id:"databricks", l:"Databricks", d:"Lakehouse platform" },
+    { id:"bigquery",   l:"BigQuery",   d:"Google Cloud warehouse" },
+    { id:"postgres",   l:"PostgreSQL", d:"Operational relational DB" },
+    { id:"graph",      l:"Graph (Cypher)", d:"The workspace knowledge graph" }
+  ];
+  var SQL_CONNECTIONS = {
+    snowflake:  [{ id:"snow-prod", l:"ANALYTICS_PROD", sub:"data-platform · US-WEST-2" }, { id:"snow-raw", l:"RAW_INGEST", sub:"ingest · US-EAST-1" }],
+    databricks: [{ id:"dbx-prod",  l:"analytics-warehouse", sub:"prod · us-east-1" }],
+    bigquery:   [{ id:"bq-metrics", l:"metrics-prod", sub:"data-platform" }],
+    postgres:   [{ id:"pg-app",    l:"app_primary",  sub:"production · pgsql 15" }],
+    graph:      [{ id:"graph-main",l:"main-graph",   sub:"production · neo4j-aura" }]
+  };
+  var AGENTS = [
+    { id:"cust_health",     l:"cust_health.score",        d:"Customer Health Scorer · 0–1 confidence" },
+    { id:"churn_risk",      l:"churn_risk.predict",       d:"Churn Risk Predictor · 90-day window" },
+    { id:"support_intent",  l:"support_intent.classify",  d:"Support Intent Classifier · 12 intents" },
+    { id:"fraud_detect",    l:"fraud.detect",             d:"Fraud Detector · transaction-level signal" },
+    { id:"sentiment",       l:"sentiment.analyze",        d:"Sentiment Analyzer · 5-band score" }
+  ];
+  var AUTOMATIONS = [
+    { id:"wf-tier",     l:"compute_customer_tier",   d:"Bucket accounts into Bronze / Silver / Gold tiers from ARR and engagement signals." },
+    { id:"wf-health",   l:"refresh_health_score",    d:"Recalculate customer health from usage, support load, renewal posture." },
+    { id:"wk-arr",      l:"ARR Rollup → Account",    d:"Aggregate active subscription MRR into an account-level ARR figure." },
+    { id:"af-360",      l:"customer_360_dag",        d:"Materialise the unified customer view from CRM, billing and product sources." }
+  ];
+  var RECOMPUTE_OPTIONS = [
+    { id:"on_change", l:"On input change", d:"Reactive — recompute whenever any input field changes." },
+    { id:"hourly",    l:"Hourly",          d:"Run at the top of every hour." },
+    { id:"daily",     l:"Daily · 02:00 UTC", d:"Run once a day during the maintenance window." },
+    { id:"manual",    l:"Manual only",     d:"Only runs when an operator clicks Recompute." }
+  ];
+  var BACKFILL_OPTIONS = [
+    { id:"forward_only", l:"Forward only",    d:"Apply only to new writes. Existing records keep their current value." },
+    { id:"all_records",  l:"All existing records", d:"Backfill every record now." },
+    { id:"last_90d",     l:"Last 90 days",    d:"Backfill records updated in the last 90 days." }
+  ];
+  var FAILURE_OPTIONS = [
+    { id:"retain_last", l:"Retain last good value", d:"On error, keep the previous successful value." },
+    { id:"set_null",    l:"Set to null",            d:"On error, write null and mark the record incomplete." },
+    { id:"raise",       l:"Raise error & alert",    d:"On error, surface a violation and page the steward." }
+  ];
+
+  // ── Styles
+  var inp = { border:"1px solid var(--line)", borderRadius:7, padding:"10px 12px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", outline:"none", boxSizing:"border-box", width:"100%", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" };
+  var lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:6 };
+
+  var selectedKind = KINDS.find(function(k){ return k.id === kind; });
+  var selectedSystem = SQL_SYSTEMS.find(function(s){ return s.id === sqlSystem; });
+  var systemConnections = SQL_CONNECTIONS[sqlSystem] || [];
+  var selectedConn = systemConnections.find(function(c){ return c.id === sqlConn; });
+
+  // Shared rich dropdown picker (same visual as AddPropertyFlowModal's renderPropPick)
+  function richPicker(value, onChange, open, setOpen, options, placeholder) {
+    var sel = options.find(function(o){ return o.id === value; });
+    return (
+      <div style={{ position:"relative" }}>
+        <button onClick={function(){ setOpen(!open); }} type="button"
+          style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+          {sel ? (
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{sel.l}</div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{sel.d || sel.sub || ""}</div>
+            </div>
+          ) : (
+            <>
+              <span style={{ width:34, height:34, borderRadius:7, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>+</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:14, color:"var(--ink-3)" }}>{placeholder || "Pick an option"}</div>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:2 }}>Click to choose</div>
+              </div>
+            </>
+          )}
+          <span style={{ color:"var(--ink-3)", fontSize:11, fontFamily:"JetBrains Mono" }}>{open ? "▴" : "▾"}</span>
+        </button>
+        {open && (
+          <>
+            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setOpen(false); }} />
+            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, maxHeight:380, overflowY:"auto" }}>
+              {options.map(function(o, i){
+                var isSel = value === o.id;
+                return (
+                  <button key={o.id} type="button" onClick={function(){ onChange(o.id); setOpen(false); }}
+                    style={{ display:"flex", alignItems:"flex-start", gap:12, width:"100%", padding:"10px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < options.length-1 ? 2 : 0 }}
+                    onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                    onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+                    {o.color && (
+                      <span style={{ width:32, height:32, borderRadius:6, background:o.color, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700 }}>{o.glyph || ""}</span>
+                    )}
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{o.l}</div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3, lineHeight:1.45 }}>{o.d || o.sub || ""}</div>
+                    </div>
+                    {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13, marginTop:2 }}>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // Validation
+  function canContinue(s) {
+    if (s === 1) return !!kind && pName.trim().length > 0;
+    if (s === 2) {
+      if (kind === "formula")    return formulaBody.trim().length > 0;
+      if (kind === "sql")        return !!sqlConn && sqlQuery.trim().length > 0;
+      if (kind === "agent")      return !!agentId;
+      if (kind === "automation") return !!automationId;
+    }
+    return true;
+  }
+  var disabled = !canContinue(step);
+
+  var steps = [
+    { label:"Basics",      sub: kind ? (selectedKind ? selectedKind.l + " · " + (pName || "untitled") : "") : "Computation type", desc:"Pick the computation type first — everything below depends on it. Then name the field and choose its storage type." },
+    { label:"Computation", sub: kind || "—", desc:"Author the logic. Recompute trigger, backfill and on-failure live here too." },
+    { label:"Review",      sub: "Confirm",  desc:"Final check before the computation is created." }
+  ];
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+  return (
+    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
+      onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ width:"94vw", maxWidth:1080, height:"92vh", maxHeight:820, background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
+
+        {/* HEADER */}
+        <div style={{ flexShrink:0, height:58, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 22px", background:"var(--panel)" }}>
+          <div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>{node.label} · New computation</div>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:20, color:"var(--ink)", marginTop:2 }}>{pName ? ("Computing " + pName) : "New computation"}</div>
+          </div>
+          <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)" }}>✕</button>
+        </div>
+
+        {/* BODY */}
+        <div style={{ flex:1, display:"grid", gridTemplateColumns:"240px 1fr", minHeight:0 }}>
+          {/* Stepper sidebar */}
+          <div style={{ background:"var(--panel-2)", borderRight:"1px solid var(--line)", padding:"20px 14px", display:"flex", flexDirection:"column", gap:4, overflowY:"auto" }}>
+            {steps.map(function(s, i){
+              var n = i + 1;
+              var isOn = step === n;
+              var isDone = step > n;
+              return (
+                <button key={n} type="button" onClick={function(){ if (n <= step) setStep(n); }}
+                  style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor: n <= step ? "pointer" : "default", fontFamily:"inherit", textAlign:"left", alignItems:"center" }}>
+                  <span style={{ width:28, height:28, borderRadius:"50%", border:"1px solid " + (isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--line)"), background: isDone ? "var(--green)" : isOn ? "var(--ink)" : "var(--bg-canvas)", color: isDone || isOn ? "var(--bg-canvas)" : "var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:12, fontWeight:700, flexShrink:0 }}>{isDone ? <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg> : n}</span>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:13, color:"var(--ink)", fontWeight: isOn ? 500 : 400 }}>{s.label}</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.sub}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Main */}
+          <div style={{ padding:"24px 32px 28px", overflowY:"auto" }}>
+            <div style={{ marginBottom:20 }}>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / " + steps.length}</div>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:28, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>{steps[step-1].label}</div>
+              <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:680 }}>{steps[step-1].desc}</div>
+            </div>
+
+            {/* ─── STEP 1: BASICS ─── */}
+            {step === 1 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:22, maxWidth:840 }}>
+                {/* Computation type FIRST — dropdown opens by default */}
+                <div>
+                  <label style={lbl}>Computation type</label>
+                  {richPicker(kind, function(v){ setKind(v); }, kindOpen, setKindOpen, KINDS, "Pick a computation type")}
+                </div>
+
+                {/* Everything else gated behind kind selection */}
+                {kind && (
+                  <>
+                    <div>
+                      <label style={lbl}>Key</label>
+                      <input value={pName} onChange={function(e){ setPName(e.target.value); }} placeholder="e.g. tier · churn_score · last_activity_at" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono" })} />
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>snake_case · how this field is referenced in queries and APIs. Unique within {node.label}.</div>
+                    </div>
+                    <div>
+                      <label style={lbl}>Display name</label>
+                      <input value={pDisplay} onChange={function(e){ setPDisplay(e.target.value); }} placeholder={"e.g. " + (pName ? pName.split("_").map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1); }).join(" ") : "Customer Tier")} style={inp} />
+                    </div>
+                    <div>
+                      <label style={lbl}>Type</label>
+                      {richPicker(pType, function(v){ setPType(v); }, pTypeOpen, setPTypeOpen, TYPE_OPTIONS.map(function(t){ var m = TYPE_META[t]; return { id:t, l:t, d:m.d, color:m.color, glyph:m.glyph }; }), "Pick a storage type")}
+                    </div>
+                    <div>
+                      <label style={lbl}>Default value <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", letterSpacing:0, textTransform:"none", marginLeft:6 }}>optional · used when the computation hasn't run yet</span></label>
+                      <input value={pDefault} onChange={function(e){ setPDefault(e.target.value); }} placeholder="—" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono" })} />
+                    </div>
+                    <div>
+                      <label style={lbl}>+ Nest under a parent field <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", letterSpacing:0, textTransform:"none", marginLeft:6 }}>optional · groups this field under a struct parent</span></label>
+                      <input value={pNest} onChange={function(e){ setPNest(e.target.value); }} placeholder="e.g. health · billing · scoring" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", maxWidth:400 })} />
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ─── STEP 2: COMPUTATION ─── */}
+            {step === 2 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:22, maxWidth:840 }}>
+                {/* Echo of the chosen type */}
+                <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", border:"1px solid var(--line-2)", borderRadius:8, background:"var(--panel-2)" }}>
+                  <span style={{ width:30, height:24, borderRadius:5, background: selectedKind.bg, color: selectedKind.color, display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700 }}>{selectedKind.glyph}</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{selectedKind.l}</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2 }}>writing into <code style={{ background:"var(--chip)", padding:"1px 5px", borderRadius:3 }}>{pName}</code></div>
+                  </div>
+                  <button onClick={function(){ setStep(1); setKindOpen(true); }} type="button" className="btn-ghost" style={{ fontSize:11 }}>Change type</button>
+                </div>
+
+                {/* FORMULA */}
+                {kind === "formula" && (
+                  <div>
+                    <label style={lbl}>Formula</label>
+                    <textarea value={formulaBody} onChange={function(e){ setFormulaBody(e.target.value); }} rows={6}
+                      placeholder={pName + " := bucket(arr_usd, [1000, 10000, 100000], ['SMB','MM','ENT','STR'])"}
+                      style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12.5, lineHeight:1.6, resize:"vertical" })} />
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>Functions: <code>bucket · coalesce · if · sum · avg · min · max · days_between · concat · lower · upper · round · lookup</code></div>
+                  </div>
+                )}
+
+                {/* SQL — System + Connection in one composable shell, then Query */}
+                {kind === "sql" && (
+                  <>
+                    <div>
+                      <label style={lbl}>Source</label>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)", overflow:"visible" }}>
+                        {/* System segment */}
+                        <div style={{ borderRight:"1px solid var(--line-2)" }}>
+                          <div style={{ padding:"8px 14px 0", fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-4)", textTransform:"uppercase", fontWeight:600 }}>System</div>
+                          {richPicker(sqlSystem, function(v){ setSqlSystem(v); setSqlConn(""); }, false, function(){}, SQL_SYSTEMS, "Pick a system")}
+                        </div>
+                        {/* Connection segment */}
+                        <div>
+                          <div style={{ padding:"8px 14px 0", fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.6px", color:"var(--ink-4)", textTransform:"uppercase", fontWeight:600 }}>Connection</div>
+                          {sqlSystem ? (
+                            richPicker(sqlConn, function(v){ setSqlConn(v); }, false, function(){}, systemConnections, "Pick a " + (selectedSystem && selectedSystem.l) + " connection")
+                          ) : (
+                            <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px" }}>
+                              <span style={{ width:34, height:34, borderRadius:7, background:"var(--chip)", border:"1px dashed var(--line)", color:"var(--ink-4)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:14, flexShrink:0 }}>·</span>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:13, color:"var(--ink-3)" }}>Pick a system first</div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <label style={lbl}>SQL / Cypher query</label>
+                      <textarea value={sqlQuery} onChange={function(e){ setSqlQuery(e.target.value); }} rows={6}
+                        placeholder={"SELECT SUM(mrr_usd * 12) FROM Subscription WHERE account_id = :id AND status = 'active'"}
+                        style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12.5, lineHeight:1.6, resize:"vertical" })} />
+                    </div>
+                  </>
+                )}
+
+                {/* AGENT */}
+                {kind === "agent" && (
+                  <div>
+                    <label style={lbl}>Select agent</label>
+                    {richPicker(agentId, setAgentId, false, function(){}, AGENTS, "Select an existing agent")}
+                  </div>
+                )}
+
+                {/* AUTOMATION */}
+                {kind === "automation" && (
+                  <div>
+                    <label style={lbl}>Select automation</label>
+                    {richPicker(automationId, setAutomationId, false, function(){}, AUTOMATIONS, "Select an existing automation")}
+                  </div>
+                )}
+
+                {/* Runtime controls — same for all kinds */}
+                <div>
+                  <label style={lbl}>Recompute when</label>
+                  {richPicker(recompute, setRecompute, false, function(){}, RECOMPUTE_OPTIONS, "Pick a recompute trigger")}
+                </div>
+                <div>
+                  <label style={lbl}>Backfill existing records</label>
+                  {richPicker(backfill, setBackfill, false, function(){}, BACKFILL_OPTIONS, "Pick a backfill strategy")}
+                </div>
+                <div>
+                  <label style={lbl}>On computation failure</label>
+                  {richPicker(onFailure, setOnFailure, false, function(){}, FAILURE_OPTIONS, "Pick a failure behaviour")}
+                </div>
+              </div>
+            )}
+
+            {/* ─── STEP 3: REVIEW ─── */}
+            {step === 3 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:840 }}>
+                <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, overflow:"hidden" }}>
+                  <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
+                    <span style={{ fontSize:14, fontWeight:600 }}>Summary</span>
+                    <span className="card-head-sub">{selectedKind && selectedKind.l} · writes {pName}</span>
+                  </div>
+                  <div>
+                    {[
+                      { k:"COMPUTATION TYPE", v: selectedKind ? selectedKind.l : "—" },
+                      { k:"KEY",              v: pName || "—" },
+                      { k:"DISPLAY NAME",     v: pDisplay || pName },
+                      { k:"TYPE",             v: pType },
+                      { k:"DEFAULT VALUE",    v: pDefault || <span style={{ color:"var(--ink-4)" }}>—</span> },
+                      { k:"NEST UNDER",       v: pNest || <span style={{ color:"var(--ink-4)" }}>—</span> },
+                      { k:"DEFINITION",       v: kind === "formula" ? formulaBody : kind === "sql" ? sqlQuery : kind === "agent" ? "agent:" + agentId : kind === "automation" ? automationId : "—" },
+                      { k:"RECOMPUTE",        v: (RECOMPUTE_OPTIONS.find(function(o){ return o.id === recompute; }) || {}).l },
+                      { k:"BACKFILL",         v: (BACKFILL_OPTIONS.find(function(o){ return o.id === backfill; }) || {}).l },
+                      { k:"ON FAILURE",       v: (FAILURE_OPTIONS.find(function(o){ return o.id === onFailure; }) || {}).l }
+                    ].map(function(row, i, arr){
+                      return (
+                        <div key={i} style={{ display:"grid", gridTemplateColumns:"170px 1fr", gap:14, padding:"10px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"baseline" }}>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>{row.k}</span>
+                          <span style={{ fontSize:13, color:"var(--ink)", textAlign:"right", fontFamily: row.k === "DEFINITION" ? "JetBrains Mono" : "inherit", whiteSpace:"pre-wrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.v}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* FOOTER */}
+        <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
+          <button className="btn-ghost" onClick={function(){ if (step > 1) setStep(step - 1); }} disabled={step === 1} style={{ opacity: step === 1 ? 0.4 : 1 }}>← Back</button>
+          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of " + steps.length + " · " + steps[step-1].label}</span>
+          <div style={{ display:"flex", gap:8 }}>
+            <button className="btn-ghost" onClick={onClose}>Cancel</button>
+            <button className="btn-dark" disabled={disabled} onClick={function(){ if (step < steps.length) setStep(step + 1); else onClose(); }} style={{ opacity: disabled ? 0.45 : 1 }}>{step < steps.length ? "Continue →" : "Create computation ↵"}</button>
           </div>
         </div>
 
