@@ -1044,6 +1044,7 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
   const svgRef = useRef(null);
   const [drag, setDrag] = useState(null); // {kind:'node'|'pan'|'link', id?, startX, startY, origX, origY}
   const [linkCursor, setLinkCursor] = useState(null); // {x,y} in world coords while drawing a new edge
+  const [linkTarget, setLinkTarget] = useState(null); // id of the node currently under cursor during a link drag
   const [size, setSize] = useState({ w: 1200, h: 800 });
 
   useEffect(() => {
@@ -1130,23 +1131,22 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
       drag.moved = true;
       const [wx, wy] = toWorld(sx, sy);
       setLinkCursor({ x: wx, y: wy });
+      // Find a candidate target under the cursor so we can glow-ring it.
+      let target = null;
+      for (let i = 0; i < nodes.length; i++) {
+        const cn = nodes[i];
+        const r = (cn.size || 22) + 6;
+        if (cn.id !== drag.id && (wx - cn.x) * (wx - cn.x) + (wy - cn.y) * (wy - cn.y) < r * r) { target = cn.id; break; }
+      }
+      setLinkTarget(target);
     }
   };
   const onPointerUp = (e, nodeId) => {
     if (drag?.kind === "link") {
       // If we dropped over a different node, fire connect; else cancel.
-      const pt = svgRef.current.getBoundingClientRect();
-      const sx = e.clientX - pt.left;
-      const sy = e.clientY - pt.top;
-      const [wx, wy] = toWorld(sx, sy);
-      let target = null;
-      for (let i = 0; i < nodes.length; i++) {
-        const n = nodes[i];
-        const r = (n.size || 22);
-        if (n.id !== drag.id && (wx - n.x) * (wx - n.x) + (wy - n.y) * (wy - n.y) < r * r) { target = n; break; }
-      }
-      if (target && onEditConnect) onEditConnect(drag.id, target.id);
+      if (linkTarget && onEditConnect) onEditConnect(drag.id, linkTarget);
       setLinkCursor(null);
+      setLinkTarget(null);
       setDrag(null);
       return;
     }
@@ -1354,39 +1354,58 @@ function Canvas({ nodes, setNodes, edges, setEdges, selected, setSelected, hover
                     {n.instances}
                   </text>
                 )}
-                {/* Edit-mode chrome: connector handle + delete × on hover */}
-                {editMode && isHov && (
-                  <g>
-                    {/* Connector handle to the right — drag to create an edge */}
-                    <g transform={`translate(${n.size + 12}, 0)`}
-                       style={{ cursor:"crosshair" }}
-                       onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, n.id, true); }}>
-                      <circle r="8" fill="var(--bg-canvas)" stroke="var(--ink-2)" strokeWidth="1.3" />
-                      <line x1="-3.5" y1="0" x2="3.5" y2="0" stroke="var(--ink)" strokeWidth="1.5" strokeLinecap="round" />
-                      <line x1="0" y1="-3.5" x2="0" y2="3.5" stroke="var(--ink)" strokeWidth="1.5" strokeLinecap="round" />
-                    </g>
-                    {/* Delete × to the top-right */}
-                    <g transform={`translate(${n.size * 0.78}, ${-n.size * 0.78})`}
-                       style={{ cursor:"pointer" }}
-                       onPointerDown={(e) => { e.stopPropagation(); }}
-                       onClick={(e) => { e.stopPropagation(); if (onDeleteNode) onDeleteNode(n.id); }}>
-                      <circle r="7" fill="var(--coral-fill)" stroke="var(--coral)" strokeWidth="1.2" />
-                      <line x1="-3" y1="-3" x2="3" y2="3" stroke="var(--coral)" strokeWidth="1.4" strokeLinecap="round" />
-                      <line x1="-3" y1="3" x2="3" y2="-3" stroke="var(--coral)" strokeWidth="1.4" strokeLinecap="round" />
-                    </g>
+                {/* Edit-mode connector — visible on hover, persists while linking
+                    from this node. Handle hugs the node's right edge so the user
+                    never crosses empty space to reach it. A larger transparent
+                    hit ring around it makes the target generous to grab. */}
+                {editMode && (isHov || (drag?.kind === "link" && drag.id === n.id)) && (
+                  <g style={{ cursor: drag?.kind === "link" && drag.id === n.id ? "crosshair" : "grab" }}>
+                    {/* Generous invisible hit ring — bridges the gap between the
+                        node body and the visible handle so hover doesn't drop out
+                        as the user reaches for it. */}
+                    <circle cx={n.size + 3} cy="0" r="14" fill="transparent" pointerEvents="all"
+                      onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, n.id, true); }} />
+                    {/* Soft connector dot, sits just outside the node edge */}
+                    <circle cx={n.size + 3} cy="0" r="5"
+                      fill="var(--panel)" stroke="var(--ink-3)" strokeWidth="1"
+                      style={{ pointerEvents:"none" }} />
+                    <line x1={n.size - 0.4} y1="0" x2={n.size + 6.4} y2="0" stroke="var(--ink-2)" strokeWidth="1.1" strokeLinecap="round" style={{ pointerEvents:"none" }} />
+                    <line x1={n.size + 3} y1="-3" x2={n.size + 3} y2="3" stroke="var(--ink-2)" strokeWidth="1.1" strokeLinecap="round" style={{ pointerEvents:"none" }} />
                   </g>
                 )}
               </g>
             );
           })}
-          {/* Rubber-band edge being drawn from a node handle */}
+          {/* Rubber-band edge while linking from a node handle.
+              Uses a smooth quadratic curve that bows slightly, plus a halo
+              ring around the target node when the cursor finds one. */}
           {drag?.kind === "link" && linkCursor && (function(){
             var from = nodes.find(function(x){ return x.id === drag.id; });
             if (!from) return null;
+            var sx = from.x + (from.size || 22) + 3;
+            var sy = from.y;
+            var ex = linkCursor.x;
+            var ey = linkCursor.y;
+            var dx = ex - sx, dy = ey - sy;
+            var len = Math.sqrt(dx*dx + dy*dy) || 1;
+            // Control point: midpoint pulled perpendicular for a gentle arc.
+            var mx = (sx + ex) / 2 + (-dy / len) * Math.min(len * 0.18, 36);
+            var my = (sy + ey) / 2 + ( dx / len) * Math.min(len * 0.18, 36);
+            var t = nodes.find(function(n){ return n.id === linkTarget; });
             return (
               <g style={{ pointerEvents:"none" }}>
-                <line x1={from.x} y1={from.y} x2={linkCursor.x} y2={linkCursor.y} stroke="var(--ink-2)" strokeWidth="1.6" strokeDasharray="4 4" />
-                <circle cx={linkCursor.x} cy={linkCursor.y} r="4" fill="var(--bg-canvas)" stroke="var(--ink-2)" strokeWidth="1.4" />
+                {/* Target glow rings — only when the cursor is over a candidate */}
+                {t && (
+                  <g>
+                    <circle cx={t.x} cy={t.y} r={(t.size || 22) + 11} fill="none" stroke="var(--green)" strokeWidth="1" opacity="0.35" />
+                    <circle cx={t.x} cy={t.y} r={(t.size || 22) + 5}  fill="none" stroke="var(--green)" strokeWidth="1.4" opacity="0.85" />
+                  </g>
+                )}
+                {/* The connecting line — soft, curved, no dashes */}
+                <path d={`M ${sx} ${sy} Q ${mx} ${my} ${ex} ${ey}`}
+                      fill="none" stroke={t ? "var(--green)" : "var(--ink-2)"} strokeWidth="1.4" strokeLinecap="round" opacity="0.9" />
+                {/* Arrival dot at the cursor */}
+                <circle cx={ex} cy={ey} r="3.2" fill={t ? "var(--green)" : "var(--ink-2)"} />
               </g>
             );
           })()}
@@ -16439,16 +16458,14 @@ function AddNodeFlow({ onClose, onCreate }) {
                         return (
                           <div style={{ position:"relative" }}>
                             <button type="button" onClick={function(){ setGlyphOpen(function(o){ return !o; }); }}
-                              style={{ width:48, height:"100%", minHeight:46, borderRadius:9, border:"1px solid var(--line)", background:"var(--panel)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", padding:0, boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}
+                              style={{ width:48, height:48, alignSelf:"center", borderRadius:"50%", border:"1px solid var(--line)", background:"var(--panel)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", padding:0, boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}
                               aria-label="Pick icon">
                               {glyphImage ? (
-                                <span style={{ position:"relative", width:30, height:30, borderRadius:"50%", background: previewC.fill, border: "1.2px solid " + previewC.stroke, display:"inline-flex", alignItems:"center", justifyContent:"center", overflow:"hidden" }}>
-                                  <img src={glyphImage} alt="" style={{ width:20, height:20, objectFit:"contain" }} />
-                                </span>
+                                <img src={glyphImage} alt="" style={{ width:28, height:28, objectFit:"contain", borderRadius:"50%" }} />
                               ) : gDef ? (
-                                <svg width="28" height="28" viewBox="-6 -6 12 12">
-                                  <circle r="5.6" fill={previewC.fill} stroke={previewC.stroke} strokeWidth="0.6" />
-                                  {gDef.render(previewC)}
+                                // Bare glyph at full scale — the button itself is the circle, no inner disc.
+                                <svg width="32" height="32" viewBox="-5 -5 10 10">
+                                  {gDef.render({ fill: "none", stroke: "var(--ink-2)" })}
                                 </svg>
                               ) : (
                                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ink-4)" strokeWidth="1.4" strokeLinecap="round">
