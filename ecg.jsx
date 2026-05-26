@@ -16166,16 +16166,21 @@ function AddNodeFlow({ onClose, onCreate }) {
   var inp = { border:"1px solid var(--line)", borderRadius:7, padding:"11px 13px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", outline:"none", boxSizing:"border-box", width:"100%", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6), 0 1px 0 rgba(40,40,20,0.02)" };
   var lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:6 };
 
-  var stepNames = ["Identity", "Properties", "Governance", "Review"];
+  var stepNames = ["Identity", "Properties", "Review"];
 
   function NodePreview({ size }) {
     size = size || 36;
     var r = size/2 - 2;
+    // Picked glyph (if any) renders inside the shape using the same colours as the body.
+    var gDef = glyph ? glyphById(glyph) : null;
+    var glyphScale = (r * 0.55) / 3.4;
+    var glyphC = { fill: catDef.fill, stroke: catDef.color };
     return (
       <svg width={size} height={size} viewBox={"-"+(size/2)+" -"+(size/2)+" "+size+" "+size}>
         {shape === "agent" ? <polygon points={[0,1,2,3,4,5].map(function(i){ var a=(Math.PI/3)*i-Math.PI/2; return (r*Math.cos(a)).toFixed(1)+","+(r*Math.sin(a)).toFixed(1); }).join(" ")} fill={catDef.fill} stroke={catDef.color} strokeWidth="1.6"/>
          : shape === "source" ? <rect x={-r} y={-r} width={2*r} height={2*r} rx="2.5" fill={catDef.fill} stroke={catDef.color} strokeWidth="1.6"/>
          : <circle r={r} fill={catDef.fill} stroke={catDef.color} strokeWidth="1.6"/>}
+        {gDef && <g transform={"scale(" + glyphScale + ")"}>{gDef.render(glyphC)}</g>}
       </svg>
     );
   }
@@ -16207,7 +16212,6 @@ function AddNodeFlow({ onClose, onCreate }) {
               var isDone = step > n;
               var sub = n === 1 ? (name || "Name & category")
                       : n === 2 ? (properties.length + " " + (properties.length === 1 ? "field" : "fields") + (propMode !== "manual" ? " · " + propMode : ""))
-                      : n === 3 ? (owner + " · " + retentionPolicy)
                       : (activate ? "Activate" : "Draft");
               return (
                 <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
@@ -16225,13 +16229,12 @@ function AddNodeFlow({ onClose, onCreate }) {
           {/* CENTER */}
           <div style={{ padding:"24px 32px 28px", overflowY:"auto" }}>
             <div style={{ marginBottom:20 }}>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / 4"}</div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / 3"}</div>
               <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>{stepNames[step-1]}</div>
               <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:680 }}>
                 {step === 1 && "Name the node type and pick its category. Use a singular capitalised noun — Account, Contract, Ticket."}
                 {step === 2 && "Define the properties this node carries. You can enter them by hand, upload a spreadsheet to auto-detect columns, parse a sample document, or start from a template."}
-                {step === 3 && "Classify the data, set retention, tag the entity, and pick an owner."}
-                {step === 4 && "Review the full schema. Activate immediately or save as a draft pending approval. Edges to other node types can be drawn later on the canvas."}
+                {step === 3 && "Review the full schema. Activate immediately or save as a draft pending approval. Edges to other node types can be drawn later on the canvas."}
               </div>
             </div>
 
@@ -16247,8 +16250,10 @@ function AddNodeFlow({ onClose, onCreate }) {
                     <label style={lbl}>ICON & NAME</label>
                     <div style={{ display:"flex", gap:8, alignItems:"stretch", position:"relative" }}>
                       {(function(){
-                        var previewNode = { type: shape, state: null, glyph: glyph };
-                        var previewC = colorForNode(previewNode);
+                        // Picker preview uses neutral colors regardless of node type — the
+                        // user only picks the glyph shape here; the actual node colour
+                        // comes from its category later.
+                        var previewC = { fill: "var(--panel-2)", stroke: "var(--ink-3)" };
                         var gDef = glyph ? glyphById(glyph) : null;
                         return (
                           <div style={{ position:"relative" }}>
@@ -16683,7 +16688,9 @@ function AddNodeFlow({ onClose, onCreate }) {
             })()}
 
             {/* ── STEP 3: Governance ── */}
-            {step === 3 && (function(){
+            {false && step === 99 && (function(){
+              // Governance step removed from Add Node flow — collapsed to Identity → Properties → Review.
+              // Owner, retention, tags, and permissions are configured later from the node-detail page.
               return (
                 <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:820 }}>
                   {/* OWNER + RETENTION row */}
@@ -16776,8 +16783,8 @@ function AddNodeFlow({ onClose, onCreate }) {
               );
             })()}
 
-            {/* ── STEP 4: Review — comprehensive, dashed summary rows like enterprise tools ── */}
-            {step === 4 && (
+            {/* ── STEP 3: Review — comprehensive, dashed summary rows like enterprise tools ── */}
+            {step === 3 && (
               <div style={{ display:"flex", flexDirection:"column", gap:22, maxWidth:880 }}>
                 {/* Headline — bigger, more confident */}
                 <div>
@@ -16802,47 +16809,12 @@ function AddNodeFlow({ onClose, onCreate }) {
                       { k:"PRIMARY KEY", v: pkField ? <span><code style={{ fontFamily:"JetBrains Mono", color:"var(--ink)" }}>{pkField}</code> <span style={{ color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:10.5 }}>: {(properties.find(function(p){ return p.name === pkField; }) || {}).type || "uuid"}</span></span> : <span style={{ color:"var(--coral)" }}>not set</span> },
                       { k:"NATURAL KEYS", v: naturalKeys.length ? naturalKeys.map(function(n){ return <code key={n} style={{ fontFamily:"JetBrains Mono", fontSize:11, padding:"2px 7px", background:"var(--chip)", borderRadius:4, color:"var(--ink-2)", marginRight:5 }}>{n}</code>; }) : <span style={{ color:"var(--ink-4)" }}>none</span> },
                       { k:"PROPERTIES",  v: properties.length + " total · " + properties.filter(function(p){ return p.required; }).length + " required · " + properties.filter(function(p){ return p.indexed; }).length + " indexed · " + properties.filter(function(p){ return p.pii; }).length + " PII" },
-                      { k:"DEDUP",       v: dedupStrategy.replace(/_/g," ") },
-                      { k:"OWNER",       v: owner },
-                      { k:"FRESHNESS SLO", v: "—" },
-                      { k:"RETENTION",   v: retentionPolicy === "forever" ? "Keep forever" : retentionPolicy },
-                      { k:"COMPLIANCE",  v: complianceTags.length ? complianceTags.map(function(t){ return <span key={t} style={{ fontFamily:"JetBrains Mono", fontSize:10.5, padding:"2px 6px", background:"var(--chip)", borderRadius:4, color:"var(--ink-2)", marginRight:4 }}>{t}</span>; }) : <span style={{ color:"var(--ink-4)" }}>—</span> }
+                      { k:"DEDUP",       v: dedupStrategy.replace(/_/g," ") }
                     ].map(function(row, i, arr){
                       return (
                         <div key={i} style={{ display:"grid", gridTemplateColumns:"160px 1fr", gap:16, padding:"10px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"baseline" }}>
                           <span style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>{row.k}</span>
                           <span style={{ fontSize:13, color:"var(--ink)", textAlign:"right" }}>{row.v}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* ACCESS CARD — show full RBAC visually */}
-                <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
-                  <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
-                    <span style={{ fontSize:14, fontWeight:600 }}>Access</span>
-                    <span className="card-head-sub">{"read " + permsRead.length + " · write " + permsWrite.length + " · admin " + permsAdmin.length}</span>
-                  </div>
-                  <div>
-                    {[
-                      { k:"READ",  list: permsRead,  tone:{ bg:"var(--blue-fill)",  fg:"var(--blue)"  } },
-                      { k:"WRITE", list: permsWrite, tone:{ bg:"var(--green-fill)", fg:"var(--green)" } },
-                      { k:"ADMIN", list: permsAdmin, tone:{ bg:"var(--coral-fill)", fg:"var(--coral)" } }
-                    ].map(function(row, i, arr){
-                      return (
-                        <div key={i} style={{ display:"grid", gridTemplateColumns:"100px 1fr", gap:16, padding:"12px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"center" }}>
-                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:row.tone.bg, color:row.tone.fg, fontWeight:700, letterSpacing:"0.5px", justifySelf:"start" }}>{row.k}</span>
-                          <div style={{ display:"flex", flexWrap:"wrap", gap:5, justifyContent:"flex-end" }}>
-                            {row.list.length === 0 ? <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)", fontStyle:"italic" }}>nobody</span> : row.list.map(function(e, j){
-                              return (
-                                <span key={j} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 7px", borderRadius:5, background:"var(--chip)", border:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>
-                                  <span style={{ width:12, height:12, borderRadius: e.kind === "user" ? "50%" : 3, background: e.kind === "user" ? "var(--ink-2)" : "var(--ink-3)", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:7.5, fontWeight:700, flexShrink:0 }}>{e.kind === "user" ? e.label.split(" ").map(function(s){ return s[0]; }).join("").slice(0,2) : "G"}</span>
-                                  {e.label}
-                                </span>
-                              );
-                            })}
-                          </div>
                         </div>
                       );
                     })}
@@ -16895,10 +16867,10 @@ function AddNodeFlow({ onClose, onCreate }) {
         {/* FOOTER */}
         <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
           <button className="btn-ghost" onClick={function(){ if (step > 1) setStep(function(s){ return s - 1; }); }} disabled={step === 1} style={{ opacity: step === 1 ? 0.4 : 1 }}>← Back</button>
-          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of 4 · " + stepNames[step-1]}</span>
+          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of 3 · " + stepNames[step-1]}</span>
           <div style={{ display:"flex", gap:8 }}>
             <button className="btn-ghost" onClick={onClose}>Cancel</button>
-            {step < 4
+            {step < 3
               ? <button className="btn-dark" disabled={!canContinue()} onClick={function(){ setStep(function(s){ return s + 1; }); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Continue →</button>
               : <button className="btn-dark" onClick={function(){ if (onCreate) onCreate({ name: name, category: category, properties: properties, shape: shape, description: description, glyph: glyph }); onClose(); }}>{activate ? "Create node type ↵" : "Save draft ↵"}</button>
             }
