@@ -3026,15 +3026,14 @@ function ComputationDetailModal({ comp, node, onClose }) {
 function NewComputationFlow({ node, properties, onClose }) {
   var [step, setStep] = useState(1);
 
-  // ── Step 1 state — Computation type leads, everything else gated behind it
+  // ── Step 1 state — Computation type leads, everything else gated behind it.
+  // The computation writes back into ONE of the node's existing properties, so we
+  // only collect a display name and the target property — its storage type, key
+  // and parent are already defined on the property itself.
   var [kind, setKind] = useState(""); // formula | sql | agent | automation
   var [kindOpen, setKindOpen] = useState(true); // open by default
-  var [pName, setPName] = useState("");
-  var [pDisplay, setPDisplay] = useState("");
-  var [pType, setPType] = useState("string");
-  var [pTypeOpen, setPTypeOpen] = useState(false);
-  var [pDefault, setPDefault] = useState("");
-  var [pNest, setPNest] = useState("");
+  var [pName, setPName] = useState("");   // human-readable computation name
+  var [target, setTarget] = useState(""); // existing property name we write into
 
   // ── Step 2 state — kind-specific authoring + runtime
   var [formulaBody, setFormulaBody] = useState("");
@@ -3216,7 +3215,7 @@ function NewComputationFlow({ node, properties, onClose }) {
 
   // Validation
   function canContinue(s) {
-    if (s === 1) return !!kind && pName.trim().length > 0;
+    if (s === 1) return !!kind && pName.trim().length > 0 && !!target;
     if (s === 2) {
       if (kind === "formula")    return formulaBody.trim().length > 0;
       if (kind === "sql")        return !!sqlConn && sqlQuery.trim().length > 0;
@@ -3228,7 +3227,7 @@ function NewComputationFlow({ node, properties, onClose }) {
   var disabled = !canContinue(step);
 
   var steps = [
-    { label:"Basics",      sub: kind ? (selectedKind ? selectedKind.l + " · " + (pName || "untitled") : "") : "Computation type", desc:"Pick the computation type first — everything below depends on it. Then name the field and choose its storage type." },
+    { label:"Basics",      sub: kind ? (selectedKind ? selectedKind.l + " · " + (target || "untitled") : "") : "Computation type", desc:"Pick the computation type, name it, and choose which property on " + node.label + " the result writes into." },
     { label:"Computation", sub: kind || "—", desc:"Author the logic. Recompute trigger, backfill and on-failure live here too." },
     { label:"Review",      sub: "Confirm",  desc:"Final check before the computation is created." }
   ];
@@ -3243,7 +3242,7 @@ function NewComputationFlow({ node, properties, onClose }) {
         <div style={{ flexShrink:0, height:58, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 22px", background:"var(--panel)" }}>
           <div>
             <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>{node.label} · New computation</div>
-            <div style={{ fontFamily:"Instrument Serif", fontSize:20, color:"var(--ink)", marginTop:2 }}>{pName ? ("Computing " + pName) : "New computation"}</div>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:20, color:"var(--ink)", marginTop:2 }}>{pName || "New computation"}</div>
           </div>
           <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)" }}>✕</button>
         </div>
@@ -3290,25 +3289,34 @@ function NewComputationFlow({ node, properties, onClose }) {
                 {kind && (
                   <>
                     <div>
-                      <label style={lbl}>Key</label>
-                      <input value={pName} onChange={function(e){ setPName(e.target.value); }} placeholder="e.g. tier · churn_score · last_activity_at" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono" })} />
-                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>snake_case · how this field is referenced in queries and APIs. Unique within {node.label}.</div>
+                      <label style={lbl}>Name</label>
+                      <input value={pName} onChange={function(e){ setPName(e.target.value); }} placeholder="e.g. Customer Tier · Churn score · Last activity" style={inp} />
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>How this computation appears in the Computations list.</div>
                     </div>
                     <div>
-                      <label style={lbl}>Display name</label>
-                      <input value={pDisplay} onChange={function(e){ setPDisplay(e.target.value); }} placeholder={"e.g. " + (pName ? pName.split("_").map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1); }).join(" ") : "Customer Tier")} style={inp} />
-                    </div>
-                    <div>
-                      <label style={lbl}>Type</label>
-                      <RichPicker value={pType} onChange={function(v){ setPType(v); }} options={TYPE_OPTIONS.map(function(t){ var m = TYPE_META[t]; return { id:t, l:t, d:m.d, color:m.color, glyph:m.glyph }; })} placeholder="Pick a storage type" />
-                    </div>
-                    <div>
-                      <label style={lbl}>Default value <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", letterSpacing:0, textTransform:"none", marginLeft:6 }}>optional · used when the computation hasn't run yet</span></label>
-                      <input value={pDefault} onChange={function(e){ setPDefault(e.target.value); }} placeholder="—" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono" })} />
-                    </div>
-                    <div>
-                      <label style={lbl}>+ Nest under a parent field <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", letterSpacing:0, textTransform:"none", marginLeft:6 }}>optional · groups this field under a struct parent</span></label>
-                      <input value={pNest} onChange={function(e){ setPNest(e.target.value); }} placeholder="e.g. health · billing · scoring" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", maxWidth:400 })} />
+                      <label style={lbl}>Write into property</label>
+                      {(function(){
+                        // Build a rich option per existing property: type pill, name, key tags.
+                        var propOptions = (properties || []).map(function(p){
+                          var meta = TYPE_META[p.type] || { color:"var(--ink-3)", glyph:"?", d: p.type };
+                          var tags = [];
+                          if (p.pk) tags.push("PK");
+                          if (p.required) tags.push("REQ");
+                          if (p.indexed) tags.push("IDX");
+                          if (p.pii) tags.push("PII");
+                          return {
+                            id: p.name,
+                            l: p.name,
+                            d: p.type + (tags.length ? " · " + tags.join(" · ") : ""),
+                            color: meta.color,
+                            glyph: meta.glyph
+                          };
+                        });
+                        return (
+                          <RichPicker value={target} onChange={function(v){ setTarget(v); }} options={propOptions} placeholder={propOptions.length ? "Pick a property to write into" : "No properties on this node yet"} />
+                        );
+                      })()}
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>The computation's result is stored on this property of {node.label}.</div>
                     </div>
                   </>
                 )}
@@ -3323,7 +3331,7 @@ function NewComputationFlow({ node, properties, onClose }) {
                   <span style={{ width:30, height:24, borderRadius:5, background: selectedKind.bg, color: selectedKind.color, display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700 }}>{selectedKind.glyph}</span>
                   <div style={{ flex:1 }}>
                     <div style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{selectedKind.l}</div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2 }}>writing into <code style={{ background:"var(--chip)", padding:"1px 5px", borderRadius:3 }}>{pName}</code></div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2 }}>writing into <code style={{ background:"var(--chip)", padding:"1px 5px", borderRadius:3 }}>{target || "—"}</code></div>
                   </div>
                   <button onClick={function(){ setStep(1); setKindOpen(true); }} type="button" className="btn-ghost" style={{ fontSize:11 }}>Change type</button>
                 </div>
@@ -3333,7 +3341,7 @@ function NewComputationFlow({ node, properties, onClose }) {
                   <div>
                     <label style={lbl}>Formula</label>
                     <textarea value={formulaBody} onChange={function(e){ setFormulaBody(e.target.value); }} rows={6}
-                      placeholder={pName + " := bucket(arr_usd, [1000, 10000, 100000], ['SMB','MM','ENT','STR'])"}
+                      placeholder={(target || "result") + " := bucket(arr_usd, [1000, 10000, 100000], ['SMB','MM','ENT','STR'])"}
                       style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12.5, lineHeight:1.6, resize:"vertical" })} />
                     <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>Functions: <code>bucket · coalesce · if · sum · avg · min · max · days_between · concat · lower · upper · round · lookup</code></div>
                   </div>
@@ -3396,21 +3404,20 @@ function NewComputationFlow({ node, properties, onClose }) {
                 <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, overflow:"hidden" }}>
                   <div className="card-head card-head-row" style={{ background:"var(--panel-2)" }}>
                     <span style={{ fontSize:14, fontWeight:600 }}>Summary</span>
-                    <span className="card-head-sub">{selectedKind && selectedKind.l} · writes {pName}</span>
+                    <span className="card-head-sub">{selectedKind && selectedKind.l} · writes {target}</span>
                   </div>
                   <div>
-                    {[
+                    {(function(){
+                      var targetProp = (properties || []).find(function(p){ return p.name === target; });
+                      return [
                       { k:"COMPUTATION TYPE", v: selectedKind ? selectedKind.l : "—" },
-                      { k:"KEY",              v: pName || "—" },
-                      { k:"DISPLAY NAME",     v: pDisplay || pName },
-                      { k:"TYPE",             v: pType },
-                      { k:"DEFAULT VALUE",    v: pDefault || <span style={{ color:"var(--ink-4)" }}>—</span> },
-                      { k:"NEST UNDER",       v: pNest || <span style={{ color:"var(--ink-4)" }}>—</span> },
+                      { k:"NAME",             v: pName || "—" },
+                      { k:"WRITES INTO",      v: target ? (target + (targetProp ? " · " + targetProp.type : "")) : "—" },
                       { k:"DEFINITION",       v: kind === "formula" ? formulaBody : kind === "sql" ? sqlQuery : kind === "agent" ? "agent:" + agentId : kind === "automation" ? automationId : "—" },
                       { k:"RECOMPUTE",        v: (RECOMPUTE_OPTIONS.find(function(o){ return o.id === recompute; }) || {}).l },
                       { k:"BACKFILL",         v: (BACKFILL_OPTIONS.find(function(o){ return o.id === backfill; }) || {}).l },
                       { k:"ON FAILURE",       v: (FAILURE_OPTIONS.find(function(o){ return o.id === onFailure; }) || {}).l }
-                    ].map(function(row, i, arr){
+                    ]; })().map(function(row, i, arr){
                       return (
                         <div key={i} style={{ display:"grid", gridTemplateColumns:"170px 1fr", gap:14, padding:"10px 22px", borderBottom: i < arr.length-1 ? "1px dashed var(--line-2)" : "none", alignItems:"baseline" }}>
                           <span style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>{row.k}</span>
