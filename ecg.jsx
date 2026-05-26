@@ -11591,39 +11591,20 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                 <div>
                   {provenance.map(function(pv, i) {
                     var p = pv.prop;
-                    var isOpen = expandedProp === p.name;
-                    var confColor = pv.conf >= 0.9 ? "var(--green)" : pv.conf >= 0.75 ? "var(--gold)" : "var(--coral)";
                     return (
-                      <div key={p.name} style={{ borderBottom: i < provenance.length-1 ? "1px solid var(--line-2)" : "none" }}>
-                        <div onClick={function(){ setExpandedProp(isOpen ? null : p.name); }}
-                          style={{ display:"grid", gridTemplateColumns:"180px 1fr auto auto auto", alignItems:"center", gap:14, padding:"11px 18px", cursor:"pointer" }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:6, minWidth:0 }}>
-                            {p.pk && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 4px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700 }}>PK</span>}
-                            <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", fontWeight: p.pk ? 600 : 400, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</code>
-                          </div>
-                          <div style={{ fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{String(pv.value)}</div>
-                          <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{p.type}</span>
-                          <div style={{ display:"flex", gap:3 }}>
-                            {p.pii && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--coral-fill)", color:"var(--coral)", fontWeight:700 }}>PII</span>}
-                            {p.required && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", fontWeight:700 }}>REQ</span>}
-                            {p.computed && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--purple-fill)", color:"var(--purple)", fontWeight:700 }}>FX</span>}
-                            {pv.conflict && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--gold-fill)", color:"var(--gold)", fontWeight:700 }}>⚠</span>}
-                          </div>
-                          <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", width:14, textAlign:"center" }}>{isOpen ? "▴" : "▾"}</span>
+                      <div key={p.name} style={{ display:"grid", gridTemplateColumns:"180px 1fr auto auto", alignItems:"center", gap:14, padding:"11px 18px", borderBottom: i < provenance.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:6, minWidth:0 }}>
+                          {p.pk && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1px 4px", borderRadius:3, background:"var(--ink)", color:"var(--bg-canvas)", fontWeight:700 }}>PK</span>}
+                          <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", fontWeight: p.pk ? 600 : 400, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</code>
                         </div>
-                        {isOpen && (
-                          <div style={{ padding:"4px 18px 16px 198px", background:"var(--panel-2)", display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px 24px", fontSize:11.5 }}>
-                            <div><span style={{ color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:10 }}>SOURCE</span> <span style={{ marginLeft:8, fontFamily:"JetBrains Mono", color:"var(--ink-2)" }}>{pv.source}</span></div>
-                            <div><span style={{ color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:10 }}>WRITTEN</span> <span style={{ marginLeft:8, fontFamily:"JetBrains Mono", color:"var(--ink-2)" }}>{pv.age + " ago"}</span></div>
-                            <div><span style={{ color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:10 }}>CONFIDENCE</span> <span style={{ marginLeft:8, fontFamily:"JetBrains Mono", color:confColor, fontWeight:600 }}>{pv.conf}</span></div>
-                            <div><span style={{ color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:10 }}>RULE</span> <span style={{ marginLeft:8, fontFamily:"JetBrains Mono", color:"var(--ink-2)" }}>{pv.rule || "—"}</span></div>
-                            {pv.conflict && (
-                              <div style={{ gridColumn:"1 / -1", marginTop:6, padding:"8px 10px", background:"var(--gold-fill)", borderRadius:6, fontSize:11, color:"var(--ink-2)", lineHeight:1.5 }}>
-                                ⚠ <b>Conflict resolved.</b> {pv.conflict.loser} asserted <code style={{ fontFamily:"JetBrains Mono", background:"rgba(255,255,255,0.5)", padding:"1px 5px", borderRadius:3 }}>{String(pv.conflict.loserValue)}</code>. Winner chosen via <b>{pv.conflict.resolution}</b>.
-                              </div>
-                            )}
-                          </div>
-                        )}
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{String(pv.value)}</div>
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)" }}>{p.type}</span>
+                        <div style={{ display:"flex", gap:3 }}>
+                          {p.pii && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--coral-fill)", color:"var(--coral)", fontWeight:700 }}>PII</span>}
+                          {p.required && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", fontWeight:700 }}>REQ</span>}
+                          {p.computed && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--purple-fill)", color:"var(--purple)", fontWeight:700 }}>FX</span>}
+                          {pv.conflict && <span style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--gold-fill)", color:"var(--gold)", fontWeight:700 }}>⚠</span>}
+                        </div>
                       </div>
                     );
                   })}
