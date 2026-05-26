@@ -3576,7 +3576,6 @@ function PropertiesPane({ node, properties }) {
     { id: "required", label: "Required",  count: properties.filter(p=>p.required).length },
     { id: "indexed",  label: "Indexed",   count: properties.filter(p=>p.indexed).length },
     { id: "pii",      label: "PII",       count: properties.filter(p=>p.pii).length },
-    { id: "computed", label: "Computed",  count: properties.filter(p=>p.computed).length },
   ];
 
   const filtered = useMemo(() => {
@@ -3584,7 +3583,6 @@ function PropertiesPane({ node, properties }) {
     if (filter === "required") rows = rows.filter(p => p.required);
     if (filter === "indexed")  rows = rows.filter(p => p.indexed);
     if (filter === "pii")      rows = rows.filter(p => p.pii);
-    if (filter === "computed") rows = rows.filter(p => p.computed);
     if (search) rows = rows.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || (p.type||"").toLowerCase().includes(search.toLowerCase()));
     rows.sort((a, b) => {
       let va = a[sort.col] ?? "", vb = b[sort.col] ?? "";
@@ -4743,27 +4741,6 @@ function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, onClo
           {/* MANUAL · STEP 2 — Behaviour: Computed → Identity (PK) → Constraints → Advanced */}
           {mode === "manual" && stepId === "behaviour" && (
           <div style={{ display:"flex", flexDirection:"column", gap:28 }}>
-
-            {/* COMPUTED — top of the step. Toggle + (when on) inline note */}
-            <div>
-              <label style={lbl}>COMPUTED PROPERTY</label>
-              <div style={{ border:"1px solid var(--line)", borderRadius:10, background:"var(--panel)", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)", overflow:"hidden", transition:"all 100ms" }}>
-                <label style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"14px 16px", cursor:"pointer", borderBottom: pComputed ? "1px solid var(--line-2)" : "none", background:"transparent" }}>
-                  <input type="checkbox" checked={pComputed} onChange={function(e){ setPComputed(e.target.checked); setPKind(e.target.checked ? "computed" : "upstream"); }} style={{ accentColor:"var(--ink)", width:15, height:15, marginTop:2, flexShrink:0 }} />
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>Derive this property from a Formula, SQL Query, Agent or Automation</div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4, lineHeight:1.5 }}>When on, the value is recomputed from the expression you configure on the next step — not written by upstream systems.</div>
-                  </div>
-                </label>
-                {pComputed && (
-                  <div style={{ padding:"12px 16px 14px", background:"var(--bg-canvas)", borderTop:"1px dashed var(--line)" }}>
-                    <div style={{ fontSize:12.5, color:"var(--ink-2)", lineHeight:1.55 }}>
-                      <b style={{ color:"var(--ink)" }}>Note:</b> A Computation step is now part of the flow — set the formula, recompute trigger, backfill and failure handling there.
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
 
             {/* IDENTITY — Primary Key checkbox card. Moved from Basics. Same subtle-border treatment. */}
             <div>
@@ -11346,15 +11323,17 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                   </button>
                 </div>
               </div>
-              <div style={{ background:"var(--bg-canvas)", padding:"20px", flex:1, display:"flex", flexDirection:"column" }}>
+              <div style={{ background:"var(--bg-canvas)", padding:0, flex:1, minHeight:0, overflow:"auto" }}>
                 {(function() {
-                  // Wider/taller viewBox so the SVG visibly fills the bigger pane,
-                  // and the node circles end up roughly the size of the workspace canvas.
-                  var W = twoHop ? 1120 : 900;
-                  var H = twoHop ? 720 : 600;
+                  // Canvas renders at its natural size and the container scrolls — same
+                  // behaviour as the main workspace graph. Node radii are constant across
+                  // 1-hop and 2-hop; we only grow the viewBox / orbit radii when expanding,
+                  // so individual nodes never shrink.
+                  var W = twoHop ? 1900 : 1100;
+                  var H = twoHop ? 1300 : 760;
                   var cx = W/2, cy = H/2;
-                  var r1 = twoHop ? 200 : 220;
-                  var r2 = 290;
+                  var r1 = 280;
+                  var r2 = 540;
 
                   // 1-hop nodes
                   var flat = [];
@@ -11395,7 +11374,7 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                   }
 
                   return (
-                    <svg width="100%" height="100%" viewBox={"0 0 "+W+" "+H} preserveAspectRatio="xMidYMid meet" style={{ display:"block", flex:1 }}>
+                    <svg width={W} height={H} viewBox={"0 0 "+W+" "+H} style={{ display:"block" }}>
                       <defs>
                         <marker id="rec-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-3)"/></marker>
                         <marker id="rec-arrow-2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-4)"/></marker>
@@ -11408,7 +11387,7 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                         var len = Math.sqrt(dx*dx + dy*dy);
                         var ux = dx/len, uy = dy/len;
                         var sx = px + ux * 28, sy = py + uy * 28;
-                        var tx = h.x - ux * 20, ty = h.y - uy * 20;
+                        var tx = h.x - ux * 28, ty = h.y - uy * 28;
                         var midX = (sx + tx) / 2, midY = (sy + ty) / 2;
                         return (
                           <g key={"h-e"+i}>
@@ -11451,9 +11430,9 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
                             onClick={function(){ setInspectedNode(h.rr); }}
                             onMouseEnter={function(){ setHoverNode(h.rr.id); }}
                             onMouseLeave={function(){ setHoverNode(null); }}>
-                            <circle cx={h.x} cy={h.y} r={isInspected ? 22 : isHover ? 20 : 18} fill={col.fill} stroke={isInspected || isHover ? "var(--ink)" : col.stroke} strokeWidth={isInspected ? 2.6 : isHover ? 2.2 : 1.4} />
-                            <text x={h.x} y={h.y - 26} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"9px", fontWeight:600, fill: isHover || isInspected ? "var(--ink)" : "var(--ink-2)", pointerEvents:"none" }}>{h.rr.id}</text>
-                            <text x={h.x} y={h.y + 30} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"8.5px", fill:"var(--ink-4)", pointerEvents:"none" }}>{String(h.rr.keyValue).slice(0, 18)}</text>
+                            <circle cx={h.x} cy={h.y} r={isInspected ? 30 : isHover ? 28 : 26} fill={col.fill} stroke={isInspected || isHover ? "var(--ink)" : col.stroke} strokeWidth={isInspected ? 3 : isHover ? 2.6 : 1.8} />
+                            <text x={h.x} y={h.y - 34} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"11.5px", fontWeight:600, fill: isHover || isInspected ? "var(--ink)" : "var(--ink-2)", pointerEvents:"none" }}>{h.rr.id}</text>
+                            <text x={h.x} y={h.y + 42} textAnchor="middle" style={{ fontFamily:"JetBrains Mono", fontSize:"10.5px", fill:"var(--ink-3)", pointerEvents:"none" }}>{String(h.rr.keyValue).slice(0, 18)}</text>
                           </g>
                         );
                       })}
