@@ -4851,14 +4851,11 @@ function CodeSnippetFlow({ node, onClose }) {
                   var on = pickedId === s.id;
                   return (
                     <button key={s.id} onClick={function(){ pickSnippet(s); }}
-                      style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:6, fontFamily:"inherit", textAlign:"left", cursor:"pointer", border:"1px solid " + (on ? "var(--line)" : "transparent"), background: on ? "var(--panel)" : "transparent" }}
+                      style={{ display:"flex", alignItems:"center", gap:8, padding:"9px 10px", borderRadius:6, fontFamily:"inherit", textAlign:"left", cursor:"pointer", border:"1px solid " + (on ? "var(--line)" : "transparent"), background: on ? "var(--panel)" : "transparent" }}
                       onMouseEnter={function(e){ if (!on) e.currentTarget.style.background = "var(--panel)"; }}
                       onMouseLeave={function(e){ if (!on) e.currentTarget.style.background = "transparent"; }}>
-                      <div style={{ minWidth:0, flex:1, display:"flex", flexDirection:"column", gap:2 }}>
+                      <div style={{ minWidth:0, flex:1 }}>
                         <div style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", fontWeight: on ? 600 : 500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.name}</div>
-                        <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-                          {s.tags.map(function(t){ return <span key={t} style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", letterSpacing:"0.4px", textTransform:"uppercase", fontWeight:600 }}>{t}</span>; })}
-                        </div>
                       </div>
                       <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:4, background: s.lang === "JSON" ? "var(--purple-fill)" : s.lang === "XML" ? "var(--blue-fill)" : "var(--gold-fill)", color: s.lang === "JSON" ? "var(--purple)" : s.lang === "XML" ? "var(--blue)" : "var(--gold)", fontWeight:700, letterSpacing:"0.5px", flexShrink:0 }}>{s.lang}</span>
                     </button>
@@ -6642,7 +6639,7 @@ function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, onClo
                    : thisStepId === "behaviour"   ? ((pIsPrimary ? "PK · " : "") + ([pRequired&&"req",pIndexed&&"idx",pUnique&&"unq",pPII&&"pii"].filter(Boolean).join(" · ") || "flags & defaults"))
                    : thisStepId === "computation" ? (pComputeKind + (pFormula ? " · expression set" : " · no expression"))
                    : "Add")
-                : (n === 1 ? (bulkFileName || (bulkTemplate ? (TEMPLATE_PACKS.find(function(t){ return t.id === bulkTemplate; }) || {}).l : "pick source"))
+                : (n === 1 ? (bulkFileName || (bulkTemplate ? ((TEMPLATE_PACKS.find(function(t){ return t.id === bulkTemplate; }) || NODE_TEMPLATES.find(function(t){ return "node_" + t.id === bulkTemplate; }) || {}).l || (NODE_TEMPLATES.find(function(t){ return "node_" + t.id === bulkTemplate; }) || {}).name) : "pick source"))
                    : n === 2 ? (bulkRows.length ? includedCount + " of " + bulkRows.length + " included" : "—")
                    : "Add " + includedCount);
               var canGoTo = mode === "manual" ? (n < currentStep || n === currentStep || canSave)
@@ -7967,38 +7964,89 @@ function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, onClo
             </div>
           )}
 
-          {/* BULK · TEMPLATE — Step 1 */}
-          {mode === "template" && bulkStep === 1 && (
-            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-              <input value={bulkQuery} onChange={function(e){ setBulkQuery(e.target.value); }} placeholder="Search property templates…" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12.5 })} />
-              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                {TEMPLATE_PACKS.filter(function(t){ return !bulkQuery || (t.l + " " + t.d).toLowerCase().indexOf(bulkQuery.toLowerCase()) >= 0; }).map(function(t){
-                  return (
-                    <button key={t.id} onClick={function(){ applyTemplate(t); }}
-                      style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}
-                      onMouseEnter={function(e){ e.currentTarget.style.borderColor = "var(--ink-3)"; }}
-                      onMouseLeave={function(e){ e.currentTarget.style.borderColor = "var(--line)"; }}>
-                      <span style={{ width:30, height:30, borderRadius:6, background:"var(--chip)", color:"var(--ink-2)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0 }}>{t.fields.length}</span>
-                      <div style={{ minWidth:0, flex:1 }}>
-                        <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{t.l}</div>
-                        <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3 }}>{t.d}</div>
-                        <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:7 }}>
-                          {t.fields.map(function(f){ return <span key={f.name} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-2)" }}>{f.name}</span>; })}
+          {/* BULK · TEMPLATE — Step 1
+              Comprehensive picker that mirrors the new-node template flow:
+              the 5 quick property packs sit in their own group at the top,
+              followed by every NODE_TEMPLATES entity grouped by department.
+              That way a user adding properties to an existing node has the
+              same catalog they'd see when creating a brand-new node. */}
+          {mode === "template" && bulkStep === 1 && (function(){
+            // Normalise NODE_TEMPLATES → same shape applyTemplate expects.
+            var entityTemplates = NODE_TEMPLATES.map(function(t){
+              return {
+                id:        "node_" + t.id,
+                l:         t.name,
+                d:         t.brief,
+                icon:      t.icon,
+                department:t.department,
+                fields:    t.properties
+              };
+            });
+            var packTemplates = TEMPLATE_PACKS.map(function(t){
+              return Object.assign({}, t, { department:"__packs" });
+            });
+            var allTemplates = packTemplates.concat(entityTemplates);
+            var q = (bulkQuery || "").toLowerCase();
+            var filtered = q ? allTemplates.filter(function(t){
+              if ((t.l + " " + (t.d || "") + " " + (t.fields || []).map(function(f){ return f.name; }).join(" ")).toLowerCase().indexOf(q) >= 0) return true;
+              return false;
+            }) : allTemplates;
+            // Group by department in display order. Property packs go first.
+            var DEPT_ORDER = [{ id:"__packs", label:"Property packs", color:"var(--purple)" }].concat(NODE_TEMPLATE_DEPARTMENTS);
+            return (
+              <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                <input value={bulkQuery} onChange={function(e){ setBulkQuery(e.target.value); }} placeholder="Search templates, departments, or fields…" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12.5 })} />
+                <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+                  {DEPT_ORDER.map(function(dept){
+                    var items = filtered.filter(function(t){ return t.department === dept.id; });
+                    if (items.length === 0) return null;
+                    return (
+                      <div key={dept.id}>
+                        <div style={{ display:"flex", alignItems:"center", gap:7, padding:"0 2px", marginBottom:8 }}>
+                          <span style={{ width:7, height:7, borderRadius:"50%", background:dept.color, flexShrink:0 }} />
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, letterSpacing:"0.55px", color:"var(--ink-3)", textTransform:"uppercase" }}>{dept.label}</span>
+                          <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)" }}>· {items.length}</span>
+                        </div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                          {items.map(function(t){
+                            var icon = t.icon || t.l.replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase();
+                            return (
+                              <button key={t.id} onClick={function(){ applyTemplate(t); }}
+                                style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel)", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}
+                                onMouseEnter={function(e){ e.currentTarget.style.borderColor = "var(--ink-3)"; e.currentTarget.style.background = "var(--bg-canvas)"; }}
+                                onMouseLeave={function(e){ e.currentTarget.style.borderColor = "var(--line)"; e.currentTarget.style.background = "var(--panel)"; }}>
+                                <span style={{ width:30, height:30, borderRadius:6, background: dept.color + "1f", color: dept.color, display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0 }}>{icon}</span>
+                                <div style={{ minWidth:0, flex:1 }}>
+                                  <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
+                                    <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{t.l}</span>
+                                    <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", padding:"1px 6px", borderRadius:3, background:"var(--chip)", fontWeight:700, letterSpacing:"0.4px" }}>{(t.fields || []).length} FIELDS</span>
+                                  </div>
+                                  {t.d && <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3, lineHeight:1.45, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.d}</div>}
+                                </div>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
-                    </button>
-                  );
-                })}
+                    );
+                  })}
+                  {filtered.length === 0 && (
+                    <div style={{ padding:"28px 16px", textAlign:"center", color:"var(--ink-4)", fontSize:12, fontFamily:"JetBrains Mono" }}>No templates match <b style={{ color:"var(--ink-2)" }}>{bulkQuery}</b></div>
+                  )}
+                </div>
+                <div style={{ marginTop:4, fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", textAlign:"right" }}>
+                  {filtered.length} of {allTemplates.length} templates across {DEPT_ORDER.filter(function(d){ return allTemplates.some(function(t){ return t.department === d.id; }); }).length} departments
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* BULK · STEP 2 — Review & edit fields (mirrors AddNodeFlow Step 2 table) */}
           {(mode === "spreadsheet" || mode === "document" || mode === "template") && bulkStep === 2 && (
             <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                 <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>
-                  {mode === "template" ? "FROM TEMPLATE" : "FROM"} <b style={{ color:"var(--ink-2)" }}>{bulkFileName || (TEMPLATE_PACKS.find(function(t){ return t.id === bulkTemplate; }) || {}).l || ""}</b>
+                  {mode === "template" ? "FROM TEMPLATE" : "FROM"} <b style={{ color:"var(--ink-2)" }}>{bulkFileName || ((TEMPLATE_PACKS.find(function(t){ return t.id === bulkTemplate; }) || NODE_TEMPLATES.find(function(t){ return "node_" + t.id === bulkTemplate; }) || {}).l || (NODE_TEMPLATES.find(function(t){ return "node_" + t.id === bulkTemplate; }) || {}).name) || ""}</b>
                 </div>
                 <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{includedCount} of {bulkRows.length} included</div>
               </div>
