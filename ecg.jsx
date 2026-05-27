@@ -4853,6 +4853,402 @@ function CodeSnippetFlow({ node, onClose }) {
   );
 }
 
+// ─── PROPERTIES SETTINGS DRAWER ─────────────────────────────────────────────
+// Right-side drawer with object-level settings: storage / retention,
+// automatic + custom indices, monitoring toggles, access control, versioning.
+
+// Small reusable toggle switch — pill with sliding knob.
+function ToggleSwitch({ on, onToggle, disabled }) {
+  return (
+    <button
+      type="button"
+      onClick={function(){ if (!disabled && onToggle) onToggle(!on); }}
+      role="switch"
+      aria-checked={on}
+      disabled={disabled}
+      style={{
+        flexShrink:0,
+        width:36, height:20, padding:0, border:"none",
+        borderRadius:999,
+        position:"relative",
+        cursor: disabled ? "not-allowed" : "pointer",
+        background: on ? "var(--ink)" : "var(--line)",
+        opacity: disabled ? 0.4 : 1,
+        transition:"background 140ms ease"
+      }}
+    >
+      <span aria-hidden="true" style={{
+        position:"absolute", top:2, left: on ? 18 : 2,
+        width:16, height:16, borderRadius:"50%",
+        background:"#fff",
+        boxShadow:"0 1px 2px rgba(0,0,0,0.22)",
+        transition:"left 140ms ease"
+      }} />
+    </button>
+  );
+}
+
+// Row used inside a setting card: label + description on the left,
+// control on the right. Multiple of these stack inside one card with a
+// hairline separator between them.
+function SettingRow({ label, hint, control, last }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:18, padding:"14px 16px", borderBottom: last ? "none" : "1px solid var(--line-2)" }}>
+      <div style={{ minWidth:0, flex:1 }}>
+        <div style={{ fontSize:13.5, color:"var(--ink)", fontWeight:500 }}>{label}</div>
+        {hint && <div style={{ fontSize:11.5, color:"var(--ink-3)", marginTop:3, lineHeight:1.45 }}>{hint}</div>}
+      </div>
+      <div style={{ flexShrink:0 }}>{control}</div>
+    </div>
+  );
+}
+
+// Section header above a setting card.
+function SettingSection({ title, hint, children, action }) {
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:14, padding:"0 2px" }}>
+        <div>
+          <div style={{ fontSize:14, color:"var(--ink)", fontWeight:600 }}>{title}</div>
+          {hint && <div style={{ fontSize:12, color:"var(--ink-3)", marginTop:3, lineHeight:1.5, maxWidth:520 }}>{hint}</div>}
+        </div>
+        {action}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function AddCustomIndexDialog({ node, fieldOptions, onCancel, onSave, initial }) {
+  var [name, setName]     = useState((initial && initial.name) || "index_1");
+  var [fields, setFields] = useState((initial && initial.fields && initial.fields.length) ? initial.fields : [{ field:"", dir:"desc" }, { field:"", dir:"desc" }]);
+
+  function update(i, key, value) {
+    setFields(function(arr){ return arr.map(function(f, idx){ if (idx !== i) return f; var n = Object.assign({}, f); n[key] = value; return n; }); });
+  }
+  function add() { setFields(function(arr){ return arr.concat([{ field:"", dir:"desc" }]); }); }
+  function remove(i) { setFields(function(arr){ return arr.filter(function(_, idx){ return idx !== i; }); }); }
+
+  var canSave = !!name.trim() && fields.some(function(f){ return f.field; });
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.42)", zIndex:260, display:"flex", alignItems:"center", justifyContent:"center" }}
+      onClick={function(e){ if (e.target === e.currentTarget) onCancel(); }}>
+      <div style={{ width:520, maxWidth:"94vw", background:"var(--bg-canvas)", border:"1px solid var(--line)", borderRadius:12, boxShadow:"0 28px 70px rgba(0,0,0,0.28)", overflow:"hidden" }}>
+        <div style={{ padding:"18px 22px", borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:11 }}>
+            <span style={{ width:32, height:32, borderRadius:7, background:"var(--purple-fill)", color:"var(--purple)", display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><circle cx="11.5" cy="14.5" r="2.5"/><path d="m13.5 16.5 2 2"/></svg>
+            </span>
+            <div style={{ fontSize:16, fontWeight:600, color:"var(--ink)" }}>{initial ? "Edit Custom Index" : "Add Custom Index"}</div>
+          </div>
+          <button onClick={onCancel} style={{ width:28, height:28, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:13, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+        </div>
+
+        <div style={{ padding:"18px 22px", display:"flex", flexDirection:"column", gap:18 }}>
+          <div>
+            <label style={{ display:"block", fontSize:12.5, fontWeight:600, color:"var(--ink)", marginBottom:6 }}>Index Name<span style={{ color:"var(--coral)" }}>*</span></label>
+            <input value={name} onChange={function(e){ setName(e.target.value); }} style={{ width:"100%", boxSizing:"border-box", padding:"9px 12px", border:"1.5px solid var(--purple)", borderRadius:8, fontFamily:"JetBrains Mono", fontSize:13, color:"var(--ink)", background:"var(--panel)", outline:"none" }} />
+          </div>
+          <div>
+            <label style={{ display:"block", fontSize:12.5, fontWeight:600, color:"var(--ink)", marginBottom:8 }}>Select Fields<span style={{ color:"var(--coral)" }}>*</span></label>
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {fields.map(function(f, i){
+                return (
+                  <div key={i} style={{ display:"grid", gridTemplateColumns:"16px 1fr 130px 30px", gap:8, alignItems:"center" }}>
+                    <span aria-hidden="true" title="Drag to reorder" style={{ color:"var(--ink-4)", cursor:"grab", display:"inline-flex", justifyContent:"center" }}>
+                      <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="3" r="1"/><circle cx="8" cy="3" r="1"/><circle cx="2" cy="7" r="1"/><circle cx="8" cy="7" r="1"/><circle cx="2" cy="11" r="1"/><circle cx="8" cy="11" r="1"/></svg>
+                    </span>
+                    <select value={f.field} onChange={function(e){ update(i, "field", e.target.value); }} style={{ padding:"8px 10px", border:"1px solid var(--line)", borderRadius:7, fontSize:13, color:"var(--ink)", background:"var(--panel)", outline:"none", fontFamily:"inherit" }}>
+                      <option value="">Select Field</option>
+                      {fieldOptions.map(function(opt){ return <option key={opt} value={opt}>{opt}</option>; })}
+                    </select>
+                    <select value={f.dir} onChange={function(e){ update(i, "dir", e.target.value); }} style={{ padding:"8px 10px", border:"1px solid var(--line)", borderRadius:7, fontSize:13, color:"var(--ink)", background:"var(--panel)", outline:"none", fontFamily:"inherit" }}>
+                      <option value="asc">Ascending</option>
+                      <option value="desc">Descending</option>
+                    </select>
+                    <button onClick={function(){ remove(i); }} disabled={fields.length === 1} style={{ width:30, height:30, padding:0, border:"none", background:"transparent", color:"var(--ink-3)", cursor: fields.length === 1 ? "not-allowed" : "pointer", opacity: fields.length === 1 ? 0.3 : 0.8, display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <button onClick={add} style={{ marginTop:10, display:"inline-flex", alignItems:"center", gap:6, padding:"7px 12px", border:"1px solid var(--line)", borderRadius:7, background:"var(--panel)", color:"var(--ink)", cursor:"pointer", fontSize:12.5, fontFamily:"inherit", fontWeight:500 }}>
+              <span style={{ fontSize:14, lineHeight:1, color:"var(--ink-2)" }}>+</span> Add Field
+            </button>
+          </div>
+        </div>
+
+        <div style={{ padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", justifyContent:"flex-end", gap:9, background:"var(--panel)" }}>
+          <button onClick={onCancel} style={{ padding:"8px 18px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel)", color:"var(--ink)", cursor:"pointer", fontSize:13, fontFamily:"inherit", fontWeight:500 }}>Cancel</button>
+          <button onClick={function(){ if (canSave) onSave({ name: name.trim(), fields: fields.filter(function(f){ return f.field; }) }); }} disabled={!canSave}
+            style={{ padding:"8px 20px", border:"none", borderRadius:8, background: canSave ? "var(--purple)" : "var(--line)", color: canSave ? "#fff" : "var(--ink-3)", cursor: canSave ? "pointer" : "not-allowed", fontSize:13, fontFamily:"inherit", fontWeight:600 }}>
+            {initial ? "Save Index" : "Add Index"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PropertiesSettingsDrawer({ node, properties, onClose }) {
+  // Data Management
+  var [storage, setStorage]       = useState("json");      // json | columnar | timeseries | object
+  var [retention, setRetention]   = useState("90");
+  var [retentionUnit, setRetentionUnit] = useState("days"); // minutes | hours | days | months | years
+
+  // Object Indices — automatic ones derived from PK/UNQ in `properties`;
+  // custom ones live in local state.
+  var autoIndices = (properties || [])
+    .filter(function(p){ return p.pk || p.unique; })
+    .map(function(p){ return { name: (p.pk ? "PK_" : "UNQ_") + p.name, kind: p.pk ? "Primary" : "Unique", fields:[p.name] }; });
+  if (autoIndices.length === 0) autoIndices = [{ name:"PK_id", kind:"Primary", fields:["id"] }];
+  var [customIndices, setCustomIndices] = useState([]);
+  var [autoOpen, setAutoOpen]   = useState(true);
+  var [customOpen, setCustomOpen] = useState(true);
+  var [addIndexOpen, setAddIndexOpen] = useState(false);
+  var [editIndex, setEditIndex] = useState(null);
+
+  // Monitoring & Logging
+  var [audit, setAudit]           = useState(false);
+  var [activity, setActivity]     = useState(true);
+  var [reporting, setReporting]   = useState(false);
+  var [webhook, setWebhook]       = useState(false);
+  var [distinctFilter, setDistinctFilter] = useState(false);
+
+  // Access Control
+  var [externalAccess, setExternalAccess] = useState(false);
+  var [globalAccess, setGlobalAccess]     = useState(false);
+
+  // Object Versioning
+  var [versioning, setVersioning]   = useState(true);
+  var [deployable, setDeployable]   = useState(false);
+
+  var fieldOptions = (properties || []).map(function(p){ return p.name; });
+
+  var inp = { width:"100%", boxSizing:"border-box", padding:"9px 12px", border:"1px solid var(--line)", borderRadius:8, fontSize:13, color:"var(--ink)", background:"var(--panel)", outline:"none", fontFamily:"inherit" };
+  var card = { border:"1px solid var(--line)", borderRadius:10, background:"var(--panel)", boxShadow:"0 1px 0 var(--line-2)" };
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.32)", zIndex:230 }} />
+      <div style={{ position:"fixed", top:0, right:0, bottom:0, width:760, maxWidth:"94vw", background:"var(--bg-canvas)", borderLeft:"1px solid var(--line)", boxShadow:"-24px 0 60px rgba(0,0,0,0.22)", zIndex:231, display:"flex", flexDirection:"column" }}>
+
+        {/* HEADER */}
+        <div style={{ flexShrink:0, padding:"16px 22px", borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <span style={{ width:34, height:34, borderRadius:8, background:"var(--purple-fill)", color:"var(--purple)", display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </span>
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>{node ? node.label + " · OBJECT SETTINGS" : "OBJECT SETTINGS"}</div>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", marginTop:2, lineHeight:1.1 }}>Properties settings</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+        </div>
+
+        {/* BODY */}
+        <div style={{ flex:1, overflowY:"auto", padding:"22px 24px", display:"flex", flexDirection:"column", gap:30 }}>
+
+          {/* DATA MANAGEMENT */}
+          <SettingSection title="Data Management" hint="Configure how object data is stored, accessed, and retained.">
+            <div style={card}>
+              <SettingRow
+                label="Object Data Storage"
+                hint="Where records for this object live at rest."
+                control={
+                  <select value={storage} onChange={function(e){ setStorage(e.target.value); }} style={Object.assign({}, inp, { width:240 })}>
+                    <option value="json">JSON Store</option>
+                    <option value="columnar">Columnar (Parquet) Store</option>
+                    <option value="timeseries">Time-series Store</option>
+                    <option value="object">Object (Blob) Store</option>
+                  </select>
+                }
+              />
+              <SettingRow
+                last
+                label="Retention Period"
+                hint="How long records are kept before being archived. Leave blank for indefinite."
+                control={
+                  <div style={{ display:"flex", gap:6 }}>
+                    <input value={retention} onChange={function(e){ setRetention(e.target.value); }} placeholder="Enter duration" style={Object.assign({}, inp, { width:130, fontFamily:"JetBrains Mono" })} />
+                    <select value={retentionUnit} onChange={function(e){ setRetentionUnit(e.target.value); }} style={Object.assign({}, inp, { width:130 })}>
+                      <option value="minutes">Minutes</option>
+                      <option value="hours">Hours</option>
+                      <option value="days">Days</option>
+                      <option value="months">Months</option>
+                      <option value="years">Years</option>
+                      <option value="never">Never expire</option>
+                    </select>
+                  </div>
+                }
+              />
+            </div>
+          </SettingSection>
+
+          {/* OBJECT INDICES */}
+          <SettingSection
+            title="Object Indices"
+            hint="Configure object indices to optimise query and data retrieval performance."
+            action={
+              <button onClick={function(){ setEditIndex(null); setAddIndexOpen(true); }} style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"7px 13px", border:"1px solid var(--purple)", borderRadius:7, background:"var(--panel)", color:"var(--purple)", cursor:"pointer", fontSize:12.5, fontFamily:"inherit", fontWeight:600 }}>
+                <span style={{ fontSize:13, lineHeight:1 }}>+</span> Add Index
+              </button>
+            }
+          >
+            <div style={card}>
+              {/* Info banner */}
+              <div style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"12px 16px", background:"var(--purple-fill)", borderBottom:"1px solid var(--line-2)" }}>
+                <span style={{ width:22, height:22, borderRadius:5, background:"var(--purple)", color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="17" r="0.8" fill="currentColor" stroke="none"/></svg>
+                </span>
+                <div style={{ fontSize:12, color:"var(--ink-2)", lineHeight:1.55 }}>
+                  Fields marked as Primary Key or Unique are indexed automatically for optimal performance. Add custom indices below to further optimise complex queries.
+                </div>
+              </div>
+
+              {/* Automatic Indices section */}
+              <div style={{ borderBottom:"1px solid var(--line-2)" }}>
+                <button onClick={function(){ setAutoOpen(function(v){ return !v; }); }}
+                  style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit" }}>
+                  <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>Automatic Indices <span style={{ color:"var(--ink-3)", fontWeight:500, marginLeft:4 }}>{autoIndices.length}</span></span>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: autoOpen ? "rotate(180deg)" : "rotate(0deg)", transition:"transform 140ms ease", color:"var(--ink-3)" }}><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                {autoOpen && (
+                  <div style={{ padding:"0 16px 14px" }}>
+                    <div style={{ border:"1px solid var(--line-2)", borderRadius:8, overflow:"hidden" }}>
+                      <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 1.6fr", gap:0, background:"var(--panel-2)", padding:"9px 13px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.55px", color:"var(--ink-3)", textTransform:"uppercase", borderBottom:"1px solid var(--line-2)" }}>
+                        <div>Index Name</div><div>Key Type</div><div>Fields</div>
+                      </div>
+                      {autoIndices.map(function(ix, i){
+                        var color = ix.kind === "Primary" ? "var(--green)" : "var(--blue)";
+                        var bg = ix.kind === "Primary" ? "var(--green-fill)" : "var(--blue-fill)";
+                        return (
+                          <div key={i} style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 1.6fr", gap:0, padding:"10px 13px", alignItems:"center", borderBottom: i < autoIndices.length - 1 ? "1px solid var(--line-2)" : "none" }}>
+                            <span style={{ fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink)" }}>{ix.name}</span>
+                            <span><span style={{ display:"inline-block", padding:"3px 9px", borderRadius:5, fontSize:11, fontWeight:600, background:bg, color:color }}>{ix.kind}</span></span>
+                            <span style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                              {ix.fields.map(function(f){
+                                return <span key={f} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"2px 7px", borderRadius:4, background:"var(--chip)", border:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>
+                                  <span style={{ width:14, height:14, borderRadius:3, background:"var(--ink-2)", color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:7.5, fontWeight:700 }}>A</span>{f}
+                                </span>;
+                              })}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Custom Indices section */}
+              <div>
+                <button onClick={function(){ setCustomOpen(function(v){ return !v; }); }}
+                  style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit" }}>
+                  <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>Custom Indices <span style={{ color:"var(--ink-3)", fontWeight:500, marginLeft:4 }}>{customIndices.length}</span></span>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: customOpen ? "rotate(180deg)" : "rotate(0deg)", transition:"transform 140ms ease", color:"var(--ink-3)" }}><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                {customOpen && (
+                  <div style={{ padding:"0 16px 14px" }}>
+                    {customIndices.length > 0 && (
+                      <div style={{ border:"1px solid var(--line-2)", borderRadius:8, overflow:"hidden", marginBottom:10 }}>
+                        <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 1.6fr 30px", gap:0, background:"var(--panel-2)", padding:"9px 13px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.55px", color:"var(--ink-3)", textTransform:"uppercase", borderBottom:"1px solid var(--line-2)" }}>
+                          <div>Index Name</div><div>Fields</div><div>Order</div><div/>
+                        </div>
+                        {customIndices.map(function(ix, i){
+                          return (
+                            <div key={i} style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 1.6fr 30px", gap:0, padding:"10px 13px", alignItems:"center", borderBottom: i < customIndices.length - 1 ? "1px solid var(--line-2)" : "none", cursor:"pointer" }}
+                              onClick={function(){ setEditIndex({ idx:i, name:ix.name, fields:ix.fields }); setAddIndexOpen(true); }}>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink)" }}>{ix.name}</span>
+                              <span style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                                {ix.fields.map(function(f, j){
+                                  return <span key={j} style={{ padding:"2px 6px", borderRadius:4, background:"var(--chip)", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)" }}>{f.field}</span>;
+                                })}
+                              </span>
+                              <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{ix.fields.map(function(f){ return f.dir.toUpperCase(); }).join(", ")}</span>
+                              <button onClick={function(e){ e.stopPropagation(); setCustomIndices(function(arr){ return arr.filter(function(_, idx){ return idx !== i; }); }); }} style={{ width:26, height:26, padding:0, border:"none", background:"transparent", color:"var(--ink-3)", cursor:"pointer", display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <button onClick={function(){ setEditIndex(null); setAddIndexOpen(true); }}
+                      style={{ width:"100%", padding:"14px 13px", border:"1.5px dashed var(--line)", borderRadius:8, background:"transparent", color:"var(--ink-2)", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:500, display:"inline-flex", alignItems:"center", justifyContent:"center", gap:7 }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      Add Custom Index
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </SettingSection>
+
+          {/* MONITORING & LOGGING */}
+          <SettingSection title="Monitoring & Logging" hint="Control how system events, user actions, and changes to this object are tracked and recorded.">
+            <div style={card}>
+              <SettingRow label="Enable Audit Trail"           hint="If enabled, audit logs will capture activity for this object."        control={<ToggleSwitch on={audit}          onToggle={setAudit} />} />
+              <SettingRow label="Enable Activity Tracking"     hint="Captures user-level activity on each record."                          control={<ToggleSwitch on={activity}       onToggle={setActivity} />} />
+              <SettingRow label="Enable Reporting"             hint="Reporting functionality will be enabled for this object."              control={<ToggleSwitch on={reporting}      onToggle={setReporting} />} />
+              <SettingRow label="Enable Webhook"               hint="A webhook event is triggered on any change in object records."         control={<ToggleSwitch on={webhook}        onToggle={setWebhook} />} />
+              <SettingRow last label="Enable Distinct Value Filtering" hint="Filters results to return unique values for a selected field." control={<ToggleSwitch on={distinctFilter} onToggle={setDistinctFilter} />} />
+            </div>
+          </SettingSection>
+
+          {/* ACCESS CONTROL */}
+          <SettingSection title="Access Control" hint="Control how users and workspaces can access this object.">
+            <div style={card}>
+              <SettingRow label="Enable External Access" hint="Allow using this object in public interfaces."                 control={<ToggleSwitch on={externalAccess} onToggle={setExternalAccess} />} />
+              <SettingRow last label="Enable Global Access" hint="Allow default sharing of records across all workspaces and users." control={<ToggleSwitch on={globalAccess}   onToggle={setGlobalAccess} />} />
+            </div>
+          </SettingSection>
+
+          {/* OBJECT VERSIONING */}
+          <SettingSection title="Object Versioning" hint="Control how versions of this object are created and managed.">
+            <div style={card}>
+              <SettingRow label="Enable Object Versioning"     hint="Store version history, enabling tracking of changes over time."         control={<ToggleSwitch on={versioning} onToggle={setVersioning} />} />
+              <SettingRow last label="Enable Deployable Versioning" hint="Support deployment tracking and related data storage."             control={<ToggleSwitch on={deployable} onToggle={setDeployable} disabled={!versioning} />} />
+            </div>
+          </SettingSection>
+
+        </div>
+
+        {/* FOOTER */}
+        <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
+          <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>Changes apply to this object only</div>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={onClose} style={{ padding:"8px 18px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel)", color:"var(--ink)", cursor:"pointer", fontSize:13, fontFamily:"inherit", fontWeight:500 }}>Cancel</button>
+            <button onClick={onClose} style={{ padding:"8px 20px", border:"none", borderRadius:8, background:"var(--ink)", color:"var(--bg-canvas)", cursor:"pointer", fontSize:13, fontFamily:"inherit", fontWeight:600 }}>Save changes</button>
+          </div>
+        </div>
+      </div>
+
+      {addIndexOpen && (
+        <AddCustomIndexDialog
+          node={node}
+          fieldOptions={fieldOptions}
+          initial={editIndex}
+          onCancel={function(){ setAddIndexOpen(false); setEditIndex(null); }}
+          onSave={function(spec){
+            setCustomIndices(function(arr){
+              if (editIndex && typeof editIndex.idx === "number") {
+                return arr.map(function(ix, i){ return i === editIndex.idx ? spec : ix; });
+              }
+              return arr.concat([spec]);
+            });
+            setAddIndexOpen(false);
+            setEditIndex(null);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
 function PropertiesPane({ node, properties }) {
   const [propFlowOpen, setPropFlowOpen] = useState(false);
   const [propFlowMode, setPropFlowMode] = useState(null); // "manual" | "spreadsheet" | "document" | "template"
@@ -4867,6 +5263,8 @@ function PropertiesPane({ node, properties }) {
   // Global override: when true, every nested struct is expanded regardless of
   // individual state. Toggled from a subtle icon button next to the search.
   const [expandAll, setExpandAll] = useState(false);
+  // Object-level settings drawer (storage, indices, monitoring, etc.).
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const AddPropertyFlow = AddPropertyFlowModal;
 
   const FILTERS = [
@@ -4962,6 +5360,28 @@ function PropertiesPane({ node, properties }) {
                   <polyline points="7 9 12 4 17 9"/>
                 </svg>
               )}
+            </button>
+            {/* Object settings — opens a right-side drawer with storage,
+                indices, monitoring, access control, and versioning controls. */}
+            <button
+              type="button"
+              onClick={function(){ setSettingsOpen(true); }}
+              title="Object settings"
+              style={{
+                width:30, height:30, padding:0,
+                display:"inline-flex", alignItems:"center", justifyContent:"center",
+                border:"1px solid var(--line)", borderRadius:7,
+                background:"transparent", color:"var(--ink-3)",
+                cursor:"pointer",
+                transition:"color 100ms ease, background 100ms ease"
+              }}
+              onMouseEnter={function(e){ e.currentTarget.style.color = "var(--ink-2)"; e.currentTarget.style.background = "var(--chip)"; }}
+              onMouseLeave={function(e){ e.currentTarget.style.color = "var(--ink-3)"; e.currentTarget.style.background = "transparent"; }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
             </button>
             <div style={{ position: "relative" }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"var(--ink-3)",pointerEvents:"none" }}>
@@ -5153,6 +5573,8 @@ function PropertiesPane({ node, properties }) {
         ? <CodeSnippetFlow node={node} onClose={() => { setPropFlowOpen(false); setPropFlowMode(null); setPropEditRow(null); }} />
         : (propFlowOpen && AddPropertyFlow && <AddPropertyFlow node={node} mode={propFlowMode || "manual"} initialProperty={propEditRow} onClose={() => { setPropFlowOpen(false); setPropFlowMode(null); setPropEditRow(null); }} />)
       }
+
+      {settingsOpen && <PropertiesSettingsDrawer node={node} properties={properties} onClose={function(){ setSettingsOpen(false); }} />}
 
       {/* Property detail drawer — full creation context surfaced in one pane */}
       {drawerProp && (function(){
