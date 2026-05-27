@@ -6851,13 +6851,50 @@ function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, onClo
                     × Remove
                   </button>
                 </div>
-                <RichSelect
-                  value={pParent}
-                  onChange={setPParent}
-                  options={existingNodeProps.map(function(p){ return { value:p.name, label:p.name, sub:p.type }; })}
-                  placeholder="Pick parent field"
-                  mono
-                />
+                {(function(){
+                  // Build parent options: only struct-typed properties can
+                  // host children. Walk the nested struct tree so a 3rd
+                  // level (e.g. external_ref.url.host) is reachable from
+                  // the same dropdown. Cap recursion at depth 2 — the
+                  // properties table currently supports up to 3 levels.
+                  var MAX_DEPTH = 2;
+                  var INDENT_CHAR = "  ";
+                  function buildOpts(arr, depth, prefix) {
+                    var out = [];
+                    arr.forEach(function(p) {
+                      if (p.type !== "struct") return;
+                      var path = prefix ? prefix + "." + p.name : p.name;
+                      var n = (p.children || []).length;
+                      out.push({
+                        value: path,
+                        label: (depth > 0 ? INDENT_CHAR.repeat(depth) + "↳ " : "") + p.name,
+                        sub: n + " field" + (n === 1 ? "" : "s")
+                      });
+                      if (depth < MAX_DEPTH && p.children && p.children.length) {
+                        out = out.concat(buildOpts(p.children, depth + 1, path));
+                      }
+                    });
+                    return out;
+                  }
+                  var parentOpts = buildOpts(existingNodeProps, 0, "");
+                  if (parentOpts.length === 0) {
+                    return (
+                      <div style={{ padding:"12px 14px", border:"1px dashed var(--line)", borderRadius:8, background:"var(--panel-2)", display:"flex", alignItems:"flex-start", gap:10 }}>
+                        <span style={{ width:18, height:18, borderRadius:4, background:"var(--chip)", color:"var(--ink-3)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0 }}>{"{}"}</span>
+                        <div style={{ fontSize:12, color:"var(--ink-3)", lineHeight:1.5 }}>This node has no <code style={{ fontFamily:"JetBrains Mono", padding:"1px 5px", borderRadius:3, background:"var(--chip)", color:"var(--ink-2)" }}>struct</code> properties yet. Create a struct first (e.g. <code style={{ fontFamily:"JetBrains Mono", padding:"1px 5px", borderRadius:3, background:"var(--chip)", color:"var(--ink-2)" }}>billing_address</code>), then come back to nest under it.</div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <RichSelect
+                      value={pParent}
+                      onChange={setPParent}
+                      options={parentOpts}
+                      placeholder="Pick a struct field"
+                      mono
+                    />
+                  );
+                })()}
                 {pParent && pName && (
                   <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6, display:"flex", alignItems:"center", gap:6 }}>
                     <span>Full path:</span>
