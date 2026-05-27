@@ -4552,9 +4552,16 @@ function parseSnippetFields(body, lang) {
         var bad = parsed.find(function(p){ return !p || typeof p !== "object" || !p.name; });
         if (bad) return { fields:[], error:"Each item needs at least a 'name' field" };
         parsed.forEach(function(p){
+          // `name` is the human-readable label; `key` is the snake_case
+          // identifier used in queries. If the snippet only gives one, we
+          // derive the other so the preview always has both to show.
+          var derivedKey = String(p.name).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+          var key  = p.key  || derivedKey;
+          var name = p.name || key;
           out.push({
-            name: p.name,
-            type: p.type || "string",
+            name:     name,
+            key:      key,
+            type:     p.type || "string",
             required: !!p.required,
             indexed:  !!p.indexed,
             unique:   !!p.unique,
@@ -4620,7 +4627,8 @@ function parseSnippetFields(body, lang) {
 
 // JSON template shown when starting from scratch. Kept short on purpose:
 // just the common fields, with optional ones listed in a one-line comment.
-var SCRATCH_JSON_TEMPLATE = '// One object per property. Optional fields: unique, pk, default, format, example.\n\n[\n  {\n    "name": "customer_email",\n    "type": "string",\n    "description": "Primary email used for transactional messages.",\n    "required": true,\n    "indexed": true,\n    "pii": true\n  }\n]';
+// name = human-readable label, key = snake_case identifier used in queries.
+var SCRATCH_JSON_TEMPLATE = '// One object per property. Optional fields: unique, pk, default, format, example.\n\n[\n  {\n    "name": "Customer Email",\n    "key": "customer_email",\n    "type": "string",\n    "description": "Primary email used for transactional messages.",\n    "required": true,\n    "indexed": true,\n    "pii": true\n  }\n]';
 var SCRATCH_XML_TEMPLATE  = "<root>\n  \n</root>";
 var SCRATCH_XSD_TEMPLATE  = '<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">\n  \n</xs:schema>';
 
@@ -4889,7 +4897,10 @@ function CodeSnippetFlow({ node, onClose }) {
                     <span style={{ minWidth:22, height:16, padding:"0 5px", borderRadius:3, background:tg.c, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{tg.g}</span>
                     <div style={{ minWidth:0, flex:1 }}>
                       <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap" }}>
-                        <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{f.name}</span>
+                        <span style={{ fontSize:11.5, color:"var(--ink)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{f.name}</span>
+                        {f.key && f.key !== f.name && (
+                          <code style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"1px 5px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", lineHeight:1.3 }}>{f.key}</code>
+                        )}
                         {f.pk       && flagPill("PK",  "var(--green)",  "var(--green-fill)")}
                         {f.required && flagPill("REQ", "var(--coral)",  "var(--coral-fill)")}
                         {f.indexed  && flagPill("IDX", "var(--blue)",   "var(--blue-fill)")}
@@ -5119,9 +5130,8 @@ function PropertiesSettingsModal({ node, properties, onClose }) {
   var [versioning, setVersioning] = useState(true);
   var [deployable, setDeployable] = useState(false);
 
-  // Section nav + search
+  // Section nav
   var [section, setSection] = useState("storage");
-  var [query, setQuery]     = useState("");
 
   var fieldOptions = (properties || []).map(function(p){ return p.name; });
 
@@ -5193,23 +5203,6 @@ function PropertiesSettingsModal({ node, properties, onClose }) {
     { v:"custom", l:"Custom" }
   ];
 
-  var SEARCHABLE = [
-    { s:"storage", k:"storage backend object data json columnar parquet timeseries blob" },
-    { s:"storage", k:"retention period archive expiry lifecycle" },
-    { s:"performance", k:"indices index automatic custom performance query" },
-    { s:"observability", k:"audit trail logs" },
-    { s:"observability", k:"activity tracking user actions changes" },
-    { s:"observability", k:"reporting dashboards exports" },
-    { s:"integrations", k:"webhook outbound endpoint url" },
-    { s:"integrations", k:"distinct value filtering unique query api" },
-    { s:"access", k:"external access public api" },
-    { s:"access", k:"global access workspaces sharing visibility" },
-    { s:"versioning", k:"versioning history changes track" },
-    { s:"versioning", k:"deployable deployment release" }
-  ];
-  var matchingSections = query
-    ? Array.from(new Set(SEARCHABLE.filter(function(s){ return s.k.toLowerCase().indexOf(query.toLowerCase()) >= 0; }).map(function(s){ return s.s; })))
-    : null;
 
   function renderSection() {
     if (section === "storage") {
@@ -5233,7 +5226,7 @@ function PropertiesSettingsModal({ node, properties, onClose }) {
                 <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3, lineHeight:1.5 }}>{activeTile.d}</div>
               </div>
             </div>
-            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6, lineHeight:1.5 }}>Storage backend is fixed at object-creation time. Migrate via a new object if a different engine is needed.</div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6, lineHeight:1.5 }}>Storage backend is fixed when the node is created. Migrate via a new node if a different engine is needed.</div>
           </div>
           <div>
             <div style={{ fontSize:11.5, fontWeight:600, color:"var(--ink-3)", letterSpacing:"0.4px", textTransform:"uppercase", marginBottom:10, fontFamily:"JetBrains Mono" }}>Retention</div>
@@ -5409,7 +5402,7 @@ function PropertiesSettingsModal({ node, properties, onClose }) {
       return (
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
           <SettingItem
-            title="Object versioning"
+            title="Node versioning"
             desc="Store full schema and record history. Restore or compare any prior version."
             control={<ToggleSwitch on={versioning} onToggle={setVersioning} />}
           />
@@ -5437,18 +5430,10 @@ function PropertiesSettingsModal({ node, properties, onClose }) {
             </span>
             <div>
               <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>{node ? node.label + " · SETTINGS" : "SETTINGS"}</div>
-              <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", marginTop:2, lineHeight:1.1 }}>Object settings</div>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", marginTop:2, lineHeight:1.1 }}>Node settings</div>
             </div>
           </div>
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <div style={{ position:"relative" }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"var(--ink-3)", pointerEvents:"none" }}>
-                <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-              </svg>
-              <input value={query} onChange={function(e){ setQuery(e.target.value); }} placeholder="Search settings" style={{ width:240, padding:"8px 12px 8px 30px", border:"1px solid var(--line)", borderRadius:7, fontSize:12.5, color:"var(--ink)", background:"var(--panel)", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
-            </div>
-            <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
-          </div>
+          <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
         </div>
 
         {/* BODY */}
@@ -5457,11 +5442,10 @@ function PropertiesSettingsModal({ node, properties, onClose }) {
           <div style={{ background:"var(--panel-2)", borderRight:"1px solid var(--line)", padding:"16px 12px", overflowY:"auto", display:"flex", flexDirection:"column", gap:2 }}>
             {SECTIONS.map(function(s){
               var on = section === s.id;
-              var dim = matchingSections && matchingSections.indexOf(s.id) < 0;
               var count = sectionCounts[s.id];
               return (
                 <button key={s.id} onClick={function(){ setSection(s.id); }}
-                  style={{ display:"flex", alignItems:"center", gap:11, padding:"10px 12px", borderRadius:8, border: on ? "1px solid var(--line)" : "1px solid transparent", background: on ? "var(--panel)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", opacity: dim ? 0.4 : 1, transition:"opacity 120ms" }}>
+                  style={{ display:"flex", alignItems:"center", gap:11, padding:"10px 12px", borderRadius:8, border: on ? "1px solid var(--line)" : "1px solid transparent", background: on ? "var(--panel)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}>
                   <span style={{ width:26, height:26, borderRadius:6, background: on ? "var(--ink)" : "var(--chip)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{s.icon}</span>
                   <div style={{ minWidth:0, flex:1 }}>
                     <div style={{ fontSize:13, color:"var(--ink)", fontWeight: on ? 600 : 500, lineHeight:1.2 }}>{s.title}</div>
@@ -5492,7 +5476,7 @@ function PropertiesSettingsModal({ node, properties, onClose }) {
 
         {/* FOOTER */}
         <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
-          <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{node ? node.label : "Object"} · these settings apply only to this object</div>
+          <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{node ? node.label : "Node"} · these settings apply only to this node</div>
           <div style={{ display:"flex", gap:8 }}>
             <button onClick={onClose} style={{ padding:"8px 18px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel)", color:"var(--ink)", cursor:"pointer", fontSize:13, fontFamily:"inherit", fontWeight:500 }}>Cancel</button>
             <button onClick={onClose} style={{ padding:"8px 20px", border:"none", borderRadius:8, background:"var(--ink)", color:"var(--bg-canvas)", cursor:"pointer", fontSize:13, fontFamily:"inherit", fontWeight:600 }}>Save changes</button>
