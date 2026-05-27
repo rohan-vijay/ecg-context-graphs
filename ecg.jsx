@@ -4579,10 +4579,44 @@ function parseSnippetFields(body, lang) {
       return { fields:out, error:null };
     }
     if (lang === "XML") {
-      // Pull top-level child element names of the root, infer types from text.
-      var rootMatch = body.match(/<([a-z_][\w-]*)[^>]*>([\s\S]*)<\/\1>/i);
+      // Strip XML comments so the scratch template's annotation doesn't
+      // confuse the element regex.
+      var cleaned = body.replace(/<!--[\s\S]*?-->/g, "");
+      var rootMatch = cleaned.match(/<([a-z_][\w-]*)[^>]*>([\s\S]*)<\/\1>/i);
       if (!rootMatch) return { fields:[], error:"No root element" };
+      var rootName = rootMatch[1];
       var inner = rootMatch[2];
+      // Helper: pull an attribute value out of an attribute string.
+      function attr(s, k) {
+        var m = s.match(new RegExp(k + '\\s*=\\s*"([^"]*)"', "i"));
+        return m ? m[1] : null;
+      }
+      // Rich form: <properties><property name="…" key="…" type="…" …>desc</property></properties>
+      if (/^properties$/i.test(rootName)) {
+        var pRe = /<property\b([^>]*?)(?:\/>|>([\s\S]*?)<\/property>)/gi;
+        var pm;
+        while ((pm = pRe.exec(inner)) !== null) {
+          var a = pm[1];
+          var inside = (pm[2] || "").trim();
+          var nm = attr(a, "name") || attr(a, "key") || "";
+          var key = attr(a, "key") || nm.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+          var typ = attr(a, "type") || "string";
+          out.push({
+            name: nm,
+            key:  key,
+            type: typ,
+            required: attr(a, "required") === "true",
+            indexed:  attr(a, "indexed")  === "true",
+            unique:   attr(a, "unique")   === "true",
+            pii:      attr(a, "pii")      === "true",
+            pk:       attr(a, "pk")       === "true",
+            sample:   attr(a, "example") || (inside.length > 60 ? inside.slice(0, 60) + "…" : inside)
+          });
+        }
+        if (out.length === 0) return { fields:[], error:"No <property> elements" };
+        return { fields:out, error:null };
+      }
+      // Existing flat form — each child of root is a field, type inferred from inner text.
       var re = /<([a-z_][\w-]*)[^>]*>([\s\S]*?)<\/\1>/gi;
       var m;
       while ((m = re.exec(inner)) !== null) {
@@ -4599,18 +4633,40 @@ function parseSnippetFields(body, lang) {
       return { fields:out, error: out.length === 0 ? "No child elements" : null };
     }
     if (lang === "XSD") {
-      // Match xs:element name="..." type="xs:..."
-      var re2 = /<xs:element\s+name="([^"]+)"(?:[^>]*type="xs:([^"]+)")?/gi;
-      var m2;
-      while ((m2 = re2.exec(body)) !== null) {
-        var nm = m2[1];
-        var xt = (m2[2] || "string").toLowerCase();
-        var mapType = { string:"string", int:"int", integer:"int", long:"int", decimal:"decimal", float:"float", double:"decimal", boolean:"bool", date:"date", datetime:"timestamp", time:"timestamp", anyuri:"string", "id":"uuid" };
-        out.push({ name:nm, type: mapType[xt] || "string", sample:"" });
+      var cleanedXsd = body.replace(/<!--[\s\S]*?-->/g, "");
+      // Capture each <xs:element …/> or <xs:element …>…</xs:element>
+      // along with its attribute string so we can pull our custom metadata
+      // attributes out alongside the standard name/type.
+      var elRe = /<xs:element\b([^>]*?)(?:\/>|>([\s\S]*?)<\/xs:element>)/gi;
+      var em;
+      var mapType = { string:"string", int:"int", integer:"int", long:"int", decimal:"decimal", float:"float", double:"decimal", boolean:"bool", date:"date", datetime:"timestamp", time:"timestamp", anyuri:"string", "id":"uuid" };
+      function xattr(s, k) {
+        var m = s.match(new RegExp(k + '\\s*=\\s*"([^"]*)"', "i"));
+        return m ? m[1] : null;
       }
-      // Drop the root container element if it has no type (it's the
-      // wrapper, not a field).
-      if (out.length && /complexType|sequence/.test(body) && out[0].type === "string" && out.length > 1) out.shift();
+      while ((em = elRe.exec(cleanedXsd)) !== null) {
+        var atrs = em[1];
+        var nestedRaw = em[2] || "";
+        var key = xattr(atrs, "name");
+        if (!key) continue;
+        var tyRaw = xattr(atrs, "type");
+        // Skip the container element that just declares the complex type
+        // structure with no concrete xs: type and contains nested elements.
+        if (!tyRaw && /<xs:(complexType|sequence|element)\b/.test(nestedRaw)) continue;
+        var ty = (tyRaw || "string").replace(/^xs:/i, "").toLowerCase();
+        var docMatch = nestedRaw.match(/<xs:documentation>([\s\S]*?)<\/xs:documentation>/i);
+        out.push({
+          name: xattr(atrs, "label") || key,
+          key:  key,
+          type: mapType[ty] || "string",
+          required: xattr(atrs, "required") === "true",
+          indexed:  xattr(atrs, "indexed")  === "true",
+          unique:   xattr(atrs, "unique")   === "true",
+          pii:      xattr(atrs, "pii")      === "true",
+          pk:       xattr(atrs, "pk")       === "true",
+          sample:   docMatch ? docMatch[1].trim() : ""
+        });
+      }
       return { fields:out, error: out.length === 0 ? "No <xs:element> nodes found" : null };
     }
   } catch (e) {
@@ -4623,8 +4679,15 @@ function parseSnippetFields(body, lang) {
 // just the common fields, with optional ones listed in a one-line comment.
 // name = human-readable label, key = snake_case identifier used in queries.
 var SCRATCH_JSON_TEMPLATE = '// One object per property. Optional fields: unique, pk, default, format, example.\n\n[\n  {\n    "name": "Customer Email",\n    "key": "customer_email",\n    "type": "string",\n    "description": "Primary email used for transactional messages.",\n    "required": true,\n    "indexed": true,\n    "pii": true\n  }\n]';
-var SCRATCH_XML_TEMPLATE  = "<root>\n  \n</root>";
-var SCRATCH_XSD_TEMPLATE  = '<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">\n  \n</xs:schema>';
+// XML schema-declaration template. Each <property> is one field.
+// Optional attrs (added inline) carry the same metadata as the JSON form.
+var SCRATCH_XML_TEMPLATE = '<!-- One <property> per field. Optional attrs: unique, pk, default, format, example. -->\n<properties>\n  <property name="Customer Email"\n            key="customer_email"\n            type="string"\n            required="true"\n            indexed="true"\n            pii="true">\n    Primary email used for transactional messages.\n  </property>\n</properties>';
+
+// XSD template. Each <xs:element> is one field. Custom attrs (label,
+// required, indexed, pii) carry the workspace's metadata alongside
+// the standard XSD type attribute. <xs:documentation> holds the
+// description.
+var SCRATCH_XSD_TEMPLATE = '<!-- One <xs:element> per property. Use the label attr for the display\n     name; required / indexed / pii / unique / pk for flags. -->\n<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">\n  <xs:element name="customer_email"\n              type="xs:string"\n              label="Customer Email"\n              required="true"\n              indexed="true"\n              pii="true">\n    <xs:annotation>\n      <xs:documentation>Primary email used for transactional messages.</xs:documentation>\n    </xs:annotation>\n  </xs:element>\n</xs:schema>';
 
 function CodeSnippetFlow({ node, onClose }) {
   var [pickedId, setPickedId]   = useState(null);             // null → "from scratch"
