@@ -4817,10 +4817,7 @@ function CodeSnippetFlow({ node, onClose }) {
         <div style={{ flexShrink:0, padding:"16px 22px", borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             <span style={{ width:34, height:34, borderRadius:8, background:"var(--purple-fill)", color:"var(--purple)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:13, fontWeight:700 }}>{"{ }"}</span>
-            <div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>{node ? node.label + " · ADD PROPERTIES" : "ADD PROPERTIES"}</div>
-              <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", marginTop:2 }}>Use code snippet</div>
-            </div>
+            <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)" }}>Use code snippet</div>
           </div>
           <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
         </div>
@@ -17380,7 +17377,7 @@ function NodesView({ onSelect, onSwitchToCanvas, onAddNode, nodes: liveNodes }) 
         </div>
         <div className="nv-head-right">
           <button className="btn-ghost">Bulk export</button>
-          <button className="btn-dark" onClick={onAddNode}>+ New node type</button>
+          <button className="btn-dark" onClick={onAddNode}>+ New node</button>
         </div>
       </div>
 
