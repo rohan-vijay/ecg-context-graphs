@@ -4508,21 +4508,70 @@ function inferTypeFromValue(v, key) {
   return "string";
 }
 
+// Strip // line comments and /* … */ block comments from a JSON-ish string
+// while preserving strings. Lets the snippet editor accept commented JSON,
+// which is how the 'from scratch' template teaches the schema.
+function stripJsonComments(s) {
+  var out = "";
+  var i = 0, inStr = false, strCh = null;
+  while (i < s.length) {
+    var c = s[i], n = s[i+1];
+    if (inStr) {
+      if (c === '\\' && i+1 < s.length) { out += c + n; i += 2; continue; }
+      if (c === strCh) inStr = false;
+      out += c; i++; continue;
+    }
+    if (c === '"' || c === "'") { inStr = true; strCh = c; out += c; i++; continue; }
+    if (c === '/' && n === '/') { while (i < s.length && s[i] !== '\n') i++; continue; }
+    if (c === '/' && n === '*') { i += 2; while (i < s.length && !(s[i] === '*' && s[i+1] === '/')) i++; i += 2; continue; }
+    out += c; i++;
+  }
+  return out;
+}
+
+// Strip JSON trailing commas (legal in commented templates, not in JSON.parse)
+function stripTrailingCommas(s) { return s.replace(/,(\s*[\]}])/g, "$1"); }
+
 // Extract a flat list of typed fields from a snippet body in any of the
 // three supported languages. Returns [] when the parse fails; in that case
 // the modal surfaces a parse error instead of pretending to find fields.
+// JSON accepts two shapes:
+//   - flat object → infer property name + type from each key/value pair
+//   - array of objects with at least a {name, type} → use the rich schema
+//     (so 'Start from scratch' templates can declare required, pk, pii, etc.)
 function parseSnippetFields(body, lang) {
   var out = [];
   if (!body) return { fields:[], error:null };
   try {
     if (lang === "JSON") {
-      var obj = JSON.parse(body);
-      if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
-        return { fields:[], error:"Top-level must be an object" };
+      var cleaned = stripTrailingCommas(stripJsonComments(body));
+      var parsed = JSON.parse(cleaned);
+      // Rich form: an array of explicit property definitions.
+      if (Array.isArray(parsed)) {
+        if (parsed.length === 0) return { fields:[], error:"Array is empty" };
+        var bad = parsed.find(function(p){ return !p || typeof p !== "object" || !p.name; });
+        if (bad) return { fields:[], error:"Each item needs at least a 'name' field" };
+        parsed.forEach(function(p){
+          out.push({
+            name: p.name,
+            type: p.type || "string",
+            required: !!p.required,
+            indexed:  !!p.indexed,
+            unique:   !!p.unique,
+            pii:      !!p.pii,
+            pk:       !!p.pk,
+            sample:   p.example != null ? String(p.example) : (p.description || "")
+          });
+        });
+        return { fields:out, error:null };
       }
-      Object.keys(obj).forEach(function(k){
-        var t = inferTypeFromValue(obj[k], k);
-        var sample = obj[k];
+      // Flat object form: keys become property names, types inferred from values.
+      if (!parsed || typeof parsed !== "object") {
+        return { fields:[], error:"Top-level must be an object or array" };
+      }
+      Object.keys(parsed).forEach(function(k){
+        var t = inferTypeFromValue(parsed[k], k);
+        var sample = parsed[k];
         if (sample !== null && typeof sample === "object") sample = Array.isArray(sample) ? "[" + sample.length + " items]" : "{…}";
         out.push({ name:k, type:t, sample: sample === null ? "null" : String(sample) });
       });
@@ -4569,9 +4618,16 @@ function parseSnippetFields(body, lang) {
   return { fields:[], error:null };
 }
 
+// Commented JSON template shown when starting from scratch. Documents every
+// configurable attribute so the snippet flow can express anything the manual
+// flow does. Strips its own comments through stripJsonComments before parsing.
+var SCRATCH_JSON_TEMPLATE = '// Define one or more properties for this node. Each item is a complete\n// property — equivalent to one row of the manual flow. Defaults are shown\n// in [brackets]; delete any line you don\'t need.\n\n[\n  {\n    "name": "customer_email",          // [required] snake_case identifier\n    "type": "string",                  // [required] string | int | decimal | bool | date | timestamp | uuid | enum | struct | string[]\n    "description": "Primary email used for transactional messages.",\n    "required": true,                  // [false] must be present on every record\n    "indexed":  true,                  // [false] add an index for fast lookups\n    "unique":   false,                 // [false] enforce uniqueness across records\n    "pii":      true,                  // [false] flag as personal information\n    "pk":       false,                 // [false] mark as the primary key\n    "default":  null,                  // [null]  default value when absent\n    "format":   "email",               // [null]  hint for validation: email | url | phone | uuid | …\n    "example":  "lia.bryan@northwind.com"\n  }\n  // ↑ duplicate this block to declare more properties\n]';
+var SCRATCH_XML_TEMPLATE  = "<root>\n  \n</root>";
+var SCRATCH_XSD_TEMPLATE  = '<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">\n  \n</xs:schema>';
+
 function CodeSnippetFlow({ node, onClose }) {
   var [pickedId, setPickedId]   = useState(null);             // null → "from scratch"
-  var [body, setBody]           = useState("{}");
+  var [body, setBody]           = useState(SCRATCH_JSON_TEMPLATE);
   var [lang, setLang]           = useState("JSON");
   var [search, setSearch]       = useState("");
   var [saveAs, setSaveAs]       = useState(false);
@@ -4580,6 +4636,12 @@ function CodeSnippetFlow({ node, onClose }) {
 
   var TYPE_GLYPH = { uuid:{ g:"ID", c:"var(--purple)" }, string:{ g:"T", c:"var(--blue)" }, "string[]":{ g:"[T]", c:"var(--blue)" }, decimal:{ g:"#", c:"var(--gold)" }, float:{ g:".5", c:"var(--gold)" }, bool:{ g:"01", c:"var(--coral)" }, timestamp:{ g:"TS", c:"var(--green)" }, date:{ g:"DT", c:"var(--green)" }, datetime:{ g:"DT", c:"var(--green)" }, enum:{ g:"E", c:"var(--purple)" }, struct:{ g:"{}", c:"var(--ink-3)" }, int:{ g:"#", c:"var(--gold)" } };
 
+  function templateFor(L) {
+    if (L === "JSON") return SCRATCH_JSON_TEMPLATE;
+    if (L === "XML")  return SCRATCH_XML_TEMPLATE;
+    return SCRATCH_XSD_TEMPLATE;
+  }
+
   function pickSnippet(s) {
     setPickedId(s.id);
     setBody(s.body);
@@ -4587,7 +4649,7 @@ function CodeSnippetFlow({ node, onClose }) {
   }
   function startFresh() {
     setPickedId(null);
-    setBody("{}");
+    setBody(templateFor("JSON"));
     setLang("JSON");
   }
 
@@ -4754,7 +4816,7 @@ function CodeSnippetFlow({ node, onClose }) {
                 {["JSON","XML","XSD"].map(function(L){
                   var on = lang === L;
                   return (
-                    <button key={L} onClick={function(){ setLang(L); if (!picked) { setBody(L === "JSON" ? "{}" : L === "XML" ? "<root>\n  \n</root>" : '<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">\n  \n</xs:schema>'); } }}
+                    <button key={L} onClick={function(){ setLang(L); if (!picked) { setBody(templateFor(L)); } }}
                       style={{ padding:"4px 11px", border:"none", borderRadius:5, fontFamily:"JetBrains Mono", fontSize:11, fontWeight:600, cursor:"pointer",
                                background: on ? "var(--ink)" : "transparent",
                                color: on ? "var(--bg-canvas)" : "var(--ink-2)" }}>{L}</button>
@@ -4820,12 +4882,22 @@ function CodeSnippetFlow({ node, onClose }) {
             <div style={{ display:"flex", flexDirection:"column", gap:5, marginTop:4 }}>
               {fields.map(function(f, i){
                 var tg = TYPE_GLYPH[f.type] || TYPE_GLYPH.string;
+                function flagPill(label, color, bg) {
+                  return <span key={label} title={label} style={{ fontFamily:"JetBrains Mono", fontSize:8, padding:"1px 4px", borderRadius:3, background:bg, color:color, fontWeight:700, letterSpacing:"0.4px", lineHeight:1.3 }}>{label}</span>;
+                }
                 return (
                   <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", border:"1px solid var(--line-2)", borderRadius:7, background:"var(--panel)" }}>
                     <span style={{ minWidth:22, height:16, padding:"0 5px", borderRadius:3, background:tg.c, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{tg.g}</span>
                     <div style={{ minWidth:0, flex:1 }}>
-                      <div style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{f.name}</div>
-                      {f.sample && <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", marginTop:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{f.sample}</div>}
+                      <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap" }}>
+                        <span style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{f.name}</span>
+                        {f.pk       && flagPill("PK",  "var(--green)",  "var(--green-fill)")}
+                        {f.required && flagPill("REQ", "var(--coral)",  "var(--coral-fill)")}
+                        {f.indexed  && flagPill("IDX", "var(--blue)",   "var(--blue-fill)")}
+                        {f.unique   && flagPill("UNQ", "var(--purple)", "var(--purple-fill)")}
+                        {f.pii      && flagPill("PII", "var(--ink-2)",  "var(--chip)")}
+                      </div>
+                      {f.sample && <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{f.sample}</div>}
                     </div>
                   </div>
                 );
