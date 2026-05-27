@@ -7893,8 +7893,10 @@ function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, onClo
 
             return (
           <div style={{ display:"flex", flexDirection:"column", gap:22, maxWidth:760 }}>
-            {/* SUMMARY — primary card */}
-            {renderCard("Summary", pType + (pComputed ? " · computed" : "") + " · " + ([pRequired&&"req",pIndexed&&"idx",pUnique&&"unq",pPII&&"pii"].filter(Boolean).join(" · ") || "no flags"), summaryRows)}
+            {/* SUMMARY — primary card. No header subtitle: the type +
+                flags are already surfaced in the TYPE and FLAGS rows
+                below, so repeating them here is just noise. */}
+            {renderCard("Summary", null, summaryRows)}
             {pComputed && renderCard("Computation", (COMPUTE_KIND_LABEL[pComputeKind] || "—") + " · " + (RECOMPUTE_LABELS[pComputeMode] || "no trigger"), compRows)}
           </div>
             );
