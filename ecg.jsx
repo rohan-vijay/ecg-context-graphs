@@ -4673,7 +4673,7 @@ function PropertiesPane({ node, properties }) {
               );
               // 22px indent per nesting level. Padding moves the chevron
               // inboard so deeper rows visually sit under their parent.
-              var INDENT = 22;
+              var INDENT = 14;
               var namePadLeft = depth > 0 ? (18 + depth * INDENT) : undefined;
               return (
                 <div key={keyId} className="props-row" style={{ gridTemplateColumns:"2fr 1.6fr 1fr 150px 170px 96px 32px", position:"relative" }}
@@ -4725,7 +4725,7 @@ function PropertiesPane({ node, properties }) {
             // stack their rails at deeper x's, so a grandchild row visually
             // sits under TWO rails (one per ancestor group). The pattern
             // scales to arbitrary depth.
-            var INDENT = 22;
+            var INDENT = 14;
             function railXFor(d) { return 18 + (d - 1) * INDENT + 9; }
             function renderNode(p, depth, parentKey) {
               var keyId = (parentKey ? parentKey + "." : "") + p.name;
