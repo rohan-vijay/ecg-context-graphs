@@ -4739,7 +4739,7 @@ function PropertiesPane({ node, properties }) {
                 <React.Fragment key={keyId}>
                   {renderRow(p, depth, parentKey)}
                   <div style={{ position:"relative" }}>
-                    <span aria-hidden="true" style={{ position:"absolute", left: railXFor(depth + 1), top:0, bottom:0, width:1, background:"var(--line)", pointerEvents:"none" }} />
+                    <span aria-hidden="true" style={{ position:"absolute", left: railXFor(depth + 1), top:0, bottom:0, width:1, background:"var(--line)", pointerEvents:"none", zIndex:1 }} />
                     {p.children.map(function(c){ return renderNode(c, depth + 1, keyId); })}
                   </div>
                 </React.Fragment>
