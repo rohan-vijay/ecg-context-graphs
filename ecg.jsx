@@ -7461,6 +7461,91 @@ var DEFAULT_EXTRACTION_FIELDS = [
   { name:"auto_renews",     type:"bool",     desc:"True if the contract auto-renews" }
 ];
 
+// Pre-built extraction automations — packaged recipes with a known
+// output schema, used in the new Extract step for unstructured sources.
+// Each entry's `fields` becomes the source-column set in the Map step.
+var EXTRACTION_AUTOMATIONS = [
+  { id:"contract",  name:"Contract Extractor",      brief:"MSAs, SOWs, NDAs — parties, value, dates, clauses", color:"var(--purple)", domain:"Legal",      runs:"12.4k", accuracy:"94%",
+    fields:[
+      { name:"party_a",          type:"string"   },
+      { name:"party_b",          type:"string"   },
+      { name:"total_value_usd",  type:"decimal"  },
+      { name:"effective_date",   type:"date"     },
+      { name:"expiry_date",      type:"date"     },
+      { name:"auto_renews",      type:"bool"     },
+      { name:"governing_law",    type:"string"   },
+      { name:"payment_terms",    type:"string"   }
+    ],
+    icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+  },
+  { id:"invoice",   name:"Invoice OCR",             brief:"Vendor invoices — line items, totals, payment terms", color:"var(--gold)", domain:"Finance", runs:"38.1k", accuracy:"97%",
+    fields:[
+      { name:"invoice_number",  type:"string"   },
+      { name:"vendor_name",     type:"string"   },
+      { name:"invoice_date",    type:"date"     },
+      { name:"due_date",        type:"date"     },
+      { name:"total_amount",    type:"decimal"  },
+      { name:"currency",        type:"enum"     },
+      { name:"tax_amount",      type:"decimal"  },
+      { name:"line_item_count", type:"int"      }
+    ],
+    icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6V21l3-2 3 2 3-2 3 2 3-2 3 2V6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="13" y2="14"/></svg>
+  },
+  { id:"resume",    name:"Resume Parser",           brief:"CVs and resumes — work history, skills, education", color:"var(--blue)", domain:"HR", runs:"6.2k", accuracy:"92%",
+    fields:[
+      { name:"candidate_name",   type:"string"   },
+      { name:"email",            type:"string"   },
+      { name:"phone",            type:"string"   },
+      { name:"years_experience", type:"int"      },
+      { name:"skills",           type:"string[]" },
+      { name:"current_role",     type:"string"   },
+      { name:"location",         type:"string"   }
+    ],
+    icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/></svg>
+  },
+  { id:"receipt",   name:"Receipt Reader",          brief:"Expense receipts — merchant, items, taxes", color:"var(--coral)", domain:"Finance", runs:"24.0k", accuracy:"96%",
+    fields:[
+      { name:"merchant",       type:"string"   },
+      { name:"receipt_date",   type:"date"     },
+      { name:"total",          type:"decimal"  },
+      { name:"tax",            type:"decimal"  },
+      { name:"category",       type:"enum"     },
+      { name:"payment_method", type:"enum"     }
+    ],
+    icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4H8a2 2 0 0 0-2 2v15l3-2 3 2 3-2 3 2V6a2 2 0 0 0-2-2z"/><line x1="9" y1="11" x2="15" y2="11"/></svg>
+  },
+  { id:"policy",    name:"Policy Doc Parser",       brief:"Internal policies — scope, owners, requirements", color:"var(--green)", domain:"GRC", runs:"3.1k", accuracy:"91%",
+    fields:[
+      { name:"policy_name",     type:"string"   },
+      { name:"version",         type:"string"   },
+      { name:"effective_date",  type:"date"     },
+      { name:"scope",           type:"string"   },
+      { name:"owner",           type:"string"   },
+      { name:"requirements",    type:"string[]" }
+    ],
+    icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+  },
+  { id:"meeting",   name:"Meeting Notes",           brief:"Notes & transcripts — attendees, decisions, actions", color:"var(--ink-2)", domain:"Ops", runs:"9.8k", accuracy:"89%",
+    fields:[
+      { name:"meeting_title", type:"string"   },
+      { name:"meeting_date",  type:"date"     },
+      { name:"attendees",     type:"string[]" },
+      { name:"decisions",     type:"string[]" },
+      { name:"action_items",  type:"string[]" },
+      { name:"next_meeting",  type:"date"     }
+    ],
+    icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+  }
+];
+
+// Existing agents in the workspace that can be used for extraction.
+// The "__custom" entry triggers the inline configuration UI.
+var EXTRACTION_AGENTS = [
+  { id:"doc_general",   name:"General Document Agent",    brief:"Versatile extraction across mixed document types",       model:"claude-3.5-sonnet", trained:"production", trainedOn:"42k docs", successRate:"93%" },
+  { id:"contract_ai",   name:"Contract Specialist Agent", brief:"Tuned on a legal-docs corpus; depth on MSA / SOW / NDA", model:"claude-3.5-sonnet", trained:"production", trainedOn:"18k contracts", successRate:"96%" },
+  { id:"doc_classifier",name:"Document Classifier Agent", brief:"Routes documents by type before downstream extraction",  model:"claude-3.5-haiku",  trained:"production", trainedOn:"60k docs", successRate:"98%" }
+];
+
 function LinkSourceFlow({ node, onClose }) {
   var [step, setStep]            = useState(1);
   var [connector, setConnector]  = useState(null);
@@ -7513,6 +7598,12 @@ function LinkSourceFlow({ node, onClose }) {
   var [extractionFields, setExtractionFields] = useState(DEFAULT_EXTRACTION_FIELDS.slice());
   var [llmModel, setLlmModel]           = useState("claude-3.5-sonnet");
   var [confThreshold, setConfThreshold] = useState("0.80");
+  // New Extract step (unstructured only): pick an Automation or an Agent
+  // to lift metadata out of each document. The selection drives the source
+  // columns that show up in the Map step.
+  var [extractMethod, setExtractMethod]       = useState("automation"); // "automation" | "agent"
+  var [extractAutomationId, setExtractAutomationId] = useState("contract");
+  var [extractAgentId, setExtractAgentId]     = useState("doc_general");
   var [syncStrategy, setSyncStrategy]   = useState("incremental");
   var [syncFrequency, setSyncFrequency] = useState("hourly");
   var [backfill, setBackfill]           = useState("90d");
@@ -7542,8 +7633,8 @@ function LinkSourceFlow({ node, onClose }) {
   var sampleFolders = (connector && SAMPLE_FOLDERS_BY_CONNECTOR[connector]) || [];
 
   function canContinue() {
-    if (step === 1) return !!connector;
-    if (step === 2) {
+    if (step === S_CONNECTOR) return !!connector;
+    if (step === S_CONNECT) {
       if (connectionMode === "saved" && savedConnId) return true;
       if (connectorDef.auth === "none") return true;
       if (connectorDef.auth === "oauth") return authConnected;
@@ -7552,15 +7643,23 @@ function LinkSourceFlow({ node, onClose }) {
       if (connectorDef.auth === "keys") return authKey.length > 0;
       return true;
     }
-    if (step === 3) {
+    if (step === S_SOURCE) {
       if (paradigm === "structured") return selectedObjects.length > 0;
       if (paradigm === "documents")  return !!folderPath && fileTypes.length > 0;
       if (paradigm === "event")      return !!topicName;
       return true;
     }
-    if (step === 4) {
+    if (S_EXTRACT > 0 && step === S_EXTRACT) {
+      if (extractMethod === "automation") return !!extractAutomationId;
+      if (extractMethod === "agent") {
+        if (extractAgentId === "__custom") return extractionFields.length > 0 && extractionPrompt.length > 10;
+        return !!extractAgentId;
+      }
+      return false;
+    }
+    if (step === S_MAP) {
       if (paradigm === "structured") return Object.keys(columnMap).length > 0;
-      if (paradigm === "documents")  return extractionFields.length > 0 && extractionPrompt.length > 10;
+      if (paradigm === "documents")  return Object.keys(columnMap).length > 0;
       if (paradigm === "event")      return Object.keys(columnMap).length > 0;
       return true;
     }
@@ -7570,7 +7669,36 @@ function LinkSourceFlow({ node, onClose }) {
   var inp = { border:"1px solid var(--line)", borderRadius:7, padding:"11px 13px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", outline:"none", boxSizing:"border-box", width:"100%", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6), 0 1px 0 rgba(40,40,20,0.02)" };
   var lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:6 };
 
-  var stepNames = ["Connector", "Connect", "Source", "Map", "Sync", "Review"];
+  // Documents paradigm earns an extra Extract step between Source and
+  // Map, because unstructured data needs to be turned into fields before
+  // those fields can be mapped to node properties.
+  var stepNames = paradigm === "documents"
+    ? ["Connector", "Connect", "Source", "Extract", "Map", "Sync", "Review"]
+    : ["Connector", "Connect", "Source", "Map", "Sync", "Review"];
+  var totalSteps = stepNames.length;
+  function stepIdx(name) { return stepNames.indexOf(name) + 1; }
+  var S_CONNECTOR = stepIdx("Connector");
+  var S_CONNECT   = stepIdx("Connect");
+  var S_SOURCE    = stepIdx("Source");
+  var S_EXTRACT   = stepIdx("Extract"); // 0 when not documents
+  var S_MAP       = stepIdx("Map");
+  var S_SYNC      = stepIdx("Sync");
+  var S_REVIEW    = stepIdx("Review");
+  // Selected automation / agent objects (looked up when needed)
+  var selectedAutomation = EXTRACTION_AUTOMATIONS.find(function(a){ return a.id === extractAutomationId; });
+  var selectedAgent      = EXTRACTION_AGENTS.find(function(a){ return a.id === extractAgentId; });
+  // Source columns for the Map step. Documents pulls them from the chosen
+  // automation/agent; structured/event uses fixed/sampled fields.
+  function docExtractedFields() {
+    if (extractMethod === "automation" && selectedAutomation) return selectedAutomation.fields;
+    if (extractMethod === "agent" && extractAgentId === "__custom") return extractionFields;
+    if (extractMethod === "agent" && selectedAgent) {
+      // existing agents publish their own typed schema — for the demo
+      // reuse the default fields as a stand-in.
+      return DEFAULT_EXTRACTION_FIELDS;
+    }
+    return [];
+  }
 
   function ConnLogo(props) {
     var c = props.c; var size = props.size || 30;
@@ -7649,13 +7777,14 @@ function LinkSourceFlow({ node, onClose }) {
               var n = i + 1;
               var isOn = step === n;
               var isDone = step > n;
-              var sub = n === 1 ? (connectorDef ? connectorDef.name : "Pick source")
-                      : n === 2 ? (authConnected || (connectorDef && connectorDef.auth === "none") ? "Connected" : "Auth")
-                      : n === 3 ? (paradigm === "structured" ? selectedObjects.length + " object(s)" : paradigm === "documents" ? (folderPath ? "Folder set" : "Folder") : paradigm === "event" ? (topicName || "Topic") : "Manual")
-                      : n === 4 ? (paradigm === "documents" ? extractionFields.length + " fields" : Object.keys(columnMap).length + " mapped")
-                      : n === 5 ? syncStrategy + " · " + syncFrequency
-                      : n === 6 ? classification + " · SLO " + sloTarget
-                      : (activate ? "Activate" : "Draft");
+              var sub = name === "Connector" ? (connectorDef ? connectorDef.name : "Pick source")
+                      : name === "Connect" ? (authConnected || (connectorDef && connectorDef.auth === "none") ? "Connected" : "Auth")
+                      : name === "Source" ? (paradigm === "structured" ? selectedObjects.length + " object(s)" : paradigm === "documents" ? (folderPath ? "Folder set" : "Folder") : paradigm === "event" ? (topicName || "Topic") : "Manual")
+                      : name === "Extract" ? (extractMethod === "automation" ? (selectedAutomation ? selectedAutomation.name : "Pick automation") : (extractAgentId === "__custom" ? extractionFields.length + " fields" : (selectedAgent ? selectedAgent.name : "Pick agent")))
+                      : name === "Map" ? Object.keys(columnMap).length + " mapped"
+                      : name === "Sync" ? syncStrategy + " · " + syncFrequency
+                      : name === "Review" ? (activate ? "Activate" : "Draft")
+                      : "";
               return (
                 <button key={n} onClick={function(){ if (n < step || canContinue()) setStep(n); }}
                   style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:7, border: isOn ? "1px solid var(--line)" : "1px solid transparent", background: isOn ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", alignItems:"center" }}>
@@ -7672,21 +7801,22 @@ function LinkSourceFlow({ node, onClose }) {
           {/* CENTER */}
           <div style={{ padding:"24px 32px 28px", overflowY:"auto" }}>
             <div style={{ marginBottom:20 }}>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / 7"}</div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / " + totalSteps}</div>
               <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>{stepNames[step-1]}</div>
               <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:680 }}>
-                {step === 1 && "Pick the system you want to bring data from. Each connector has its own extraction paradigm — structured tables, document folders with LLM extraction, event streams, or manual upload."}
-                {step === 2 && connectorDef && "Authenticate with " + connectorDef.name + ". Credentials are stored encrypted and rotated automatically."}
-                {step === 3 && paradigm === "structured" && "Pick which objects or tables to extract. Each will be mapped to a node type in the next step."}
-                {step === 3 && paradigm === "documents" && "Pick the folder(s) to monitor and which file types should be processed. An LLM will extract structured data from each file using the prompt you define in the next step."}
-                {step === 3 && paradigm === "event" && "Pick the topic or stream to subscribe to. Events will be transformed into graph records as they arrive."}
-                {step === 3 && paradigm === "manual" && "No source location to configure — you'll upload or edit records directly."}
-                {step === 4 && paradigm === "structured" && "Map source columns to the properties of the target node type. Unmapped columns will be ignored."}
-                {step === 4 && paradigm === "documents" && "Define the extraction template — the prompt and the structured fields the LLM should populate from each document."}
-                {step === 4 && paradigm === "event" && "Map fields of the incoming event payload to node properties."}
-                {step === 4 && paradigm === "manual" && "Pick the target node type. Records will be added or edited through the steward UI."}
-                {step === 5 && "Configure how often this source refreshes and how new vs existing records are reconciled."}
-                {step === 6 && "Review the full source configuration. Activate immediately or save as a draft pending approval."}
+                {step === S_CONNECTOR && "Pick the system you want to bring data from. Each connector has its own extraction paradigm — structured tables, document folders with LLM extraction, event streams, or manual upload."}
+                {step === S_CONNECT && connectorDef && "Authenticate with " + connectorDef.name + ". Credentials are stored encrypted and rotated automatically."}
+                {step === S_SOURCE && paradigm === "structured" && "Pick which objects or tables to extract. Each will be mapped to a node type in the next step."}
+                {step === S_SOURCE && paradigm === "documents" && "Pick the folder(s) to monitor and which file types should be processed."}
+                {step === S_SOURCE && paradigm === "event" && "Pick the topic or stream to subscribe to. Events will be transformed into graph records as they arrive."}
+                {step === S_SOURCE && paradigm === "manual" && "No source location to configure — you'll upload or edit records directly."}
+                {S_EXTRACT > 0 && step === S_EXTRACT && "Pick how each document should be turned into structured fields. Use a packaged automation for a known document type, or wire up an agent for full control."}
+                {step === S_MAP && paradigm === "structured" && "Map source columns to the properties of the target node type. Unmapped columns will be ignored."}
+                {step === S_MAP && paradigm === "documents" && "Map the fields the extractor produces to the properties of the target node type. Apply transforms where the format needs cleaning."}
+                {step === S_MAP && paradigm === "event" && "Map fields of the incoming event payload to node properties."}
+                {step === S_MAP && paradigm === "manual" && "Pick the target node type. Records will be added or edited through the steward UI."}
+                {step === S_SYNC && "Configure how often this source refreshes and how new vs existing records are reconciled."}
+                {step === S_REVIEW && "Review the full source configuration. Activate immediately or save as a draft pending approval."}
               </div>
             </div>
 
@@ -7974,7 +8104,7 @@ function LinkSourceFlow({ node, onClose }) {
               </div>
             )}
 
-            {step === 4 && (paradigm === "structured" || paradigm === "event") && (function(){
+            {step === S_MAP && (paradigm === "structured" || paradigm === "event") && (function(){
               var SRC_COLS = paradigm === "structured"
                 ? ["Id","Name","Email","Domain","Industry","Tier","Region","CreatedAt","AnnualRevenue","OwnerId","BillingCountry"]
                 : ["id","name","email","status","timestamp","payload.amount","payload.currency","headers.source"];
@@ -8073,69 +8203,319 @@ function LinkSourceFlow({ node, onClose }) {
               );
             })()}
 
-            {step === 4 && paradigm === "documents" && (
-              <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:880 }}>
+            {S_EXTRACT > 0 && step === S_EXTRACT && paradigm === "documents" && (function(){
+              // Two-card method picker first; then either an automation grid
+              // or an agent picker (with an optional inline config drawer).
+              var methodCards = [
+                { id:"automation", l:"Use an automation", d:"Pre-built extraction recipe with a known output schema. Battle-tested, deterministic, lowest cost.",
+                  icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M9 6h6a3 3 0 0 1 3 3v6"/></svg> },
+                { id:"agent",      l:"Use an agent",      d:"Pick an existing Claude agent or configure one inline. Flexible — you own the prompt and the schema.",
+                  icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v3"/><path d="M12 19v3"/><path d="M4.93 4.93l2.12 2.12"/><path d="M16.95 16.95l2.12 2.12"/><path d="M2 12h3"/><path d="M19 12h3"/><circle cx="12" cy="12" r="5"/></svg> }
+              ];
+              var TYPE_GLYPH = { uuid:{ g:"ID", c:"var(--purple)" }, string:{ g:"T", c:"var(--blue)" }, "string[]":{ g:"[T]", c:"var(--blue)" }, decimal:{ g:"#", c:"var(--gold)" }, float:{ g:".5", c:"var(--gold)" }, bool:{ g:"01", c:"var(--coral)" }, timestamp:{ g:"TS", c:"var(--green)" }, date:{ g:"DT", c:"var(--green)" }, datetime:{ g:"DT", c:"var(--green)" }, enum:{ g:"E", c:"var(--purple)" }, struct:{ g:"{}", c:"var(--ink-3)" }, int:{ g:"#", c:"var(--gold)" } };
+              return (
+              <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:1040 }}>
+
+                {/* METHOD PICKER */}
+                <div>
+                  <label style={lbl}>EXTRACTION METHOD</label>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                    {methodCards.map(function(m){
+                      var isOn = extractMethod === m.id;
+                      return (
+                        <button key={m.id} type="button" onClick={function(){ setExtractMethod(m.id); }}
+                          style={{ textAlign:"left", padding:"16px 18px", borderRadius:10, cursor:"pointer", fontFamily:"inherit",
+                                   border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"),
+                                   background: isOn ? "var(--bg-canvas)" : "var(--panel)",
+                                   boxShadow: isOn ? "0 1px 0 var(--line-2), 0 6px 16px rgba(40,40,20,0.05)" : "0 1px 0 var(--line-2)",
+                                   display:"flex", alignItems:"flex-start", gap:14 }}>
+                          <span style={{ width:38, height:38, borderRadius:9, display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0,
+                                         background: isOn ? "var(--ink)" : "var(--chip)",
+                                         color: isOn ? "var(--bg-canvas)" : "var(--ink-2)",
+                                         border: "1px solid " + (isOn ? "var(--ink)" : "var(--line-2)") }}>{m.icon}</span>
+                          <div style={{ minWidth:0, flex:1 }}>
+                            <div style={{ fontSize:14, color:"var(--ink)", fontWeight:600, lineHeight:1.25 }}>{m.l}</div>
+                            <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", marginTop:5, lineHeight:1.5 }}>{m.d}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* AUTOMATION GRID */}
+                {extractMethod === "automation" && (
+                  <div>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                      <div>
+                        <label style={Object.assign({}, lbl, { marginBottom:2 })}>PICK AN AUTOMATION</label>
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{EXTRACTION_AUTOMATIONS.length} packaged extractors · open output schemas</div>
+                      </div>
+                    </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(2, 1fr)", gap:10 }}>
+                      {EXTRACTION_AUTOMATIONS.map(function(a){
+                        var isOn = extractAutomationId === a.id;
+                        return (
+                          <button key={a.id} type="button" onClick={function(){ setExtractAutomationId(a.id); }}
+                            style={{ textAlign:"left", padding:"14px 15px", borderRadius:10, cursor:"pointer", fontFamily:"inherit",
+                                     border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"),
+                                     background: isOn ? "var(--bg-canvas)" : "var(--panel)",
+                                     boxShadow: isOn ? "0 1px 0 var(--line-2), 0 6px 16px rgba(40,40,20,0.05)" : "0 1px 0 var(--line-2)" }}>
+                            <div style={{ display:"flex", alignItems:"flex-start", gap:11 }}>
+                              <span style={{ width:34, height:34, borderRadius:8, display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0, background: a.color + "14", color: a.color, border:"1px solid " + a.color + "26" }}>{a.icon}</span>
+                              <div style={{ minWidth:0, flex:1 }}>
+                                <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
+                                  <span style={{ fontSize:13.5, color:"var(--ink)", fontWeight:600, lineHeight:1.25 }}>{a.name}</span>
+                                  <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:4, background:"var(--chip)", color:"var(--ink-3)", fontWeight:600, letterSpacing:"0.4px", textTransform:"uppercase" }}>{a.domain}</span>
+                                </div>
+                                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4, lineHeight:1.5 }}>{a.brief}</div>
+                                <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginTop:9 }}>
+                                  {a.fields.slice(0, 5).map(function(f){
+                                    var tg = TYPE_GLYPH[f.type] || TYPE_GLYPH.string;
+                                    return (
+                                      <span key={f.name} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 7px 3px 4px", borderRadius:5, background:"var(--chip)", border:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)" }}>
+                                        <span style={{ minWidth:18, height:14, padding:"0 4px", borderRadius:3, background:tg.c, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:8, fontWeight:700, letterSpacing:"0.3px" }}>{tg.g}</span>
+                                        {f.name}
+                                      </span>
+                                    );
+                                  })}
+                                  {a.fields.length > 5 && <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", alignSelf:"center" }}>+{a.fields.length - 5} more</span>}
+                                </div>
+                                <div style={{ display:"flex", gap:14, marginTop:10, paddingTop:9, borderTop:"1px dashed var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)" }}>
+                                  <span><span style={{ color:"var(--ink-4)" }}>RUNS </span><span style={{ color:"var(--ink-2)" }}>{a.runs}</span></span>
+                                  <span><span style={{ color:"var(--ink-4)" }}>ACC </span><span style={{ color:"var(--green)" }}>{a.accuracy}</span></span>
+                                  <span style={{ marginLeft:"auto" }}><span style={{ color:"var(--ink-4)" }}>FIELDS </span><span style={{ color:"var(--ink-2)" }}>{a.fields.length}</span></span>
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* AGENT PICKER */}
+                {extractMethod === "agent" && (
+                  <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+                    <div>
+                      <label style={lbl}>PICK AN AGENT</label>
+                      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                        {EXTRACTION_AGENTS.concat([{ id:"__custom", name:"Configure a new agent", brief:"Inline setup — model, system prompt, and extraction schema" }]).map(function(agent){
+                          var isOn = extractAgentId === agent.id;
+                          var custom = agent.id === "__custom";
+                          return (
+                            <button key={agent.id} type="button" onClick={function(){ setExtractAgentId(agent.id); }}
+                              style={{ textAlign:"left", padding:"12px 14px", borderRadius:9, cursor:"pointer", fontFamily:"inherit",
+                                       border:"1px solid " + (isOn ? "var(--ink)" : "var(--line)"),
+                                       background: isOn ? "var(--bg-canvas)" : "var(--panel)",
+                                       boxShadow: isOn ? "0 1px 0 var(--line-2)" : "0 1px 0 var(--line-2)",
+                                       display:"flex", alignItems:"center", gap:13 }}>
+                              <span style={{ width:32, height:32, borderRadius:7, display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0, background: custom ? "var(--chip)" : "var(--purple-fill)", color: custom ? "var(--ink-2)" : "var(--purple)", border:"1px solid " + (custom ? "var(--line-2)" : "var(--purple)" + "33") }}>
+                                {custom
+                                  ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                  : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>}
+                              </span>
+                              <div style={{ minWidth:0, flex:1 }}>
+                                <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                                  <span style={{ fontSize:13.5, color:"var(--ink)", fontWeight:600, lineHeight:1.2 }}>{agent.name}</span>
+                                  {agent.model && <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"2px 6px", borderRadius:4, background:"var(--chip)", color:"var(--ink-3)", fontWeight:600, letterSpacing:"0.4px" }}>{agent.model}</span>}
+                                  {agent.trained && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:4, background:"var(--green-fill)", color:"var(--green)", fontWeight:700, letterSpacing:"0.4px", textTransform:"uppercase" }}>{agent.trained}</span>}
+                                </div>
+                                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:4, lineHeight:1.45 }}>{agent.brief}</div>
+                              </div>
+                              {!custom && (
+                                <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:3, paddingLeft:14, borderLeft:"1px dashed var(--line-2)", marginLeft:6, flexShrink:0 }}>
+                                  <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", letterSpacing:"0.5px", textTransform:"uppercase" }}>Success</div>
+                                  <div style={{ fontFamily:"JetBrains Mono", fontSize:14, color:"var(--green)", fontWeight:700 }}>{agent.successRate}</div>
+                                  <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)" }}>{agent.trainedOn}</div>
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Inline custom agent config — appears below the picker */}
+                    {extractAgentId === "__custom" && (
+                      <div style={{ padding:"16px 18px", border:"1px solid var(--line)", borderRadius:10, background:"var(--panel)", boxShadow:"0 1px 0 var(--line-2)", display:"flex", flexDirection:"column", gap:14 }}>
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>Custom agent config</div>
+                        <div>
+                          <label style={lbl}>SYSTEM PROMPT</label>
+                          <textarea value={extractionPrompt} onChange={function(e){ setExtractionPrompt(e.target.value); }} rows={4} style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12, resize:"vertical", lineHeight:1.55 })} />
+                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>Sent with every document. Be explicit; ask the model to return null when uncertain.</div>
+                        </div>
+                        <div>
+                          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+                            <label style={lbl}>FIELDS TO EXTRACT</label>
+                            <button onClick={addField} className="btn-ghost" style={{ fontSize:11.5 }}>+ Add field</button>
+                          </div>
+                          <div style={{ border:"1px solid var(--line)", borderRadius:8, overflow:"hidden" }}>
+                            <div style={{ display:"grid", gridTemplateColumns:"1fr 110px 2fr 32px", gap:0, background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", padding:"7px 12px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
+                              <div>Name</div><div>Type</div><div>Description for the model</div><div/>
+                            </div>
+                            {extractionFields.map(function(f, i) {
+                              return (
+                                <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 110px 2fr 32px", gap:6, padding:"6px 12px", alignItems:"center", borderBottom: i < extractionFields.length-1 ? "1px solid var(--line-2)" : "none" }}>
+                                  <input value={f.name} onChange={function(e){ updateField(i, "name", e.target.value); }} style={Object.assign({}, inp, { padding:"5px 8px", fontSize:12, fontFamily:"JetBrains Mono" })} />
+                                  <select value={f.type} onChange={function(e){ updateField(i, "type", e.target.value); }} style={Object.assign({}, inp, { padding:"5px 8px", fontSize:12, fontFamily:"JetBrains Mono" })}>
+                                    <option value="string">string</option><option value="string[]">string[]</option><option value="decimal">decimal</option><option value="bool">bool</option><option value="date">date</option><option value="timestamp">timestamp</option><option value="enum">enum</option>
+                                  </select>
+                                  <input value={f.desc} onChange={function(e){ updateField(i, "desc", e.target.value); }} style={Object.assign({}, inp, { padding:"5px 8px", fontSize:12 })} />
+                                  <button onClick={function(){ removeField(i); }} disabled={extractionFields.length === 1} style={{ width:26, height:26, borderRadius:5, border:"1px solid var(--line)", background: extractionFields.length === 1 ? "transparent" : "var(--bg-canvas)", color:"var(--ink-3)", cursor: extractionFields.length === 1 ? "not-allowed" : "pointer", opacity: extractionFields.length === 1 ? 0.4 : 1 }}>×</button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:14 }}>
+                          <div>
+                            <label style={lbl}>MODEL</label>
+                            <select value={llmModel} onChange={function(e){ setLlmModel(e.target.value); }} style={inp}>
+                              <option value="claude-3.5-sonnet">Claude 3.5 Sonnet · best quality</option>
+                              <option value="claude-3.5-haiku">Claude 3.5 Haiku · fast & cheap</option>
+                              <option value="gpt-4o">GPT-4o · best quality</option>
+                              <option value="gpt-4o-mini">GPT-4o mini · fast & cheap</option>
+                              <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label style={lbl}>MIN CONFIDENCE</label>
+                            <input value={confThreshold} onChange={function(e){ setConfThreshold(e.target.value); }} style={Object.assign({}, inp, { fontFamily:"JetBrains Mono" })} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TEST ON SAMPLE — always visible at the bottom */}
+                <div style={{ padding:"14px 16px", border:"1px dashed var(--line)", borderRadius:9, background:"var(--panel-2)" }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:7 }}>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>DRY RUN ON 3 SAMPLE DOCUMENTS</span>
+                    <button className="btn-ghost" style={{ fontSize:11.5 }}>Run preview →</button>
+                  </div>
+                  <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.5 }}>Sample 3 documents from the folder and preview the extracted fields before committing. Estimated cost <code style={{ fontFamily:"JetBrains Mono", color:"var(--ink-2)" }}>~$0.04 / 3 docs</code>.</div>
+                </div>
+              </div>
+              );
+            })()}
+
+            {/* MAP step for documents — mirrors the structured map: source → transform → target */}
+            {step === S_MAP && paradigm === "documents" && (function(){
+              var extractedFields = docExtractedFields();
+              var SRC_COLS = extractedFields.map(function(f){ return f.name; });
+              var SRC_TYPES = {}; extractedFields.forEach(function(f){ SRC_TYPES[f.name] = f.type; });
+              var TRANSFORMS = [
+                { v:"",                 l:"— none —" },
+                { v:"trim",             l:"trim()" },
+                { v:"lower",            l:"lower()" },
+                { v:"upper",            l:"upper()" },
+                { v:"to_iso_date",      l:"to_iso_date()" },
+                { v:"to_decimal",       l:"to_decimal()" },
+                { v:"parse_currency",   l:"parse_currency()" },
+                { v:"normalize_email",  l:"normalize_email()" },
+                { v:"hash_sha256",      l:"hash_sha256() — PII safe" },
+                { v:"split_to_array",   l:"split_to_array(,)" },
+                { v:"first_of",         l:"first_of(arr)" },
+                { v:"custom",           l:"custom JS expression…" }
+              ];
+              var TYPE_COLOR = { uuid:"var(--purple)", string:"var(--blue)", "string[]":"var(--blue)", decimal:"var(--gold)", float:"var(--gold)", bool:"var(--coral)", timestamp:"var(--green)", date:"var(--green)", datetime:"var(--green)", enum:"var(--purple)", struct:"var(--ink-3)", int:"var(--gold)" };
+              var TYPE_GLYPH = { uuid:{ g:"ID", c:"var(--purple)" }, string:{ g:"T", c:"var(--blue)" }, "string[]":{ g:"[T]", c:"var(--blue)" }, decimal:{ g:"#", c:"var(--gold)" }, float:{ g:".5", c:"var(--gold)" }, bool:{ g:"01", c:"var(--coral)" }, timestamp:{ g:"TS", c:"var(--green)" }, date:{ g:"DT", c:"var(--green)" }, datetime:{ g:"DT", c:"var(--green)" }, enum:{ g:"E", c:"var(--purple)" }, struct:{ g:"{}", c:"var(--ink-3)" }, int:{ g:"#", c:"var(--gold)" } };
+              var mappedCount = Object.keys(columnMap).filter(function(k){ return columnMap[k]; }).length;
+              var srcLabel = extractMethod === "automation" && selectedAutomation ? selectedAutomation.name :
+                             extractMethod === "agent" && extractAgentId === "__custom" ? "Custom agent" :
+                             extractMethod === "agent" && selectedAgent ? selectedAgent.name : "Extractor";
+              return (
+              <div style={{ display:"flex", flexDirection:"column", gap:18, maxWidth:920 }}>
                 <div>
                   <label style={lbl}>TARGET NODE TYPE</label>
-                  <select value={targetNodeId} onChange={function(e){ setTargetNodeId(e.target.value); }} style={Object.assign({}, inp, { maxWidth:340 })}>
-                    {NODES.filter(function(n){ return n.type !== "source"; }).map(function(n){ return <option key={n.id} value={n.id}>{n.label}</option>; })}
-                  </select>
+                  <RichSelect
+                    value={targetNodeId}
+                    onChange={setTargetNodeId}
+                    options={NODES.filter(function(n){ return n.type !== "source"; }).map(function(n){ return { value:n.id, label:n.label, sub: (n.props || []).length + " properties" }; })}
+                    placeholder="Pick a target node"
+                    leadingColor={"var(--blue)"}
+                  />
                 </div>
+
                 <div>
-                  <label style={lbl}>EXTRACTION PROMPT</label>
-                  <textarea value={extractionPrompt} onChange={function(e){ setExtractionPrompt(e.target.value); }} rows={4} style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12, resize:"vertical", lineHeight:1.55 })} />
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6 }}>The model will be given this instruction along with each document. Be explicit; ask it to return null when uncertain.</div>
-                </div>
-                <div>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
-                    <label style={lbl}>FIELDS TO EXTRACT</label>
-                    <button onClick={addField} className="btn-ghost" style={{ fontSize:11.5 }}>+ Add field</button>
-                  </div>
-                  <div style={{ border:"1px solid var(--line)", borderRadius:8, overflow:"hidden" }}>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 100px 2fr 32px", gap:0, background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", padding:"7px 12px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
-                      <div>Name</div><div>Type</div><div>Description for the model</div><div/>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                    <div>
+                      <label style={Object.assign({}, lbl, { marginBottom:2 })}>EXTRACTED FIELD → PROPERTY MAPPING</label>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{mappedCount} of {SRC_COLS.length} fields mapped <span style={{ color:"var(--ink-3)" }}>· source </span><span style={{ color:"var(--ink-2)" }}>{srcLabel}</span></div>
                     </div>
-                    {extractionFields.map(function(f, i) {
+                    <button onClick={function(){
+                      var auto = {};
+                      extractedFields.forEach(function(f){
+                        var match = targetProps.find(function(p){ return p.name.replace(/_/g,"") === f.name.replace(/_/g,""); });
+                        if (!match) {
+                          match = targetProps.find(function(p){
+                            var n = f.name.replace(/_/g,"").toLowerCase();
+                            var pn = p.name.replace(/_/g,"").toLowerCase();
+                            return n.indexOf(pn) >= 0 || pn.indexOf(n) >= 0;
+                          });
+                        }
+                        if (match) auto[f.name] = match.name;
+                      });
+                      setColumnMap(auto);
+                    }} style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"7px 12px", borderRadius:7, border:"1px solid var(--ink-2)", background:"var(--panel)", color:"var(--ink)", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:500, boxShadow:"0 1px 0 var(--line-2)" }}>
+                      <span style={{ color:"var(--gold)" }}>⚡</span> Auto-detect mapping
+                    </button>
+                  </div>
+
+                  <div style={{ border:"1px solid var(--line)", borderRadius:10, background:"var(--panel)", boxShadow:"0 1px 0 var(--line-2), 0 6px 18px rgba(40,40,20,0.04)" }}>
+                    <div style={{ display:"grid", gridTemplateColumns:"1.05fr 22px 0.95fr 22px 1.1fr", gap:10, background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", padding:"10px 16px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.55px", color:"var(--ink-3)", textTransform:"uppercase", borderRadius:"10px 10px 0 0" }}>
+                      <div>Extracted field</div>
+                      <div/>
+                      <div>Transform <span style={{ textTransform:"none", color:"var(--ink-4)" }}>(optional)</span></div>
+                      <div/>
+                      <div>Target property</div>
+                    </div>
+                    {SRC_COLS.length === 0 && (
+                      <div style={{ padding:"22px 16px", textAlign:"center", color:"var(--ink-3)", fontSize:12 }}>Pick an automation or agent in the Extract step first — the fields it produces will show up here to map.</div>
+                    )}
+                    {SRC_COLS.map(function(srcCol, i, arr) {
+                      var mapped = columnMap[srcCol];
+                      var mappedProp = mapped ? targetProps.find(function(p){ return p.name === mapped; }) : null;
+                      var transform = columnTransform[srcCol] || "";
+                      var stype = SRC_TYPES[srcCol] || "string";
+                      var tg = TYPE_GLYPH[stype] || TYPE_GLYPH.string;
                       return (
-                        <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 100px 2fr 32px", gap:6, padding:"6px 12px", alignItems:"center", borderBottom: i < extractionFields.length-1 ? "1px solid var(--line-2)" : "none" }}>
-                          <input value={f.name} onChange={function(e){ updateField(i, "name", e.target.value); }} style={Object.assign({}, inp, { padding:"5px 8px", fontSize:12, fontFamily:"JetBrains Mono" })} />
-                          <select value={f.type} onChange={function(e){ updateField(i, "type", e.target.value); }} style={Object.assign({}, inp, { padding:"5px 8px", fontSize:12, fontFamily:"JetBrains Mono" })}>
-                            <option value="string">string</option><option value="string[]">string[]</option><option value="decimal">decimal</option><option value="bool">bool</option><option value="date">date</option><option value="timestamp">timestamp</option><option value="enum">enum</option>
-                          </select>
-                          <input value={f.desc} onChange={function(e){ updateField(i, "desc", e.target.value); }} style={Object.assign({}, inp, { padding:"5px 8px", fontSize:12 })} />
-                          <button onClick={function(){ removeField(i); }} disabled={extractionFields.length === 1} style={{ width:26, height:26, borderRadius:5, border:"1px solid var(--line)", background: extractionFields.length === 1 ? "transparent" : "var(--bg-canvas)", color:"var(--ink-3)", cursor: extractionFields.length === 1 ? "not-allowed" : "pointer", opacity: extractionFields.length === 1 ? 0.4 : 1 }}>×</button>
+                        <div key={srcCol} style={{ display:"grid", gridTemplateColumns:"1.05fr 22px 0.95fr 22px 1.1fr", gap:10, padding:"9px 16px", alignItems:"center", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 0 ? "transparent" : "var(--bg-canvas)" }}>
+                          <span style={{ display:"inline-flex", alignItems:"center", gap:7, padding:"5px 10px 5px 6px", borderRadius:6, background:"var(--chip)", border:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink)", maxWidth:"100%", overflow:"hidden", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+                            <span style={{ minWidth:18, height:14, padding:"0 4px", borderRadius:3, background:tg.c, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:8, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{tg.g}</span>
+                            <code style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{srcCol}</code>
+                          </span>
+                          <span style={{ textAlign:"center", color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:13 }}>→</span>
+                          <RichSelect
+                            value={transform}
+                            onChange={function(v){ setColumnTransform(function(m){ var n = Object.assign({}, m); if (v) n[srcCol] = v; else delete n[srcCol]; return n; }); }}
+                            options={TRANSFORMS.map(function(t){ return { value:t.v, label:t.l }; })}
+                            placeholder="— none —"
+                            mono
+                            accent={transform ? "var(--purple)" : null}
+                          />
+                          <span style={{ textAlign:"center", color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:13 }}>→</span>
+                          <RichSelect
+                            value={mapped || ""}
+                            onChange={function(v){ setColumnMap(function(m){ var n = Object.assign({}, m); if (v) n[srcCol] = v; else delete n[srcCol]; return n; }); }}
+                            options={[{ value:"", label:"— skip —" }].concat(targetProps.map(function(p){ return { value:p.name, label:p.name, sub:p.type, color: TYPE_COLOR[p.type] || "var(--ink-3)" }; }))}
+                            placeholder="— skip —"
+                            mono
+                            leadingColor={mappedProp ? (TYPE_COLOR[mappedProp.type] || "var(--ink-3)") : null}
+                          />
                         </div>
                       );
                     })}
                   </div>
                 </div>
-                <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:14 }}>
-                  <div>
-                    <label style={lbl}>LLM MODEL</label>
-                    <select value={llmModel} onChange={function(e){ setLlmModel(e.target.value); }} style={inp}>
-                      <option value="claude-3.5-sonnet">Claude 3.5 Sonnet · best quality</option>
-                      <option value="claude-3.5-haiku">Claude 3.5 Haiku · fast & cheap</option>
-                      <option value="gpt-4o">GPT-4o · best quality</option>
-                      <option value="gpt-4o-mini">GPT-4o mini · fast & cheap</option>
-                      <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={lbl}>MIN CONFIDENCE</label>
-                    <input value={confThreshold} onChange={function(e){ setConfThreshold(e.target.value); }} style={Object.assign({}, inp, { fontFamily:"JetBrains Mono" })} />
-                  </div>
-                </div>
-                <div style={{ padding:"12px 14px", border:"1px dashed var(--line)", borderRadius:8, background:"var(--panel-2)" }}>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>TEST ON SAMPLE</span>
-                    <button className="btn-ghost" style={{ fontSize:11.5 }}>Run on 3 sample docs →</button>
-                  </div>
-                  <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.5 }}>Pick 3 documents from the folder and preview the extraction output before committing. Estimated cost: <code style={{ fontFamily:"JetBrains Mono", color:"var(--ink-2)" }}>~$0.04 / 3 docs</code>.</div>
-                </div>
               </div>
-            )}
+              );
+            })()}
 
-            {step === 4 && paradigm === "manual" && (
+            {step === S_MAP && paradigm === "manual" && (
               <div style={{ maxWidth:640 }}>
                 <label style={lbl}>TARGET NODE TYPE</label>
                 <select value={targetNodeId} onChange={function(e){ setTargetNodeId(e.target.value); }} style={inp}>
@@ -8144,7 +8524,7 @@ function LinkSourceFlow({ node, onClose }) {
               </div>
             )}
 
-            {step === 5 && (
+            {step === S_SYNC && (
               <div style={{ maxWidth:780, display:"flex", flexDirection:"column", gap:20 }}>
                 <div>
                   <label style={lbl}>SYNC STRATEGY</label>
@@ -8223,7 +8603,7 @@ function LinkSourceFlow({ node, onClose }) {
               </div>
             )}
 
-            {step === 6 && connectorDef && (
+            {step === S_REVIEW && connectorDef && (
               <div style={{ maxWidth:760, display:"flex", flexDirection:"column", gap:18 }}>
                 <div style={{ border:"1px solid var(--line)", borderRadius:10, padding:20, background:"var(--panel)" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14 }}>
@@ -8239,8 +8619,14 @@ function LinkSourceFlow({ node, onClose }) {
                                                        : paradigm === "documents" ? folderPath + " (" + fileTypes.join(", ") + ")"
                                                        : paradigm === "event" ? "topic " + topicName
                                                        : "manual"}</span>
+                    {paradigm === "documents" && (
+                      <>
+                        <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>EXTRACT</span>
+                        <span style={{ color:"var(--ink)" }}>{extractMethod === "automation" ? "automation: " + (selectedAutomation ? selectedAutomation.name : "—") : extractAgentId === "__custom" ? "custom agent · " + extractionFields.length + " fields · " + llmModel : "agent: " + (selectedAgent ? selectedAgent.name : "—")}</span>
+                      </>
+                    )}
                     <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>MAPPING</span>
-                    <span style={{ color:"var(--ink)" }}>{paradigm === "documents" ? extractionFields.length + " extracted fields via " + llmModel : Object.keys(columnMap).length + " columns mapped"}</span>
+                    <span style={{ color:"var(--ink)" }}>{Object.keys(columnMap).length + " " + (paradigm === "documents" ? "fields" : "columns") + " mapped → " + (targetNode ? targetNode.label : "?")}</span>
                     <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>BACKFILL</span>
                     <span style={{ color:"var(--ink)" }}>{backfill === "none" ? "no backfill" : backfill}</span>
                     <span style={{ color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.4px" }}>CONFLICTS</span>
@@ -8264,10 +8650,10 @@ function LinkSourceFlow({ node, onClose }) {
         {/* FOOTER */}
         <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
           <button className="btn-ghost" onClick={function(){ if (step > 1) setStep(function(s){ return s - 1; }); }} disabled={step === 1} style={{ opacity: step === 1 ? 0.4 : 1 }}>← Back</button>
-          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of 6 · " + stepNames[step-1]}</span>
+          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of " + totalSteps + " · " + stepNames[step-1]}</span>
           <div style={{ display:"flex", gap:8 }}>
             <button className="btn-ghost" onClick={onClose}>Cancel</button>
-            {step < 6
+            {step < totalSteps
               ? <button className="btn-dark" disabled={!canContinue()} onClick={function(){ setStep(function(s){ return s + 1; }); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Continue →</button>
               : <button className="btn-dark" onClick={onClose}>{activate ? "Activate source ↵" : "Save draft ↵"}</button>
             }
