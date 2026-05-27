@@ -4602,6 +4602,10 @@ function PropertiesPane({ node, properties }) {
               var displayName = p.name.replace(/_/g, " ").replace(/\b\w/g, function(m){ return m.toUpperCase(); }).replace(/\bId\b/g, "ID").replace(/\bUrl\b/g, "URL");
               // Disclosure slot: rotating chevron when has children, otherwise a
               // tiny dim dot. Same width either way so names line up.
+              var isChild = depth > 0;
+              // Parents get a real chevron button. Children skip the
+              // disclosure entirely — the group rail + indent already say
+              // "I belong to the row above" without an extra dot of noise.
               var disclosure = hasChildren ? (
                 <button
                   onClick={function(e){
@@ -4621,24 +4625,20 @@ function PropertiesPane({ node, properties }) {
                     <polyline points="9 6 15 12 9 18"/>
                   </svg>
                 </button>
-              ) : (
-                <span style={{ width:18, height:18, display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                  <span style={{ width:3, height:3, borderRadius:"50%", background:"var(--line-2)" }} />
-                </span>
-              );
-              // Child rows get an indent + a faint left rail so they read as a group.
-              var isChild = depth > 0;
+              ) : !isChild ? (
+                <span style={{ width:18, height:18, display:"inline-flex", flexShrink:0 }} />
+              ) : null;
+              // Child rows: indent + a continuous 1px vertical rail running
+              // edge-to-edge of the row at the parent's chevron x-position.
+              // The rail visually threads all siblings back to the parent.
+              var railLeft = 18 + 9; // name-cell padding ~ matches parent chevron centre
               return (
-                <div key={keyId} className="props-row" style={{ gridTemplateColumns:"1.5fr 1.2fr 1fr 150px 170px 130px 32px", background: isChild ? "rgba(0,0,0,0.012)" : undefined }}
+                <div key={keyId} className="props-row" style={{ gridTemplateColumns:"1.5fr 1.2fr 1fr 150px 170px 130px 32px", background: isChild ? "rgba(0,0,0,0.018)" : undefined, position:"relative" }}
                   onClick={function(){ setPropEditRow(p); setPropFlowMode("manual"); setPropFlowOpen(true); }}>
-                  <div className="props-cell props-name-cell" style={{ paddingLeft: isChild ? (12 + depth * 18) : undefined }}>
-                    {isChild && (
-                      <span aria-hidden="true" style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:14, height:18, color:"var(--ink-4)", flexShrink:0, marginRight:2 }}>
-                        <svg width="14" height="18" viewBox="0 0 14 18" fill="none" stroke="currentColor" strokeWidth="1.2">
-                          <path d="M3 0 V9 H12" strokeLinecap="round" />
-                        </svg>
-                      </span>
-                    )}
+                  {isChild && (
+                    <span aria-hidden="true" style={{ position:"absolute", left: railLeft, top:0, bottom:0, width:1, background:"var(--line)", pointerEvents:"none" }} />
+                  )}
+                  <div className="props-cell props-name-cell" style={{ paddingLeft: isChild ? (railLeft + 22) : undefined }}>
                     {disclosure}
                     <span style={{ fontSize:13, color: isChild ? "var(--ink-2)" : "var(--ink)", fontWeight: isChild ? 400 : 500 }}>{displayName}</span>
                     {p.pk && <span className="snap-tag snap-pk">PK</span>}
