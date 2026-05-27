@@ -4671,10 +4671,13 @@ function PropertiesPane({ node, properties }) {
               ) : (
                 <span style={{ width:18, height:18, display:"inline-flex", flexShrink:0 }} />
               );
-              // 22px indent per nesting level. Padding moves the chevron
-              // inboard so deeper rows visually sit under their parent.
+              // Per-level indent. The chevron for depth D sits at the row's
+              // own padding-left (18) + D * INDENT + chevron half-width (9),
+              // which is exactly where the next-deeper rail will be drawn.
+              // That alignment is what makes URL's children's rail sit
+              // directly under URL's chevron rather than offset to the left.
               var INDENT = 14;
-              var namePadLeft = depth > 0 ? (18 + depth * INDENT) : undefined;
+              var namePadLeft = depth > 0 ? (depth * INDENT) : undefined;
               return (
                 <div key={keyId} className="props-row" style={{ gridTemplateColumns:"2fr 1.6fr 1fr 150px 170px 96px 32px", position:"relative" }}
                   onClick={function(){ setPropEditRow(p); setPropFlowMode("manual"); setPropFlowOpen(true); }}>
