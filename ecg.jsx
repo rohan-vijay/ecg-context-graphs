@@ -4472,6 +4472,9 @@ function PropertiesPane({ node, properties }) {
   const [propEditRow, setPropEditRow]   = useState(null); // when set, AddPropertyFlow opens in edit mode pre-filled
   // Track which struct properties are expanded to reveal their nested fields inline.
   const [expandedNested, setExpandedNested] = useState({});
+  // Global override: when true, every nested struct is expanded regardless of
+  // individual state. Toggled from a subtle icon button next to the search.
+  const [expandAll, setExpandAll] = useState(false);
   const AddPropertyFlow = AddPropertyFlowModal;
 
   const FILTERS = [
@@ -4533,6 +4536,41 @@ function PropertiesPane({ node, properties }) {
             ))}
           </div>
           <div className="card-head-actions">
+            {/* Global expand/collapse toggle. Subtle by default — only the
+                icon outlined; on-state earns a chip-tinted background so it
+                reads as active without shouting. */}
+            <button
+              type="button"
+              onClick={function(){ setExpandAll(function(v){ return !v; }); }}
+              title={expandAll ? "Collapse nested fields" : "Expand all nested fields"}
+              aria-pressed={expandAll}
+              style={{
+                width:30, height:30, padding:0,
+                display:"inline-flex", alignItems:"center", justifyContent:"center",
+                border:"1px solid var(--line)", borderRadius:7,
+                background: expandAll ? "var(--chip)" : "transparent",
+                color: expandAll ? "var(--ink)" : "var(--ink-3)",
+                cursor:"pointer",
+                transition:"color 100ms ease, background 100ms ease"
+              }}
+              onMouseEnter={function(e){ if (!expandAll) { e.currentTarget.style.color = "var(--ink-2)"; } }}
+              onMouseLeave={function(e){ if (!expandAll) { e.currentTarget.style.color = "var(--ink-3)"; } }}
+            >
+              {/* Two icons swapped by state. Off = "unfold" (arrows out);
+                  On = "fold" (arrows in). Mirrors the action it would take
+                  if clicked, which keeps the affordance predictable. */}
+              {expandAll ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="7 20 12 15 17 20"/>
+                  <polyline points="7 4 12 9 17 4"/>
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="7 15 12 20 17 15"/>
+                  <polyline points="7 9 12 4 17 9"/>
+                </svg>
+              )}
+            </button>
             <div style={{ position: "relative" }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"var(--ink-3)",pointerEvents:"none" }}>
                 <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
@@ -4603,7 +4641,7 @@ function PropertiesPane({ node, properties }) {
             function renderRow(p, depth, parentKey) {
               var keyId = (parentKey ? parentKey + "." : "") + p.name;
               var hasChildren = !!(p.children && p.children.length);
-              var isOpen = !!expandedNested[keyId];
+              var isOpen = expandAll || !!expandedNested[keyId];
               var tg = TYPE_GLYPH[p.type] || TYPE_GLYPH.string;
               var fillC = metricColor(p.fill);
               var confC = metricColor(p.conf);
@@ -4692,7 +4730,7 @@ function PropertiesPane({ node, properties }) {
             function renderNode(p, depth, parentKey) {
               var keyId = (parentKey ? parentKey + "." : "") + p.name;
               var hasChildren = !!(p.children && p.children.length);
-              var isOpen = !!expandedNested[keyId];
+              var isOpen = expandAll || !!expandedNested[keyId];
               if (!hasChildren || !isOpen) return renderRow(p, depth, parentKey);
               return (
                 <React.Fragment key={keyId}>
