@@ -1736,7 +1736,15 @@ const PROPS_BY_NODE = {
     { name: "csm_id",             type: "fk Employee", required: false, indexed: true, pii: false, fill: 81, conf: 95, source: "Salesforce" },
     { name: "parent_account_id",  type: "fk self",   required: false, indexed: false, pii: false, fill: 31,  conf: 100, source: "Salesforce" },
     { name: "primary_contact_email", type: "string", required: false, indexed: true,  pii: true,  fill: 92,  conf: 96, source: "Salesforce" },
-    { name: "billing_address",    type: "struct",    required: false, indexed: false, pii: true,  fill: 87,  conf: 91, source: "NetSuite ERP" },
+    { name: "billing_address",    type: "struct",    required: false, indexed: false, pii: true,  fill: 87,  conf: 91, source: "NetSuite ERP",
+      children: [
+        { name: "street",      type: "string", required: false, indexed: false, pii: true,  fill: 89, conf: 94, source: "NetSuite ERP" },
+        { name: "city",        type: "string", required: false, indexed: true,  pii: false, fill: 91, conf: 96, source: "NetSuite ERP" },
+        { name: "state",       type: "enum",   required: false, indexed: true,  pii: false, fill: 90, conf: 99, source: "NetSuite ERP" },
+        { name: "postal_code", type: "string", required: false, indexed: true,  pii: false, fill: 88, conf: 97, source: "NetSuite ERP" },
+        { name: "country",     type: "enum",   required: false, indexed: true,  pii: false, fill: 95, conf: 99, source: "NetSuite ERP" },
+      ]
+    },
     { name: "tax_id",             type: "string",    required: false, indexed: false, pii: true,  fill: 64,  conf: 94, source: "NetSuite ERP" },
     { name: "fiscal_year_end",    type: "date",      required: false, indexed: false, pii: false, fill: 78,  conf: 99, source: "NetSuite ERP" },
     { name: "is_lighthouse",      type: "bool",      required: false, indexed: false, pii: false, fill: 100, conf: 100, source: "manual" },
@@ -1764,7 +1772,25 @@ function generateProps(node) {
   const extras = ["status","owner_id","type","priority","metadata","amount","external_ref","resolved_at"];
   for (let i = 0; i < Math.min(node.props - 3, extras.length); i++) {
     const e = extras[i];
-    out.push({ name: e, type: i%3===0?"enum":i%3===1?"string":"timestamp", required: i<2, indexed: i%2===0, pii: e.includes("owner")||e.includes("ref"), fill: 70+((seed*i)%30), conf: 80+((seed+i)%19), source: "primary" });
+    var row = { name: e, type: i%3===0?"enum":i%3===1?"string":"timestamp", required: i<2, indexed: i%2===0, pii: e.includes("owner")||e.includes("ref"), fill: 70+((seed*i)%30), conf: 80+((seed+i)%19), source: "primary" };
+    if (e === "metadata") {
+      row.type = "struct";
+      row.children = [
+        { name: "source_system", type: "enum",      required: false, indexed: false, pii: false, fill: 92, conf: 98, source: "primary" },
+        { name: "ingested_at",   type: "timestamp", required: false, indexed: true,  pii: false, fill: 100,conf: 100,source: "primary" },
+        { name: "version",       type: "int",       required: false, indexed: false, pii: false, fill: 84, conf: 96, source: "primary" },
+        { name: "tags",          type: "string[]",  required: false, indexed: false, pii: false, fill: 71, conf: 95, source: "primary" },
+      ];
+    }
+    if (e === "external_ref") {
+      row.type = "struct";
+      row.children = [
+        { name: "system", type: "enum",   required: false, indexed: false, pii: false, fill: 96, conf: 99, source: "primary" },
+        { name: "ref_id", type: "string", required: false, indexed: true,  pii: false, fill: 94, conf: 99, source: "primary" },
+        { name: "url",    type: "string", required: false, indexed: false, pii: false, fill: 62, conf: 92, source: "primary" },
+      ];
+    }
+    out.push(row);
   }
   return out;
 }
@@ -4438,6 +4464,8 @@ function PropertiesPane({ node, properties }) {
   const [sort, setSort] = useState({ col: "name", dir: "asc" });
   const [selectedProp, setSelectedProp] = useState(null);
   const [propEditRow, setPropEditRow]   = useState(null); // when set, AddPropertyFlow opens in edit mode pre-filled
+  // Track which struct properties are expanded to reveal their nested fields inline.
+  const [expandedNested, setExpandedNested] = useState({});
   const AddPropertyFlow = AddPropertyFlowModal;
 
   const FILTERS = [
@@ -4550,74 +4578,116 @@ function PropertiesPane({ node, properties }) {
             <div className="props-th props-th-action"></div>
           </div>
 
-          {filtered.map((p, i) => {
+          {(function renderRows(){
+            // Recursive renderer so nested struct properties expand inline. The
+            // disclosure slot is always reserved at the start of the name cell so
+            // rows align identically whether or not they have children.
             var TYPE_GLYPH = { uuid:{ g:"ID", c:"var(--purple)" }, string:{ g:"T",  c:"var(--blue)"   }, "string[]":{ g:"[T]", c:"var(--blue)" }, decimal:{ g:"#",  c:"var(--gold)"   }, float:{ g:".5", c:"var(--gold)"   }, bool:{ g:"01", c:"var(--coral)"  }, timestamp:{ g:"TS", c:"var(--green)" }, date:{ g:"DT", c:"var(--green)" }, datetime:{ g:"DT", c:"var(--green)" }, enum:{ g:"E",  c:"var(--purple)" }, struct:{ g:"{}", c:"var(--ink-3)" }, int:{ g:"#", c:"var(--gold)" } };
-            var tg = TYPE_GLYPH[p.type] || TYPE_GLYPH.string;
-            var fillC = metricColor(p.fill);
-            var confC = metricColor(p.conf);
-            // Humanise the snake_case key for the display Name column.
-            var displayName = p.name.replace(/_/g, " ").replace(/\b\w/g, function(m){ return m.toUpperCase(); }).replace(/\bId\b/g, "ID").replace(/\bUrl\b/g, "URL");
-            // Flag pill — small 18px square with a stroke icon + a coloured tinted background.
-            // Replaces the text "req / idx / PII" so the column reads as visual tokens.
-            function FlagPill({ tone, title, icon }) {
-              return (
-                <span title={title} style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:20, height:20, borderRadius:5, background:tone.bg, color:tone.fg, flexShrink:0 }}>
-                  {icon}
-                </span>
-              );
-            }
             var REQ_ICON = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="13"/><circle cx="12" cy="18" r="0.8" fill="currentColor" stroke="none"/></svg>;
             var IDX_ICON = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="13 2 4 14 12 14 11 22 20 10 12 10 13 2"/></svg>;
             var PII_ICON = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>;
             var UNQ_ICON = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="7" cy="14" r="3"/><path d="M10 12l9-9 2 2-9 9"/><path d="M16 6l3 3"/></svg>;
-            return (
-              <div key={p.name} className="props-row" style={{ gridTemplateColumns:"1.5fr 1.2fr 1fr 150px 170px 130px 32px" }}
-                onClick={() => { setPropEditRow(p); setPropFlowMode("manual"); setPropFlowOpen(true); }}>
-                {/* NAME — display label (humanised). PK and FX COMPUTED badges sit AFTER the name
-                    so the eye reads "Account ID · PK" rather than "PK · Account ID". */}
-                <div className="props-cell props-name-cell">
-                  <span style={{ fontSize:13, color:"var(--ink)", fontWeight:500 }}>{displayName}</span>
-                  {p.pk && <span className="snap-tag snap-pk">PK</span>}
-                  {p.computed && <span title="Computed" style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"2px 5px 2px 4px", borderRadius:4, background:"var(--gold-fill)", color:"var(--gold)", fontFamily:"JetBrains Mono", fontSize:9, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>
-                    <span style={{ fontStyle:"italic" }}>fx</span><span>COMPUTED</span>
-                  </span>}
-                </div>
-                {/* KEY — the snake_case identifier, in mono so it reads as code */}
-                <div className="props-cell">
-                  <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-2)", background:"var(--chip)", padding:"2px 7px", borderRadius:4 }}>{p.name}</code>
-                </div>
-                <div className="props-cell prop-type">
-                  <span style={{ display:"inline-flex", alignItems:"center", gap:7 }}>
-                    <span style={{ minWidth:22, height:18, padding:"0 5px", borderRadius:4, background:tg.c, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{tg.g}</span>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-2)" }}>{p.type}</span>
-                  </span>
-                </div>
-                {/* FILL — bar + percent, left-aligned to match header */}
-                <div className="props-cell">
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <div style={{ position:"relative", flex:"1 1 70px", maxWidth:80, height:6, background:"var(--line)", borderRadius:3, overflow:"hidden" }}><div style={{ position:"absolute", left:0, top:0, bottom:0, width: p.fill + "%", background: fillC, borderRadius:3 }} /></div>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color: fillC, fontWeight:600, minWidth:36 }}>{p.fill}%</span>
+            function FlagPill({ tone, title, icon }) {
+              return (
+                <span title={title} style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:20, height:20, borderRadius:5, background:tone.bg, color:tone.fg, flexShrink:0 }}>{icon}</span>
+              );
+            }
+            function renderRow(p, depth, parentKey) {
+              var keyId = (parentKey ? parentKey + "." : "") + p.name;
+              var hasChildren = !!(p.children && p.children.length);
+              var isOpen = !!expandedNested[keyId];
+              var tg = TYPE_GLYPH[p.type] || TYPE_GLYPH.string;
+              var fillC = metricColor(p.fill);
+              var confC = metricColor(p.conf);
+              var displayName = p.name.replace(/_/g, " ").replace(/\b\w/g, function(m){ return m.toUpperCase(); }).replace(/\bId\b/g, "ID").replace(/\bUrl\b/g, "URL");
+              // Disclosure slot: rotating chevron when has children, otherwise a
+              // tiny dim dot. Same width either way so names line up.
+              var disclosure = hasChildren ? (
+                <button
+                  onClick={function(e){
+                    e.stopPropagation();
+                    setExpandedNested(function(prev){
+                      var next = Object.assign({}, prev);
+                      if (next[keyId]) delete next[keyId]; else next[keyId] = true;
+                      return next;
+                    });
+                  }}
+                  title={isOpen ? "Collapse nested fields" : "Expand nested fields"}
+                  style={{ width:18, height:18, padding:0, border:"none", background:"transparent", display:"inline-flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:"var(--ink-2)", borderRadius:4, flexShrink:0 }}
+                  onMouseEnter={function(e){ e.currentTarget.style.background = "var(--chip)"; }}
+                  onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 120ms ease" }}>
+                    <polyline points="9 6 15 12 9 18"/>
+                  </svg>
+                </button>
+              ) : (
+                <span style={{ width:18, height:18, display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  <span style={{ width:3, height:3, borderRadius:"50%", background:"var(--line-2)" }} />
+                </span>
+              );
+              // Child rows get an indent + a faint left rail so they read as a group.
+              var isChild = depth > 0;
+              return (
+                <div key={keyId} className="props-row" style={{ gridTemplateColumns:"1.5fr 1.2fr 1fr 150px 170px 130px 32px", background: isChild ? "rgba(0,0,0,0.012)" : undefined }}
+                  onClick={function(){ setPropEditRow(p); setPropFlowMode("manual"); setPropFlowOpen(true); }}>
+                  <div className="props-cell props-name-cell" style={{ paddingLeft: isChild ? (12 + depth * 18) : undefined }}>
+                    {isChild && (
+                      <span aria-hidden="true" style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:14, height:18, color:"var(--ink-4)", flexShrink:0, marginRight:2 }}>
+                        <svg width="14" height="18" viewBox="0 0 14 18" fill="none" stroke="currentColor" strokeWidth="1.2">
+                          <path d="M3 0 V9 H12" strokeLinecap="round" />
+                        </svg>
+                      </span>
+                    )}
+                    {disclosure}
+                    <span style={{ fontSize:13, color: isChild ? "var(--ink-2)" : "var(--ink)", fontWeight: isChild ? 400 : 500 }}>{displayName}</span>
+                    {p.pk && <span className="snap-tag snap-pk">PK</span>}
+                    {p.computed && <span title="Computed" style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"2px 5px 2px 4px", borderRadius:4, background:"var(--gold-fill)", color:"var(--gold)", fontFamily:"JetBrains Mono", fontSize:9, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>
+                      <span style={{ fontStyle:"italic" }}>fx</span><span>COMPUTED</span>
+                    </span>}
+                    {hasChildren && <span title={p.children.length + " nested fields"} style={{ display:"inline-flex", alignItems:"center", padding:"1px 6px", borderRadius:4, background:"var(--chip)", color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:600, flexShrink:0 }}>{p.children.length}</span>}
                   </div>
-                </div>
-                {/* CONFORMANCE — bar + percent, left-aligned */}
-                <div className="props-cell">
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <div style={{ position:"relative", flex:"1 1 70px", maxWidth:80, height:6, background:"var(--line)", borderRadius:3, overflow:"hidden" }}><div style={{ position:"absolute", left:0, top:0, bottom:0, width: p.conf + "%", background: confC, borderRadius:3 }} /></div>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color: confC, fontWeight:600, minWidth:36 }}>{p.conf}%</span>
+                  <div className="props-cell">
+                    <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-2)", background:"var(--chip)", padding:"2px 7px", borderRadius:4 }}>{isChild ? parentKey.split(".").pop() + "." + p.name : p.name}</code>
                   </div>
+                  <div className="props-cell prop-type">
+                    <span style={{ display:"inline-flex", alignItems:"center", gap:7 }}>
+                      <span style={{ minWidth:22, height:18, padding:"0 5px", borderRadius:4, background:tg.c, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{tg.g}</span>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-2)" }}>{p.type}</span>
+                    </span>
+                  </div>
+                  <div className="props-cell">
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <div style={{ position:"relative", flex:"1 1 70px", maxWidth:80, height:6, background:"var(--line)", borderRadius:3, overflow:"hidden" }}><div style={{ position:"absolute", left:0, top:0, bottom:0, width: p.fill + "%", background: fillC, borderRadius:3 }} /></div>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color: fillC, fontWeight:600, minWidth:36 }}>{p.fill}%</span>
+                    </div>
+                  </div>
+                  <div className="props-cell">
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <div style={{ position:"relative", flex:"1 1 70px", maxWidth:80, height:6, background:"var(--line)", borderRadius:3, overflow:"hidden" }}><div style={{ position:"absolute", left:0, top:0, bottom:0, width: p.conf + "%", background: confC, borderRadius:3 }} /></div>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:12, color: confC, fontWeight:600, minWidth:36 }}>{p.conf}%</span>
+                    </div>
+                  </div>
+                  <div className="props-cell" style={{ display:"flex", alignItems:"center", gap:5 }}>
+                    {p.required && <FlagPill title="Required"   tone={{ bg:"var(--coral-fill)", fg:"var(--coral)"  }} icon={REQ_ICON} />}
+                    {p.indexed  && <FlagPill title="Indexed"    tone={{ bg:"var(--blue-fill)",  fg:"var(--blue)"   }} icon={IDX_ICON} />}
+                    {p.unique   && <FlagPill title="Unique"     tone={{ bg:"var(--purple-fill)",fg:"var(--purple)" }} icon={UNQ_ICON} />}
+                    {p.pii      && <FlagPill title="PII"        tone={{ bg:"var(--chip)",       fg:"var(--ink-2)"  }} icon={PII_ICON} />}
+                    {!p.required && !p.indexed && !p.unique && !p.pii && <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>—</span>}
+                  </div>
+                  <div className="props-cell props-chevron">›</div>
                 </div>
-                {/* FLAGS — icon-only pills so the column reads as visual tokens at a glance */}
-                <div className="props-cell" style={{ display:"flex", alignItems:"center", gap:5 }}>
-                  {p.required && <FlagPill title="Required"   tone={{ bg:"var(--coral-fill)", fg:"var(--coral)"  }} icon={REQ_ICON} />}
-                  {p.indexed  && <FlagPill title="Indexed"    tone={{ bg:"var(--blue-fill)",  fg:"var(--blue)"   }} icon={IDX_ICON} />}
-                  {p.unique   && <FlagPill title="Unique"     tone={{ bg:"var(--purple-fill)",fg:"var(--purple)" }} icon={UNQ_ICON} />}
-                  {p.pii      && <FlagPill title="PII"        tone={{ bg:"var(--chip)",       fg:"var(--ink-2)"  }} icon={PII_ICON} />}
-                  {!p.required && !p.indexed && !p.unique && !p.pii && <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>—</span>}
-                </div>
-                <div className="props-cell props-chevron">›</div>
-              </div>
-            );
-          })}
+              );
+            }
+            var out = [];
+            filtered.forEach(function(p){
+              out.push(renderRow(p, 0, ""));
+              if (p.children && p.children.length && expandedNested[p.name]) {
+                p.children.forEach(function(c){ out.push(renderRow(c, 1, p.name)); });
+              }
+            });
+            return out;
+          })()}
         </div>
 
         {filtered.length === 0 && (
