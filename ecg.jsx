@@ -4992,48 +4992,370 @@ function AddCustomIndexDialog({ node, fieldOptions, onCancel, onSave, initial })
   );
 }
 
-function PropertiesSettingsDrawer({ node, properties, onClose }) {
-  // Data Management
-  var [storage, setStorage]       = useState("json");      // json | columnar | timeseries | object
-  var [retention, setRetention]   = useState("90");
-  var [retentionUnit, setRetentionUnit] = useState("days"); // minutes | hours | days | months | years
 
-  // Object Indices — automatic ones derived from PK/UNQ in `properties`;
-  // custom ones live in local state.
+// ─── PROPERTIES SETTINGS MODAL ──────────────────────────────────────────────
+// Centered modal with a left-rail nav for jumping between sections. Each
+// section is shaped around its actual use-case instead of stacking toggle
+// rows together.
+function PropertiesSettingsModal({ node, properties, onClose }) {
+  // STORAGE / LIFECYCLE
+  var [storage, setStorage]       = useState("json");
+  var [retention, setRetention]   = useState("90d");
+
+  // PERFORMANCE / INDICES — auto indices derive live from PK/UNQ fields,
+  // custom indices live in local state and merge into one display table.
   var autoIndices = (properties || [])
     .filter(function(p){ return p.pk || p.unique; })
-    .map(function(p){ return { name: (p.pk ? "PK_" : "UNQ_") + p.name, kind: p.pk ? "Primary" : "Unique", fields:[p.name] }; });
-  if (autoIndices.length === 0) autoIndices = [{ name:"PK_id", kind:"Primary", fields:["id"] }];
+    .map(function(p){ return { name: (p.pk ? "PK_" : "UNQ_") + p.name, kind: p.pk ? "Primary" : "Unique", fields:[{ field:p.name, dir:"asc" }] }; });
+  if (autoIndices.length === 0) autoIndices = [{ name:"PK_id", kind:"Primary", fields:[{ field:"id", dir:"asc" }] }];
   var [customIndices, setCustomIndices] = useState([]);
-  var [autoOpen, setAutoOpen]   = useState(true);
-  var [customOpen, setCustomOpen] = useState(true);
-  var [addIndexOpen, setAddIndexOpen] = useState(false);
-  var [editIndex, setEditIndex] = useState(null);
+  var [addIndexOpen, setAddIndexOpen]   = useState(false);
+  var [editIndex, setEditIndex]         = useState(null);
 
-  // Monitoring & Logging
-  var [audit, setAudit]           = useState(false);
-  var [activity, setActivity]     = useState(true);
-  var [reporting, setReporting]   = useState(false);
-  var [webhook, setWebhook]       = useState(false);
+  // OBSERVABILITY
+  var [audit, setAudit]                 = useState(false);
+  var [auditRetentionDays, setAuditRetentionDays] = useState("365");
+  var [activity, setActivity]           = useState(true);
+  var [activityScope, setActivityScope] = useState("changes");
+  var [reporting, setReporting]         = useState(false);
+
+  // INTEGRATIONS & QUERY
+  var [webhook, setWebhook]             = useState(false);
+  var [webhookUrl, setWebhookUrl]       = useState("");
+  var [webhookEvents, setWebhookEvents] = useState({ create:true, update:true, delete:false });
   var [distinctFilter, setDistinctFilter] = useState(false);
 
-  // Access Control
+  // ACCESS
   var [externalAccess, setExternalAccess] = useState(false);
   var [globalAccess, setGlobalAccess]     = useState(false);
 
-  // Object Versioning
-  var [versioning, setVersioning]   = useState(true);
-  var [deployable, setDeployable]   = useState(false);
+  // VERSIONING
+  var [versioning, setVersioning]       = useState(true);
+  var [keepVersions, setKeepVersions]   = useState("50");
+  var [deployable, setDeployable]       = useState(false);
+
+  // Section nav + search
+  var [section, setSection] = useState("storage");
+  var [query, setQuery]     = useState("");
 
   var fieldOptions = (properties || []).map(function(p){ return p.name; });
 
+  var sectionCounts = {
+    storage:       (retention !== "indefinite" ? 1 : 0) + (storage !== "json" ? 1 : 0),
+    performance:   customIndices.length,
+    observability: (audit ? 1 : 0) + (activity ? 1 : 0) + (reporting ? 1 : 0),
+    integrations:  (webhook ? 1 : 0) + (distinctFilter ? 1 : 0),
+    access:        (externalAccess ? 1 : 0) + (globalAccess ? 1 : 0),
+    versioning:    (versioning ? 1 : 0) + (deployable ? 1 : 0)
+  };
+
+  var SECTIONS = [
+    { id:"storage",       title:"Storage",       desc:"Where data lives and how long it's kept",
+      icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 11v6c0 1.66 4 3 9 3s9-1.34 9-3v-6"/></svg> },
+    { id:"performance",   title:"Performance",   desc:"Indices that speed up queries",
+      icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="13 2 4 14 12 14 11 22 20 10 12 10 13 2"/></svg> },
+    { id:"observability", title:"Observability", desc:"Audit, activity, reporting",
+      icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> },
+    { id:"integrations",  title:"Integrations",  desc:"Webhook and query options",
+      icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> },
+    { id:"access",        title:"Access",        desc:"Who can see and use this object",
+      icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> },
+    { id:"versioning",    title:"Versioning",    desc:"History and deployable copies",
+      icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="10"/></svg> }
+  ];
+
   var inp = { width:"100%", boxSizing:"border-box", padding:"9px 12px", border:"1px solid var(--line)", borderRadius:8, fontSize:13, color:"var(--ink)", background:"var(--panel)", outline:"none", fontFamily:"inherit" };
-  var card = { border:"1px solid var(--line)", borderRadius:10, background:"var(--panel)", boxShadow:"0 1px 0 var(--line-2)" };
+
+  function SettingItem({ title, desc, control, expansion, warn }) {
+    return (
+      <div style={{ border:"1px solid var(--line)", borderRadius:10, background:"var(--panel)", boxShadow:"0 1px 0 var(--line-2)" }}>
+        <div style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"15px 16px" }}>
+          <div style={{ minWidth:0, flex:1 }}>
+            <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{title}</div>
+            {desc && <div style={{ fontSize:12.5, color:"var(--ink-3)", marginTop:4, lineHeight:1.5 }}>{desc}</div>}
+          </div>
+          <div style={{ flexShrink:0, marginTop:2 }}>{control}</div>
+        </div>
+        {warn && (
+          <div style={{ display:"flex", alignItems:"flex-start", gap:9, padding:"10px 16px", background:"var(--gold-fill)", borderTop:"1px solid var(--line-2)" }}>
+            <span style={{ width:18, height:18, borderRadius:4, background:"var(--gold)", color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><circle cx="12" cy="17" r="0.8" fill="currentColor" stroke="none"/></svg>
+            </span>
+            <div style={{ fontSize:11.5, color:"var(--ink-2)", lineHeight:1.5 }}>{warn}</div>
+          </div>
+        )}
+        {expansion && (
+          <div style={{ padding:"14px 16px 16px 16px", borderTop:"1px solid var(--line-2)", background:"var(--panel-2)" }}>
+            {expansion}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  var STORAGE_TILES = [
+    { id:"json",       l:"JSON Store",         d:"Schemaless. Best for evolving shapes and small to medium volumes." },
+    { id:"columnar",   l:"Columnar (Parquet)", d:"Best for analytical scans across many records." },
+    { id:"timeseries", l:"Time-series",        d:"Optimised for append-heavy, time-ordered workloads." },
+    { id:"object",     l:"Object (Blob)",      d:"For large binary records; metadata indexed separately." }
+  ];
+  var RETENTION_PRESETS = [
+    { v:"7d",   l:"7 days"   },
+    { v:"30d",  l:"30 days"  },
+    { v:"90d",  l:"90 days"  },
+    { v:"365d", l:"1 year"   },
+    { v:"indefinite", l:"Forever" }
+  ];
+
+  var SEARCHABLE = [
+    { s:"storage", k:"storage backend object data json columnar parquet timeseries blob" },
+    { s:"storage", k:"retention period archive expiry lifecycle" },
+    { s:"performance", k:"indices index automatic custom performance query" },
+    { s:"observability", k:"audit trail logs" },
+    { s:"observability", k:"activity tracking user actions changes" },
+    { s:"observability", k:"reporting dashboards exports" },
+    { s:"integrations", k:"webhook outbound endpoint url" },
+    { s:"integrations", k:"distinct value filtering unique query api" },
+    { s:"access", k:"external access public api" },
+    { s:"access", k:"global access workspaces sharing visibility" },
+    { s:"versioning", k:"versioning history changes track" },
+    { s:"versioning", k:"deployable deployment release" }
+  ];
+  var matchingSections = query
+    ? Array.from(new Set(SEARCHABLE.filter(function(s){ return s.k.toLowerCase().indexOf(query.toLowerCase()) >= 0; }).map(function(s){ return s.s; })))
+    : null;
+
+  function renderSection() {
+    if (section === "storage") {
+      return (
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          <div>
+            <div style={{ fontSize:11.5, fontWeight:600, color:"var(--ink-3)", letterSpacing:"0.4px", textTransform:"uppercase", marginBottom:10, fontFamily:"JetBrains Mono" }}>Storage backend</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              {STORAGE_TILES.map(function(t){
+                var on = storage === t.id;
+                return (
+                  <button key={t.id} type="button" onClick={function(){ setStorage(t.id); }}
+                    style={{ textAlign:"left", padding:"13px 14px", borderRadius:9, cursor:"pointer", fontFamily:"inherit",
+                             border:"1px solid " + (on ? "var(--ink)" : "var(--line)"),
+                             background: on ? "var(--bg-canvas)" : "var(--panel)",
+                             boxShadow: on ? "0 1px 0 var(--line-2), 0 4px 12px rgba(40,40,20,0.05)" : "0 1px 0 var(--line-2)" }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                      <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{t.l}</span>
+                      {on && <span style={{ width:18, height:18, borderRadius:"50%", background:"var(--ink)", color:"var(--bg-canvas)", display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
+                        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5"/></svg>
+                      </span>}
+                    </div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:5, lineHeight:1.5 }}>{t.d}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize:11.5, fontWeight:600, color:"var(--ink-3)", letterSpacing:"0.4px", textTransform:"uppercase", marginBottom:10, fontFamily:"JetBrains Mono" }}>Retention</div>
+            <div style={{ border:"1px solid var(--line)", borderRadius:10, background:"var(--panel)", padding:"14px 16px", boxShadow:"0 1px 0 var(--line-2)" }}>
+              <div style={{ fontSize:13, color:"var(--ink)", fontWeight:500, marginBottom:4 }}>How long should records be kept?</div>
+              <div style={{ fontSize:11.5, color:"var(--ink-3)", marginBottom:11, lineHeight:1.5 }}>Records past this age are archived to cold storage and removed from the live object.</div>
+              <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                {RETENTION_PRESETS.map(function(r){
+                  var on = retention === r.v;
+                  return (
+                    <button key={r.v} onClick={function(){ setRetention(r.v); }} style={{ padding:"6px 12px", borderRadius:7, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "var(--panel)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11.5, fontWeight:600, cursor:"pointer" }}>{r.l}</button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (section === "performance") {
+      var rows = autoIndices.map(function(ix){ return { source:"auto",   name:ix.name, kind:ix.kind, fields:ix.fields }; })
+                 .concat(customIndices.map(function(ix){ return { source:"custom", name:ix.name, kind:"Custom",  fields:ix.fields }; }));
+      return (
+        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+          <div style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"11px 13px", background:"var(--purple-fill)", borderRadius:8 }}>
+            <span style={{ width:18, height:18, borderRadius:4, background:"var(--purple)", color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="17" r="0.8" fill="currentColor" stroke="none"/></svg>
+            </span>
+            <div style={{ fontSize:12, color:"var(--ink-2)", lineHeight:1.5 }}>Primary and unique fields are indexed automatically. Add custom indices for the queries you run often — composite filters, sort-and-paginate, range scans.</div>
+          </div>
+          <div style={{ border:"1px solid var(--line)", borderRadius:10, background:"var(--panel)", overflow:"hidden", boxShadow:"0 1px 0 var(--line-2)" }}>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 80px 1.4fr 36px", gap:0, background:"var(--panel-2)", padding:"9px 14px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.55px", color:"var(--ink-3)", textTransform:"uppercase", borderBottom:"1px solid var(--line-2)" }}>
+              <div>Name</div><div>Type</div><div>Fields</div><div/>
+            </div>
+            {rows.map(function(ix, i){
+              var typeColor = ix.kind === "Primary" ? "var(--green)" : ix.kind === "Unique" ? "var(--blue)" : "var(--purple)";
+              var typeBg    = ix.kind === "Primary" ? "var(--green-fill)" : ix.kind === "Unique" ? "var(--blue-fill)" : "var(--purple-fill)";
+              return (
+                <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 80px 1.4fr 36px", gap:0, padding:"11px 14px", alignItems:"center", borderBottom: i < rows.length - 1 ? "1px solid var(--line-2)" : "none", cursor: ix.source === "custom" ? "pointer" : "default" }}
+                  onClick={ix.source === "custom" ? function(){ var cIdx = customIndices.findIndex(function(c){ return c.name === ix.name; }); setEditIndex({ idx:cIdx, name:ix.name, fields:ix.fields }); setAddIndexOpen(true); } : undefined}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0 }}>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ix.name}</span>
+                    {ix.source === "auto" && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 5px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", fontWeight:700, letterSpacing:"0.4px" }}>AUTO</span>}
+                  </div>
+                  <div><span style={{ display:"inline-block", padding:"2px 8px", borderRadius:5, fontSize:10.5, fontWeight:600, background:typeBg, color:typeColor }}>{ix.kind}</span></div>
+                  <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                    {ix.fields.map(function(f, j){
+                      var name = typeof f === "string" ? f : f.field;
+                      var dir = typeof f === "object" ? f.dir : null;
+                      return <span key={j} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"2px 7px", borderRadius:4, background:"var(--chip)", border:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)" }}>{name}{dir && <span style={{ color:"var(--ink-4)", fontSize:9 }}>{dir.toUpperCase()}</span>}</span>;
+                    })}
+                  </div>
+                  {ix.source === "custom" ? (
+                    <button onClick={function(e){ e.stopPropagation(); setCustomIndices(function(arr){ return arr.filter(function(c){ return c.name !== ix.name; }); }); }} style={{ width:28, height:28, padding:0, border:"none", background:"transparent", color:"var(--ink-3)", cursor:"pointer", display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                    </button>
+                  ) : <span title="Auto-managed" style={{ color:"var(--ink-4)", display:"inline-flex", justifyContent:"center" }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  </span>}
+                </div>
+              );
+            })}
+            <button onClick={function(){ setEditIndex(null); setAddIndexOpen(true); }}
+              style={{ width:"100%", padding:"12px", border:"none", borderTop:"1px solid var(--line-2)", background:"var(--panel-2)", color:"var(--ink-2)", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, fontWeight:500, display:"inline-flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add custom index
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (section === "observability") {
+      return (
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          <SettingItem
+            title="Audit trail"
+            desc="Capture every change to schema and records — who, what, when. Used by compliance reviews."
+            control={<ToggleSwitch on={audit} onToggle={setAudit} />}
+            expansion={audit && (
+              <div>
+                <div style={{ fontSize:12.5, color:"var(--ink-2)", fontWeight:500, marginBottom:8 }}>Keep audit logs for</div>
+                <div style={{ display:"flex", gap:6 }}>
+                  {[["90","90 days"],["180","6 months"],["365","1 year"],["1825","5 years"]].map(function(o){
+                    var on = auditRetentionDays === o[0];
+                    return <button key={o[0]} onClick={function(){ setAuditRetentionDays(o[0]); }} style={{ padding:"5px 11px", borderRadius:6, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "var(--panel)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:600, cursor:"pointer" }}>{o[1]}</button>;
+                  })}
+                </div>
+              </div>
+            )}
+          />
+          <SettingItem
+            title="Activity tracking"
+            desc="Surface a feed of record-level activity on the node and in dashboards."
+            control={<ToggleSwitch on={activity} onToggle={setActivity} />}
+            expansion={activity && (
+              <div>
+                <div style={{ fontSize:12.5, color:"var(--ink-2)", fontWeight:500, marginBottom:8 }}>Track</div>
+                <div style={{ display:"flex", gap:6 }}>
+                  {[["changes","Changes only"],["reads","Reads only"],["both","Both"]].map(function(o){
+                    var on = activityScope === o[0];
+                    return <button key={o[0]} onClick={function(){ setActivityScope(o[0]); }} style={{ padding:"5px 11px", borderRadius:6, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "var(--panel)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", fontSize:11.5, fontFamily:"inherit", fontWeight:500, cursor:"pointer" }}>{o[1]}</button>;
+                  })}
+                </div>
+              </div>
+            )}
+          />
+          <SettingItem
+            title="Reporting"
+            desc="Make this object queryable from the reporting layer — appears in dashboards and exports."
+            control={<ToggleSwitch on={reporting} onToggle={setReporting} />}
+          />
+        </div>
+      );
+    }
+
+    if (section === "integrations") {
+      return (
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          <SettingItem
+            title="Webhook"
+            desc="POST a JSON payload to your endpoint when records change."
+            control={<ToggleSwitch on={webhook} onToggle={setWebhook} />}
+            expansion={webhook && (
+              <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                <div>
+                  <label style={{ display:"block", fontSize:12, fontWeight:600, color:"var(--ink-2)", marginBottom:6 }}>Endpoint URL</label>
+                  <input value={webhookUrl} onChange={function(e){ setWebhookUrl(e.target.value); }} placeholder="https://api.example.com/hooks/object" style={Object.assign({}, inp, { fontFamily:"JetBrains Mono", fontSize:12 })} />
+                </div>
+                <div>
+                  <div style={{ fontSize:12, fontWeight:600, color:"var(--ink-2)", marginBottom:8 }}>Trigger on</div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    {[["create","Create"],["update","Update"],["delete","Delete"]].map(function(o){
+                      var on = webhookEvents[o[0]];
+                      return <button key={o[0]} onClick={function(){ setWebhookEvents(function(prev){ var n = Object.assign({}, prev); n[o[0]] = !n[o[0]]; return n; }); }}
+                        style={{ padding:"6px 14px", borderRadius:6, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "var(--panel)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", fontSize:12, fontFamily:"inherit", fontWeight:500, cursor:"pointer" }}>{o[1]}</button>;
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          />
+          <SettingItem
+            title="Distinct value filtering"
+            desc="Let queries return unique values for a chosen field. Useful for typeahead and faceted filters."
+            control={<ToggleSwitch on={distinctFilter} onToggle={setDistinctFilter} />}
+          />
+        </div>
+      );
+    }
+
+    if (section === "access") {
+      return (
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          <SettingItem
+            title="External access"
+            desc="Expose this object through the public REST and GraphQL APIs. Requires an API token."
+            control={<ToggleSwitch on={externalAccess} onToggle={setExternalAccess} />}
+          />
+          <SettingItem
+            title="Global access"
+            desc="Records are visible to every workspace by default. Workspace-level overrides still apply."
+            control={<ToggleSwitch on={globalAccess} onToggle={setGlobalAccess} />}
+            warn={globalAccess ? "Every workspace in the org will see records from this object. Use scoped access instead if you only need to share with a subset." : null}
+          />
+        </div>
+      );
+    }
+
+    if (section === "versioning") {
+      return (
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          <SettingItem
+            title="Object versioning"
+            desc="Store full schema and record history. Restore or compare any prior version."
+            control={<ToggleSwitch on={versioning} onToggle={setVersioning} />}
+            expansion={versioning && (
+              <div>
+                <div style={{ fontSize:12.5, color:"var(--ink-2)", fontWeight:500, marginBottom:8 }}>Keep at most</div>
+                <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                  {[["10","10"],["50","50"],["200","200"],["all","Unlimited"]].map(function(o){
+                    var on = keepVersions === o[0];
+                    return <button key={o[0]} onClick={function(){ setKeepVersions(o[0]); }} style={{ padding:"5px 11px", borderRadius:6, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "var(--panel)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11.5, fontWeight:600, cursor:"pointer" }}>{o[1]}</button>;
+                  })}
+                  <span style={{ fontSize:12, color:"var(--ink-3)", marginLeft:4 }}>versions</span>
+                </div>
+              </div>
+            )}
+          />
+          <SettingItem
+            title="Deployable versioning"
+            desc="Pin a version as 'deployed' so consumers can pull a stable copy while you iterate on the next."
+            control={<ToggleSwitch on={deployable} onToggle={setDeployable} disabled={!versioning} />}
+          />
+        </div>
+      );
+    }
+    return null;
+  }
 
   return (
-    <>
-      <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.32)", zIndex:230 }} />
-      <div style={{ position:"fixed", top:0, right:0, bottom:0, width:760, maxWidth:"94vw", background:"var(--bg-canvas)", borderLeft:"1px solid var(--line)", boxShadow:"-24px 0 60px rgba(0,0,0,0.22)", zIndex:231, display:"flex", flexDirection:"column" }}>
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.42)", zIndex:230, display:"flex", alignItems:"center", justifyContent:"center" }}
+      onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ width:"94vw", maxWidth:1120, height:"86vh", background:"var(--bg-canvas)", borderRadius:14, border:"1px solid var(--line)", boxShadow:"0 32px 80px rgba(0,0,0,0.32)", display:"flex", flexDirection:"column", overflow:"hidden" }}>
 
         {/* HEADER */}
         <div style={{ flexShrink:0, padding:"16px 22px", borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
@@ -5042,184 +5364,63 @@ function PropertiesSettingsDrawer({ node, properties, onClose }) {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             </span>
             <div>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>{node ? node.label + " · OBJECT SETTINGS" : "OBJECT SETTINGS"}</div>
-              <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", marginTop:2, lineHeight:1.1 }}>Properties settings</div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>{node ? node.label + " · SETTINGS" : "SETTINGS"}</div>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", marginTop:2, lineHeight:1.1 }}>Object settings</div>
             </div>
           </div>
-          <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ position:"relative" }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"var(--ink-3)", pointerEvents:"none" }}>
+                <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+              </svg>
+              <input value={query} onChange={function(e){ setQuery(e.target.value); }} placeholder="Search settings" style={{ width:240, padding:"8px 12px 8px 30px", border:"1px solid var(--line)", borderRadius:7, fontSize:12.5, color:"var(--ink)", background:"var(--panel)", outline:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+            </div>
+            <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+          </div>
         </div>
 
         {/* BODY */}
-        <div style={{ flex:1, overflowY:"auto", padding:"22px 24px", display:"flex", flexDirection:"column", gap:30 }}>
-
-          {/* DATA MANAGEMENT */}
-          <SettingSection title="Data Management" hint="Configure how object data is stored, accessed, and retained.">
-            <div style={card}>
-              <SettingRow
-                label="Object Data Storage"
-                hint="Where records for this object live at rest."
-                control={
-                  <select value={storage} onChange={function(e){ setStorage(e.target.value); }} style={Object.assign({}, inp, { width:240 })}>
-                    <option value="json">JSON Store</option>
-                    <option value="columnar">Columnar (Parquet) Store</option>
-                    <option value="timeseries">Time-series Store</option>
-                    <option value="object">Object (Blob) Store</option>
-                  </select>
-                }
-              />
-              <SettingRow
-                last
-                label="Retention Period"
-                hint="How long records are kept before being archived. Leave blank for indefinite."
-                control={
-                  <div style={{ display:"flex", gap:6 }}>
-                    <input value={retention} onChange={function(e){ setRetention(e.target.value); }} placeholder="Enter duration" style={Object.assign({}, inp, { width:130, fontFamily:"JetBrains Mono" })} />
-                    <select value={retentionUnit} onChange={function(e){ setRetentionUnit(e.target.value); }} style={Object.assign({}, inp, { width:130 })}>
-                      <option value="minutes">Minutes</option>
-                      <option value="hours">Hours</option>
-                      <option value="days">Days</option>
-                      <option value="months">Months</option>
-                      <option value="years">Years</option>
-                      <option value="never">Never expire</option>
-                    </select>
+        <div style={{ flex:1, display:"grid", gridTemplateColumns:"232px minmax(0, 1fr)", minHeight:0 }}>
+          {/* LEFT RAIL */}
+          <div style={{ background:"var(--panel-2)", borderRight:"1px solid var(--line)", padding:"16px 12px", overflowY:"auto", display:"flex", flexDirection:"column", gap:2 }}>
+            {SECTIONS.map(function(s){
+              var on = section === s.id;
+              var dim = matchingSections && matchingSections.indexOf(s.id) < 0;
+              var count = sectionCounts[s.id];
+              return (
+                <button key={s.id} onClick={function(){ setSection(s.id); }}
+                  style={{ display:"flex", alignItems:"center", gap:11, padding:"10px 12px", borderRadius:8, border: on ? "1px solid var(--line)" : "1px solid transparent", background: on ? "var(--panel)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", opacity: dim ? 0.4 : 1, transition:"opacity 120ms" }}>
+                  <span style={{ width:26, height:26, borderRadius:6, background: on ? "var(--ink)" : "var(--chip)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{s.icon}</span>
+                  <div style={{ minWidth:0, flex:1 }}>
+                    <div style={{ fontSize:13, color:"var(--ink)", fontWeight: on ? 600 : 500, lineHeight:1.2 }}>{s.title}</div>
+                    <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-3)", marginTop:2, lineHeight:1.35, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.desc}</div>
                   </div>
-                }
-              />
-            </div>
-          </SettingSection>
+                  {count > 0 && (
+                    <span style={{ flexShrink:0, fontFamily:"JetBrains Mono", fontSize:10, fontWeight:700, color: on ? "var(--ink-2)" : "var(--ink-3)", background: on ? "var(--chip)" : "transparent", padding:"2px 6px", borderRadius:4 }}>{count}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
 
-          {/* OBJECT INDICES */}
-          <SettingSection
-            title="Object Indices"
-            hint="Configure object indices to optimise query and data retrieval performance."
-            action={
-              <button onClick={function(){ setEditIndex(null); setAddIndexOpen(true); }} style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"7px 13px", border:"1px solid var(--purple)", borderRadius:7, background:"var(--panel)", color:"var(--purple)", cursor:"pointer", fontSize:12.5, fontFamily:"inherit", fontWeight:600 }}>
-                <span style={{ fontSize:13, lineHeight:1 }}>+</span> Add Index
-              </button>
-            }
-          >
-            <div style={card}>
-              {/* Info banner */}
-              <div style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"12px 16px", background:"var(--purple-fill)", borderBottom:"1px solid var(--line-2)" }}>
-                <span style={{ width:22, height:22, borderRadius:5, background:"var(--purple)", color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="17" r="0.8" fill="currentColor" stroke="none"/></svg>
-                </span>
-                <div style={{ fontSize:12, color:"var(--ink-2)", lineHeight:1.55 }}>
-                  Fields marked as Primary Key or Unique are indexed automatically for optimal performance. Add custom indices below to further optimise complex queries.
+          {/* CONTENT */}
+          <div style={{ padding:"22px 28px", overflowY:"auto" }}>
+            {(function(){
+              var s = SECTIONS.find(function(x){ return x.id === section; });
+              return (
+                <div style={{ marginBottom:18 }}>
+                  <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1 }}>{s.title}</div>
+                  <div style={{ fontSize:13, color:"var(--ink-3)", marginTop:6, lineHeight:1.55, maxWidth:620 }}>{s.desc}.</div>
                 </div>
-              </div>
-
-              {/* Automatic Indices section */}
-              <div style={{ borderBottom:"1px solid var(--line-2)" }}>
-                <button onClick={function(){ setAutoOpen(function(v){ return !v; }); }}
-                  style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit" }}>
-                  <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>Automatic Indices <span style={{ color:"var(--ink-3)", fontWeight:500, marginLeft:4 }}>{autoIndices.length}</span></span>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: autoOpen ? "rotate(180deg)" : "rotate(0deg)", transition:"transform 140ms ease", color:"var(--ink-3)" }}><polyline points="6 9 12 15 18 9"/></svg>
-                </button>
-                {autoOpen && (
-                  <div style={{ padding:"0 16px 14px" }}>
-                    <div style={{ border:"1px solid var(--line-2)", borderRadius:8, overflow:"hidden" }}>
-                      <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 1.6fr", gap:0, background:"var(--panel-2)", padding:"9px 13px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.55px", color:"var(--ink-3)", textTransform:"uppercase", borderBottom:"1px solid var(--line-2)" }}>
-                        <div>Index Name</div><div>Key Type</div><div>Fields</div>
-                      </div>
-                      {autoIndices.map(function(ix, i){
-                        var color = ix.kind === "Primary" ? "var(--green)" : "var(--blue)";
-                        var bg = ix.kind === "Primary" ? "var(--green-fill)" : "var(--blue-fill)";
-                        return (
-                          <div key={i} style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 1.6fr", gap:0, padding:"10px 13px", alignItems:"center", borderBottom: i < autoIndices.length - 1 ? "1px solid var(--line-2)" : "none" }}>
-                            <span style={{ fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink)" }}>{ix.name}</span>
-                            <span><span style={{ display:"inline-block", padding:"3px 9px", borderRadius:5, fontSize:11, fontWeight:600, background:bg, color:color }}>{ix.kind}</span></span>
-                            <span style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                              {ix.fields.map(function(f){
-                                return <span key={f} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"2px 7px", borderRadius:4, background:"var(--chip)", border:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>
-                                  <span style={{ width:14, height:14, borderRadius:3, background:"var(--ink-2)", color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:7.5, fontWeight:700 }}>A</span>{f}
-                                </span>;
-                              })}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Custom Indices section */}
-              <div>
-                <button onClick={function(){ setCustomOpen(function(v){ return !v; }); }}
-                  style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", border:"none", background:"transparent", cursor:"pointer", fontFamily:"inherit" }}>
-                  <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>Custom Indices <span style={{ color:"var(--ink-3)", fontWeight:500, marginLeft:4 }}>{customIndices.length}</span></span>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: customOpen ? "rotate(180deg)" : "rotate(0deg)", transition:"transform 140ms ease", color:"var(--ink-3)" }}><polyline points="6 9 12 15 18 9"/></svg>
-                </button>
-                {customOpen && (
-                  <div style={{ padding:"0 16px 14px" }}>
-                    {customIndices.length > 0 && (
-                      <div style={{ border:"1px solid var(--line-2)", borderRadius:8, overflow:"hidden", marginBottom:10 }}>
-                        <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 1.6fr 30px", gap:0, background:"var(--panel-2)", padding:"9px 13px", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.55px", color:"var(--ink-3)", textTransform:"uppercase", borderBottom:"1px solid var(--line-2)" }}>
-                          <div>Index Name</div><div>Fields</div><div>Order</div><div/>
-                        </div>
-                        {customIndices.map(function(ix, i){
-                          return (
-                            <div key={i} style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 1.6fr 30px", gap:0, padding:"10px 13px", alignItems:"center", borderBottom: i < customIndices.length - 1 ? "1px solid var(--line-2)" : "none", cursor:"pointer" }}
-                              onClick={function(){ setEditIndex({ idx:i, name:ix.name, fields:ix.fields }); setAddIndexOpen(true); }}>
-                              <span style={{ fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink)" }}>{ix.name}</span>
-                              <span style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                                {ix.fields.map(function(f, j){
-                                  return <span key={j} style={{ padding:"2px 6px", borderRadius:4, background:"var(--chip)", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-2)" }}>{f.field}</span>;
-                                })}
-                              </span>
-                              <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>{ix.fields.map(function(f){ return f.dir.toUpperCase(); }).join(", ")}</span>
-                              <button onClick={function(e){ e.stopPropagation(); setCustomIndices(function(arr){ return arr.filter(function(_, idx){ return idx !== i; }); }); }} style={{ width:26, height:26, padding:0, border:"none", background:"transparent", color:"var(--ink-3)", cursor:"pointer", display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                    <button onClick={function(){ setEditIndex(null); setAddIndexOpen(true); }}
-                      style={{ width:"100%", padding:"14px 13px", border:"1.5px dashed var(--line)", borderRadius:8, background:"transparent", color:"var(--ink-2)", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:500, display:"inline-flex", alignItems:"center", justifyContent:"center", gap:7 }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                      Add Custom Index
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </SettingSection>
-
-          {/* MONITORING & LOGGING */}
-          <SettingSection title="Monitoring & Logging" hint="Control how system events, user actions, and changes to this object are tracked and recorded.">
-            <div style={card}>
-              <SettingRow label="Enable Audit Trail"           hint="If enabled, audit logs will capture activity for this object."        control={<ToggleSwitch on={audit}          onToggle={setAudit} />} />
-              <SettingRow label="Enable Activity Tracking"     hint="Captures user-level activity on each record."                          control={<ToggleSwitch on={activity}       onToggle={setActivity} />} />
-              <SettingRow label="Enable Reporting"             hint="Reporting functionality will be enabled for this object."              control={<ToggleSwitch on={reporting}      onToggle={setReporting} />} />
-              <SettingRow label="Enable Webhook"               hint="A webhook event is triggered on any change in object records."         control={<ToggleSwitch on={webhook}        onToggle={setWebhook} />} />
-              <SettingRow last label="Enable Distinct Value Filtering" hint="Filters results to return unique values for a selected field." control={<ToggleSwitch on={distinctFilter} onToggle={setDistinctFilter} />} />
-            </div>
-          </SettingSection>
-
-          {/* ACCESS CONTROL */}
-          <SettingSection title="Access Control" hint="Control how users and workspaces can access this object.">
-            <div style={card}>
-              <SettingRow label="Enable External Access" hint="Allow using this object in public interfaces."                 control={<ToggleSwitch on={externalAccess} onToggle={setExternalAccess} />} />
-              <SettingRow last label="Enable Global Access" hint="Allow default sharing of records across all workspaces and users." control={<ToggleSwitch on={globalAccess}   onToggle={setGlobalAccess} />} />
-            </div>
-          </SettingSection>
-
-          {/* OBJECT VERSIONING */}
-          <SettingSection title="Object Versioning" hint="Control how versions of this object are created and managed.">
-            <div style={card}>
-              <SettingRow label="Enable Object Versioning"     hint="Store version history, enabling tracking of changes over time."         control={<ToggleSwitch on={versioning} onToggle={setVersioning} />} />
-              <SettingRow last label="Enable Deployable Versioning" hint="Support deployment tracking and related data storage."             control={<ToggleSwitch on={deployable} onToggle={setDeployable} disabled={!versioning} />} />
-            </div>
-          </SettingSection>
-
+              );
+            })()}
+            {renderSection()}
+          </div>
         </div>
 
         {/* FOOTER */}
         <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
-          <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>Changes apply to this object only</div>
+          <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{node ? node.label : "Object"} · these settings apply only to this object</div>
           <div style={{ display:"flex", gap:8 }}>
             <button onClick={onClose} style={{ padding:"8px 18px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel)", color:"var(--ink)", cursor:"pointer", fontSize:13, fontFamily:"inherit", fontWeight:500 }}>Cancel</button>
             <button onClick={onClose} style={{ padding:"8px 20px", border:"none", borderRadius:8, background:"var(--ink)", color:"var(--bg-canvas)", cursor:"pointer", fontSize:13, fontFamily:"inherit", fontWeight:600 }}>Save changes</button>
@@ -5235,7 +5436,7 @@ function PropertiesSettingsDrawer({ node, properties, onClose }) {
           onCancel={function(){ setAddIndexOpen(false); setEditIndex(null); }}
           onSave={function(spec){
             setCustomIndices(function(arr){
-              if (editIndex && typeof editIndex.idx === "number") {
+              if (editIndex && typeof editIndex.idx === "number" && editIndex.idx >= 0) {
                 return arr.map(function(ix, i){ return i === editIndex.idx ? spec : ix; });
               }
               return arr.concat([spec]);
@@ -5245,7 +5446,7 @@ function PropertiesSettingsDrawer({ node, properties, onClose }) {
           }}
         />
       )}
-    </>
+    </div>
   );
 }
 
@@ -5574,7 +5775,7 @@ function PropertiesPane({ node, properties }) {
         : (propFlowOpen && AddPropertyFlow && <AddPropertyFlow node={node} mode={propFlowMode || "manual"} initialProperty={propEditRow} onClose={() => { setPropFlowOpen(false); setPropFlowMode(null); setPropEditRow(null); }} />)
       }
 
-      {settingsOpen && <PropertiesSettingsDrawer node={node} properties={properties} onClose={function(){ setSettingsOpen(false); }} />}
+      {settingsOpen && <PropertiesSettingsModal node={node} properties={properties} onClose={function(){ setSettingsOpen(false); }} />}
 
       {/* Property detail drawer — full creation context surfaced in one pane */}
       {drawerProp && (function(){
