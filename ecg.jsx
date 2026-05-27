@@ -890,7 +890,7 @@ function Inspector({ node, onClose, onOpenDetail, edges: liveEdges, nodes: liveN
       )}
 
       <div className="ih-stats">
-        <div><div className="ih-stat-label">Instances</div><div className="ih-stat-v">{node.instances}</div></div>
+        <div><div className="ih-stat-label">Records</div><div className="ih-stat-v">{node.instances}</div></div>
         <div><div className="ih-stat-label">Properties</div><div className="ih-stat-v">{properties.length}</div></div>
         <div><div className="ih-stat-label">Edge types</div><div className="ih-stat-v">{outgoing.length}</div></div>
       </div>
@@ -1709,15 +1709,6 @@ function Legend({ filter, setFilter }) {
         <svg width="14" height="14" viewBox="-12 -12 24 24"><rect x="-8" y="-8" width="16" height="16" rx="1.5" fill="var(--green-fill)" stroke="var(--green)" strokeWidth="1.4" /></svg>
         Sources
       </button>
-      <div className="legend-sep" />
-      <div className="legend-kind">
-        <span className="legend-line legend-line-direct" />
-        Edge
-      </div>
-      <div className="legend-kind">
-        <span className="legend-line legend-line-inferred" />
-        Inferred
-      </div>
     </div>
   );
 }
@@ -2984,7 +2975,7 @@ function NodeDetailView({ nodeId, onBack, onCanvas, nodes: liveNodes, edges: liv
 
         <div className="detail-kpis">
           <div className="kpi">
-            <div className="kpi-lbl">Instances</div>
+            <div className="kpi-lbl">Records</div>
             <div className="kpi-v">{node.instancesN ? node.instancesN.toLocaleString() : "—"}</div>
           </div>
           <div className="kpi">
