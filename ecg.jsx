@@ -1685,18 +1685,19 @@ function Minimap({ nodes, viewport, size }) {
           const c = colorForNode(n);
           return <circle key={n.id} cx={mapX(n.x)} cy={mapY(n.y)} r="2" fill={c.stroke} />;
         })}
-        {/* Soft viewport indicator — purple-tinted fill with a thin
-            purple stroke. Reads as "selection" rather than a heavy
-            black outline that fights the rest of the minimap. */}
+        {/* Soft viewport indicator — a low-opacity ink tint that picks
+            up the warm-brown ink colour used across the rest of the app
+            instead of introducing a new accent. Same selection semantic,
+            much lower visual weight than the original solid black outline. */}
         <rect
           x={Math.max(0, mapX(vx0))}
           y={Math.max(0, mapY(vy0))}
           width={Math.min(W, vw * s)}
           height={Math.min(H, vh * s)}
-          fill="var(--purple)"
-          fillOpacity="0.08"
-          stroke="var(--purple)"
-          strokeOpacity="0.55"
+          fill="var(--ink)"
+          fillOpacity="0.05"
+          stroke="var(--ink)"
+          strokeOpacity="0.4"
           strokeWidth="1"
         />
       </svg>
