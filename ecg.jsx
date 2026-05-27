@@ -1787,7 +1787,13 @@ function generateProps(node) {
       row.children = [
         { name: "system", type: "enum",   required: false, indexed: false, pii: false, fill: 96, conf: 99, source: "primary" },
         { name: "ref_id", type: "string", required: false, indexed: true,  pii: false, fill: 94, conf: 99, source: "primary" },
-        { name: "url",    type: "string", required: false, indexed: false, pii: false, fill: 62, conf: 92, source: "primary" },
+        { name: "url",    type: "struct", required: false, indexed: false, pii: false, fill: 62, conf: 92, source: "primary",
+          children: [
+            { name: "host",   type: "string", required: false, indexed: false, pii: false, fill: 62, conf: 92, source: "primary" },
+            { name: "path",   type: "string", required: false, indexed: false, pii: false, fill: 60, conf: 91, source: "primary" },
+            { name: "scheme", type: "enum",   required: false, indexed: false, pii: false, fill: 62, conf: 99, source: "primary" },
+          ]
+        },
       ];
     }
     out.push(row);
@@ -4568,7 +4574,7 @@ function PropertiesPane({ node, properties }) {
           {/* Columns: Name | Key | Type | Fill | Conformance | Flags | chevron.
               All headers are left-aligned (including the numeric Fill / Conformance),
               so the column label sits flush with where the data starts reading. */}
-          <div className="props-head" style={{ gridTemplateColumns:"1.5fr 1.2fr 1fr 150px 170px 130px 32px" }}>
+          <div className="props-head" style={{ gridTemplateColumns:"2fr 1.6fr 1fr 150px 170px 96px 32px" }}>
             <button className="props-th" onClick={() => onSort("name")}>Name{sortIcon("name")}</button>
             <button className="props-th" onClick={() => onSort("name")}>Key{sortIcon("name")}</button>
             <button className="props-th" onClick={() => onSort("type")}>Type{sortIcon("type")}</button>
@@ -4579,9 +4585,11 @@ function PropertiesPane({ node, properties }) {
           </div>
 
           {(function renderRows(){
-            // Recursive renderer so nested struct properties expand inline. The
-            // disclosure slot is always reserved at the start of the name cell so
-            // rows align identically whether or not they have children.
+            // Recursive renderer for nested struct properties. Children of a
+            // parent are wrapped in a relative container so their connecting
+            // rail can run continuously — no breaks across row borders. The
+            // pattern recurses, so a third level of nesting just gets its own
+            // rail at a deeper indent.
             var TYPE_GLYPH = { uuid:{ g:"ID", c:"var(--purple)" }, string:{ g:"T",  c:"var(--blue)"   }, "string[]":{ g:"[T]", c:"var(--blue)" }, decimal:{ g:"#",  c:"var(--gold)"   }, float:{ g:".5", c:"var(--gold)"   }, bool:{ g:"01", c:"var(--coral)"  }, timestamp:{ g:"TS", c:"var(--green)" }, date:{ g:"DT", c:"var(--green)" }, datetime:{ g:"DT", c:"var(--green)" }, enum:{ g:"E",  c:"var(--purple)" }, struct:{ g:"{}", c:"var(--ink-3)" }, int:{ g:"#", c:"var(--gold)" } };
             var REQ_ICON = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="13"/><circle cx="12" cy="18" r="0.8" fill="currentColor" stroke="none"/></svg>;
             var IDX_ICON = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="13 2 4 14 12 14 11 22 20 10 12 10 13 2"/></svg>;
@@ -4600,12 +4608,9 @@ function PropertiesPane({ node, properties }) {
               var fillC = metricColor(p.fill);
               var confC = metricColor(p.conf);
               var displayName = p.name.replace(/_/g, " ").replace(/\b\w/g, function(m){ return m.toUpperCase(); }).replace(/\bId\b/g, "ID").replace(/\bUrl\b/g, "URL");
-              // Disclosure slot: rotating chevron when has children, otherwise a
-              // tiny dim dot. Same width either way so names line up.
-              var isChild = depth > 0;
-              // Parents get a real chevron button. Children skip the
-              // disclosure entirely — the group rail + indent already say
-              // "I belong to the row above" without an extra dot of noise.
+              // Disclosure: same 18px slot at every depth so the column lines
+              // up vertically even across levels. Empty placeholder when the
+              // row has no children.
               var disclosure = hasChildren ? (
                 <button
                   onClick={function(e){
@@ -4625,22 +4630,19 @@ function PropertiesPane({ node, properties }) {
                     <polyline points="9 6 15 12 9 18"/>
                   </svg>
                 </button>
-              ) : !isChild ? (
+              ) : (
                 <span style={{ width:18, height:18, display:"inline-flex", flexShrink:0 }} />
-              ) : null;
-              // Child rows: indent + a continuous 1px vertical rail running
-              // edge-to-edge of the row at the parent's chevron x-position.
-              // The rail visually threads all siblings back to the parent.
-              var railLeft = 18 + 9; // name-cell padding ~ matches parent chevron centre
+              );
+              // 22px indent per nesting level. Padding moves the chevron
+              // inboard so deeper rows visually sit under their parent.
+              var INDENT = 22;
+              var namePadLeft = depth > 0 ? (18 + depth * INDENT) : undefined;
               return (
-                <div key={keyId} className="props-row" style={{ gridTemplateColumns:"1.5fr 1.2fr 1fr 150px 170px 130px 32px", background: isChild ? "rgba(0,0,0,0.018)" : undefined, position:"relative" }}
+                <div key={keyId} className="props-row" style={{ gridTemplateColumns:"2fr 1.6fr 1fr 150px 170px 96px 32px", position:"relative" }}
                   onClick={function(){ setPropEditRow(p); setPropFlowMode("manual"); setPropFlowOpen(true); }}>
-                  {isChild && (
-                    <span aria-hidden="true" style={{ position:"absolute", left: railLeft, top:0, bottom:0, width:1, background:"var(--line)", pointerEvents:"none" }} />
-                  )}
-                  <div className="props-cell props-name-cell" style={{ paddingLeft: isChild ? (railLeft + 22) : undefined }}>
+                  <div className="props-cell props-name-cell" style={{ paddingLeft: namePadLeft }}>
                     {disclosure}
-                    <span style={{ fontSize:13, color: isChild ? "var(--ink-2)" : "var(--ink)", fontWeight: isChild ? 400 : 500 }}>{displayName}</span>
+                    <span style={{ fontSize:13, color:"var(--ink)", fontWeight:500 }}>{displayName}</span>
                     {p.pk && <span className="snap-tag snap-pk">PK</span>}
                     {p.computed && <span title="Computed" style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"2px 5px 2px 4px", borderRadius:4, background:"var(--gold-fill)", color:"var(--gold)", fontFamily:"JetBrains Mono", fontSize:9, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>
                       <span style={{ fontStyle:"italic" }}>fx</span><span>COMPUTED</span>
@@ -4648,7 +4650,7 @@ function PropertiesPane({ node, properties }) {
                     {hasChildren && <span title={p.children.length + " nested fields"} style={{ display:"inline-flex", alignItems:"center", padding:"1px 6px", borderRadius:4, background:"var(--chip)", color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:600, flexShrink:0 }}>{p.children.length}</span>}
                   </div>
                   <div className="props-cell">
-                    <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-2)", background:"var(--chip)", padding:"2px 7px", borderRadius:4 }}>{isChild ? parentKey.split(".").pop() + "." + p.name : p.name}</code>
+                    <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-2)", background:"var(--chip)", padding:"2px 7px", borderRadius:4 }}>{keyId}</code>
                   </div>
                   <div className="props-cell prop-type">
                     <span style={{ display:"inline-flex", alignItems:"center", gap:7 }}>
@@ -4679,14 +4681,30 @@ function PropertiesPane({ node, properties }) {
                 </div>
               );
             }
-            var out = [];
-            filtered.forEach(function(p){
-              out.push(renderRow(p, 0, ""));
-              if (p.children && p.children.length && expandedNested[p.name]) {
-                p.children.forEach(function(c){ out.push(renderRow(c, 1, p.name)); });
-              }
-            });
-            return out;
+            // Each open parent wraps its children in a position:relative
+            // group container so a single 1px rail can span the full height
+            // of its descendants — no gaps across row borders. Nested groups
+            // stack their rails at deeper x's, so a grandchild row visually
+            // sits under TWO rails (one per ancestor group). The pattern
+            // scales to arbitrary depth.
+            var INDENT = 22;
+            function railXFor(d) { return 18 + (d - 1) * INDENT + 9; }
+            function renderNode(p, depth, parentKey) {
+              var keyId = (parentKey ? parentKey + "." : "") + p.name;
+              var hasChildren = !!(p.children && p.children.length);
+              var isOpen = !!expandedNested[keyId];
+              if (!hasChildren || !isOpen) return renderRow(p, depth, parentKey);
+              return (
+                <React.Fragment key={keyId}>
+                  {renderRow(p, depth, parentKey)}
+                  <div style={{ position:"relative" }}>
+                    <span aria-hidden="true" style={{ position:"absolute", left: railXFor(depth + 1), top:0, bottom:0, width:1, background:"var(--line)", pointerEvents:"none" }} />
+                    {p.children.map(function(c){ return renderNode(c, depth + 1, keyId); })}
+                  </div>
+                </React.Fragment>
+              );
+            }
+            return filtered.map(function(p){ return renderNode(p, 0, ""); });
           })()}
         </div>
 
