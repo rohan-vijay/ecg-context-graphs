@@ -1652,7 +1652,10 @@ function Minimap({ nodes, viewport, size }) {
   const minY = Math.min(...ys) - 60, maxY = Math.max(...ys) + 60;
   // Height matched to the zoom column (4 × 34px buttons + borders = 138px outer;
   // 6px padding above and below leaves 124px for the svg).
-  const W = 152, H = 124;
+  // Sized so the total minimap height (border + padding + svg + padding +
+  // border = 1+6+H+6+1) matches the zoom-control column on the right,
+  // which stacks 3 × 34px buttons + 1 × ~21px value chip + 2 × 1px border.
+  const W = 152, H = 111;
   const sx = W / (maxX - minX);
   const sy = H / (maxY - minY);
   const s = Math.min(sx, sy);
