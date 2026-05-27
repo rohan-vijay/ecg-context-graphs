@@ -4618,10 +4618,9 @@ function parseSnippetFields(body, lang) {
   return { fields:[], error:null };
 }
 
-// Commented JSON template shown when starting from scratch. Documents every
-// configurable attribute so the snippet flow can express anything the manual
-// flow does. Strips its own comments through stripJsonComments before parsing.
-var SCRATCH_JSON_TEMPLATE = '// Define one or more properties for this node. Each item is a complete\n// property — equivalent to one row of the manual flow. Defaults are shown\n// in [brackets]; delete any line you don\'t need.\n\n[\n  {\n    "name": "customer_email",          // [required] snake_case identifier\n    "type": "string",                  // [required] string | int | decimal | bool | date | timestamp | uuid | enum | struct | string[]\n    "description": "Primary email used for transactional messages.",\n    "required": true,                  // [false] must be present on every record\n    "indexed":  true,                  // [false] add an index for fast lookups\n    "unique":   false,                 // [false] enforce uniqueness across records\n    "pii":      true,                  // [false] flag as personal information\n    "pk":       false,                 // [false] mark as the primary key\n    "default":  null,                  // [null]  default value when absent\n    "format":   "email",               // [null]  hint for validation: email | url | phone | uuid | …\n    "example":  "lia.bryan@northwind.com"\n  }\n  // ↑ duplicate this block to declare more properties\n]';
+// JSON template shown when starting from scratch. Kept short on purpose:
+// just the common fields, with optional ones listed in a one-line comment.
+var SCRATCH_JSON_TEMPLATE = '// One object per property. Optional fields: unique, pk, default, format, example.\n\n[\n  {\n    "name": "customer_email",\n    "type": "string",\n    "description": "Primary email used for transactional messages.",\n    "required": true,\n    "indexed": true,\n    "pii": true\n  }\n]';
 var SCRATCH_XML_TEMPLATE  = "<root>\n  \n</root>";
 var SCRATCH_XSD_TEMPLATE  = '<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">\n  \n</xs:schema>';
 
@@ -5017,37 +5016,52 @@ function AddCustomIndexDialog({ node, fieldOptions, onCancel, onSave, initial })
           <button onClick={onCancel} style={{ width:28, height:28, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:13, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
         </div>
 
-        <div style={{ padding:"18px 22px", display:"flex", flexDirection:"column", gap:18 }}>
+        <div style={{ padding:"20px 22px 18px", display:"flex", flexDirection:"column", gap:18 }}>
           <div>
-            <label style={{ display:"block", fontSize:12.5, fontWeight:600, color:"var(--ink)", marginBottom:6 }}>Index Name<span style={{ color:"var(--coral)" }}>*</span></label>
-            <input value={name} onChange={function(e){ setName(e.target.value); }} style={{ width:"100%", boxSizing:"border-box", padding:"9px 12px", border:"1.5px solid var(--purple)", borderRadius:8, fontFamily:"JetBrains Mono", fontSize:13, color:"var(--ink)", background:"var(--panel)", outline:"none" }} />
+            <label style={{ display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, color:"var(--ink-3)", letterSpacing:"0.5px", textTransform:"uppercase", marginBottom:7 }}>Index Name <span style={{ color:"var(--coral)" }}>*</span></label>
+            <input value={name} onChange={function(e){ setName(e.target.value); }}
+              style={{ width:"100%", boxSizing:"border-box", padding:"10px 13px", border:"1px solid var(--line)", borderRadius:8, fontFamily:"JetBrains Mono", fontSize:13, color:"var(--ink)", background:"var(--panel)", outline:"none", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}
+              onFocus={function(e){ e.currentTarget.style.borderColor = "var(--ink)"; }}
+              onBlur={function(e){ e.currentTarget.style.borderColor = "var(--line)"; }} />
           </div>
           <div>
-            <label style={{ display:"block", fontSize:12.5, fontWeight:600, color:"var(--ink)", marginBottom:8 }}>Select Fields<span style={{ color:"var(--coral)" }}>*</span></label>
-            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+              <label style={{ display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, color:"var(--ink-3)", letterSpacing:"0.5px", textTransform:"uppercase" }}>Fields <span style={{ color:"var(--coral)" }}>*</span></label>
+              <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)" }}>{fields.filter(function(f){ return f.field; }).length} of {fields.length} set</span>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
               {fields.map(function(f, i){
                 return (
-                  <div key={i} style={{ display:"grid", gridTemplateColumns:"16px 1fr 130px 30px", gap:8, alignItems:"center" }}>
+                  <div key={i} style={{ display:"grid", gridTemplateColumns:"18px 1fr 150px 30px", gap:8, alignItems:"center" }}>
                     <span aria-hidden="true" title="Drag to reorder" style={{ color:"var(--ink-4)", cursor:"grab", display:"inline-flex", justifyContent:"center" }}>
                       <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="3" r="1"/><circle cx="8" cy="3" r="1"/><circle cx="2" cy="7" r="1"/><circle cx="8" cy="7" r="1"/><circle cx="2" cy="11" r="1"/><circle cx="8" cy="11" r="1"/></svg>
                     </span>
-                    <select value={f.field} onChange={function(e){ update(i, "field", e.target.value); }} style={{ padding:"8px 10px", border:"1px solid var(--line)", borderRadius:7, fontSize:13, color:"var(--ink)", background:"var(--panel)", outline:"none", fontFamily:"inherit" }}>
-                      <option value="">Select Field</option>
-                      {fieldOptions.map(function(opt){ return <option key={opt} value={opt}>{opt}</option>; })}
-                    </select>
-                    <select value={f.dir} onChange={function(e){ update(i, "dir", e.target.value); }} style={{ padding:"8px 10px", border:"1px solid var(--line)", borderRadius:7, fontSize:13, color:"var(--ink)", background:"var(--panel)", outline:"none", fontFamily:"inherit" }}>
-                      <option value="asc">Ascending</option>
-                      <option value="desc">Descending</option>
-                    </select>
-                    <button onClick={function(){ remove(i); }} disabled={fields.length === 1} style={{ width:30, height:30, padding:0, border:"none", background:"transparent", color:"var(--ink-3)", cursor: fields.length === 1 ? "not-allowed" : "pointer", opacity: fields.length === 1 ? 0.3 : 0.8, display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
+                    <RichSelect
+                      value={f.field}
+                      onChange={function(v){ update(i, "field", v); }}
+                      options={[{ value:"", label:"Select field" }].concat(fieldOptions.map(function(o){ return { value:o, label:o }; }))}
+                      placeholder="Select field"
+                      mono
+                    />
+                    <RichSelect
+                      value={f.dir}
+                      onChange={function(v){ update(i, "dir", v); }}
+                      options={[{ value:"asc", label:"Ascending" }, { value:"desc", label:"Descending" }]}
+                      placeholder="Order"
+                    />
+                    <button onClick={function(){ remove(i); }} disabled={fields.length === 1}
+                      style={{ width:30, height:30, padding:0, border:"1px solid transparent", borderRadius:6, background:"transparent", color:"var(--ink-3)", cursor: fields.length === 1 ? "not-allowed" : "pointer", opacity: fields.length === 1 ? 0.3 : 0.8, display:"inline-flex", alignItems:"center", justifyContent:"center", transition:"background 100ms" }}
+                      onMouseEnter={function(e){ if (fields.length > 1) { e.currentTarget.style.background = "var(--chip)"; e.currentTarget.style.color = "var(--coral)"; } }}
+                      onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--ink-3)"; }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
                     </button>
                   </div>
                 );
               })}
             </div>
-            <button onClick={add} style={{ marginTop:10, display:"inline-flex", alignItems:"center", gap:6, padding:"7px 12px", border:"1px solid var(--line)", borderRadius:7, background:"var(--panel)", color:"var(--ink)", cursor:"pointer", fontSize:12.5, fontFamily:"inherit", fontWeight:500 }}>
-              <span style={{ fontSize:14, lineHeight:1, color:"var(--ink-2)" }}>+</span> Add Field
+            <button onClick={add} style={{ marginTop:10, display:"inline-flex", alignItems:"center", gap:6, padding:"7px 12px", border:"1px dashed var(--line)", borderRadius:7, background:"transparent", color:"var(--ink-2)", cursor:"pointer", fontSize:12, fontFamily:"inherit", fontWeight:500 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add field
             </button>
           </div>
         </div>
@@ -5070,9 +5084,11 @@ function AddCustomIndexDialog({ node, fieldOptions, onCancel, onSave, initial })
 // section is shaped around its actual use-case instead of stacking toggle
 // rows together.
 function PropertiesSettingsModal({ node, properties, onClose }) {
-  // STORAGE / LIFECYCLE
-  var [storage, setStorage]       = useState("json");
+  // STORAGE / LIFECYCLE — storage backend is fixed at object-creation time
+  // (changing engines on a live table is destructive), so it's view-only.
+  var storage = "json";
   var [retention, setRetention]   = useState("90d");
+  var [customRetention, setCustomRetention] = useState({ amount:"180", unit:"days" });
 
   // PERFORMANCE / INDICES — auto indices derive live from PK/UNQ fields,
   // custom indices live in local state and merge into one display table.
@@ -5085,11 +5101,9 @@ function PropertiesSettingsModal({ node, properties, onClose }) {
   var [editIndex, setEditIndex]         = useState(null);
 
   // OBSERVABILITY
-  var [audit, setAudit]                 = useState(false);
-  var [auditRetentionDays, setAuditRetentionDays] = useState("365");
-  var [activity, setActivity]           = useState(true);
-  var [activityScope, setActivityScope] = useState("changes");
-  var [reporting, setReporting]         = useState(false);
+  var [audit, setAudit]         = useState(false);
+  var [activity, setActivity]   = useState(true);
+  var [reporting, setReporting] = useState(false);
 
   // INTEGRATIONS & QUERY
   var [webhook, setWebhook]             = useState(false);
@@ -5102,9 +5116,8 @@ function PropertiesSettingsModal({ node, properties, onClose }) {
   var [globalAccess, setGlobalAccess]     = useState(false);
 
   // VERSIONING
-  var [versioning, setVersioning]       = useState(true);
-  var [keepVersions, setKeepVersions]   = useState("50");
-  var [deployable, setDeployable]       = useState(false);
+  var [versioning, setVersioning] = useState(true);
+  var [deployable, setDeployable] = useState(false);
 
   // Section nav + search
   var [section, setSection] = useState("storage");
@@ -5113,7 +5126,7 @@ function PropertiesSettingsModal({ node, properties, onClose }) {
   var fieldOptions = (properties || []).map(function(p){ return p.name; });
 
   var sectionCounts = {
-    storage:       (retention !== "indefinite" ? 1 : 0) + (storage !== "json" ? 1 : 0),
+    storage:       (retention !== "indefinite" ? 1 : 0),
     performance:   customIndices.length,
     observability: (audit ? 1 : 0) + (activity ? 1 : 0) + (reporting ? 1 : 0),
     integrations:  (webhook ? 1 : 0) + (distinctFilter ? 1 : 0),
@@ -5176,7 +5189,8 @@ function PropertiesSettingsModal({ node, properties, onClose }) {
     { v:"30d",  l:"30 days"  },
     { v:"90d",  l:"90 days"  },
     { v:"365d", l:"1 year"   },
-    { v:"indefinite", l:"Forever" }
+    { v:"indefinite", l:"Forever" },
+    { v:"custom", l:"Custom" }
   ];
 
   var SEARCHABLE = [
@@ -5199,30 +5213,27 @@ function PropertiesSettingsModal({ node, properties, onClose }) {
 
   function renderSection() {
     if (section === "storage") {
+      var activeTile = STORAGE_TILES.find(function(t){ return t.id === storage; });
       return (
         <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
           <div>
-            <div style={{ fontSize:11.5, fontWeight:600, color:"var(--ink-3)", letterSpacing:"0.4px", textTransform:"uppercase", marginBottom:10, fontFamily:"JetBrains Mono" }}>Storage backend</div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-              {STORAGE_TILES.map(function(t){
-                var on = storage === t.id;
-                return (
-                  <button key={t.id} type="button" onClick={function(){ setStorage(t.id); }}
-                    style={{ textAlign:"left", padding:"13px 14px", borderRadius:9, cursor:"pointer", fontFamily:"inherit",
-                             border:"1px solid " + (on ? "var(--ink)" : "var(--line)"),
-                             background: on ? "var(--bg-canvas)" : "var(--panel)",
-                             boxShadow: on ? "0 1px 0 var(--line-2), 0 4px 12px rgba(40,40,20,0.05)" : "0 1px 0 var(--line-2)" }}>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                      <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{t.l}</span>
-                      {on && <span style={{ width:18, height:18, borderRadius:"50%", background:"var(--ink)", color:"var(--bg-canvas)", display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
-                        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5"/></svg>
-                      </span>}
-                    </div>
-                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:5, lineHeight:1.5 }}>{t.d}</div>
-                  </button>
-                );
-              })}
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+              <div style={{ fontSize:11.5, fontWeight:600, color:"var(--ink-3)", letterSpacing:"0.4px", textTransform:"uppercase", fontFamily:"JetBrains Mono" }}>Storage backend</div>
+              <span style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, letterSpacing:"0.5px", textTransform:"uppercase", color:"var(--ink-3)", padding:"3px 8px", borderRadius:4, background:"var(--chip)" }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                View only
+              </span>
             </div>
+            <div style={{ border:"1px solid var(--line)", borderRadius:10, background:"var(--panel)", padding:"14px 16px", boxShadow:"0 1px 0 var(--line-2)", display:"flex", alignItems:"center", gap:14 }}>
+              <span style={{ width:38, height:38, borderRadius:8, background:"var(--purple-fill)", color:"var(--purple)", display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 11v6c0 1.66 4 3 9 3s9-1.34 9-3v-6"/></svg>
+              </span>
+              <div style={{ minWidth:0, flex:1 }}>
+                <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{activeTile.l}</div>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3, lineHeight:1.5 }}>{activeTile.d}</div>
+              </div>
+            </div>
+            <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:6, lineHeight:1.5 }}>Storage backend is fixed at object-creation time. Migrate via a new object if a different engine is needed.</div>
           </div>
           <div>
             <div style={{ fontSize:11.5, fontWeight:600, color:"var(--ink-3)", letterSpacing:"0.4px", textTransform:"uppercase", marginBottom:10, fontFamily:"JetBrains Mono" }}>Retention</div>
@@ -5237,6 +5248,29 @@ function PropertiesSettingsModal({ node, properties, onClose }) {
                   );
                 })}
               </div>
+              {retention === "custom" && (
+                <div style={{ marginTop:14, paddingTop:14, borderTop:"1px dashed var(--line-2)" }}>
+                  <div style={{ fontSize:12, fontWeight:600, color:"var(--ink-2)", marginBottom:8 }}>Custom retention</div>
+                  <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:10 }}>
+                    <input value={customRetention.amount} onChange={function(e){ setCustomRetention(Object.assign({}, customRetention, { amount:e.target.value })); }} placeholder="180"
+                      style={{ width:120, padding:"8px 11px", border:"1px solid var(--line)", borderRadius:7, fontFamily:"JetBrains Mono", fontSize:13, color:"var(--ink)", background:"var(--panel)", outline:"none", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)", boxSizing:"border-box" }} />
+                    <div style={{ width:170 }}>
+                      <RichSelect
+                        value={customRetention.unit}
+                        onChange={function(v){ setCustomRetention(Object.assign({}, customRetention, { unit:v })); }}
+                        options={[
+                          { value:"hours", label:"Hours" },
+                          { value:"days", label:"Days" },
+                          { value:"weeks", label:"Weeks" },
+                          { value:"months", label:"Months" },
+                          { value:"years", label:"Years" }
+                        ]}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", lineHeight:1.5 }}>Tip: use the rule editor on Governance for conditional rules — e.g. keep records longer when status = "open".</div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -5303,33 +5337,11 @@ function PropertiesSettingsModal({ node, properties, onClose }) {
             title="Audit trail"
             desc="Capture every change to schema and records — who, what, when. Used by compliance reviews."
             control={<ToggleSwitch on={audit} onToggle={setAudit} />}
-            expansion={audit && (
-              <div>
-                <div style={{ fontSize:12.5, color:"var(--ink-2)", fontWeight:500, marginBottom:8 }}>Keep audit logs for</div>
-                <div style={{ display:"flex", gap:6 }}>
-                  {[["90","90 days"],["180","6 months"],["365","1 year"],["1825","5 years"]].map(function(o){
-                    var on = auditRetentionDays === o[0];
-                    return <button key={o[0]} onClick={function(){ setAuditRetentionDays(o[0]); }} style={{ padding:"5px 11px", borderRadius:6, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "var(--panel)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:600, cursor:"pointer" }}>{o[1]}</button>;
-                  })}
-                </div>
-              </div>
-            )}
           />
           <SettingItem
             title="Activity tracking"
             desc="Surface a feed of record-level activity on the node and in dashboards."
             control={<ToggleSwitch on={activity} onToggle={setActivity} />}
-            expansion={activity && (
-              <div>
-                <div style={{ fontSize:12.5, color:"var(--ink-2)", fontWeight:500, marginBottom:8 }}>Track</div>
-                <div style={{ display:"flex", gap:6 }}>
-                  {[["changes","Changes only"],["reads","Reads only"],["both","Both"]].map(function(o){
-                    var on = activityScope === o[0];
-                    return <button key={o[0]} onClick={function(){ setActivityScope(o[0]); }} style={{ padding:"5px 11px", borderRadius:6, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "var(--panel)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", fontSize:11.5, fontFamily:"inherit", fontWeight:500, cursor:"pointer" }}>{o[1]}</button>;
-                  })}
-                </div>
-              </div>
-            )}
           />
           <SettingItem
             title="Reporting"
@@ -5400,18 +5412,6 @@ function PropertiesSettingsModal({ node, properties, onClose }) {
             title="Object versioning"
             desc="Store full schema and record history. Restore or compare any prior version."
             control={<ToggleSwitch on={versioning} onToggle={setVersioning} />}
-            expansion={versioning && (
-              <div>
-                <div style={{ fontSize:12.5, color:"var(--ink-2)", fontWeight:500, marginBottom:8 }}>Keep at most</div>
-                <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                  {[["10","10"],["50","50"],["200","200"],["all","Unlimited"]].map(function(o){
-                    var on = keepVersions === o[0];
-                    return <button key={o[0]} onClick={function(){ setKeepVersions(o[0]); }} style={{ padding:"5px 11px", borderRadius:6, border:"1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "var(--panel)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:11.5, fontWeight:600, cursor:"pointer" }}>{o[1]}</button>;
-                  })}
-                  <span style={{ fontSize:12, color:"var(--ink-3)", marginLeft:4 }}>versions</span>
-                </div>
-              </div>
-            )}
           />
           <SettingItem
             title="Deployable versioning"
