@@ -4461,6 +4461,398 @@ function PropertyDetailView({ node, property, properties, onBack }) {
   );
 }
 
+// ─── CODE SNIPPET LIBRARY + TYPE INFERENCE ──────────────────────────────────
+// Bundled snippets that come with the workspace. Names are concrete and
+// memorable so users can recognise the shape they're after at a glance.
+var SNIPPET_LIBRARY = [
+  { id:"sf_account",          name:"salesforce_account",        lang:"JSON", tags:["CRM","SaaS"],
+    body: '{\n  "Id": "0015g00000abcdef",\n  "Name": "Acme Corporation",\n  "AccountNumber": "AC-29104",\n  "Industry": "Manufacturing",\n  "AnnualRevenue": 48200000,\n  "NumberOfEmployees": 1240,\n  "Website": "https://acme.com",\n  "BillingCity": "Boston",\n  "BillingCountry": "USA",\n  "IsActive": true,\n  "CreatedDate": "2024-03-12T09:14:00Z",\n  "OwnerId": "00558000000aBcDE"\n}' },
+  { id:"invoice_payload",     name:"invoice_payload",           lang:"JSON", tags:["Finance","NetSuite"],
+    body: '{\n  "invoice_id": "INV-2025-00482",\n  "issued_at": "2025-08-14T12:00:00Z",\n  "due_date": "2025-09-13",\n  "vendor_name": "Northwind Logistics",\n  "currency": "USD",\n  "subtotal": 18420.50,\n  "tax_amount": 1473.64,\n  "total_amount": 19894.14,\n  "is_paid": false,\n  "po_number": "PO-77441"\n}' },
+  { id:"support_ticket",      name:"support_ticket",            lang:"JSON", tags:["Support","Zendesk"],
+    body: '{\n  "ticket_id": "ZD-118420",\n  "subject": "Cannot connect to API endpoint",\n  "priority": "high",\n  "status": "open",\n  "requester_email": "lia.bryan@northwind.com",\n  "assignee_id": "agt_4421",\n  "created_at": "2026-04-08T15:42:00Z",\n  "updated_at": "2026-04-08T16:14:00Z",\n  "tags": ["api", "auth", "p1"],\n  "satisfaction_score": null\n}' },
+  { id:"employee_profile",    name:"employee_profile",          lang:"JSON", tags:["HR","Workday"],
+    body: '{\n  "employee_id": "E-9921",\n  "first_name": "Morgan",\n  "last_name": "Lee",\n  "work_email": "morgan.lee@acme.com",\n  "department": "Data Platform",\n  "manager_id": "E-8814",\n  "hire_date": "2022-06-01",\n  "is_remote": true,\n  "annual_salary_usd": 168000,\n  "skills": ["python", "snowflake", "dbt"]\n}' },
+  { id:"subscription_event",  name:"subscription_event",        lang:"JSON", tags:["Billing","Stripe"],
+    body: '{\n  "event_id": "evt_1NaB2Cdef",\n  "event_type": "customer.subscription.updated",\n  "occurred_at": "2026-05-22T08:11:42Z",\n  "customer_id": "cus_R29YzZ",\n  "subscription_id": "sub_R49uvT",\n  "plan_code": "ENTERPRISE_PRO_MONTHLY",\n  "mrr_usd": 4200.00,\n  "seats": 42,\n  "is_trial": false\n}' },
+  { id:"meeting_attendee",    name:"meeting_attendee",          lang:"JSON", tags:["Calendar","Ops"],
+    body: '{\n  "meeting_id": "mtg_2026_q2_review",\n  "attendee_email": "ramin.k@acme.com",\n  "attendee_name": "Ramin Kazemi",\n  "response_status": "accepted",\n  "joined_at": "2026-05-15T14:02:18Z",\n  "left_at": "2026-05-15T14:58:04Z",\n  "is_organizer": false,\n  "device": "web"\n}' },
+  { id:"payment_event",       name:"payment_event",             lang:"JSON", tags:["Finance","Stripe"],
+    body: '{\n  "payment_id": "ch_3OvB9Z2eZv",\n  "amount_cents": 199414,\n  "currency": "USD",\n  "captured_at": "2025-09-13T10:08:00Z",\n  "card_brand": "visa",\n  "card_last4": "4242",\n  "is_refunded": false,\n  "customer_email": "ap@northwind.com"\n}' },
+  { id:"incident_alert",      name:"incident_alert",            lang:"JSON", tags:["Ops","PagerDuty"],
+    body: '{\n  "incident_id": "INC-998421",\n  "service": "snowflake-warehouse",\n  "severity": "SEV2",\n  "opened_at": "2026-05-19T03:14:00Z",\n  "acknowledged_at": "2026-05-19T03:16:42Z",\n  "resolved_at": null,\n  "page_count": 3,\n  "is_business_hours": false\n}' },
+  { id:"contract_terms",      name:"contract_terms",            lang:"JSON", tags:["Legal","CLM"],
+    body: '{\n  "contract_id": "MSA-2024-001",\n  "party_a": "Acme Corp",\n  "party_b": "Globex Industries",\n  "effective_date": "2024-04-01",\n  "expiry_date": "2027-03-31",\n  "total_value_usd": 1240000,\n  "auto_renews": true,\n  "governing_law": "Delaware",\n  "is_signed": true\n}' },
+  { id:"product_catalog_xml", name:"product_catalog",           lang:"XML",  tags:["Commerce"],
+    body: '<product>\n  <sku>SKU-90421</sku>\n  <name>Aero Pro 14"</name>\n  <category>Laptops</category>\n  <price_usd>1899.00</price_usd>\n  <weight_kg>1.4</weight_kg>\n  <in_stock>true</in_stock>\n  <released_at>2025-11-04</released_at>\n</product>' },
+  { id:"purchase_order_xsd",  name:"purchase_order_schema",     lang:"XSD",  tags:["B2B","Procurement"],
+    body: '<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">\n  <xs:element name="purchase_order">\n    <xs:complexType>\n      <xs:sequence>\n        <xs:element name="po_number" type="xs:string"/>\n        <xs:element name="vendor_id" type="xs:string"/>\n        <xs:element name="order_date" type="xs:date"/>\n        <xs:element name="line_total" type="xs:decimal"/>\n        <xs:element name="is_approved" type="xs:boolean"/>\n      </xs:sequence>\n    </xs:complexType>\n  </xs:element>\n</xs:schema>' }
+];
+
+// Infer a property type from a JS value (post-JSON.parse).
+function inferTypeFromValue(v, key) {
+  if (v === null || v === undefined) return "string";
+  if (typeof v === "boolean") return "bool";
+  if (typeof v === "number") return Number.isInteger(v) ? "int" : "decimal";
+  if (Array.isArray(v)) return "string[]";
+  if (typeof v === "object") return "struct";
+  if (typeof v === "string") {
+    // Light heuristics: ISO timestamp / date / email / uuid
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)) return "timestamp";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return "date";
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) return "uuid";
+    var lk = (key || "").toLowerCase();
+    if (lk.endsWith("_id") || lk === "id") return "string"; // keep as string, mark PK candidate elsewhere
+    return "string";
+  }
+  return "string";
+}
+
+// Extract a flat list of typed fields from a snippet body in any of the
+// three supported languages. Returns [] when the parse fails; in that case
+// the modal surfaces a parse error instead of pretending to find fields.
+function parseSnippetFields(body, lang) {
+  var out = [];
+  if (!body) return { fields:[], error:null };
+  try {
+    if (lang === "JSON") {
+      var obj = JSON.parse(body);
+      if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
+        return { fields:[], error:"Top-level must be an object" };
+      }
+      Object.keys(obj).forEach(function(k){
+        var t = inferTypeFromValue(obj[k], k);
+        var sample = obj[k];
+        if (sample !== null && typeof sample === "object") sample = Array.isArray(sample) ? "[" + sample.length + " items]" : "{…}";
+        out.push({ name:k, type:t, sample: sample === null ? "null" : String(sample) });
+      });
+      return { fields:out, error:null };
+    }
+    if (lang === "XML") {
+      // Pull top-level child element names of the root, infer types from text.
+      var rootMatch = body.match(/<([a-z_][\w-]*)[^>]*>([\s\S]*)<\/\1>/i);
+      if (!rootMatch) return { fields:[], error:"No root element" };
+      var inner = rootMatch[2];
+      var re = /<([a-z_][\w-]*)[^>]*>([\s\S]*?)<\/\1>/gi;
+      var m;
+      while ((m = re.exec(inner)) !== null) {
+        var name = m[1];
+        var text = m[2].trim();
+        var t = "string";
+        if (/^(true|false)$/i.test(text)) t = "bool";
+        else if (/^-?\d+$/.test(text)) t = "int";
+        else if (/^-?\d+\.\d+$/.test(text)) t = "decimal";
+        else if (/^\d{4}-\d{2}-\d{2}T/.test(text)) t = "timestamp";
+        else if (/^\d{4}-\d{2}-\d{2}$/.test(text)) t = "date";
+        out.push({ name:name, type:t, sample:text.length > 30 ? text.slice(0, 30) + "…" : text });
+      }
+      return { fields:out, error: out.length === 0 ? "No child elements" : null };
+    }
+    if (lang === "XSD") {
+      // Match xs:element name="..." type="xs:..."
+      var re2 = /<xs:element\s+name="([^"]+)"(?:[^>]*type="xs:([^"]+)")?/gi;
+      var m2;
+      while ((m2 = re2.exec(body)) !== null) {
+        var nm = m2[1];
+        var xt = (m2[2] || "string").toLowerCase();
+        var mapType = { string:"string", int:"int", integer:"int", long:"int", decimal:"decimal", float:"float", double:"decimal", boolean:"bool", date:"date", datetime:"timestamp", time:"timestamp", anyuri:"string", "id":"uuid" };
+        out.push({ name:nm, type: mapType[xt] || "string", sample:"" });
+      }
+      // Drop the root container element if it has no type (it's the
+      // wrapper, not a field).
+      if (out.length && /complexType|sequence/.test(body) && out[0].type === "string" && out.length > 1) out.shift();
+      return { fields:out, error: out.length === 0 ? "No <xs:element> nodes found" : null };
+    }
+  } catch (e) {
+    return { fields:[], error: (e && e.message) || "Parse error" };
+  }
+  return { fields:[], error:null };
+}
+
+function CodeSnippetFlow({ node, onClose }) {
+  var [pickedId, setPickedId]   = useState(null);             // null → "from scratch"
+  var [body, setBody]           = useState("{}");
+  var [lang, setLang]           = useState("JSON");
+  var [search, setSearch]       = useState("");
+  var [saveAs, setSaveAs]       = useState(false);
+  var [saveName, setSaveName]   = useState("");
+  var [langOpen, setLangOpen]   = useState(false);
+
+  var TYPE_GLYPH = { uuid:{ g:"ID", c:"var(--purple)" }, string:{ g:"T", c:"var(--blue)" }, "string[]":{ g:"[T]", c:"var(--blue)" }, decimal:{ g:"#", c:"var(--gold)" }, float:{ g:".5", c:"var(--gold)" }, bool:{ g:"01", c:"var(--coral)" }, timestamp:{ g:"TS", c:"var(--green)" }, date:{ g:"DT", c:"var(--green)" }, datetime:{ g:"DT", c:"var(--green)" }, enum:{ g:"E", c:"var(--purple)" }, struct:{ g:"{}", c:"var(--ink-3)" }, int:{ g:"#", c:"var(--gold)" } };
+
+  function pickSnippet(s) {
+    setPickedId(s.id);
+    setBody(s.body);
+    setLang(s.lang);
+  }
+  function startFresh() {
+    setPickedId(null);
+    setBody("{}");
+    setLang("JSON");
+  }
+
+  var parsed = parseSnippetFields(body, lang);
+  var fields = parsed.fields;
+  var parseError = parsed.error;
+  var picked = SNIPPET_LIBRARY.find(function(s){ return s.id === pickedId; });
+  var docTitle = picked ? picked.name : "New snippet";
+  var lineCount = (body.match(/\n/g) || []).length + 1;
+  var lineNumbers = [];
+  for (var i = 1; i <= lineCount; i++) lineNumbers.push(i);
+
+  var filteredLib = SNIPPET_LIBRARY.filter(function(s){
+    if (!search) return true;
+    var hay = (s.name + " " + s.tags.join(" ")).toLowerCase();
+    return hay.indexOf(search.toLowerCase()) >= 0;
+  });
+
+  // Soft syntax highlight using a placeholder pipeline: tokenize the
+  // escaped source into segments with assigned classes, then render. This
+  // avoids the trap of re-matching span attributes we just inserted.
+  function highlight(text, language) {
+    var esc = function(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+    var src = text || "";
+    var tokens = [];
+    function push(t, color) { tokens.push({ t:t, c:color || null }); }
+    var i = 0;
+    if (language === "JSON") {
+      // very small JSON tokenizer
+      var re = /"(?:[^"\\]|\\.)*"|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?/g;
+      var m, last = 0;
+      while ((m = re.exec(src)) !== null) {
+        if (m.index > last) push(src.slice(last, m.index), null);
+        var tok = m[0];
+        var color = null;
+        if (tok[0] === '"') {
+          // Is this a key (followed by colon) or a value?
+          var rest = src.slice(m.index + tok.length).match(/^\s*:/);
+          color = rest ? "#7048a3" : "#137333";
+        } else if (/^(true|false|null)$/.test(tok)) {
+          color = "#b3261e";
+        } else {
+          color = "#137333";
+        }
+        push(tok, color);
+        last = m.index + tok.length;
+      }
+      if (last < src.length) push(src.slice(last), null);
+    } else if (language === "XML" || language === "XSD") {
+      // Walk the string, recognising tag-name tokens after < or </
+      var re2 = /(&lt;\/?)|([a-z_][\w:-]*)|("[^"]*")|([=>])|(\s+)|([^\s<>=&]+)/gi;
+      // Simpler: split into runs and color tag names, strings, equals
+      var pos = 0;
+      // Use a state machine: inside-tag vs outside-tag
+      var inTag = false;
+      var seenTagName = false;
+      var re3 = /<\/?|>|"(?:[^"\\]|\\.)*"|[a-zA-Z_][\w:-]*|=|\s+|[^<>="\s]+/g;
+      var mm;
+      while ((mm = re3.exec(src)) !== null) {
+        var tt = mm[0];
+        var color2 = null;
+        if (tt === "<" || tt === "</") { inTag = true; seenTagName = false; color2 = null; }
+        else if (tt === ">") { inTag = false; seenTagName = false; color2 = null; }
+        else if (inTag && /^[a-zA-Z_][\w:-]*$/.test(tt)) {
+          if (!seenTagName) { color2 = "#7048a3"; seenTagName = true; }
+          else { color2 = "#b3261e"; } // attribute name
+        }
+        else if (inTag && tt[0] === '"') { color2 = "#137333"; }
+        push(tt, color2);
+      }
+    } else {
+      push(src, null);
+    }
+    return tokens.map(function(tok){
+      var safe = esc(tok.t);
+      return tok.c ? '<span style="color:' + tok.c + '">' + safe + '</span>' : safe;
+    }).join("");
+  }
+
+  var canUse = fields.length > 0 && !parseError;
+
+  // The 100% wide editor needs both a textarea (for input) and a div
+  // overlay (for the syntax-highlight rendering). Both share the same
+  // metrics so the caret aligns with the rendered characters.
+  var editorFont = '"JetBrains Mono", monospace';
+  var editorSize = 12.5;
+  var editorLine = 1.55;
+
+  return (
+    <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
+      onClick={function(e){ if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ width:"94vw", maxWidth:1240, height:"86vh", background:"var(--bg-canvas)", borderRadius:14, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
+
+        {/* HEADER */}
+        <div style={{ flexShrink:0, padding:"16px 22px", borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <span style={{ width:34, height:34, borderRadius:8, background:"var(--purple-fill)", color:"var(--purple)", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:13, fontWeight:700 }}>{"{ }"}</span>
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.7px", color:"var(--ink-3)", textTransform:"uppercase" }}>{node ? node.label + " · ADD PROPERTIES" : "ADD PROPERTIES"}</div>
+              <div style={{ fontFamily:"Instrument Serif", fontSize:22, color:"var(--ink)", marginTop:2 }}>Use code snippet</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+        </div>
+
+        {/* BODY — 3 columns: library | editor | preview */}
+        <div style={{ flex:1, display:"grid", gridTemplateColumns:"260px minmax(0, 1fr) 320px", minHeight:0 }}>
+
+          {/* LIBRARY */}
+          <div style={{ background:"var(--panel-2)", borderRight:"1px solid var(--line)", padding:"16px 14px", display:"flex", flexDirection:"column", gap:12, overflowY:"auto" }}>
+            <button onClick={startFresh}
+              style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:8, fontFamily:"inherit", textAlign:"left", cursor:"pointer",
+                       border:"1px solid " + (pickedId === null ? "var(--purple)" : "var(--line)"),
+                       background: pickedId === null ? "var(--purple-fill)" : "var(--panel)",
+                       color: pickedId === null ? "var(--purple)" : "var(--ink)" }}>
+              <span style={{ width:22, height:22, borderRadius:5, background: pickedId === null ? "var(--purple)" : "var(--chip)", color: pickedId === null ? "#fff" : "var(--ink-2)", display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </span>
+              <div style={{ fontSize:13, fontWeight:600 }}>Start from scratch</div>
+            </button>
+
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:8, padding:"0 2px" }}>Use existing snippet</div>
+              <div style={{ position:"relative", marginBottom:8 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:"var(--ink-3)", pointerEvents:"none" }}>
+                  <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.8"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                </svg>
+                <input value={search} onChange={function(e){ setSearch(e.target.value); }} placeholder="Search" style={{ width:"100%", boxSizing:"border-box", padding:"7px 10px 7px 28px", border:"1px solid var(--line)", borderRadius:7, fontFamily:"inherit", fontSize:12.5, color:"var(--ink)", background:"var(--panel)", outline:"none" }} />
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                {filteredLib.map(function(s){
+                  var on = pickedId === s.id;
+                  return (
+                    <button key={s.id} onClick={function(){ pickSnippet(s); }}
+                      style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:6, fontFamily:"inherit", textAlign:"left", cursor:"pointer", border:"1px solid " + (on ? "var(--line)" : "transparent"), background: on ? "var(--panel)" : "transparent" }}
+                      onMouseEnter={function(e){ if (!on) e.currentTarget.style.background = "var(--panel)"; }}
+                      onMouseLeave={function(e){ if (!on) e.currentTarget.style.background = "transparent"; }}>
+                      <div style={{ minWidth:0, flex:1, display:"flex", flexDirection:"column", gap:2 }}>
+                        <div style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", fontWeight: on ? 600 : 500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.name}</div>
+                        <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+                          {s.tags.map(function(t){ return <span key={t} style={{ fontFamily:"JetBrains Mono", fontSize:8.5, padding:"1px 5px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", letterSpacing:"0.4px", textTransform:"uppercase", fontWeight:600 }}>{t}</span>; })}
+                        </div>
+                      </div>
+                      <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:4, background: s.lang === "JSON" ? "var(--purple-fill)" : s.lang === "XML" ? "var(--blue-fill)" : "var(--gold-fill)", color: s.lang === "JSON" ? "var(--purple)" : s.lang === "XML" ? "var(--blue)" : "var(--gold)", fontWeight:700, letterSpacing:"0.5px", flexShrink:0 }}>{s.lang}</span>
+                    </button>
+                  );
+                })}
+                {filteredLib.length === 0 && (
+                  <div style={{ padding:"16px 8px", textAlign:"center", color:"var(--ink-4)", fontSize:11.5, fontFamily:"JetBrains Mono" }}>No matches</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* EDITOR */}
+          <div style={{ display:"flex", flexDirection:"column", minWidth:0, padding:"18px 22px", gap:14 }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:14 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0 }}>
+                <span style={{ fontFamily:"Instrument Serif", fontSize:20, color:"var(--ink)" }}>{docTitle}</span>
+                {picked && <span style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", letterSpacing:"0.5px", textTransform:"uppercase" }}>FROM LIBRARY</span>}
+              </div>
+              {/* Language pill — segmented, click to switch */}
+              <div style={{ display:"flex", gap:2, padding:2, border:"1px solid var(--line)", borderRadius:7, background:"var(--panel)" }}>
+                {["JSON","XML","XSD"].map(function(L){
+                  var on = lang === L;
+                  return (
+                    <button key={L} onClick={function(){ setLang(L); if (!picked) { setBody(L === "JSON" ? "{}" : L === "XML" ? "<root>\n  \n</root>" : '<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">\n  \n</xs:schema>'); } }}
+                      style={{ padding:"4px 11px", border:"none", borderRadius:5, fontFamily:"JetBrains Mono", fontSize:11, fontWeight:600, cursor:"pointer",
+                               background: on ? "var(--ink)" : "transparent",
+                               color: on ? "var(--bg-canvas)" : "var(--ink-2)" }}>{L}</button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Code editor */}
+            <div style={{ flex:1, minHeight:0, position:"relative", border:"1px solid var(--line)", borderRadius:10, background:"var(--panel)", boxShadow:"0 1px 0 var(--line-2)", overflow:"hidden", display:"flex" }}>
+              {/* gutter */}
+              <div aria-hidden="true" style={{ flexShrink:0, width:44, padding:"12px 0", background:"var(--panel-2)", borderRight:"1px solid var(--line-2)", fontFamily:editorFont, fontSize:editorSize, lineHeight:editorLine, color:"var(--ink-4)", textAlign:"right", userSelect:"none" }}>
+                {lineNumbers.map(function(n){ return <div key={n} style={{ padding:"0 10px 0 0" }}>{n}</div>; })}
+              </div>
+              {/* code area: highlight overlay + invisible textarea */}
+              <div style={{ flex:1, minWidth:0, position:"relative", overflow:"auto" }}>
+                <pre aria-hidden="true"
+                  style={{ position:"absolute", top:0, left:0, right:0, bottom:0, margin:0, padding:"12px 14px", fontFamily:editorFont, fontSize:editorSize, lineHeight:editorLine, color:"var(--ink)", pointerEvents:"none", whiteSpace:"pre-wrap", wordBreak:"break-word" }}
+                  dangerouslySetInnerHTML={{ __html: highlight(body, lang) + "\n" }} />
+                <textarea
+                  value={body}
+                  onChange={function(e){ setBody(e.target.value); }}
+                  spellCheck={false}
+                  style={{ position:"relative", display:"block", width:"100%", minHeight:"100%", padding:"12px 14px", boxSizing:"border-box", border:"none", outline:"none", resize:"none", background:"transparent", color:"transparent", caretColor:"var(--ink)", fontFamily:editorFont, fontSize:editorSize, lineHeight:editorLine, whiteSpace:"pre-wrap", wordBreak:"break-word", overflow:"hidden" }} />
+              </div>
+            </div>
+
+            {/* Save-as toggle */}
+            <div style={{ display:"flex", alignItems:"center", gap:14, padding:"10px 14px", border:"1px solid var(--line)", borderRadius:8, background:"var(--panel)" }}>
+              <label style={{ display:"flex", alignItems:"center", gap:9, cursor:"pointer", flexShrink:0 }}>
+                <input type="checkbox" checked={saveAs} onChange={function(e){ setSaveAs(e.target.checked); }} style={{ width:15, height:15, accentColor:"var(--purple)" }} />
+                <div>
+                  <div style={{ fontSize:12.5, color:"var(--ink)", fontWeight:500 }}>Save as a new snippet</div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:2 }}>Save this {lang} snippet to the library for re-use</div>
+                </div>
+              </label>
+              <input
+                value={saveName}
+                onChange={function(e){ setSaveName(e.target.value); }}
+                disabled={!saveAs}
+                placeholder="snippet_name"
+                style={{ marginLeft:"auto", width:280, padding:"7px 10px", border:"1px solid var(--line)", borderRadius:6, fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)", background: saveAs ? "var(--panel)" : "var(--chip)", outline:"none", opacity: saveAs ? 1 : 0.5 }} />
+            </div>
+          </div>
+
+          {/* PREVIEW */}
+          <div style={{ background:"var(--panel-2)", borderLeft:"1px solid var(--line)", padding:"18px 16px", display:"flex", flexDirection:"column", gap:10, overflowY:"auto" }}>
+            <div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase" }}>Will create</div>
+              <div style={{ display:"flex", alignItems:"baseline", gap:7, marginTop:2 }}>
+                <span style={{ fontFamily:"Instrument Serif", fontSize:30, color: fields.length > 0 ? "var(--ink)" : "var(--ink-4)", lineHeight:1 }}>{fields.length}</span>
+                <span style={{ fontSize:13, color:"var(--ink-3)" }}>{fields.length === 1 ? "property" : "properties"}</span>
+              </div>
+            </div>
+
+            {parseError && (
+              <div style={{ padding:"10px 11px", border:"1px solid var(--coral)", background:"var(--coral-fill)", borderRadius:7 }}>
+                <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", textTransform:"uppercase", color:"var(--coral)", fontWeight:700 }}>Parse error</div>
+                <div style={{ fontSize:11.5, color:"var(--coral)", marginTop:3 }}>{parseError}</div>
+              </div>
+            )}
+
+            <div style={{ display:"flex", flexDirection:"column", gap:5, marginTop:4 }}>
+              {fields.map(function(f, i){
+                var tg = TYPE_GLYPH[f.type] || TYPE_GLYPH.string;
+                return (
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", border:"1px solid var(--line-2)", borderRadius:7, background:"var(--panel)" }}>
+                    <span style={{ minWidth:22, height:16, padding:"0 5px", borderRadius:3, background:tg.c, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{tg.g}</span>
+                    <div style={{ minWidth:0, flex:1 }}>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{f.name}</div>
+                      {f.sample && <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", marginTop:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{f.sample}</div>}
+                    </div>
+                  </div>
+                );
+              })}
+              {fields.length === 0 && !parseError && (
+                <div style={{ padding:"22px 10px", textAlign:"center", color:"var(--ink-4)", fontSize:11.5, fontFamily:"JetBrains Mono", lineHeight:1.5 }}>Properties detected from the snippet will show up here.</div>
+              )}
+            </div>
+          </div>
+
+        </div>
+
+        {/* FOOTER */}
+        <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
+          <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>
+            {parseError ? <span style={{ color:"var(--coral)" }}>{parseError}</span> : (fields.length > 0 ? fields.length + " " + (fields.length === 1 ? "property" : "properties") + " will be added" : "Pick or paste a snippet to begin")}
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <button className="btn-ghost" onClick={onClose}>Cancel</button>
+            <button className="btn-dark" disabled={!canUse} onClick={onClose} style={{ opacity: canUse ? 1 : 0.45 }}>{canUse ? "Add " + fields.length + " " + (fields.length === 1 ? "property" : "properties") + " ↵" : "Use"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PropertiesPane({ node, properties }) {
   const [propFlowOpen, setPropFlowOpen] = useState(false);
   const [propFlowMode, setPropFlowMode] = useState(null); // "manual" | "spreadsheet" | "document" | "template"
@@ -4584,10 +4976,11 @@ function PropertiesPane({ node, properties }) {
                   <div onClick={() => setAddMenuOpen(false)} style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:199 }} />
                   <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:200, width:280, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 18px 44px rgba(0,0,0,0.18)", padding:6 }}>
                     {[
-                      { id:"manual",      l:"Add manually",       d:"Define one property with full governance.",      svg:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg> },
-                      { id:"spreadsheet", l:"Upload spreadsheet", d:"Auto-detect columns from a CSV or Excel file.",  svg:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg> },
-                      { id:"document",    l:"Parse a document",    d:"Extract fields from a PDF, contract or doc.",   svg:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> },
-                      { id:"template",    l:"From a template",     d:"Pick a curated property set for this entity.",  svg:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> }
+                      { id:"manual",      l:"Add manually",        d:"Define one property with full governance.",       svg:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg> },
+                      { id:"snippet",     l:"Use a code snippet",  d:"Paste JSON / XML / XSD; auto-infer typed fields.", svg:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> },
+                      { id:"spreadsheet", l:"Upload spreadsheet",  d:"Auto-detect columns from a CSV or Excel file.",   svg:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg> },
+                      { id:"document",    l:"Parse a document",    d:"Extract fields from a PDF, contract or doc.",     svg:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> },
+                      { id:"template",    l:"From a template",     d:"Pick a curated property set for this entity.",    svg:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> }
                     ].map(function(opt){
                       return (
                         <button key={opt.id} onClick={() => { setPropFlowMode(opt.id); setPropFlowOpen(true); setAddMenuOpen(false); }}
@@ -4756,7 +5149,10 @@ function PropertiesPane({ node, properties }) {
         )}
       </div>
 
-      {propFlowOpen && AddPropertyFlow && <AddPropertyFlow node={node} mode={propFlowMode || "manual"} initialProperty={propEditRow} onClose={() => { setPropFlowOpen(false); setPropFlowMode(null); setPropEditRow(null); }} />}
+      {propFlowOpen && propFlowMode === "snippet"
+        ? <CodeSnippetFlow node={node} onClose={() => { setPropFlowOpen(false); setPropFlowMode(null); setPropEditRow(null); }} />
+        : (propFlowOpen && AddPropertyFlow && <AddPropertyFlow node={node} mode={propFlowMode || "manual"} initialProperty={propEditRow} onClose={() => { setPropFlowOpen(false); setPropFlowMode(null); setPropEditRow(null); }} />)
+      }
 
       {/* Property detail drawer — full creation context surfaced in one pane */}
       {drawerProp && (function(){
