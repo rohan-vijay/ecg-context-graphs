@@ -17344,12 +17344,16 @@ function NodesView({ onSelect, onSwitchToCanvas, onAddNode, nodes: liveNodes }) 
 
   const rows = useMemo(() => {
     const filtered = _nodes.filter(n => catFilter === "all" || n.cat === catFilter);
+    function countSources(n)  { return n.type === "source" ? 0 : (generateSources(n) || []).length; }
+    function countRules(n)    { if (n.type === "source") return 0; var r = generateRules(n); return (r.quality||[]).length + (r.match||[]).length + (r.survivorship||[]).length; }
     const sorters = {
       label: (a, b) => a.label.localeCompare(b.label),
       category: (a, b) => a.cat.localeCompare(b.cat),
       instances: (a, b) => a.instancesN - b.instancesN,
       props: (a, b) => a.props - b.props,
       edges: (a, b) => a.edges - b.edges,
+      sources: (a, b) => countSources(a) - countSources(b),
+      rules: (a, b) => countRules(a) - countRules(b),
       fill: (a, b) => a.fill - b.fill,
       conf: (a, b) => a.conf - b.conf,
       pii: (a, b) => a.pii - b.pii,
@@ -17376,7 +17380,6 @@ function NodesView({ onSelect, onSwitchToCanvas, onAddNode, nodes: liveNodes }) 
         </div>
         <div className="nv-head-right">
           <button className="btn-ghost">Bulk export</button>
-          <button className="btn-ghost" onClick={onSwitchToCanvas}>Switch to canvas →</button>
           <button className="btn-dark" onClick={onAddNode}>+ New node type</button>
         </div>
       </div>
@@ -17399,11 +17402,12 @@ function NodesView({ onSelect, onSwitchToCanvas, onAddNode, nodes: liveNodes }) 
           <button className="nv-th nv-th-num"      onClick={() => onSort("instances")}>Instances{sortIcon("instances")}</button>
           <button className="nv-th nv-th-num"      onClick={() => onSort("props")}>Props{sortIcon("props")}</button>
           <button className="nv-th nv-th-num"      onClick={() => onSort("edges")}>Edges{sortIcon("edges")}</button>
+          <button className="nv-th nv-th-num"      onClick={() => onSort("sources")}>Sources{sortIcon("sources")}</button>
+          <button className="nv-th nv-th-num"      onClick={() => onSort("rules")}>Rules{sortIcon("rules")}</button>
           <button className="nv-th nv-th-bar"      onClick={() => onSort("fill")}>Fill rate{sortIcon("fill")}</button>
           <button className="nv-th nv-th-bar"      onClick={() => onSort("conf")}>Conformance{sortIcon("conf")}</button>
           <div    className="nv-th nv-th-freshness">Freshness</div>
           <button className="nv-th nv-th-pii"      onClick={() => onSort("pii")}>PII{sortIcon("pii")}</button>
-          <div    className="nv-th nv-th-change">Change</div>
         </div>
 
         <div className="nv-body">
@@ -17419,6 +17423,8 @@ function NodesView({ onSelect, onSwitchToCanvas, onAddNode, nodes: liveNodes }) 
               <div className="nv-cell nv-th-num nv-num">{n.instancesN ? n.instancesN.toLocaleString() : "—"}</div>
               <div className="nv-cell nv-th-num nv-num">{n.props}</div>
               <div className="nv-cell nv-th-num nv-num">{n.edges}</div>
+              <div className="nv-cell nv-th-num nv-num" style={{ color: n.type === "source" ? "var(--ink-4)" : "var(--ink)" }}>{n.type === "source" ? "—" : (generateSources(n) || []).length}</div>
+              <div className="nv-cell nv-th-num nv-num" style={{ color: n.type === "source" ? "var(--ink-4)" : "var(--ink)" }}>{n.type === "source" ? "—" : (function(){ var r = generateRules(n); return (r.quality || []).length + (r.match || []).length + (r.survivorship || []).length; })()}</div>
               <div className="nv-cell nv-th-bar">
                 <div className="nv-bar"><div className="nv-bar-fill" style={{ width: n.fill + "%", background: metricColor(n.fill) }} /></div>
                 <span className="nv-bar-v" style={{ color: metricColor(n.fill) }}>{n.fill}%</span>
@@ -17429,9 +17435,6 @@ function NodesView({ onSelect, onSwitchToCanvas, onAddNode, nodes: liveNodes }) 
               </div>
               <div className="nv-cell nv-th-freshness nv-num">{n.fresh}</div>
               <div className="nv-cell nv-th-pii nv-num" style={{ color: n.pii > 0 ? "var(--coral)" : "var(--ink-3)" }}>{n.pii}</div>
-              <div className="nv-cell nv-th-change">
-                <span className={"nv-change nv-change-" + n.change.toLowerCase()}>{n.change}</span>
-              </div>
             </button>
           ))}
         </div>
