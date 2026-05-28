@@ -6175,27 +6175,12 @@ function FormulaEditor({ editorRef, value, onChange, rePill, propNames, toHtml, 
 // Struct rows expand inline (chevron) to reveal nested children; only struct
 // rows are selectable as a parent.
 function ParentFieldPicker({ value, onChange, properties }) {
-  var [open, setOpen]       = useState(false);
+  var [open, setOpen]         = useState(false);
   var [expanded, setExpanded] = useState({});
+  var [search, setSearch]     = useState("");
   var btnRef = React.useRef(null);
+  var searchRef = React.useRef(null);
   var [coords, setCoords] = useState({ top:0, left:0, width:0 });
-
-  // Same TYPE_GLYPH table the Properties tab uses, so the labels here read
-  // the same as the rest of the app.
-  var TYPE_GLYPH = {
-    uuid:      { g:"ID",  c:"var(--purple)" },
-    string:    { g:"T",   c:"var(--blue)"   },
-    "string[]":{ g:"[T]", c:"var(--blue)"   },
-    decimal:   { g:"#",   c:"var(--gold)"   },
-    float:     { g:".5",  c:"var(--gold)"   },
-    int:       { g:"#",   c:"var(--gold)"   },
-    bool:      { g:"01",  c:"var(--coral)"  },
-    timestamp: { g:"TS",  c:"var(--green)"  },
-    date:      { g:"DT",  c:"var(--green)"  },
-    datetime:  { g:"DT",  c:"var(--green)"  },
-    enum:      { g:"E",   c:"var(--purple)" },
-    struct:    { g:"{}",  c:"var(--ink-3)"  }
-  };
 
   function findByPath(path) {
     if (!path) return null;
@@ -6218,6 +6203,14 @@ function ParentFieldPicker({ value, onChange, properties }) {
     }
     setOpen(function(o){ return !o; });
   }
+  // Focus the search input as soon as the panel opens.
+  React.useEffect(function(){
+    if (open && searchRef.current) {
+      setTimeout(function(){ try { searchRef.current.focus(); } catch(_e){} }, 0);
+    }
+    if (!open) setSearch("");
+  }, [open]);
+
   function toggleExpand(key) {
     setExpanded(function(prev){
       var n = Object.assign({}, prev);
@@ -6226,78 +6219,112 @@ function ParentFieldPicker({ value, onChange, properties }) {
     });
   }
 
-  // Type pill — colour-coded glyph + canonical type name.
-  function TypePill({ type }) {
-    var tg = TYPE_GLYPH[type] || TYPE_GLYPH.string;
+  // Match against name (case-insensitive). Empty query → always true.
+  var q = (search || "").trim().toLowerCase();
+  function matchTree(p) {
+    if (!q) return true;
+    if (p.name && p.name.toLowerCase().indexOf(q) !== -1) return true;
+    if (p.children && p.children.length) {
+      for (var i = 0; i < p.children.length; i++) if (matchTree(p.children[i])) return true;
+    }
+    return false;
+  }
+
+  // Plain-text type label — same color as everything else; no glyph, no pill.
+  function TypeLabel({ type }) {
     return (
-      <span style={{ display:"inline-flex", alignItems:"center", gap:6, flexShrink:0 }}>
-        <span style={{ minWidth:20, height:16, padding:"0 5px", borderRadius:3, background:tg.c, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9, fontWeight:700, letterSpacing:"0.3px" }}>{tg.g}</span>
-        <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-2)" }}>{type}</span>
-      </span>
+      <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", letterSpacing:"0.1px", flexShrink:0 }}>{type}</span>
     );
   }
+
+  // Same display-name transform as the main property table so labels read identically.
+  function prettyName(s) {
+    return (s || "").replace(/_/g, " ").replace(/\b\w/g, function(m){ return m.toUpperCase(); }).replace(/\bId\b/g, "ID").replace(/\bUrl\b/g, "URL");
+  }
+
+  var INDENT = 14;
+  // Chevron button is 16px wide, aligned to start of its grid cell. The rail
+  // under a parent row sits directly under its chevron's icon center.
+  function railXFor(d) { return 12 + (d - 1) * INDENT + 8; }
 
   function renderRow(p, depth, parentPath) {
     var path = parentPath ? parentPath + "." + p.name : p.name;
     var hasChildren = p.type === "struct" && p.children && p.children.length;
-    var isOpen = !!expanded[path];
+    var isOpen = q ? true : !!expanded[path];
     var isSelectable = p.type === "struct";
     var isSelected = value === path;
-    var INDENT = 18;
+    return (
+      <div
+        key={path}
+        title={isSelectable ? "Pick as parent struct" : "Only struct fields can host children"}
+        onClick={function(){ if (isSelectable) { onChange(path); setOpen(false); } }}
+        style={{
+          position:"relative",
+          display:"grid",
+          gridTemplateColumns:"16px 1fr auto 14px",
+          alignItems:"center",
+          gap:10,
+          padding:"6px 12px 6px " + (12 + depth * INDENT) + "px",
+          cursor: isSelectable ? "pointer" : "not-allowed",
+          background: isSelected ? "var(--chip)" : "transparent"
+        }}
+        onMouseEnter={function(e){ if (!isSelected) e.currentTarget.style.background = isSelectable ? "var(--panel-2)" : "color-mix(in oklab, var(--panel-2) 50%, transparent)"; }}
+        onMouseLeave={function(e){ if (!isSelected) e.currentTarget.style.background = "transparent"; }}
+      >
+        {/* Compact disclosure for struct rows. */}
+        {hasChildren ? (
+          <button
+            type="button"
+            onClick={function(e){ e.stopPropagation(); toggleExpand(path); }}
+            title={isOpen ? "Collapse" : "Expand"}
+            style={{ width:16, height:16, padding:0, border:"1px solid var(--line-2)", background:"var(--panel-2)", cursor:"pointer", color:"var(--ink-3)", borderRadius:4, display:"inline-flex", alignItems:"center", justifyContent:"center", zIndex:2, justifySelf:"start" }}
+            onMouseEnter={function(e){ e.currentTarget.style.background = "var(--chip)"; e.currentTarget.style.color = "var(--ink-2)"; }}
+            onMouseLeave={function(e){ e.currentTarget.style.background = "var(--panel-2)"; e.currentTarget.style.color = "var(--ink-3)"; }}
+          >
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition:"transform 120ms ease" }}>
+              <polyline points="9 6 15 12 9 18"/>
+            </svg>
+          </button>
+        ) : <span />}
+
+        {/* Display name (title-cased), same font/weight as the main property table. */}
+        <span style={{ display:"inline-flex", alignItems:"center", gap:7, minWidth:0 }}>
+          <span style={{ fontSize:13, color:"var(--ink)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{prettyName(p.name)}</span>
+          {hasChildren && (
+            <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"1px 5px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", fontWeight:600 }}>{p.children.length}</span>
+          )}
+        </span>
+
+        {/* Type label on the right — plain text, single color. */}
+        <TypeLabel type={p.type} />
+
+        {/* Selected check */}
+        <span style={{ display:"inline-flex", justifyContent:"flex-end", color:"var(--ink-2)" }}>
+          {isSelected && <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5"/></svg>}
+        </span>
+      </div>
+    );
+  }
+
+  // Group container = continuous vertical rail spanning all descendants of a struct.
+  function renderNode(p, depth, parentPath) {
+    if (!matchTree(p)) return null;
+    var path = parentPath ? parentPath + "." + p.name : p.name;
+    var hasChildren = p.type === "struct" && p.children && p.children.length;
+    var isOpen = q ? true : !!expanded[path];
+    if (!hasChildren || !isOpen) return renderRow(p, depth, parentPath);
     return (
       <React.Fragment key={path}>
-        <div
-          onClick={function(){ if (isSelectable) { onChange(path); setOpen(false); } }}
-          style={{
-            display:"grid",
-            gridTemplateColumns:"22px 1fr auto 16px",
-            alignItems:"center",
-            gap:8,
-            padding:"8px 12px 8px " + (12 + depth * INDENT) + "px",
-            cursor: isSelectable ? "pointer" : "default",
-            background: isSelected ? "var(--chip)" : "transparent",
-            opacity: isSelectable ? 1 : 0.65
-          }}
-          onMouseEnter={function(e){ if (isSelectable && !isSelected) e.currentTarget.style.background = "var(--panel-2)"; }}
-          onMouseLeave={function(e){ if (isSelectable && !isSelected) e.currentTarget.style.background = "transparent"; }}
-        >
-          {/* Disclosure for struct rows; empty placeholder otherwise so names align */}
-          {hasChildren ? (
-            <button
-              type="button"
-              onClick={function(e){ e.stopPropagation(); toggleExpand(path); }}
-              title={isOpen ? "Collapse" : "Expand"}
-              style={{ width:22, height:22, padding:0, border:"none", background:"transparent", cursor:"pointer", color:"var(--ink-2)", borderRadius:4, display:"inline-flex", alignItems:"center", justifyContent:"center" }}
-              onMouseEnter={function(e){ e.currentTarget.style.background = "var(--chip)"; }}
-              onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition:"transform 120ms ease" }}>
-                <polyline points="9 6 15 12 9 18"/>
-              </svg>
-            </button>
-          ) : <span />}
-
-          {/* Name + optional child count for struct */}
-          <span style={{ display:"inline-flex", alignItems:"center", gap:7, minWidth:0 }}>
-            <span style={{ fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.name}</span>
-            {hasChildren && (
-              <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"1px 5px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", fontWeight:600 }}>{p.children.length}</span>
-            )}
-          </span>
-
-          {/* Type label on the right */}
-          <TypePill type={p.type} />
-
-          {/* Selected check */}
-          <span style={{ display:"inline-flex", justifyContent:"flex-end", color:"var(--ink-2)" }}>
-            {isSelected && <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5"/></svg>}
-          </span>
+        {renderRow(p, depth, parentPath)}
+        <div style={{ position:"relative" }}>
+          <span aria-hidden="true" style={{ position:"absolute", left: railXFor(depth + 1), top:0, bottom:0, width:1, background:"var(--line)", pointerEvents:"none", zIndex:1 }} />
+          {p.children.map(function(c){ return renderNode(c, depth + 1, path); })}
         </div>
-
-        {hasChildren && isOpen && p.children.map(function(c){ return renderRow(c, depth + 1, path); })}
       </React.Fragment>
     );
   }
+
+  var visibleTop = (properties || []).filter(matchTree);
 
   return (
     <div>
@@ -6318,15 +6345,13 @@ function ParentFieldPicker({ value, onChange, properties }) {
       >
         <span style={{ display:"flex", alignItems:"center", gap:8, minWidth:0 }}>
           {selected ? (
-            <>
-              <span style={{ fontFamily:"JetBrains Mono", fontSize:13, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{value}</span>
-            </>
+            <span style={{ fontFamily:"JetBrains Mono", fontSize:13, color:"var(--ink)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{value}</span>
           ) : (
             <span style={{ fontFamily:"JetBrains Mono", fontSize:12.5, color:"var(--ink-3)" }}>Pick a struct field</span>
           )}
         </span>
-        <span style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
-          {selected && <TypePill type={selected.type} />}
+        <span style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
+          {selected && <TypeLabel type={selected.type} />}
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition:"transform 120ms ease", color:"var(--ink-3)" }}>
             <polyline points="6 9 12 15 18 9"/>
           </svg>
@@ -6336,15 +6361,48 @@ function ParentFieldPicker({ value, onChange, properties }) {
       {open && (
         <>
           <div onClick={function(){ setOpen(false); }} style={{ position:"fixed", inset:0, zIndex:300 }} />
-          <div style={{ position:"fixed", top:coords.top, left:coords.left, width:coords.width, maxHeight:340, overflowY:"auto", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:8, boxShadow:"0 12px 32px rgba(40,40,20,0.18)", zIndex:301, padding:"4px 0" }}>
-            {(properties || []).length === 0 ? (
-              <div style={{ padding:"14px 16px", fontSize:12, color:"var(--ink-4)", fontFamily:"JetBrains Mono" }}>This node has no properties yet.</div>
-            ) : (properties || []).map(function(p){ return renderRow(p, 0, ""); })}
-            {(properties || []).every(function(p){ return p.type !== "struct"; }) && (
-              <div style={{ padding:"10px 14px", borderTop:"1px dashed var(--line-2)", marginTop:4, fontSize:11, color:"var(--ink-4)", fontFamily:"JetBrains Mono", lineHeight:1.5 }}>
-                No <code style={{ padding:"1px 5px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)" }}>struct</code> properties exist yet — only struct fields can host children.
+          <div style={{ position:"fixed", top:coords.top, left:coords.left, width:coords.width, maxHeight:380, display:"flex", flexDirection:"column", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:8, boxShadow:"0 12px 32px rgba(40,40,20,0.18)", zIndex:301 }}>
+            {/* Search */}
+            <div style={{ padding:"8px 10px", borderBottom:"1px solid var(--line-2)", flexShrink:0 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", border:"1px solid var(--line)", borderRadius:6, background:"var(--panel-2)" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color:"var(--ink-3)", flexShrink:0 }}>
+                  <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input
+                  ref={searchRef}
+                  type="text"
+                  value={search}
+                  onChange={function(e){ setSearch(e.target.value); }}
+                  placeholder="Search properties"
+                  style={{ flex:1, minWidth:0, border:"none", outline:"none", background:"transparent", fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink)" }}
+                />
+                {search && (
+                  <button type="button" onClick={function(){ setSearch(""); }} style={{ border:"none", background:"transparent", cursor:"pointer", color:"var(--ink-3)", padding:0, display:"inline-flex" }} title="Clear">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                )}
               </div>
-            )}
+            </div>
+
+            {/* Hint */}
+            <div style={{ padding:"7px 12px", borderBottom:"1px solid var(--line-2)", fontSize:11, color:"var(--ink-3)", fontStyle:"italic", flexShrink:0, background:"color-mix(in oklab, var(--chip) 35%, transparent)" }}>
+              Only <span style={{ fontFamily:"JetBrains Mono", fontStyle:"normal", color:"var(--ink-2)" }}>struct</span> fields can host children — leaf types are shown for context.
+            </div>
+
+            {/* List */}
+            <div style={{ overflowY:"auto", padding:"4px 0", flex:1 }}>
+              {(properties || []).length === 0 ? (
+                <div style={{ padding:"14px 16px", fontSize:12, color:"var(--ink-4)", fontFamily:"JetBrains Mono" }}>This node has no properties yet.</div>
+              ) : visibleTop.length === 0 ? (
+                <div style={{ padding:"14px 16px", fontSize:12, color:"var(--ink-4)", fontFamily:"JetBrains Mono" }}>No properties match &ldquo;{search}&rdquo;.</div>
+              ) : visibleTop.map(function(p){ return renderNode(p, 0, ""); })}
+
+              {!q && (properties || []).length > 0 && (properties || []).every(function(p){ return p.type !== "struct"; }) && (
+                <div style={{ padding:"10px 14px", borderTop:"1px dashed var(--line-2)", marginTop:4, fontSize:11, color:"var(--ink-4)", fontFamily:"JetBrains Mono", lineHeight:1.5 }}>
+                  No <code style={{ padding:"1px 5px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)" }}>struct</code> properties exist yet — only struct fields can host children.
+                </div>
+              )}
+            </div>
           </div>
         </>
       )}
