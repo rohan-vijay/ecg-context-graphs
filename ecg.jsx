@@ -5915,6 +5915,21 @@ function PropertiesPane({ node, properties }) {
                       <span style={{ fontStyle:"italic" }}>fx</span><span>COMPUTED</span>
                     </span>}
                     {hasChildren && <span title={p.children.length + " nested fields"} style={{ display:"inline-flex", alignItems:"center", padding:"1px 6px", borderRadius:4, background:"var(--chip)", color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:10, fontWeight:600, flexShrink:0 }}>{p.children.length}</span>}
+                    {nestable && (
+                      <button
+                        title={"Add a child field under " + displayName}
+                        onClick={function(e){
+                          e.stopPropagation();
+                          setPropEditRow(null);
+                          setPropFlowParent(keyId);
+                          setPropFlowMode("manual");
+                          setPropFlowOpen(true);
+                        }}
+                        style={{ marginLeft:"auto", width:20, height:20, flexShrink:0, padding:0, border:"1px dashed var(--line)", background:"var(--panel-2)", borderRadius:5, display:"inline-flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:"var(--ink-3)", fontFamily:"JetBrains Mono", fontSize:13, fontWeight:700, lineHeight:1, opacity: rowHovered ? 1 : 0, transition:"opacity 120ms ease" }}
+                        onMouseEnter={function(e){ e.currentTarget.style.background = "var(--chip)"; e.currentTarget.style.color = "var(--ink)"; }}
+                        onMouseLeave={function(e){ e.currentTarget.style.background = "var(--panel-2)"; e.currentTarget.style.color = "var(--ink-3)"; }}
+                      >+</button>
+                    )}
                   </div>
                   <div className="props-cell">
                     <code style={{ fontFamily:"JetBrains Mono", fontSize:12, color:"var(--ink-2)", background:"var(--chip)", padding:"2px 7px", borderRadius:4 }}>{keyId}</code>
@@ -5944,23 +5959,7 @@ function PropertiesPane({ node, properties }) {
                     {p.pii      && <FlagPill title="PII"        tone={{ bg:"var(--chip)",       fg:"var(--ink-2)"  }} icon={PII_ICON} />}
                     {!p.required && !p.indexed && !p.unique && !p.pii && <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>—</span>}
                   </div>
-                  <div className="props-cell props-chevron" style={{ position:"relative" }}>
-                    {nestable && rowHovered ? (
-                      <button
-                        title={"Add a child field under " + displayName}
-                        onClick={function(e){
-                          e.stopPropagation();
-                          setPropEditRow(null);
-                          setPropFlowParent(keyId);
-                          setPropFlowMode("manual");
-                          setPropFlowOpen(true);
-                        }}
-                        style={{ width:22, height:22, padding:0, border:"1px solid var(--line)", background:"var(--panel)", borderRadius:5, display:"inline-flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:"var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:14, fontWeight:700, lineHeight:1 }}
-                        onMouseEnter={function(e){ e.currentTarget.style.background = "var(--chip)"; e.currentTarget.style.color = "var(--ink)"; }}
-                        onMouseLeave={function(e){ e.currentTarget.style.background = "var(--panel)"; e.currentTarget.style.color = "var(--ink-2)"; }}
-                      >+</button>
-                    ) : <span>›</span>}
-                  </div>
+                  <div className="props-cell props-chevron">›</div>
                 </div>
               );
             }
@@ -18550,7 +18549,7 @@ function AddNodeFlow({ onClose, onCreate }) {
   function mutateAt(arr, path, fn){ var idx = path[0]; return arr.map(function(n, i){ if (i !== idx) return n; if (path.length === 1) return fn(n); var nn = Object.assign({}, n); nn.children = mutateAt(n.children || [], path.slice(1), fn); return nn; }); }
   function updatePath(path, key, val){ setProperties(function(arr){ return mutateAt(arr, path, function(n){ var nn = Object.assign({}, n); nn[key] = val; return nn; }); }); }
   function removePath(path){ setProperties(function(arr){ if (path.length === 1){ var p = arr[path[0]]; if (p && pkField === p.name) setPkField(""); return arr.filter(function(_, i){ return i !== path[0]; }); } return mutateAt(arr, path.slice(0, -1), function(n){ var nn = Object.assign({}, n); nn.children = (n.children || []).filter(function(_, j){ return j !== path[path.length - 1]; }); return nn; }); }); }
-  function addChildPath(path){ setProperties(function(arr){ return mutateAt(arr, path, function(n){ var nn = Object.assign({}, n); nn.children = (n.children || []).concat([{ name: "new_field", type: "string" }]); return nn; }); }); setExpandedRows(function(m){ var n = Object.assign({}, m); n[pathKey(path)] = true; return n; }); }
+  function addChildPath(path){ setProperties(function(arr){ return mutateAt(arr, path, function(n){ var nn = Object.assign({}, n); if (!PROP_NESTABLE[nn.type]) nn.type = "object"; nn.children = (n.children || []).concat([{ name: "new_field", type: "string" }]); return nn; }); }); setExpandedRows(function(m){ var n = Object.assign({}, m); n[pathKey(path)] = true; return n; }); }
   // Recursive property row — renders identically at any depth (name · type · PK/REQ/IDX/PII · settings · delete).
   function renderPropRow(p, path, depth){
     var key = pathKey(path);
@@ -18570,9 +18569,11 @@ function AddNodeFlow({ onClose, onCreate }) {
                 </button>
               : <span style={{ width:18, flexShrink:0 }} />}
             {depth > 0 && <span style={{ color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:11, flexShrink:0 }}>└</span>}
-            <input value={p.name} onChange={function(e){ updatePath(path, "name", e.target.value); }} style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12, fontFamily:"JetBrains Mono" })} />
-            {nestable && <button onClick={function(){ addChildPath(path); }} title="Add child property"
-              style={{ width:20, height:20, flexShrink:0, borderRadius:5, border:"1px dashed var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontWeight:700, fontSize:13, lineHeight:1 }}>+</button>}
+            <input value={p.name} onChange={function(e){ updatePath(path, "name", e.target.value); }} style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12, fontFamily:"JetBrains Mono", maxWidth: depth > 0 ? Math.max(150, 420 - (depth - 1) * 64) : undefined })} />
+            <button onClick={function(){ addChildPath(path); }} title="Add a child field"
+              style={{ width:20, height:20, flexShrink:0, borderRadius:5, border:"1px dashed var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontWeight:700, fontSize:13, lineHeight:1 }}
+              onMouseEnter={function(e){ e.currentTarget.style.background = "var(--chip)"; e.currentTarget.style.color = "var(--ink)"; }}
+              onMouseLeave={function(e){ e.currentTarget.style.background = "var(--panel-2)"; e.currentTarget.style.color = "var(--ink-3)"; }}>+</button>
             {p.confidence && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color: p.confidence >= 0.9 ? "var(--green)" : "var(--gold)", flexShrink:0, fontWeight:700 }} title={"LLM confidence " + p.confidence}>{Math.round(p.confidence * 100) + "%"}</span>}
             {p.detectedFrom && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", flexShrink:0 }} title={p.detectedFrom}>↩</span>}
           </div>
@@ -18588,7 +18589,7 @@ function AddNodeFlow({ onClose, onCreate }) {
           </button>
           <button onClick={function(){ removePath(path); }} style={{ width:24, height:24, borderRadius:5, border:"1px solid var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", justifySelf:"center" }}>×</button>
         </div>
-        {nestable && expanded && kids.map(function(c, ci){ return renderPropRow(c, path.concat(ci), depth + 1); })}
+        {expanded && kids.map(function(c, ci){ return renderPropRow(c, path.concat(ci), depth + 1); })}
       </div>
     );
   }
