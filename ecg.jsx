@@ -1,5 +1,63 @@
 const { useState, useRef, useEffect, useMemo, useCallback } = React;
 
+// ---------- URL STATE SYNC --------------------------------------------------
+// Keeps the browser URL in sync with in-app navigation so any open graph,
+// workspace tab, detail page, or pane is shareable and survives reload +
+// back/forward. App owns the top-level keys (graph/tab/node/sel/add/rule);
+// child views own their own keys via useUrlParam (ntab, gsec, gdetail, gnew).
+function ecgReadParams() {
+  return new URLSearchParams(window.location.search);
+}
+// Build the "?..." string for a params object (empty string when no params).
+function ecgQueryString(params) {
+  var qs = params.toString();
+  return qs ? "?" + qs : "";
+}
+// Write the given query string to the address bar. push=true creates a new
+// history entry (use for structural navigation), otherwise it replaces the
+// current entry (use for transient state). Fires ecg:urlchange so useUrlParam
+// consumers re-read synchronously.
+function ecgApplyUrl(queryString, push) {
+  if (queryString === window.location.search) return false;
+  var url = window.location.pathname + queryString + window.location.hash;
+  if (push) window.history.pushState(null, "", url);
+  else window.history.replaceState(null, "", url);
+  window.dispatchEvent(new Event("ecg:urlchange"));
+  return true;
+}
+
+// Bind a single query param to component state. Treats `defaultVal` (and
+// null/undefined/"") as "absent" so default values never clutter the URL.
+function useUrlParam(key, defaultVal, opts) {
+  var push = !!(opts && opts.push);
+  function read() {
+    var v = ecgReadParams().get(key);
+    return v === null ? defaultVal : v;
+  }
+  var [val, setVal] = useState(read);
+  useEffect(function() {
+    function onChange() { setVal(read()); }
+    window.addEventListener("popstate", onChange);
+    window.addEventListener("ecg:urlchange", onChange);
+    return function() {
+      window.removeEventListener("popstate", onChange);
+      window.removeEventListener("ecg:urlchange", onChange);
+    };
+  }, [key]);
+  var set = useCallback(function(next) {
+    var resolved = typeof next === "function" ? next(read()) : next;
+    var params = ecgReadParams();
+    if (resolved === null || resolved === undefined || resolved === "" || resolved === defaultVal) {
+      params.delete(key);
+    } else {
+      params.set(key, String(resolved));
+    }
+    ecgApplyUrl(ecgQueryString(params), push);
+    setVal(resolved === null || resolved === undefined || resolved === "" ? defaultVal : resolved);
+  }, [key]);
+  return [val, set];
+}
+
 // ---------- DATA ------------------------------------------------------------
 
 const _ENT_NODES = [
@@ -2886,7 +2944,7 @@ function NodeDetailView({ nodeId, onBack, onCanvas, nodes: liveNodes, edges: liv
   const _nodes = liveNodes && liveNodes.length ? liveNodes : NODES;
   const _edges = liveEdges && liveEdges.length ? liveEdges : EDGES;
   const node = _nodes.find(n => n.id === nodeId);
-  const [tab, setTab] = useState("Overview");
+  const [tab, setTab] = useUrlParam("ntab", "Overview");
   const [editOpen, setEditOpen] = useState(false);
   const [violationRule, setViolationRule] = useState(null);
   const [matchRule, setMatchRule] = useState(null);
@@ -15803,9 +15861,12 @@ var GOV_DATA = {
 };
 
 function GovernanceWorkspace() {
-  var [section, setSection] = useState("overview");
-  var [createKind, setCreateKind] = useState(null); // policy | role | framework | retention | steward | risk | incident | classification
-  var [detail, setDetail] = useState(null); // { kind, id } — when set, renders GovernanceDetailView instead of the section content
+  var [section, setSection] = useUrlParam("gsec", "overview");
+  var [createKind, setCreateKind] = useUrlParam("gnew", ""); // policy | role | framework | retention | steward | risk | incident | classification ("" = none)
+  // Detail page ({kind,id}) serialised to a single "gdetail=kind:id" param.
+  var [detailRaw, setDetailRaw] = useUrlParam("gdetail", "");
+  var detail = detailRaw ? { kind: detailRaw.split(":")[0], id: detailRaw.split(":").slice(1).join(":") } : null;
+  function setDetail(d) { setDetailRaw(d ? d.kind + ":" + d.id : ""); }
 
   // Section registry. Counts surface in the sidebar so the nav feels alive.
   var sections = [
@@ -21754,6 +21815,76 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // ─── URL ↔ STATE ───────────────────────────────────────────────────────────
+  // Top-level navigation mirrored into query params so a graph/tab/node/pane is
+  // shareable and reload/back-forward safe. Child views (node detail, governance)
+  // own their own params via useUrlParam.
+  var TAB_NAMES = ["Graph", "Nodes", "Edges", "Sources", "Records", "Violations", "Governance"];
+  function tabFromUrl(s) {
+    if (!s) return "Graph";
+    var m = TAB_NAMES.find(function(t){ return t.toLowerCase() === s.toLowerCase(); });
+    return m || "Graph";
+  }
+  var restoredRef = useRef(false);
+  var structRef = useRef("");
+
+  // Pull state out of the URL (mount + back/forward). Unknown graph ids fall
+  // back to the landing page since blank/ephemeral graphs aren't persisted.
+  function applyUrlToState() {
+    var p = ecgReadParams();
+    var g = p.get("graph");
+    var known = g && (g === "ps" || CONTEXT_GRAPHS.some(function(x){ return x.id === g; }));
+    if (known) {
+      setCurrentGraphId(g);
+      setBlankGraphName(null);
+      setNodes(NODES.filter(function(n){ return n.type !== "agent"; }));
+      setEditMode(false);
+      setSidebarOpen(true);
+      setTab(tabFromUrl(p.get("tab")));
+      setDetailId(p.get("node") || null);
+      var s = p.get("sel");
+      setSelected(s === "none" ? null : (s || "account"));
+      setAddNodeOpen(p.get("add") === "1");
+      setStewardshipRuleFilter(p.get("rule") || null);
+      structRef.current = [g, tabFromUrl(p.get("tab")), p.get("node") || ""].join("|");
+    } else {
+      setCurrentGraphId(null);
+      setDetailId(null);
+      setAddNodeOpen(false);
+      structRef.current = ["", tabFromUrl(p.get("tab")), ""].join("|");
+    }
+  }
+
+  // State → URL. Skips the first commit (before restore runs). Pushes a new
+  // history entry on structural changes (graph/tab/node), replaces otherwise.
+  useEffect(function() {
+    if (!restoredRef.current) return;
+    var params = ecgReadParams();
+    if (currentGraphId) params.set("graph", currentGraphId); else params.delete("graph");
+    if (currentGraphId && tab && tab !== "Graph") params.set("tab", tab.toLowerCase()); else params.delete("tab");
+    if (currentGraphId && detailId) params.set("node", detailId); else params.delete("node");
+    // Inspector / canvas selection — only meaningful on the Graph tab.
+    if (currentGraphId && !detailId && tab === "Graph") params.set("sel", selected || "none"); else params.delete("sel");
+    if (currentGraphId && addNodeOpen) params.set("add", "1"); else params.delete("add");
+    if (currentGraphId && tab === "Violations" && stewardshipRuleFilter) params.set("rule", stewardshipRuleFilter); else params.delete("rule");
+    // Tidy params owned by child views once their parent view is closed.
+    if (!detailId) params.delete("ntab");
+    if (tab !== "Governance") { params.delete("gsec"); params.delete("gdetail"); params.delete("gnew"); }
+    var struct = [currentGraphId || "", tab, detailId || ""].join("|");
+    var isStruct = struct !== structRef.current;
+    structRef.current = struct;
+    ecgApplyUrl(ecgQueryString(params), isStruct);
+  }, [currentGraphId, tab, detailId, selected, addNodeOpen, stewardshipRuleFilter]);
+
+  // Restore on mount + react to browser back/forward.
+  useEffect(function() {
+    applyUrlToState();
+    restoredRef.current = true;
+    function onPop() { applyUrlToState(); }
+    window.addEventListener("popstate", onPop);
+    return function() { window.removeEventListener("popstate", onPop); };
   }, []);
 
   // Landing screen: pre-graph workspace picker
