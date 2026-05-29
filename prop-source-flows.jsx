@@ -1115,7 +1115,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
       onNext={() => setStep(x => x + 1)}
       onPublish={onClose}
       onClose={onClose}
-      rightPane={step <= 2 ? null : <SrcPreview s={s} sel={sel} node={node} srcCols={srcCols} nodeProps={nodeProps} mappedCount={mappedCount} />}
+      rightPane={null}
     >
       {step === 0 && <SrcSystem s={s} set={set} />}
       {step === 1 && <SrcConnection s={s} set={set} sel={sel} />}
@@ -1282,60 +1282,39 @@ function SrcConnection({ s, set, sel }) {
 
 function SrcObject({ s, set, sel, srcCols }) {
   const [q, setQ] = useState("");
-  const [mode, setMode] = useState(s.query ? "query" : "browse");
   const objects = sel ? getSourceObjects(sel.id, sel) : [];
   const list = objects.filter(o => !q || o.name.toLowerCase().indexOf(q.toLowerCase()) >= 0);
-  const MODES = [{ id: "browse", label: "Browse objects" }, { id: "query", label: "Custom SQL" }];
   return (
     <StepWrap wide eyebrow="STEP 3 · OBJECT" title="Select the object to read" desc={`Search the objects available on ${sel ? sel.name : "the source"} and pick the one to fetch data from.`}>
-      <div style={{ display: "flex", gap: 3, padding: 3, borderRadius: 9, border: "1px solid var(--line)", background: "var(--bg-canvas)", width: "fit-content", marginBottom: 16 }}>
-        {MODES.map(m => {
-          const on = mode === m.id;
-          return <button key={m.id} onClick={() => setMode(m.id)} style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: on ? 600 : 500, background: on ? "var(--ink)" : "transparent", color: on ? "var(--bg-canvas)" : "var(--ink-2)" }}>{m.label}</button>;
-        })}
+      <div style={{ position: "relative", marginBottom: 12 }}>
+        <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--ink-3)", display: "flex" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
+        </span>
+        <input className="winput" style={{ paddingLeft: 40, height: 44 }} placeholder="Search objects…" value={q} onChange={e => setQ(e.target.value)} autoFocus />
       </div>
-
-      {mode === "browse" && (
-        <>
-          <div style={{ position: "relative", marginBottom: 12 }}>
-            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--ink-3)", display: "flex" }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
-            </span>
-            <input className="winput" style={{ paddingLeft: 36 }} placeholder="Search objects…" value={q} onChange={e => setQ(e.target.value)} autoFocus />
-          </div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.5px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 8 }}>{list.length} objects</div>
-          <div style={{ border: "1px solid var(--line)", borderRadius: 11, overflow: "hidden", background: "var(--panel)", maxHeight: 320, overflowY: "auto" }}>
-            {list.map((o, i) => {
-              const on = s.table === o.name;
-              return (
-                <button key={o.name} onClick={() => set({ table: o.name, query: "" })}
-                  style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "11px 14px", border: "none", borderTop: i ? "1px solid var(--line-2)" : "none", background: on ? "var(--bg-canvas)" : "transparent", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}
-                  onMouseEnter={e => { if (!on) e.currentTarget.style.background = "var(--panel-2)"; }}
-                  onMouseLeave={e => { if (!on) e.currentTarget.style.background = "transparent"; }}>
-                  <span style={{ width: 26, height: 26, borderRadius: 6, background: "var(--chip)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-3)", flexShrink: 0 }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">{o.type === "View" ? <><circle cx="12" cy="12" r="3" /><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /></> : <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 9v11" /></>}</svg>
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, fontWeight: 600, color: "var(--ink)" }}>{o.name}</code>
-                    <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>{o.type} · {o.cols} columns</div>
-                  </div>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--ink-3)", flexShrink: 0 }}>{o.rows} rows</span>
-                  {on
-                    ? <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: "50%", background: "var(--ink)", color: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>✓</span>
-                    : <span style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, color: "var(--ink-3)", padding: "5px 12px", borderRadius: 7, border: "1px solid var(--line)" }}>Select</span>}
-                </button>
-              );
-            })}
-            {list.length === 0 && <div style={{ padding: "28px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No objects match “{q}”.</div>}
-          </div>
-        </>
-      )}
-
-      {mode === "query" && (
-        <FormRow label="Custom SQL" required hint="Define exactly what to read. Columns are discovered from the query result.">
-          <textarea className="winput winput-mono winput-code" rows="7" placeholder={"SELECT id, name, industry, arr_usd, updated_at\nFROM accounts\nWHERE is_deleted = false"} value={s.query} onChange={e => set({ query: e.target.value, table: "" })} />
-        </FormRow>
-      )}
+      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.5px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 8 }}>{list.length} objects</div>
+      <div style={{ border: "1px solid var(--line)", borderRadius: 11, overflow: "hidden", background: "var(--panel)" }}>
+        {list.map((o, i) => {
+          const on = s.table === o.name;
+          return (
+            <button key={o.name} onClick={() => set({ table: o.name, query: "" })}
+              style={{ display: "flex", alignItems: "center", gap: 14, width: "100%", padding: "14px 16px", border: "none", borderTop: i ? "1px solid var(--line-2)" : "none", background: on ? "var(--bg-canvas)" : "transparent", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}
+              onMouseEnter={e => { if (!on) e.currentTarget.style.background = "var(--panel-2)"; }}
+              onMouseLeave={e => { if (!on) e.currentTarget.style.background = "transparent"; }}>
+              {sel ? <SrcConnectorLogo c={sel} size={20} /> : <span style={{ width: 32, height: 32, borderRadius: 8, background: "var(--chip)", border: "1px solid var(--line)", flexShrink: 0 }} />}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{o.name}</code>
+                <div style={{ fontSize: 11.5, color: "var(--ink-4)", marginTop: 3 }}>{o.type} · {o.cols} columns</div>
+              </div>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, color: "var(--ink-3)", flexShrink: 0 }}>{o.rows} rows</span>
+              {on
+                ? <span style={{ flexShrink: 0, width: 24, height: 24, borderRadius: "50%", background: "var(--ink)", color: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700 }}>✓</span>
+                : <span style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, color: "var(--ink-3)", padding: "6px 14px", borderRadius: 7, border: "1px solid var(--line)" }}>Select</span>}
+            </button>
+          );
+        })}
+        {list.length === 0 && <div style={{ padding: "32px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No objects match “{q}”.</div>}
+      </div>
 
       {(s.table || s.query) && (
         <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--line-2)" }}>
@@ -1359,7 +1338,7 @@ function SrcMapping({ s, set, srcCols, nodeProps, node, sel }) {
   const mappedCount = Object.values(s.mapping).filter(Boolean).length;
 
   return (
-    <StepWrap eyebrow="STEP 4 · COLUMN MAPPING" title="Map source columns to node properties" desc="Unmapped source columns are dropped. Unmapped node properties retain their current value.">
+    <StepWrap wide eyebrow="STEP 4 · COLUMN MAPPING" title="Map source columns to node properties" desc="Unmapped source columns are dropped. Unmapped node properties retain their current value.">
       <FormRow label={`Coverage · ${mappedCount} / ${srcCols.length} columns mapped`} hint="Coercion is applied automatically when types differ. Override per column if needed.">
         <div style={{ height: 4, background: "var(--line-2)", borderRadius: 2, overflow: "hidden", marginBottom: 2 }}>
           <div style={{ height: "100%", width: (srcCols.length > 0 ? mappedCount/srcCols.length*100 : 0) + "%", background: mappedCount > 0 ? "var(--green)" : "var(--line)", transition: "width 200ms" }} />
@@ -1422,7 +1401,7 @@ function SrcSchedule({ s, set, srcCols }) {
   const TEAM_OPTS = ["data-platform","fin-ops","cs-platform","governance","applied-ml"].map(t => ({ id: t, label: t }));
 
   return (
-    <StepWrap eyebrow="STEP 5 · SCHEDULE & SLO" title="Load, cadence, freshness, and error behaviour" desc="How data is loaded and kept fresh. The SLO becomes a contractual commitment visible to all downstream consumers — set it conservatively.">
+    <StepWrap wide eyebrow="STEP 5 · SCHEDULE & SLO" title="Load, cadence, freshness, and error behaviour" desc="How data is loaded and kept fresh. The SLO becomes a contractual commitment visible to all downstream consumers — set it conservatively.">
       <FormRow label="Load strategy">
         <RadioList options={LOAD_STRATEGIES} value={s.loadStrategy} onChange={v => set({ loadStrategy: v })} />
       </FormRow>
@@ -1500,7 +1479,7 @@ ${s.backfill ? `backfill:\n  window: ${s.backfillWindow}` : "# backfill: disable
 owner: ${s.owner}`;
 
   return (
-    <StepWrap eyebrow="STEP 6 · REVIEW & PUBLISH" title="Review pipeline configuration" desc="Once published this pipeline appears in the Sources tab and begins syncing on the configured schedule.">
+    <StepWrap wide eyebrow="STEP 6 · REVIEW & PUBLISH" title="Review pipeline configuration" desc="Once published this pipeline appears in the Sources tab and begins syncing on the configured schedule.">
       <div className="review-grid">
         <section className="card review-summary">
           <div className="card-head">Summary</div>
