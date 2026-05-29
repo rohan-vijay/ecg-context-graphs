@@ -759,7 +759,7 @@ function NodeShape({ node, selected, highlighted, dimmed, hover }) {
 
 // ---------- HEADER ----------------------------------------------------------
 
-const TABS = ["Graph", "Nodes", "Edges", "Sources", "Records", "Violations", "Governance"];
+const TABS = ["Graph", "Nodes", "Edges", "Knowledge", "Sources", "Records", "Violations", "Governance"];
 
 function Header({ tab, onTab, onAddNode, onBackToLanding, graphName }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -21410,6 +21410,1092 @@ function GraphLandingView({ onOpenGraph }) {
   );
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// KNOWLEDGE  ·  first-class top-level entity (sits after Edges)
+// ────────────────────────────────────────────────────────────────────────────
+// A Knowledge Set bundles ingested sources (Drive, S3, Confluence, websites,
+// data catalogs…). Indexing/Enrichment/PII/Storage configure HOW content is
+// processed; the DISCOVERY module — the heart — profiles WHAT is actually in a
+// source (document kinds, topics, entities, sensitivity, quality) before/while
+// you index it, and turns those findings into a proposed indexing plan.
+// ════════════════════════════════════════════════════════════════════════════
+
+// Semantic palette for document kinds / segments.
+var K_TONES = {
+  purple: { c:"var(--purple)", fill:"var(--purple-fill)", soft:"var(--purple-soft)" },
+  blue:   { c:"var(--blue)",   fill:"var(--blue-fill)",   soft:"var(--blue-soft)" },
+  green:  { c:"var(--green)",  fill:"var(--green-fill)",  soft:"var(--green-soft)" },
+  gold:   { c:"var(--gold)",   fill:"var(--gold-fill)",   soft:"var(--gold-soft)" },
+  coral:  { c:"var(--coral)",  fill:"var(--coral-fill)",  soft:"var(--coral-soft)" },
+  teal:   { c:"#3f8f86", fill:"#dcefea", soft:"#a9d8cf" },
+  slate:  { c:"#6c7689", fill:"#e6e9f0", soft:"#c2c8d4" },
+  gray:   { c:"var(--ink-4)", fill:"var(--chip)", soft:"var(--line)" },
+};
+function ktone(name){ return K_TONES[name] || K_TONES.slate; }
+function kfmt(n){ return n >= 1000 ? (n/1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/,"") + "K" : String(n); }
+
+// ── Discovery profile for the flagship "Sales Knowledge" set ────────────────
+var SALES_KINDS = [
+  { id:"contract", label:"Contracts (MSA)", count:624, tone:"purple", conf:96, sens:"high",
+    desc:"Master service agreements & signed contracts governing subscriptions.",
+    fields:["counterparty","effective_date","term_months","governing_law","total_value","auto_renew"],
+    dateRange:"Jan 2019 – May 2026", langs:["EN (94%)","DE (4%)","FR (2%)"], avgLen:"14 pp",
+    samples:["Acme_MSA_2024_executed.pdf","Globex_MasterAgreement_v3.docx","Initech_MSA_renewal.pdf"],
+    strategy:"Agentic parse (Docling) · contract schema enrichment · route to Contracts store" },
+  { id:"order", label:"Order Forms & Quotes", count:511, tone:"blue", conf:93, sens:"med",
+    desc:"Order forms, quotes and pricing sheets tied to opportunities.",
+    fields:["account","product_skus","acv","start_date","end_date","sales_rep","discount_pct"],
+    dateRange:"Mar 2020 – May 2026", langs:["EN (99%)"], avgLen:"3 pp",
+    samples:["OF_Q2-2026_Northwind.pdf","Quote_Umbrella_Corp_renewal.xlsx","OrderForm_Hooli_expansion.pdf"],
+    strategy:"Tabular → SQL for line items · embed header narrative · extract ACV/term" },
+  { id:"callnote", label:"Call & Meeting Notes", count:397, tone:"green", conf:88, sens:"low",
+    desc:"Rep-authored call summaries, discovery notes, QBR write-ups.",
+    fields:["account","attendees","meeting_date","next_steps","sentiment"],
+    dateRange:"Jun 2021 – May 2026", langs:["EN (97%)","ES (3%)"], avgLen:"1.4 pp",
+    samples:["Discovery_call_Acme_2026-04.md","QBR_notes_Globex_Q1.docx","Demo_recap_Initech.txt"],
+    strategy:"Token splitter (512) · LLM enrichment: account, next_steps, sentiment" },
+  { id:"nda", label:"NDAs", count:284, tone:"gold", conf:95, sens:"high",
+    desc:"Mutual & one-way non-disclosure agreements.",
+    fields:["parties","effective_date","term_months","mutual"],
+    dateRange:"Jan 2019 – Apr 2026", langs:["EN (98%)","DE (2%)"], avgLen:"4 pp",
+    samples:["NDA_mutual_Acme.pdf","NDA_oneway_Stark_Industries.pdf","NDA_Wayne_Ent_2025.docx"],
+    strategy:"Agentic parse · extract parties + term · flag for legal review" },
+  { id:"proposal", label:"Proposals & Decks", count:227, tone:"coral", conf:84, sens:"med",
+    desc:"Sales proposals, pitch decks and solution overviews.",
+    fields:["account","opportunity","pricing_tier","valid_until"],
+    dateRange:"Sep 2021 – May 2026", langs:["EN (100%)"], avgLen:"22 slides",
+    samples:["Proposal_Acme_Platform_2026.pptx","Pitch_Globex_renewal.pdf","Solution_overview_Hooli.pptx"],
+    strategy:"Vision LLM parse (slides) · per-slide chunk · image captioning" },
+  { id:"invoice", label:"Invoices", count:199, tone:"teal", conf:97, sens:"med",
+    desc:"Billing invoices drawn from subscription cycles.",
+    fields:["invoice_no","account","amount","currency","due_date","status"],
+    dateRange:"Jan 2022 – May 2026", langs:["EN (96%)","DE (4%)"], avgLen:"2 pp",
+    samples:["INV-2026-04812_Acme.pdf","INV-2026-04977_Globex.pdf","INV-2026-05001_Initech.pdf"],
+    strategy:"Tabular → SQL · OCR for scanned · mask amounts in previews" },
+  { id:"email", label:"Email Threads", count:170, tone:"slate", conf:81, sens:"high",
+    desc:"Exported deal-related email threads and forwards.",
+    fields:["thread_subject","participants","first_date","last_date"],
+    dateRange:"Feb 2022 – May 2026", langs:["EN (95%)","ES (5%)"], avgLen:"6 msgs",
+    samples:["RE_Acme_renewal_terms.eml","FW_Globex_security_review.eml","Thread_Initech_pricing.eml"],
+    strategy:"Thread-aware chunking · PII mask emails/phones · sender enrichment" },
+  { id:"report", label:"Reports & Spreadsheets", count:142, tone:"green", conf:79, sens:"low",
+    desc:"Pipeline reports, forecasts and ad-hoc analysis exports.",
+    fields:["report_type","period","owner"],
+    dateRange:"Jan 2023 – May 2026", langs:["EN (100%)"], avgLen:"—",
+    samples:["Pipeline_forecast_Q2-2026.xlsx","Win-loss_analysis_H1.csv","ACV_by_segment.xlsx"],
+    strategy:"Tabular → embedding · sheet-per-chunk · header inference" },
+  { id:"unclassified", label:"Unclassified", count:286, tone:"gray", conf:42, sens:"unknown",
+    desc:"Low-confidence or mixed content the classifier couldn't place.",
+    fields:[], dateRange:"—", langs:["mixed"], avgLen:"—",
+    samples:["scan_001.pdf","IMG_4821.jpg","untitled (3).docx","archive_old.zip"],
+    strategy:"Hold for review · sample 50 → refine taxonomy · likely OCR needed" },
+];
+
+var SALES_DISCOVERY = {
+  funnel: { discovered:2840, profiled:1840, indexed:1000, enriched:842, failed:102 },
+  coverage: 65, confidence: 94, sampleNote:"Profiled 1,840 of 2,840 documents",
+  scannedAt:"2h ago", taxonomy:"Open",
+  kinds: SALES_KINDS,
+  topics: [
+    { label:"Renewals & expansion", count:512, tone:"blue" },
+    { label:"Pricing & discounting", count:436, tone:"purple" },
+    { label:"Security & compliance review", count:318, tone:"gold" },
+    { label:"Data residency (EU)", count:204, tone:"coral" },
+    { label:"Onboarding & implementation", count:188, tone:"green" },
+    { label:"Competitive displacement", count:131, tone:"teal" },
+  ],
+  entities: [
+    { group:"Organizations", tone:"blue", items:[["Acme Corp",218],["Globex",173],["Initech",142],["Hooli",98],["Umbrella Corp",61]] },
+    { group:"People", tone:"purple", items:[["Jane Okafor",84],["David Mensah",72],["Priya Nair",55],["Tom Realmonte",41]] },
+    { group:"Products", tone:"green", items:[["Platform Enterprise",402],["Add-on: Insights",211],["Support Premier",96]] },
+  ],
+  sensitivity: [
+    { type:"Email addresses", count:1240, kinds:["Email Threads","Contracts","Call Notes"], sev:"med" },
+    { type:"Signatures / names", count:910, kinds:["Contracts","NDAs"], sev:"med" },
+    { type:"Monetary amounts", count:733, kinds:["Order Forms","Invoices","Contracts"], sev:"low" },
+    { type:"Phone numbers", count:288, kinds:["Email Threads","Call Notes"], sev:"med" },
+    { type:"API keys / secrets", count:4, kinds:["Unclassified","Reports"], sev:"high" },
+  ],
+  quality: [
+    { id:"dupes", label:"Duplicates / near-dupes", count:214, tone:"gold", fix:"Dedupe before indexing", action:"dedupe" },
+    { id:"scanned", label:"Scanned-image PDFs", count:96, tone:"coral", fix:"Route to Vision / OCR parse", action:"index" },
+    { id:"stale", label:"Stale (untouched > 3 yr)", count:438, tone:"slate", fix:"Add date filter to exclude", action:"filter" },
+    { id:"corrupt", label:"Empty / corrupt", count:12, tone:"coral", fix:"Skip & log", action:"none" },
+    { id:"oversized", label:"Oversized (> 50 MB)", count:7, tone:"gold", fix:"Split or skip", action:"none" },
+    { id:"unsupported", label:"Unsupported formats", count:31, tone:"gray", fix:"Map mimetype or exclude", action:"index" },
+  ],
+  projection: { chunks:"148K", tokens:"38.6M", storage:"2.4 GB", cost:"$312 / mo" },
+  proposedRules: [
+    { id:"r1", finding:"22% of the corpus is Contracts (MSA)", action:"Add an Indexing Strategy for PDF/DOCX → Agentic (Docling) parse with a contract schema", type:"indexing", sev:"high", opens:"kidx" },
+    { id:"r2", finding:"96 scanned-image PDFs detected (no text layer)", action:"Switch those to Vision LLM / OCR parsing so they're searchable", type:"indexing", sev:"high", opens:"kidx" },
+    { id:"r3", finding:"4 files contain API keys / secrets", action:"Add a PII regex pattern to redact secrets + quarantine the 4 files", type:"pii", sev:"high", opens:"kpii" },
+    { id:"r4", finding:"438 documents untouched for > 3 years", action:"Add a date filter to skip pre-2023 files (−15% volume, −$47/mo)", type:"filter", sev:"med", opens:"ksrc" },
+    { id:"r5", finding:"Contracts, NDAs, Invoices share entities (counterparty, value)", action:"Add an LLM enrichment strategy to extract counterparty + value + dates", type:"enrichment", sev:"med", opens:"kenr" },
+    { id:"r6", finding:"214 duplicate / near-duplicate files", action:"Enable dedupe so identical content isn't embedded twice (−$22/mo)", type:"quality", sev:"med", opens:null },
+  ],
+};
+
+// Lighter discovery profile generator for non-flagship sets.
+function genDiscovery(seed){
+  return {
+    funnel:{ discovered:seed.docs, profiled:Math.round(seed.docs*0.6), indexed:Math.round(seed.docs*0.4), enriched:Math.round(seed.docs*0.3), failed:Math.round(seed.docs*0.02) },
+    coverage:60, confidence:90, sampleNote:"Profiled "+kfmt(Math.round(seed.docs*0.6))+" of "+kfmt(seed.docs)+" documents",
+    scannedAt:"1d ago", taxonomy:"Open",
+    kinds: SALES_KINDS.slice(0,5).map(function(k,i){ return Object.assign({}, k, { count: Math.max(8, Math.round(seed.docs*[0.3,0.22,0.18,0.12,0.18][i])) }); }),
+    topics: SALES_DISCOVERY.topics.slice(0,4),
+    entities: SALES_DISCOVERY.entities,
+    sensitivity: SALES_DISCOVERY.sensitivity.slice(0,3),
+    quality: SALES_DISCOVERY.quality.slice(0,4),
+    projection:{ chunks:kfmt(Math.round(seed.docs*52)), tokens:kfmt(Math.round(seed.docs*13000)), storage:(seed.docs*0.8/1000).toFixed(1)+" GB", cost:"$"+Math.max(20,Math.round(seed.docs*0.11))+" / mo" },
+    proposedRules: SALES_DISCOVERY.proposedRules.slice(0,3),
+  };
+}
+
+// ── Knowledge sets (top-level list) ─────────────────────────────────────────
+var KSOURCE_APPS = {
+  gdrive:{ label:"Google Drive", glyph:"▲", color:"#1a73e8" },
+  s3:{ label:"Amazon S3", glyph:"S3", color:"#e25444" },
+  confluence:{ label:"Confluence", glyph:"C", color:"#1868db" },
+  website:{ label:"Website", glyph:"🌐", color:"#5b6470" },
+  catalog:{ label:"Data Catalog", glyph:"▥", color:"#8a78a8" },
+  sharepoint:{ label:"SharePoint", glyph:"SP", color:"#0a7c8a" },
+  doc:{ label:"Document upload", glyph:"📄", color:"#6a6c5c" },
+  notion:{ label:"Notion", glyph:"N", color:"#1f211b" },
+};
+
+var KSETS = [
+  { id:"sales", name:"Sales Knowledge", desc:"Contracts, order forms, call notes and proposals powering the revenue org.",
+    tags:["revenue","contracts"], workspace:"Sales and CRM", status:"active",
+    docs:2840, sourcesN:4, coverage:65, sensitivity:"high", createdBy:"Rohan", createdOn:"29 May 2026", lastSynced:"2h ago",
+    sources:[
+      { id:"s1", app:"gdrive", action:"Index a folder — all files", type:"Application", status:"synced", docs:1980, discovered:2102, syncing:0, synced:1980, failed:102, freq:"Every 6 hours", lastSynced:"2h ago", breakdown:[["Documents",612,"blue"],["Spreadsheets",398,"green"],["Slides",233,"gold"],["PDFs",611,"coral"],["Other",228,"gray"]] },
+      { id:"s2", app:"s3", action:"Import all files", type:"Application", status:"synced", docs:540, discovered:540, syncing:0, synced:540, failed:0, freq:"Daily", lastSynced:"6h ago", breakdown:[["PDFs",312,"coral"],["Documents",128,"blue"],["Other",100,"gray"]] },
+      { id:"s3c", app:"confluence", action:"Index space", type:"Application", status:"syncing", docs:220, discovered:260, syncing:40, synced:220, failed:0, freq:"Every 12 hours", lastSynced:"syncing…", breakdown:[["Pages",220,"blue"]] },
+      { id:"s4", app:"website", action:"Crawl site", type:"Website", status:"draft", docs:0, discovered:0, syncing:0, synced:0, failed:0, freq:"N/A", lastSynced:"—", breakdown:[] },
+    ] },
+  { id:"hr", name:"HR General", desc:"Policies, handbooks and people-ops documents.",
+    tags:["people","policy"], workspace:"—", status:"active",
+    docs:980, sourcesN:4, coverage:48, sensitivity:"high", createdBy:"Omar", createdOn:"20 May 2026", lastSynced:"7d ago",
+    sources:[
+      { id:"h1", app:"catalog", action:"Import entity", type:"Data Catalog", status:"draft", docs:0, discovered:0, syncing:0, synced:0, failed:0, freq:"N/A", lastSynced:"—", breakdown:[] },
+      { id:"h2", app:"s3", action:"Import all files", type:"Application", status:"draft", docs:0, discovered:0, syncing:0, synced:0, failed:0, freq:"N/A", lastSynced:"—", breakdown:[] },
+      { id:"h3", app:"website", action:"Crawl site", type:"Website", status:"draft", docs:0, discovered:0, syncing:0, synced:0, failed:0, freq:"N/A", lastSynced:"—", breakdown:[] },
+      { id:"h4", app:"doc", action:"Document", type:"Document", status:"failed", docs:0, discovered:1, syncing:0, synced:0, failed:1, freq:"N/A", lastSynced:"—", breakdown:[] },
+    ] },
+  { id:"support", name:"Customer Support", desc:"Help-center articles, macros and resolved ticket transcripts.",
+    tags:["support"], workspace:"—", status:"active",
+    docs:1460, sourcesN:2, coverage:72, sensitivity:"med", createdBy:"Jainam", createdOn:"26 May 2026", lastSynced:"4h ago", sources:[] },
+  { id:"website", name:"Website", desc:"Public marketing & docs site content.",
+    tags:[], workspace:"—", status:"active",
+    docs:320, sourcesN:1, coverage:90, sensitivity:"low", createdBy:"Soumya", createdOn:"25 May 2026", lastSynced:"1d ago", sources:[] },
+  { id:"training", name:"Training", desc:"Enablement decks and certification material.",
+    tags:["enablement"], workspace:"—", status:"draft",
+    docs:0, sourcesN:0, coverage:0, sensitivity:"low", createdBy:"Rajkumar", createdOn:"25 May 2026", lastSynced:"—", sources:[] },
+];
+function ksetById(id){ return KSETS.find(function(s){ return s.id === id; }); }
+function ksetDiscovery(set){ return set.id === "sales" ? SALES_DISCOVERY : genDiscovery(set); }
+
+// ── Small shared primitives ─────────────────────────────────────────────────
+function KPill({ children, tone, soft }){
+  var t = ktone(tone || "slate");
+  return <span style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"'JetBrains Mono', monospace", fontSize:10, fontWeight:600, letterSpacing:"0.3px", padding:"3px 8px", borderRadius:5, background: soft ? "transparent" : t.fill, color:t.c, border: soft ? "1px solid "+t.soft : "1px solid transparent" }}>{children}</span>;
+}
+var K_STATUS = { active:{l:"Active",t:"green"}, synced:{l:"Synced",t:"green"}, syncing:{l:"Syncing",t:"blue"}, draft:{l:"Draft",t:"slate"}, failed:{l:"Failed",t:"coral"} };
+function KStatus({ s }){ var m = K_STATUS[s] || K_STATUS.draft; return <KPill tone={m.t}>{m.l}</KPill>; }
+var K_SENS = { high:{l:"High PII",t:"coral"}, med:{l:"Some PII",t:"gold"}, low:{l:"Low PII",t:"green"}, unknown:{l:"Unknown",t:"gray"} };
+function KSens({ s }){ var m = K_SENS[s] || K_SENS.unknown; return <KPill tone={m.t} soft>{m.l}</KPill>; }
+
+// Stacked horizontal breakdown bar from [label,count,tone] or kind objects.
+function KStackBar({ segments, height }){
+  var total = segments.reduce(function(a,s){ return a + (s.count != null ? s.count : s[1]); }, 0) || 1;
+  return (
+    <div style={{ display:"flex", width:"100%", height:height||12, borderRadius:6, overflow:"hidden", background:"var(--chip)", border:"1px solid var(--line)" }}>
+      {segments.map(function(s,i){
+        var count = s.count != null ? s.count : s[1];
+        var tone = s.tone || s[2];
+        var pct = (count/total)*100;
+        return <div key={i} title={(s.label||s[0])+" · "+count} style={{ width:pct+"%", background:ktone(tone).c, borderRight: i < segments.length-1 ? "1px solid var(--panel)" : "none" }} />;
+      })}
+    </div>
+  );
+}
+function KMiniBar({ pct, tone }){
+  return <div style={{ width:64, height:5, borderRadius:3, background:"var(--chip)", overflow:"hidden" }}><div style={{ width:Math.max(3,pct)+"%", height:"100%", background:ktone(tone||"blue").c }} /></div>;
+}
+
+// Generic centered creation/config modal shell (matches node/property modals).
+function KModal({ icon, title, subtitle, onClose, children, footer, width }){
+  return (
+    <div onClick={function(e){ if(e.target===e.currentTarget) onClose(); }} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+      <div onClick={function(e){ e.stopPropagation(); }} style={{ width:"100%", maxWidth:width||540, maxHeight:"88vh", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:14, boxShadow:"0 32px 80px rgba(0,0,0,0.32)", display:"flex", flexDirection:"column", overflow:"hidden" }}>
+        <div style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"20px 22px 16px", borderBottom:"1px solid var(--line-2)" }}>
+          {icon && <div style={{ width:40, height:40, borderRadius:10, background:"var(--purple-fill)", color:"var(--purple)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{icon}</div>}
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:22, color:"var(--ink)", lineHeight:1.12 }}>{title}</div>
+            {subtitle && <div style={{ fontSize:12.5, color:"var(--ink-3)", marginTop:4, lineHeight:1.5 }}>{subtitle}</div>}
+          </div>
+          <button onClick={onClose} style={{ width:30, height:30, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", color:"var(--ink-3)", flexShrink:0, fontSize:13 }}>✕</button>
+        </div>
+        <div style={{ flex:1, overflowY:"auto", padding:"18px 22px 22px" }}>{children}</div>
+        {footer && <div style={{ flexShrink:0, padding:"13px 22px", borderTop:"1px solid var(--line)", display:"flex", justifyContent:"flex-end", gap:8, background:"var(--panel-2)" }}>{footer}</div>}
+      </div>
+    </div>
+  );
+}
+var K_LBL = { display:"block", fontFamily:"'JetBrains Mono', monospace", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:7 };
+var K_INP = { border:"1px solid var(--line)", borderRadius:8, padding:"10px 12px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--bg-canvas)", outline:"none", boxSizing:"border-box", width:"100%" };
+function KField({ label, hint, children }){
+  return (
+    <div style={{ marginBottom:18 }}>
+      <label style={K_LBL}>{label}</label>
+      {children}
+      {hint && <div style={{ fontSize:11, color:"var(--ink-4)", marginTop:6, lineHeight:1.45 }}>{hint}</div>}
+    </div>
+  );
+}
+// Lightweight custom select.
+function KSelect({ value, placeholder, options, onChange }){
+  var [open, setOpen] = useState(false);
+  var sel = options.find(function(o){ return (o.id||o) === value; });
+  return (
+    <div style={{ position:"relative" }}>
+      <button onClick={function(){ setOpen(!open); }} style={Object.assign({}, K_INP, { display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer", textAlign:"left" })}>
+        <span style={{ color: sel ? "var(--ink)" : "var(--ink-4)" }}>{sel ? (sel.label||sel) : (placeholder||"Select…")}</span>
+        <span style={{ color:"var(--ink-3)", fontSize:11 }}>▾</span>
+      </button>
+      {open && <>
+        <div style={{ position:"fixed", inset:0, zIndex:210 }} onClick={function(){ setOpen(false); }} />
+        <div style={{ position:"absolute", top:"calc(100% + 5px)", left:0, right:0, zIndex:211, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:5, maxHeight:240, overflowY:"auto" }}>
+          {options.map(function(o){ var id=o.id||o; var lab=o.label||o; var on = id===value;
+            return <button key={id} onClick={function(){ onChange(id); setOpen(false); }} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", width:"100%", padding:"8px 10px", borderRadius:6, border:"none", background: on?"var(--bg-canvas)":"transparent", cursor:"pointer", fontFamily:"inherit", fontSize:13, color:"var(--ink)", textAlign:"left" }}
+              onMouseEnter={function(e){ if(!on) e.currentTarget.style.background="var(--panel-2)"; }} onMouseLeave={function(e){ if(!on) e.currentTarget.style.background="transparent"; }}>
+              {lab}{on && <span style={{ color:"var(--green)", fontWeight:700 }}>✓</span>}
+            </button>;
+          })}
+        </div>
+      </>}
+    </div>
+  );
+}
+function KChipMulti({ value, options, placeholder, onChange }){
+  var [open, setOpen] = useState(false);
+  function toggle(id){ onChange(value.includes(id) ? value.filter(function(v){ return v!==id; }) : value.concat([id])); }
+  return (
+    <div style={{ position:"relative" }}>
+      <button onClick={function(){ setOpen(!open); }} style={Object.assign({}, K_INP, { display:"flex", alignItems:"center", flexWrap:"wrap", gap:5, cursor:"pointer", minHeight:42 })}>
+        {value.length===0 && <span style={{ color:"var(--ink-4)" }}>{placeholder||"Select…"}</span>}
+        {value.map(function(v){ return <span key={v} style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"'JetBrains Mono', monospace", fontSize:10.5, padding:"3px 4px 3px 8px", borderRadius:5, background:"var(--purple-fill)", color:"var(--purple)", fontWeight:600 }}>{v}<span onClick={function(e){ e.stopPropagation(); toggle(v); }} style={{ cursor:"pointer", opacity:0.6 }}>×</span></span>; })}
+        <span style={{ marginLeft:"auto", color:"var(--ink-3)", fontSize:11 }}>▾</span>
+      </button>
+      {open && <>
+        <div style={{ position:"fixed", inset:0, zIndex:210 }} onClick={function(){ setOpen(false); }} />
+        <div style={{ position:"absolute", top:"calc(100% + 5px)", left:0, right:0, zIndex:211, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, display:"flex", flexWrap:"wrap", gap:5, maxHeight:200, overflowY:"auto" }}>
+          {options.map(function(o){ var on = value.includes(o); return <button key={o} onClick={function(){ toggle(o); }} style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:10.5, padding:"5px 9px", borderRadius:5, cursor:"pointer", border:"1px solid "+(on?"var(--purple-soft)":"var(--line)"), background: on?"var(--purple-fill)":"transparent", color: on?"var(--purple)":"var(--ink-2)", fontWeight: on?700:500 }}>{on&&"✓ "}{o}</button>; })}
+        </div>
+      </>}
+    </div>
+  );
+}
+function KToggleRow({ on, onToggle, title, desc, children }){
+  return (
+    <div style={{ borderBottom:"1px solid var(--line-2)", padding:"16px 0" }}>
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:16 }}>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{title}</div>
+          {desc && <div style={{ fontSize:12, color:"var(--ink-3)", marginTop:3, lineHeight:1.5 }}>{desc}</div>}
+        </div>
+        <button onClick={onToggle} style={{ width:38, height:22, borderRadius:11, border:"none", cursor:"pointer", background: on?"var(--purple)":"var(--line)", position:"relative", flexShrink:0, transition:"background 120ms" }}>
+          <span style={{ position:"absolute", top:2, left: on?18:2, width:18, height:18, borderRadius:"50%", background:"#fff", transition:"left 120ms", boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }} />
+        </button>
+      </div>
+      {on && children && <div style={{ marginTop:14 }}>{children}</div>}
+    </div>
+  );
+}
+function KRadioCards({ value, options, onChange, cols }){
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"repeat("+(cols||options.length)+", 1fr)", gap:10 }}>
+      {options.map(function(o){ var on = o.id===value;
+        return <button key={o.id} onClick={function(){ onChange(o.id); }} style={{ padding:"13px 14px", textAlign:"left", border:"1px solid "+(on?"var(--purple)":"var(--line)"), borderRadius:9, background:"var(--bg-canvas)", cursor:"pointer", fontFamily:"inherit", boxShadow: on?"0 0 0 2px var(--purple-fill)":"none" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom: o.desc?5:0 }}>
+            <span style={{ width:14, height:14, borderRadius:"50%", border:"1px solid "+(on?"var(--purple)":"var(--line)"), background: on?"var(--purple)":"transparent", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>{on && <span style={{ width:5, height:5, borderRadius:"50%", background:"#fff" }} />}</span>
+            <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{o.label}</span>
+          </div>
+          {o.desc && <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.45, paddingLeft:22 }}>{o.desc}</div>}
+        </button>;
+      })}
+    </div>
+  );
+}
+function KSectionHead({ icon, title, desc, right }){
+  return (
+    <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:16, marginBottom:18 }}>
+      <div style={{ display:"flex", gap:13 }}>
+        {icon && <div style={{ width:36, height:36, borderRadius:9, background:"var(--panel)", border:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--ink-2)", flexShrink:0 }}>{icon}</div>}
+        <div>
+          <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:24, color:"var(--ink)", lineHeight:1.1 }}>{title}</div>
+          {desc && <div style={{ fontSize:13, color:"var(--ink-3)", marginTop:4, maxWidth:620, lineHeight:1.5 }}>{desc}</div>}
+        </div>
+      </div>
+      {right}
+    </div>
+  );
+}
+function KCard({ title, right, children, pad }){
+  return (
+    <div style={{ border:"1px solid var(--line)", borderRadius:12, background:"var(--panel)", overflow:"hidden" }}>
+      {title && <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 16px", borderBottom:"1px solid var(--line-2)" }}>
+        <div style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{title}</div>{right}
+      </div>}
+      <div style={{ padding: pad===false ? 0 : "16px" }}>{children}</div>
+    </div>
+  );
+}
+
+// ════════════════ ROUTER: list ⇄ set detail ════════════════════════════════
+function KnowledgeView(){
+  var [ksetId, setKsetId] = useUrlParam("kset", "");
+  var set = ksetId ? ksetById(ksetId) : null;
+  if (set) return <KSetDetail set={set} onBack={function(){ setKsetId(""); }} />;
+  return <KSetsList onOpen={function(id){ setKsetId(id); }} />;
+}
+
+// ──────────────── Knowledge Sets list ───────────────────────────────────────
+function KSetsList({ onOpen }){
+  var [filter, setFilter] = useState("all");
+  var [q, setQ] = useState("");
+  var [newOpen, setNewOpen] = useUrlFlow("knew", "");
+  var counts = useMemo(function(){ return { all:KSETS.length, active:KSETS.filter(function(s){return s.status==="active";}).length, draft:KSETS.filter(function(s){return s.status==="draft";}).length }; }, []);
+  var rows = KSETS.filter(function(s){
+    if (filter==="active" && s.status!=="active") return false;
+    if (filter==="draft" && s.status!=="draft") return false;
+    if (q && s.name.toLowerCase().indexOf(q.toLowerCase())<0) return false;
+    return true;
+  });
+  return (
+    <div className="nodes-view">
+      <div className="nv-head">
+        <div className="nv-head-left"><div className="nv-title">Knowledge</div></div>
+        <div className="nv-head-right">
+          <button className="btn-ghost">Bulk export</button>
+          <button className="btn-dark" onClick={function(){ setNewOpen("1"); }}>+ New Knowledge Set</button>
+        </div>
+      </div>
+      <div className="nv-chips-row">
+        <div className="nv-chips">
+          {[["all","All"],["active","Active"],["draft","Draft"]].map(function(c){ return <button key={c[0]} className={"chip"+(filter===c[0]?" on":"")} onClick={function(){ setFilter(c[0]); }}>{c[1]} <span className="chip-n">{counts[c[0]]}</span></button>; })}
+          <input value={q} onChange={function(e){ setQ(e.target.value); }} placeholder="Search knowledge sets…" style={{ marginLeft:10, border:"1px solid var(--line)", borderRadius:7, padding:"6px 10px", fontSize:12.5, fontFamily:"inherit", background:"var(--bg-canvas)", color:"var(--ink)", width:220, outline:"none" }} />
+        </div>
+        <div className="nv-meta">{rows.length} of {KSETS.length} sets</div>
+      </div>
+      <div className="nv-table">
+        <div className="nv-row nv-head-row" style={{ gridTemplateColumns:"minmax(220px,1.6fr) 90px 100px 150px 110px 1fr 130px 100px" }}>
+          <div className="nv-th nv-th-name">Knowledge set</div>
+          <div className="nv-th nv-th-num">Sources</div>
+          <div className="nv-th nv-th-num">Documents</div>
+          <div className="nv-th">Discovery</div>
+          <div className="nv-th">Sensitivity</div>
+          <div className="nv-th">Workspace</div>
+          <div className="nv-th">Last synced</div>
+          <div className="nv-th">Status</div>
+        </div>
+        <div className="nv-body">
+          {rows.map(function(s){
+            return (
+              <button key={s.id} className="nv-row" onClick={function(){ onOpen(s.id); }} style={{ gridTemplateColumns:"minmax(220px,1.6fr) 90px 100px 150px 110px 1fr 130px 100px" }}>
+                <div className="nv-cell nv-th-name" style={{ display:"flex", gap:11, alignItems:"center", minWidth:0 }}>
+                  <span style={{ width:32, height:32, borderRadius:8, background:"var(--purple-fill)", color:"var(--purple)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 7a2 2 0 012-2h4l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2V7z"/></svg>
+                  </span>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontWeight:600, color:"var(--ink)", fontSize:13.5, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.name}</div>
+                    <div style={{ fontSize:11.5, color:"var(--ink-3)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.desc}</div>
+                  </div>
+                </div>
+                <div className="nv-cell nv-num">{s.sourcesN}</div>
+                <div className="nv-cell nv-num">{kfmt(s.docs)}</div>
+                <div className="nv-cell" style={{ display:"flex", alignItems:"center", gap:8 }}><KMiniBar pct={s.coverage} tone={s.coverage>=70?"green":s.coverage>=40?"gold":"coral"} /><span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:11, color:"var(--ink-3)" }}>{s.coverage}%</span></div>
+                <div className="nv-cell"><KSens s={s.sensitivity} /></div>
+                <div className="nv-cell" style={{ fontSize:12.5, color:"var(--ink-2)" }}>{s.workspace}</div>
+                <div className="nv-cell" style={{ fontSize:12, color:"var(--ink-3)", fontFamily:"'JetBrains Mono', monospace" }}>{s.lastSynced}</div>
+                <div className="nv-cell"><KStatus s={s.status} /></div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {newOpen && <NewKnowledgeSetModal onClose={function(){ setNewOpen(""); }} onCreate={function(){ setNewOpen(""); }} />}
+    </div>
+  );
+}
+
+function NewKnowledgeSetModal({ onClose, onCreate }){
+  var [name, setName] = useState("");
+  var [desc, setDesc] = useState("");
+  var [tags, setTags] = useState([]);
+  var [ws, setWs] = useState("");
+  return (
+    <KModal onClose={onClose}
+      icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 7a2 2 0 012-2h4l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2V7z"/></svg>}
+      title="New Knowledge Set" subtitle="Help AI make more informed decisions by adding knowledge sources"
+      footer={<><button className="btn-ghost" onClick={onClose}>Cancel</button><button className="btn-dark" disabled={!name.trim()} style={{ opacity:name.trim()?1:0.45 }} onClick={onCreate}>Create</button></>}>
+      <KField label="Name *"><input value={name} onChange={function(e){ setName(e.target.value); }} placeholder="e.g. Sales Knowledge" style={K_INP} /></KField>
+      <KField label="Description"><textarea value={desc} onChange={function(e){ setDesc(e.target.value); }} placeholder="Describe your knowledge set here…" rows={3} style={Object.assign({}, K_INP, { resize:"vertical", lineHeight:1.5 })} /></KField>
+      <KField label="Tags"><KChipMulti value={tags} onChange={setTags} placeholder="Select tags" options={["revenue","contracts","support","people","policy","enablement","public"]} /></KField>
+      <KField label="Workspace"><KSelect value={ws} onChange={setWs} placeholder="Select workspace" options={["Sales and CRM","People Ops","Support","Marketing"]} /></KField>
+    </KModal>
+  );
+}
+
+// ──────────────── Knowledge Set detail (sub-nav router) ─────────────────────
+var KSECTIONS = [
+  { id:"discovery", label:"Discovery" },
+  { id:"sources", label:"Knowledge" },
+  { id:"indexing", label:"Indexing" },
+  { id:"enrichment", label:"Enrichment" },
+  { id:"pii", label:"PII Masking" },
+  { id:"storage", label:"Storage" },
+];
+var KSEC_ICONS = {
+  discovery: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>,
+  sources: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg>,
+  indexing: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>,
+  enrichment: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2 2M16 16l2 2M18 6l-2 2M8 16l-2 2"/></svg>,
+  pii: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>,
+  storage: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6"/></svg>,
+};
+
+function KSetDetail({ set, onBack }){
+  var [sec, setSec] = useUrlParam("ksec", "discovery");
+  var [srcOpen, setSrcOpen] = useUrlFlow("ksrc", "");
+  var disco = ksetDiscovery(set);
+  return (
+    <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 52px)", overflow:"hidden" }}>
+      {/* breadcrumb + header */}
+      <div style={{ padding:"16px 26px 0" }}>
+        <div style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:11, color:"var(--ink-3)", marginBottom:8 }}>
+          <button onClick={onBack} style={{ background:"none", border:"none", color:"var(--ink-3)", cursor:"pointer", fontFamily:"inherit", fontSize:11, padding:0 }}>Knowledge</button>
+          <span style={{ margin:"0 7px" }}>/</span><span style={{ color:"var(--ink)" }}>{set.name}</span>
+        </div>
+        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:16, paddingBottom:16, borderBottom:"1px solid var(--line)" }}>
+          <div>
+            <div style={{ display:"flex", alignItems:"center", gap:11 }}>
+              <span style={{ fontFamily:"'Instrument Serif', serif", fontSize:30, color:"var(--ink)", lineHeight:1 }}>{set.name}</span>
+              <KPill tone="gold" soft>Undeployed Changes</KPill>
+            </div>
+            <div style={{ fontSize:12, color:"var(--ink-3)", marginTop:5, fontFamily:"'JetBrains Mono', monospace" }}>Last updated {set.lastSynced} · {set.sourcesN} sources · {kfmt(set.docs)} documents</div>
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <button className="btn-ghost" style={{ border:"1px solid var(--line)", borderRadius:8, padding:"8px 16px" }}>Publish</button>
+            <button className="btn-dark" style={{ padding:"8px 16px" }} onClick={function(){ setSrcOpen("1"); }}>+ New Knowledge</button>
+          </div>
+        </div>
+      </div>
+      {/* body: sub-nav + content */}
+      <div style={{ display:"flex", flex:1, minHeight:0 }}>
+        <div style={{ width:210, flexShrink:0, borderRight:"1px solid var(--line)", padding:"16px 12px", overflowY:"auto" }}>
+          {KSECTIONS.map(function(s){ var on = sec===s.id;
+            return <button key={s.id} onClick={function(){ setSec(s.id); }} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:8, border:"none", background: on?"var(--purple-fill)":"transparent", color: on?"var(--purple)":"var(--ink-2)", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight: on?600:500, textAlign:"left", marginBottom:2 }}
+              onMouseEnter={function(e){ if(!on) e.currentTarget.style.background="var(--bg-canvas)"; }} onMouseLeave={function(e){ if(!on) e.currentTarget.style.background="transparent"; }}>
+              <span style={{ display:"flex", color: on?"var(--purple)":"var(--ink-3)" }}>{KSEC_ICONS[s.id]}</span>{s.label}
+              {s.id==="discovery" && <span style={{ marginLeft:"auto", width:6, height:6, borderRadius:"50%", background:"var(--purple)" }} />}
+            </button>;
+          })}
+        </div>
+        <div style={{ flex:1, minWidth:0, overflowY:"auto", padding:"24px 30px 60px" }}>
+          {sec==="discovery" && <DiscoveryModule set={set} disco={disco} onAddSource={function(){ setSrcOpen("1"); }} />}
+          {sec==="sources" && <KSourcesSection set={set} onAddSource={function(){ setSrcOpen("1"); }} />}
+          {sec==="indexing" && <KIndexingSection />}
+          {sec==="enrichment" && <KEnrichmentSection />}
+          {sec==="pii" && <KPIIMaskingSection />}
+          {sec==="storage" && <KStorageSection />}
+        </div>
+      </div>
+      {srcOpen && <AddKnowledgeSourceWizard set={set} onClose={function(){ setSrcOpen(""); }} />}
+    </div>
+  );
+}
+
+// ════════════════ DISCOVERY MODULE — the heart ═════════════════════════════
+function DiscoveryModule({ set, disco, onAddSource }){
+  var [kindId, setKindId] = useUrlParam("kkind", "");
+  var [scanOpen, setScanOpen] = useUrlFlow("kscan", "");
+  var [ruleModal, setRuleModal] = useUrlFlow("kapply", ""); // which config modal a proposed rule opened
+  var [dismissed, setDismissed] = useState([]);
+  var kind = kindId ? disco.kinds.find(function(k){ return k.id===kindId; }) : null;
+  var f = disco.funnel;
+  var funnelSteps = [
+    { k:"discovered", label:"Discovered", v:f.discovered, tone:"slate", sub:"files found" },
+    { k:"profiled", label:"Profiled", v:f.profiled, tone:"purple", sub:"classified" },
+    { k:"indexed", label:"Indexed", v:f.indexed, tone:"blue", sub:"embedded" },
+    { k:"enriched", label:"Enriched", v:f.enriched, tone:"green", sub:"metadata added" },
+    { k:"failed", label:"Failed", v:f.failed, tone:"coral", sub:"need attention" },
+  ];
+  var rules = disco.proposedRules.filter(function(r){ return dismissed.indexOf(r.id)<0; });
+
+  if (set.docs === 0) {
+    return (
+      <div>
+        <KSectionHead title="Discovery" desc="Before you index, Discovery profiles a source to reveal what's actually in there — document kinds, topics, entities, sensitivity and quality — then drafts the indexing plan." />
+        <div style={{ border:"1px dashed var(--line)", borderRadius:14, padding:"60px 24px", textAlign:"center", background:"var(--panel)" }}>
+          <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:26, color:"var(--ink)" }}>Nothing to discover yet</div>
+          <div style={{ fontSize:13, color:"var(--ink-3)", marginTop:8, maxWidth:440, margin:"8px auto 0", lineHeight:1.55 }}>Connect a source, then run a discovery scan. We'll sample the corpus and tell you what kinds of documents live in it before you commit to indexing everything.</div>
+          <button className="btn-dark" style={{ marginTop:20, padding:"10px 18px" }} onClick={onAddSource}>+ Connect a source</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <KSectionHead title="Discovery"
+        desc="What's actually in this knowledge — profiled from a representative sample before full indexing. Every finding can be turned into an indexing, enrichment or masking rule."
+        right={<div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <KPill tone="purple" soft>{disco.taxonomy} taxonomy</KPill>
+          <button className="btn-dark" style={{ padding:"8px 14px" }} onClick={function(){ setScanOpen("1"); }}>↻ Re-scan</button>
+        </div>} />
+
+      {/* coverage strip */}
+      <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:18, padding:"10px 14px", borderRadius:10, background:"var(--panel)", border:"1px solid var(--line)" }}>
+        <span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:11.5, color:"var(--ink-2)" }}>{disco.sampleNote}</span>
+        <span style={{ width:1, height:14, background:"var(--line)" }} />
+        <span style={{ display:"flex", alignItems:"center", gap:7 }}><KMiniBar pct={disco.confidence} tone="green" /><span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:11.5, color:"var(--ink-3)" }}>{disco.confidence}% confidence</span></span>
+        <span style={{ marginLeft:"auto", fontFamily:"'JetBrains Mono', monospace", fontSize:11, color:"var(--ink-4)" }}>last scan {disco.scannedAt}</span>
+      </div>
+
+      {/* pipeline funnel */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:1, background:"var(--line)", border:"1px solid var(--line)", borderRadius:12, overflow:"hidden", marginBottom:24 }}>
+        {funnelSteps.map(function(s,i){
+          return (
+            <div key={s.k} style={{ background:"var(--panel)", padding:"15px 16px", position:"relative" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:8 }}>
+                <span style={{ width:8, height:8, borderRadius:"50%", background:ktone(s.tone).c }} />
+                <span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:10, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>{s.label}</span>
+              </div>
+              <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:30, color:"var(--ink)", lineHeight:1 }}>{kfmt(s.v)}</div>
+              <div style={{ fontSize:11, color:"var(--ink-4)", marginTop:3 }}>{s.sub}</div>
+              {i<funnelSteps.length-1 && <span style={{ position:"absolute", right:-9, top:"50%", transform:"translateY(-50%)", zIndex:1, color:"var(--ink-4)", fontSize:13, background:"var(--panel)", width:18, textAlign:"center" }}>›</span>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* COMPOSITION BY KIND — the killer view */}
+      <KCard title="Composition by document kind" right={<span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:11, color:"var(--ink-3)" }}>{disco.kinds.length} kinds · {kfmt(set.docs)} docs</span>}>
+        <div style={{ marginBottom:16 }}><KStackBar segments={disco.kinds} height={14} /></div>
+        <div>
+          {disco.kinds.map(function(k){
+            var pct = Math.round((k.count/set.docs)*100);
+            return (
+              <button key={k.id} onClick={function(){ setKindId(k.id); }} style={{ display:"grid", gridTemplateColumns:"18px minmax(160px,1.4fr) 70px 90px 120px 1fr 24px", alignItems:"center", gap:12, width:"100%", padding:"11px 8px", border:"none", borderTop:"1px solid var(--line-2)", background:"transparent", cursor:"pointer", textAlign:"left", fontFamily:"inherit" }}
+                onMouseEnter={function(e){ e.currentTarget.style.background="var(--bg-canvas)"; }} onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; }}>
+                <span style={{ width:11, height:11, borderRadius:3, background:ktone(k.tone).c }} />
+                <span style={{ minWidth:0 }}><span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{k.label}</span><div style={{ fontSize:11.5, color:"var(--ink-4)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{k.desc}</div></span>
+                <span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:13, color:"var(--ink)" }}>{kfmt(k.count)}</span>
+                <span style={{ display:"flex", alignItems:"center", gap:7 }}><KMiniBar pct={pct} tone={k.tone} /><span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:11, color:"var(--ink-3)" }}>{pct}%</span></span>
+                <span><KSens s={k.sens} /></span>
+                <span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:10.5, color:"var(--ink-4)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>conf {k.conf}% · {k.langs[0]}</span>
+                <span style={{ color:"var(--ink-4)", fontSize:14, textAlign:"center" }}>›</span>
+              </button>
+            );
+          })}
+        </div>
+      </KCard>
+
+      {/* two-col: topics + entities */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginTop:16 }}>
+        <KCard title="Topics & themes">
+          {disco.topics.map(function(t,i){ var max = disco.topics[0].count;
+            return <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 60px", alignItems:"center", gap:12, padding:"8px 0", borderTop: i?"1px solid var(--line-2)":"none" }}>
+              <div><div style={{ fontSize:13, color:"var(--ink)", marginBottom:5 }}>{t.label}</div><div style={{ height:5, borderRadius:3, background:"var(--chip)", overflow:"hidden" }}><div style={{ width:(t.count/max*100)+"%", height:"100%", background:ktone(t.tone).c }} /></div></div>
+              <div style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:12, color:"var(--ink-3)", textAlign:"right" }}>{kfmt(t.count)}</div>
+            </div>;
+          })}
+        </KCard>
+        <KCard title="Entities" right={<span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:10, color:"var(--purple)" }}>→ feed the graph</span>}>
+          {disco.entities.map(function(g,i){
+            return <div key={i} style={{ marginBottom: i<disco.entities.length-1?14:0 }}>
+              <div style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:9.5, letterSpacing:"0.5px", textTransform:"uppercase", color:"var(--ink-4)", marginBottom:7 }}>{g.group}</div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                {g.items.map(function(it){ return <span key={it[0]} style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:11.5, padding:"4px 9px", borderRadius:6, background:ktone(g.tone).fill, color:ktone(g.tone).c, border:"1px solid "+ktone(g.tone).soft }}>{it[0]}<span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:10, opacity:0.7 }}>{it[1]}</span></span>; })}
+              </div>
+            </div>;
+          })}
+        </KCard>
+      </div>
+
+      {/* sensitivity + quality */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginTop:16 }}>
+        <KCard title="Sensitivity map" right={<KPill tone="coral" soft>{disco.sensitivity.filter(function(s){return s.sev==="high";}).length} high-risk</KPill>}>
+          {disco.sensitivity.map(function(s,i){
+            return <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 0", borderTop: i?"1px solid var(--line-2)":"none" }}>
+              <span style={{ width:8, height:8, borderRadius:"50%", background: s.sev==="high"?"var(--coral)":s.sev==="med"?"var(--gold)":"var(--green)", flexShrink:0 }} />
+              <div style={{ flex:1, minWidth:0 }}><div style={{ fontSize:13, color:"var(--ink)" }}>{s.type}</div><div style={{ fontSize:11, color:"var(--ink-4)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>in {s.kinds.join(", ")}</div></div>
+              <span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:12, color:"var(--ink-2)" }}>{kfmt(s.count)}</span>
+            </div>;
+          })}
+        </KCard>
+        <KCard title="Quality & hygiene">
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:1, background:"var(--line-2)", border:"1px solid var(--line-2)", borderRadius:8, overflow:"hidden" }}>
+            {disco.quality.map(function(qd){
+              return <div key={qd.id} style={{ background:"var(--panel)", padding:"11px 12px" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:7 }}><span style={{ fontFamily:"'Instrument Serif', serif", fontSize:22, color:ktone(qd.tone).c, lineHeight:1 }}>{kfmt(qd.count)}</span></div>
+                <div style={{ fontSize:11.5, color:"var(--ink-2)", marginTop:3 }}>{qd.label}</div>
+                <div style={{ fontSize:10.5, color:"var(--ink-4)", marginTop:4 }}>→ {qd.fix}</div>
+              </div>;
+            })}
+          </div>
+        </KCard>
+      </div>
+
+      {/* projection */}
+      <div style={{ marginTop:16 }}>
+        <KCard title="Volume & cost projection (full corpus)">
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:1, background:"var(--line-2)", border:"1px solid var(--line-2)", borderRadius:8, overflow:"hidden" }}>
+            {[["Est. chunks",disco.projection.chunks],["Embedding tokens",disco.projection.tokens],["Vector storage",disco.projection.storage],["Est. cost",disco.projection.cost]].map(function(p){
+              return <div key={p[0]} style={{ background:"var(--panel)", padding:"13px 15px" }}>
+                <div style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:9.5, letterSpacing:"0.5px", textTransform:"uppercase", color:"var(--ink-4)" }}>{p[0]}</div>
+                <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:26, color:"var(--ink)", marginTop:4 }}>{p[1]}</div>
+              </div>;
+            })}
+          </div>
+        </KCard>
+      </div>
+
+      {/* PROPOSED PLAN — the action loop */}
+      <div style={{ marginTop:24 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+          <div>
+            <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:22, color:"var(--ink)" }}>Proposed indexing plan</div>
+            <div style={{ fontSize:12.5, color:"var(--ink-3)", marginTop:3 }}>Drafted from the findings above. Review each, then apply — nothing changes until you do.</div>
+          </div>
+          {rules.length>0 && <button className="btn-dark" style={{ padding:"8px 16px" }}>Apply all ({rules.length})</button>}
+        </div>
+        <div style={{ border:"1px solid var(--line)", borderRadius:12, overflow:"hidden", background:"var(--panel)" }}>
+          {rules.length===0 && <div style={{ padding:"28px", textAlign:"center", color:"var(--ink-3)", fontSize:13 }}>All proposals reviewed. ✓</div>}
+          {rules.map(function(r,i){
+            var sevTone = r.sev==="high"?"coral":r.sev==="med"?"gold":"slate";
+            return (
+              <div key={r.id} style={{ display:"flex", alignItems:"flex-start", gap:14, padding:"15px 16px", borderTop: i?"1px solid var(--line-2)":"none" }}>
+                <span style={{ marginTop:2, flexShrink:0 }}><KPill tone={sevTone} soft>{r.type}</KPill></span>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13, color:"var(--ink)", fontWeight:600 }}>{r.finding}</div>
+                  <div style={{ fontSize:12.5, color:"var(--ink-2)", marginTop:4, lineHeight:1.5 }}>{r.action}</div>
+                </div>
+                <div style={{ display:"flex", gap:7, flexShrink:0 }}>
+                  <button className="btn-ghost" style={{ border:"1px solid var(--line)", borderRadius:7, padding:"6px 10px", fontSize:12 }} onClick={function(){ setDismissed(dismissed.concat([r.id])); }}>Dismiss</button>
+                  <button className="btn-dark" style={{ padding:"6px 12px", fontSize:12, opacity: r.opens?1:0.45 }} disabled={!r.opens} onClick={function(){ if(r.opens) setRuleModal(r.opens); }}>Review & apply</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {kind && <DiscoveryKindDrawer kind={kind} total={set.docs} onClose={function(){ setKindId(""); }} />}
+      {scanOpen && <NewDiscoveryScanModal set={set} onClose={function(){ setScanOpen(""); }} />}
+      {ruleModal==="kidx" && <NewIndexingStrategyModal onClose={function(){ setRuleModal(""); }} />}
+      {ruleModal==="kenr" && <NewEnrichmentStrategyModal onClose={function(){ setRuleModal(""); }} />}
+      {ruleModal==="kpii" && <KModal onClose={function(){ setRuleModal(""); }} title="Add PII pattern" subtitle="Redact secrets detected by discovery" footer={<><button className="btn-ghost" onClick={function(){ setRuleModal(""); }}>Cancel</button><button className="btn-dark" onClick={function(){ setRuleModal(""); }}>Add pattern</button></>}><KField label="Pattern name"><input style={K_INP} defaultValue="api_key_secret" /></KField><KField label="Regex" hint="Pre-filled from the 4 detected secrets."><input style={Object.assign({},K_INP,{fontFamily:"'JetBrains Mono', monospace"})} defaultValue="(?i)(api[_-]?key|secret|aws_[a-z]+_token)\\s*[:=]\\s*\\S+" /></KField></KModal>}
+      {ruleModal==="ksrc" && <NewDiscoveryScanModal set={set} onClose={function(){ setRuleModal(""); }} />}
+    </div>
+  );
+}
+
+// Drill-in drawer for a single document kind.
+function DiscoveryKindDrawer({ kind, total, onClose }){
+  var pct = Math.round((kind.count/total)*100);
+  return (
+    <div onClick={function(e){ if(e.target===e.currentTarget) onClose(); }} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", justifyContent:"flex-end" }}>
+      <div style={{ width:480, maxWidth:"94vw", height:"100%", background:"var(--panel)", borderLeft:"1px solid var(--line)", boxShadow:"-24px 0 60px rgba(0,0,0,0.22)", display:"flex", flexDirection:"column" }}>
+        <div style={{ padding:"20px 22px", borderBottom:"1px solid var(--line-2)", display:"flex", alignItems:"flex-start", gap:12 }}>
+          <span style={{ width:12, height:12, borderRadius:4, background:ktone(kind.tone).c, marginTop:6, flexShrink:0 }} />
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:24, color:"var(--ink)", lineHeight:1.1 }}>{kind.label}</div>
+            <div style={{ fontSize:12.5, color:"var(--ink-3)", marginTop:4, lineHeight:1.5 }}>{kind.desc}</div>
+          </div>
+          <button onClick={onClose} style={{ width:30, height:30, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", color:"var(--ink-3)", flexShrink:0 }}>✕</button>
+        </div>
+        <div style={{ flex:1, overflowY:"auto", padding:"20px 22px" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:1, background:"var(--line-2)", border:"1px solid var(--line-2)", borderRadius:8, overflow:"hidden", marginBottom:20 }}>
+            {[["Documents",kfmt(kind.count)],["Share",pct+"%"],["Confidence",kind.conf+"%"]].map(function(s){ return <div key={s[0]} style={{ background:"var(--panel)", padding:"12px 13px" }}><div style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:9, letterSpacing:"0.4px", textTransform:"uppercase", color:"var(--ink-4)" }}>{s[0]}</div><div style={{ fontFamily:"'Instrument Serif', serif", fontSize:24, color:"var(--ink)", marginTop:3 }}>{s[1]}</div></div>; })}
+          </div>
+          {kind.fields.length>0 && <div style={{ marginBottom:20 }}>
+            <div style={K_LBL}>What's inside · typical fields</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>{kind.fields.map(function(fl){ return <span key={fl} style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:11, padding:"4px 9px", borderRadius:6, background:"var(--bg-canvas)", border:"1px solid var(--line)", color:"var(--ink-2)" }}>{fl}</span>; })}</div>
+          </div>}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:20 }}>
+            <div><div style={K_LBL}>Date range</div><div style={{ fontSize:12.5, color:"var(--ink)" }}>{kind.dateRange}</div></div>
+            <div><div style={K_LBL}>Avg length</div><div style={{ fontSize:12.5, color:"var(--ink)" }}>{kind.avgLen}</div></div>
+            <div><div style={K_LBL}>Languages</div><div style={{ fontSize:12.5, color:"var(--ink)" }}>{kind.langs.join(", ")}</div></div>
+            <div><div style={K_LBL}>Sensitivity</div><KSens s={kind.sens} /></div>
+          </div>
+          <div style={{ marginBottom:20 }}>
+            <div style={K_LBL}>Sample files</div>
+            <div style={{ border:"1px solid var(--line)", borderRadius:8, overflow:"hidden" }}>
+              {kind.samples.map(function(sf,i){ return <div key={i} style={{ display:"flex", alignItems:"center", gap:9, padding:"9px 12px", borderTop: i?"1px solid var(--line-2)":"none", fontSize:12, color:"var(--ink-2)", fontFamily:"'JetBrains Mono', monospace" }}><span style={{ color:"var(--ink-4)" }}>▤</span>{sf}</div>; })}
+            </div>
+          </div>
+          <div style={{ padding:"14px", borderRadius:10, background:"var(--purple-fill)", border:"1px solid var(--purple-soft)" }}>
+            <div style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:9.5, letterSpacing:"0.5px", textTransform:"uppercase", color:"var(--purple)", marginBottom:6 }}>Suggested strategy</div>
+            <div style={{ fontSize:12.5, color:"var(--ink)", lineHeight:1.55 }}>{kind.strategy}</div>
+          </div>
+        </div>
+        <div style={{ padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", justifyContent:"flex-end", gap:8, background:"var(--panel-2)" }}>
+          <button className="btn-ghost" onClick={onClose}>Close</button>
+          <button className="btn-dark">Apply this strategy</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────── Sources section (the "Knowledge" list) ────────────────────
+function KSourcesSection({ set, onAddSource }){
+  var [openId, setOpenId] = useUrlParam("ksrcv", "");
+  var openSrc = openId ? (set.sources||[]).find(function(s){ return s.id===openId; }) : null;
+  if (openSrc) return <KSourceOverview src={openSrc} onBack={function(){ setOpenId(""); }} />;
+  return (
+    <div>
+      <KSectionHead title="Knowledge" desc="Documents, apps, websites and data catalogs feeding this set. Each source indexes independently."
+        right={<button className="btn-dark" style={{ padding:"8px 14px" }} onClick={onAddSource}>+ New Knowledge</button>} />
+      {set.sources.length===0 ? (
+        <div style={{ border:"1px dashed var(--line)", borderRadius:14, padding:"50px 24px", textAlign:"center", background:"var(--panel)" }}>
+          <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:24, color:"var(--ink)" }}>Add Knowledge</div>
+          <div style={{ fontSize:13, color:"var(--ink-3)", marginTop:6 }}>Add documents, apps, websites or data catalogs to your knowledge</div>
+          <button className="btn-dark" style={{ marginTop:18, padding:"9px 16px" }} onClick={onAddSource}>+ New Knowledge</button>
+        </div>
+      ) : (
+        <div className="nv-table">
+          <div className="nv-row nv-head-row" style={{ gridTemplateColumns:"minmax(220px,1.6fr) 130px 100px 150px 120px 110px" }}>
+            <div className="nv-th nv-th-name">Name</div><div className="nv-th">Type</div><div className="nv-th nv-th-num">Documents</div><div className="nv-th">Update frequency</div><div className="nv-th">Last synced</div><div className="nv-th">Status</div>
+          </div>
+          <div className="nv-body">
+            {set.sources.map(function(src){ var app = KSOURCE_APPS[src.app];
+              return <button key={src.id} className="nv-row" onClick={function(){ setOpenId(src.id); }} style={{ gridTemplateColumns:"minmax(220px,1.6fr) 130px 100px 150px 120px 110px" }}>
+                <div className="nv-cell nv-th-name" style={{ display:"flex", gap:11, alignItems:"center", minWidth:0 }}>
+                  <span style={{ width:30, height:30, borderRadius:7, background:"var(--bg-canvas)", border:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, color:app.color, fontFamily:"'JetBrains Mono', monospace", fontWeight:700, flexShrink:0 }}>{app.glyph}</span>
+                  <div style={{ minWidth:0 }}><div style={{ fontWeight:600, color:"var(--ink)", fontSize:13, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{app.label}</div><div style={{ fontSize:11, color:"var(--ink-4)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{src.action}</div></div>
+                </div>
+                <div className="nv-cell" style={{ fontSize:12, color:"var(--ink-2)" }}>{src.type}</div>
+                <div className="nv-cell nv-num">{src.docs ? kfmt(src.docs) : "—"}</div>
+                <div className="nv-cell" style={{ fontSize:12, color:"var(--ink-3)" }}>{src.freq}</div>
+                <div className="nv-cell" style={{ fontSize:11.5, color:"var(--ink-3)", fontFamily:"'JetBrains Mono', monospace" }}>{src.lastSynced}</div>
+                <div className="nv-cell"><KStatus s={src.status} /></div>
+              </button>;
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Per-source overview (indexing progress + file-type breakdown) — matches connector page.
+function KSourceOverview({ src, onBack }){
+  var app = KSOURCE_APPS[src.app];
+  var stats = [["Discovered",src.discovered,"slate"],["Syncing",src.syncing,"blue"],["Synced",src.synced,"green"],["Failed",src.failed,"coral"]];
+  return (
+    <div>
+      <div style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:11, color:"var(--ink-3)", marginBottom:12 }}>
+        <button onClick={onBack} style={{ background:"none", border:"none", color:"var(--ink-3)", cursor:"pointer", fontFamily:"inherit", fontSize:11, padding:0 }}>Knowledge</button><span style={{ margin:"0 7px" }}>/</span><span style={{ color:"var(--ink)" }}>{app.label}</span>
+      </div>
+      <KSectionHead title={app.label} desc={src.action+" · "+src.type}
+        right={src.status==="syncing" ? <KPill tone="blue">Syncing…</KPill> : <KStatus s={src.status} />} />
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:1, background:"var(--line)", border:"1px solid var(--line)", borderRadius:12, overflow:"hidden", marginBottom:22 }}>
+        {stats.map(function(s){ return <div key={s[0]} style={{ background:"var(--panel)", padding:"15px 16px" }}><div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:7 }}><span style={{ width:8, height:8, borderRadius:"50%", background:ktone(s[2]).c }} /><span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:10, letterSpacing:"0.4px", textTransform:"uppercase", color:"var(--ink-3)" }}>{s[0]}</span></div><div style={{ fontFamily:"'Instrument Serif', serif", fontSize:30, color:"var(--ink)" }}>{kfmt(s[1])}</div></div>; })}
+      </div>
+      {src.breakdown.length>0 && <KCard title="File type breakdown" right={<span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:11, color:"var(--ink-3)" }}>{kfmt(src.docs)} files</span>}>
+        <div style={{ marginBottom:14 }}><KStackBar segments={src.breakdown} height={14} /></div>
+        <div style={{ display:"flex", flexWrap:"wrap", gap:14 }}>{src.breakdown.map(function(b){ return <span key={b[0]} style={{ display:"inline-flex", alignItems:"center", gap:7, fontSize:12, color:"var(--ink-2)" }}><span style={{ width:9, height:9, borderRadius:2, background:ktone(b[2]).c }} />{b[0]}<span style={{ fontFamily:"'JetBrains Mono', monospace", color:"var(--ink-3)" }}>{kfmt(b[1])}</span></span>; })}</div>
+      </KCard>}
+      <div style={{ marginTop:16, padding:"14px 16px", borderRadius:10, background:"var(--purple-fill)", border:"1px solid var(--purple-soft)", display:"flex", alignItems:"center", gap:12 }}>
+        <span style={{ color:"var(--purple)" }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></span>
+        <div style={{ flex:1 }}><div style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>This breakdown is by file format only</div><div style={{ fontSize:12, color:"var(--ink-2)", marginTop:2 }}>Run Discovery to see the semantic breakdown — contracts, invoices, NDAs and what's inside them.</div></div>
+        <button className="btn-dark" style={{ padding:"7px 13px", fontSize:12 }} onClick={onBack}>Go to Discovery</button>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────── Indexing section + modal ──────────────────────────────────
+function KStrategyCard({ title, sub, parsing, app, chunking }){
+  return (
+    <div style={{ border:"1px solid var(--line)", borderRadius:11, background:"var(--panel)", marginBottom:12, overflow:"hidden" }}>
+      <div style={{ padding:"13px 16px", borderBottom:"1px solid var(--line-2)", background:"var(--panel-2)" }}>
+        <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{title}</div>
+        {sub && <div style={{ fontSize:11.5, color:"var(--ink-3)", marginTop:3 }}>{sub}</div>}
+      </div>
+      <div style={{ padding:"14px 16px", display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:16 }}>
+        {[["Parsing method",parsing],["Application",app],["Chunking",chunking]].map(function(c){ return <div key={c[0]}><div style={K_LBL}>{c[0]}</div><div style={{ fontSize:12.5, color:"var(--ink)" }}>{c[1]}</div></div>; })}
+      </div>
+    </div>
+  );
+}
+function KIndexingSection(){
+  var [open, setOpen] = useUrlFlow("kidx", "");
+  var [graphIdx, setGraphIdx] = useState(false);
+  return (
+    <div>
+      <KSectionHead icon={KSEC_ICONS.indexing} title="Indexing Strategies" desc="Define how content is broken into segments for efficient retrieval while preserving context. Add per-format overrides on top of the default." />
+      <KStrategyCard title="Default Strategy" sub="Standard chunking applied to all document types unless a more specific strategy matches." parsing="Application" app="Docling" chunking="Token Text Splitter · 512" />
+      <KStrategyCard title="PDF, Microsoft Word, Plain Text" parsing="Application" app="Docling" chunking="Token Text Splitter · 512" />
+      <button onClick={function(){ setOpen("1"); }} style={{ width:"100%", padding:"13px", border:"1px dashed var(--line)", borderRadius:10, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", fontSize:13, color:"var(--ink-2)", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>+ New Indexing Strategy</button>
+      <div style={{ marginTop:18 }}><KToggleRow on={graphIdx} onToggle={function(){ setGraphIdx(!graphIdx); }} title="Enable Graph-Based Indexing" desc="Automatically extract entities and relationships from added knowledge to build a connected graph. Discovery's entities seed this." /></div>
+      {open && <NewIndexingStrategyModal onClose={function(){ setOpen(""); }} />}
+    </div>
+  );
+}
+function NewIndexingStrategyModal({ onClose }){
+  var [mimes, setMimes] = useState(["PDF","DOCX"]);
+  var [method, setMethod] = useState("application");
+  var [appv, setAppv] = useState("Docling");
+  var [model, setModel] = useState("Claude Sonnet 4.6");
+  var [ctab, setCtab] = useState("text");
+  var [maxc, setMaxc] = useState("512");
+  return (
+    <KModal onClose={onClose} width={620} title="New Indexing Strategy" subtitle="Guide content-specific processing for optimized indexing and retrieval"
+      footer={<><button className="btn-ghost" onClick={onClose}>Cancel</button><button className="btn-dark" onClick={onClose}>Add</button></>}>
+      <KField label="Mimetype *" hint="One strategy can cover several formats."><KChipMulti value={mimes} onChange={setMimes} options={["PDF","DOCX","Plain Text","CSV","XML","PPTX","XLSX","HTML","Markdown","Image","Audio"]} placeholder="Select mimetypes" /></KField>
+      <div style={{ borderTop:"1px solid var(--line-2)", paddingTop:16, marginBottom:6 }}><div style={{ fontSize:13, fontWeight:600, color:"var(--ink)", marginBottom:3 }}>Parsing</div><div style={{ fontSize:11.5, color:"var(--ink-3)", marginBottom:12 }}>Define your parsing strategy here</div></div>
+      <KRadioCards value={method} onChange={setMethod} cols={3} options={[
+        { id:"application", label:"Application", desc:"External app" },
+        { id:"agentic", label:"Agentic", desc:"Vision LLM" },
+        { id:"automation", label:"Automation", desc:"Custom flow" },
+      ]} />
+      <div style={{ height:14 }} />
+      {method==="application" && <KField label="Application"><KSelect value={appv} onChange={setAppv} options={["Unstructured","Llama Parse","Docling"]} /></KField>}
+      {method==="agentic" && <KField label="Parsing model"><KSelect value={model} onChange={setModel} options={["Claude Sonnet 4.6","Claude Opus 4.8","OpenAI GPT 4.1","Gemini 3 Flash","Qwen 3"]} /></KField>}
+      {method==="automation" && <KField label="Automation"><KSelect value="" onChange={function(){}} placeholder="Select Automation" options={["Parse PDFs v2","OCR pipeline","Custom extractor"]} /></KField>}
+      <div style={{ borderTop:"1px solid var(--line-2)", paddingTop:16, marginBottom:12 }}><div style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>Chunking</div></div>
+      <div style={{ display:"flex", gap:4, marginBottom:14 }}>{["text","image","audio","tabular"].map(function(t){ return <button key={t} onClick={function(){ setCtab(t); }} style={{ padding:"6px 12px", borderRadius:7, border:"1px solid "+(ctab===t?"var(--purple)":"var(--line)"), background: ctab===t?"var(--purple-fill)":"transparent", color: ctab===t?"var(--purple)":"var(--ink-2)", cursor:"pointer", fontSize:12, fontFamily:"inherit", textTransform:"capitalize", fontWeight: ctab===t?600:500 }}>{t==="tabular"?"Tabular Data":t}</button>; })}</div>
+      {ctab==="text" && <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><KField label="Max chunk size"><input value={maxc} onChange={function(e){ setMaxc(e.target.value); }} style={K_INP} /></KField><KField label="Chunking algorithm"><KSelect value="Token Text Splitter" onChange={function(){}} options={["Token Text Splitter","Recursive","Sentence","Semantic"]} /></KField></div>}
+      {ctab==="tabular" && <KRadioCards value="embed" onChange={function(){}} cols={1} options={[{id:"embed",label:"Tables → Embedding",desc:"Convert tabular data into vector representations"},{id:"sql",label:"Tables → SQL",desc:"Transform into SQL structures for relational querying"}]} />}
+      {(ctab==="image"||ctab==="audio") && <div style={{ fontSize:12.5, color:"var(--ink-3)", padding:"12px 0" }}>{ctab==="image"?"Image":"Audio"} chunking uses model defaults; configure overrides per source.</div>}
+    </KModal>
+  );
+}
+
+// ──────────────── Enrichment section + modal ────────────────────────────────
+function KEnrichmentSection(){
+  var [open, setOpen] = useUrlFlow("kenr", "");
+  return (
+    <div>
+      <KSectionHead icon={KSEC_ICONS.enrichment} title="Enrichment Strategies" desc="Set up metadata enrichment at the chunk level to support accurate, context-driven retrieval. Discovery's classifications can seed these fields." />
+      <button onClick={function(){ setOpen("1"); }} style={{ width:"100%", padding:"13px", border:"1px dashed var(--line)", borderRadius:10, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", fontSize:13, color:"var(--ink-2)", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>+ New Enrichment Strategy</button>
+      {open && <NewEnrichmentStrategyModal onClose={function(){ setOpen(""); }} />}
+    </div>
+  );
+}
+function NewEnrichmentStrategyModal({ onClose }){
+  var [type, setType] = useUrlFlow("kenrtype", "");
+  if (!type) {
+    return (
+      <KModal onClose={onClose} title="New Enrichment Strategy" subtitle="Choose how to generate metadata for each chunk"
+        icon={KSEC_ICONS.enrichment}>
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {[["manual","Manual Value","Define a static value applied to all chunks"],["llm","LLM Powered","AI generation with custom instructions and field references"],["automation","Automation","Apply a pre-configured automation workflow to enrich this field"]].map(function(o){
+            return <button key={o[0]} onClick={function(){ setType(o[0]); }} style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"15px 16px", border:"1px solid var(--line)", borderRadius:10, background:"var(--bg-canvas)", cursor:"pointer", textAlign:"left", fontFamily:"inherit" }} onMouseEnter={function(e){ e.currentTarget.style.borderColor="var(--purple)"; }} onMouseLeave={function(e){ e.currentTarget.style.borderColor="var(--line)"; }}>
+              <span style={{ width:34, height:34, borderRadius:8, background:"var(--purple-fill)", color:"var(--purple)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{o[0]==="manual"?"≡":o[0]==="llm"?"✦":"⚡"}</span>
+              <div><div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{o[1]}</div><div style={{ fontSize:12, color:"var(--ink-3)", marginTop:3, lineHeight:1.45 }}>{o[2]}</div></div>
+            </button>;
+          })}
+        </div>
+      </KModal>
+    );
+  }
+  return (
+    <KModal onClose={onClose} width={620} title={type==="manual"?"Manual Value":type==="llm"?"LLM Generated":"Automation"} subtitle="Select fields to enrich and provide their values"
+      footer={<><button className="btn-ghost" onClick={function(){ setType(""); }}>← Back</button><button className="btn-dark" onClick={onClose}>Create</button></>}>
+      {type==="llm" && <KField label="Model *" hint="Pick the AI model that best suits your metadata extraction flow."><KSelect value="Claude Sonnet 4.6" onChange={function(){}} options={["Claude Sonnet 4.6","Claude Opus 4.8","OpenAI GPT 4.1","Gemini 3 Flash"]} /></KField>}
+      <div style={K_LBL}>Fields to enrich</div>
+      <div style={{ border:"1px solid var(--line)", borderRadius:9, overflow:"hidden" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1.4fr", gap:0, background:"var(--panel-2)", padding:"9px 12px", fontFamily:"'JetBrains Mono', monospace", fontSize:9.5, letterSpacing:"0.4px", textTransform:"uppercase", color:"var(--ink-3)" }}><span>Field</span><span>{type==="manual"?"Value":type==="llm"?"Instructions":"Mapping"}</span></div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1.4fr", gap:10, padding:"12px" }}>
+          <KSelect value="" onChange={function(){}} placeholder="Select field" options={["doc_kind","counterparty","effective_date","total_value","sentiment","next_steps"]} />
+          <input style={K_INP} placeholder={type==="manual"?"Static value":type==="llm"?"e.g. Classify the document kind…":"map output…"} defaultValue={type==="llm"?"Classify this chunk's document kind: contract, invoice, NDA, call note…":""} />
+        </div>
+        <button style={{ width:"100%", padding:"10px", border:"none", borderTop:"1px solid var(--line-2)", background:"transparent", color:"var(--purple)", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, fontWeight:600 }}>+ Add field</button>
+      </div>
+    </KModal>
+  );
+}
+
+// ──────────────── PII masking section ───────────────────────────────────────
+function KPIIMaskingSection(){
+  var [regex, setRegex] = useState(true);
+  var [unify, setUnify] = useState(true);
+  var [autom, setAutom] = useState(false);
+  return (
+    <div>
+      <KSectionHead icon={KSEC_ICONS.pii} title="PII Masking" desc="Filter out sensitive information using the methods below. Discovery's sensitivity map tells you which kinds carry PII." />
+      <KToggleRow on={regex} onToggle={function(){ setRegex(!regex); }} title="Regex Pattern" desc="Filter out sensitive information based on defined regex patterns">
+        <button style={{ padding:"7px 13px", border:"1px solid var(--line)", borderRadius:8, background:"var(--bg-canvas)", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, color:"var(--ink-2)" }}>+ Add Pattern</button>
+      </KToggleRow>
+      <KToggleRow on={unify} onToggle={function(){ setUnify(!unify); }} title="PII by Auto-detect" desc="Automatic PII detection and masking (SSNs, cards, emails, phones)" />
+      <KToggleRow on={autom} onToggle={function(){ setAutom(!autom); }} title="Automations" desc="Apply automations to filter out sensitive information">
+        <KSelect value="" onChange={function(){}} placeholder="Select Automation" options={["Redact secrets v2","Mask financials","Custom scrubber"]} />
+      </KToggleRow>
+    </div>
+  );
+}
+
+// ──────────────── Storage section ───────────────────────────────────────────
+function KStorageSection(){
+  var [embed, setEmbed] = useState("text-embedding-3-large — azure openai");
+  var [store, setStore] = useState("Open Search");
+  var [ret, setRet] = useState("12");
+  return (
+    <div>
+      <KSectionHead icon={KSEC_ICONS.storage} title="Storage" desc="Configure how vectors are embedded and where they're stored for retrieval." />
+      <KField label="Embedding model" hint="Converts organized data into vector points matched against the user query."><KSelect value={embed} onChange={setEmbed} options={["text-embedding-3-large — azure openai","text-embedding-3-small — openai","Cohere embed v3","Voyage 3"]} /></KField>
+      <KField label="Knowledge store" hint="Storage object for vector data that helps AI quickly find and retrieve relevant records."><KSelect value={store} onChange={setStore} options={["Open Search","Pinecone","pgvector","Qdrant"]} /></KField>
+      <KField label="Retention period" hint="Choose how long to keep your knowledge stored."><div style={{ display:"flex", gap:10 }}><input value={ret} onChange={function(e){ setRet(e.target.value); }} style={Object.assign({},K_INP,{width:120})} /><KSelect value="Months" onChange={function(){}} options={["Days","Months","Years"]} /></div></KField>
+    </div>
+  );
+}
+
+// ──────────────── Add Knowledge Source wizard (with Discover step) ──────────
+var KSRC_STEPS = ["App & Action","Connection","Input","Discover","Settings"];
+var KSRC_APP_LIST = [
+  ["gdrive","Google Drive","▲","#1a73e8"],["s3","Amazon S3","S3","#e25444"],["confluence","Confluence","C","#1868db"],
+  ["sharepoint","SharePoint","SP","#0a7c8a"],["notion","Notion","N","#1f211b"],["website","Website","🌐","#5b6470"],
+  ["catalog","Data Catalog","▥","#8a78a8"],["doc","Document upload","📄","#6a6c5c"],
+];
+function AddKnowledgeSourceWizard({ set, onClose }){
+  var [step, setStep] = useWizardStep("ksrcstep", 1);
+  var [appId, setAppId] = useUrlFlow("ksrcapp", "gdrive");
+  var [action, setAction] = useUrlFlow("ksrcact", "folder");
+  var [scanned, setScanned] = useUrlFlow("ksrcdone", "");
+  var [scanning, setScanning] = useState(false);
+  var app = KSRC_APP_LIST.find(function(a){ return a[0]===appId; });
+  function canContinue(){ if(step===1) return !!appId && !!action; return true; }
+  function runScan(){ setScanning(true); setTimeout(function(){ setScanning(false); setScanned("1"); }, 1400); }
+  var previewKinds = SALES_KINDS.slice(0,6);
+
+  return (
+    <div onClick={function(e){ if(e.target===e.currentTarget) onClose(); }} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+      <div style={{ width:"94vw", maxWidth:1080, height:"92vh", background:"var(--bg-canvas)", borderRadius:12, border:"1px solid var(--line)", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 80px rgba(0,0,0,0.32)" }}>
+        <div style={{ flexShrink:0, height:56, borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 22px", background:"var(--panel)" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <span style={{ width:26, height:26, borderRadius:6, background:"var(--bg-canvas)", border:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, color:app[3], fontFamily:"'JetBrains Mono', monospace", fontWeight:700 }}>{app[2]}</span>
+            <span style={{ fontFamily:"'Instrument Serif', serif", fontSize:19, color:"var(--ink)" }}>{app[1]}</span>
+          </div>
+          <button onClick={onClose} style={{ width:32, height:32, borderRadius:"50%", border:"1px solid var(--line)", background:"none", cursor:"pointer", fontSize:15, color:"var(--ink-3)" }}>✕</button>
+        </div>
+        <div style={{ flex:1, display:"grid", gridTemplateColumns:"230px minmax(0,1fr)", minHeight:0 }}>
+          {/* stepper */}
+          <div style={{ background:"var(--panel-2)", borderRight:"1px solid var(--line)", padding:"20px 14px", display:"flex", flexDirection:"column", gap:4, overflowY:"auto" }}>
+            {KSRC_STEPS.map(function(name,i){ var n=i+1; var on=step===n; var done=step>n;
+              return <button key={n} onClick={function(){ if(n<step||canContinue()) setStep(n); }} style={{ display:"flex", gap:11, padding:"10px 12px", borderRadius:7, border: on?"1px solid var(--line)":"1px solid transparent", background: on?"var(--bg-canvas)":"transparent", cursor:"pointer", textAlign:"left", alignItems:"center" }}>
+                <span style={{ width:26, height:26, borderRadius:"50%", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, border:"1px solid "+(done?"var(--green)":on?"var(--purple)":"var(--line)"), background: done?"var(--green)":on?"var(--purple)":"var(--bg-canvas)", color: done||on?"#fff":"var(--ink-3)" }}>{done?"✓":n}</span>
+                <div style={{ minWidth:0 }}><div style={{ fontSize:13, color:"var(--ink)", fontWeight: on?600:400 }}>{name}</div>{name==="Discover" && <div style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:9.5, color:"var(--purple)", marginTop:2 }}>recommended</div>}</div>
+              </button>;
+            })}
+          </div>
+          {/* form */}
+          <div style={{ padding:"24px 32px 28px", overflowY:"auto" }}>
+            <div style={{ marginBottom:20 }}>
+              <div style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>STEP {step} / {KSRC_STEPS.length}</div>
+              <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:26, color:"var(--ink)", lineHeight:1.1 }}>{KSRC_STEPS[step-1]}</div>
+            </div>
+
+            {step===1 && <div>
+              <div style={K_LBL}>Select an app</div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:22 }}>
+                {KSRC_APP_LIST.map(function(a){ var on=a[0]===appId; return <button key={a[0]} onClick={function(){ setAppId(a[0]); }} style={{ padding:"16px 10px", border:"1px solid "+(on?"var(--purple)":"var(--line)"), borderRadius:10, background:"var(--panel)", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:8, boxShadow: on?"0 0 0 2px var(--purple-fill)":"none" }}><span style={{ width:34, height:34, borderRadius:8, background:"var(--bg-canvas)", border:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"center", color:a[3], fontFamily:"'JetBrains Mono', monospace", fontWeight:700, fontSize:13 }}>{a[2]}</span><span style={{ fontSize:11.5, color:"var(--ink-2)", textAlign:"center" }}>{a[1]}</span></button>; })}
+              </div>
+              <div style={K_LBL}>Action</div>
+              <KRadioCards value={action} onChange={setAction} cols={1} options={[
+                { id:"folder", label:"Index a folder — all files", desc:"Index all the files and folders inside a specific folder" },
+                { id:"file", label:"Index a file", desc:"Index a particular file's data" },
+                { id:"all", label:"Import all files", desc:"Import every file from the source" },
+              ]} />
+            </div>}
+
+            {step===2 && <div>
+              <KField label="Connection"><KSelect value="UnifyApps connection" onChange={function(){}} options={["UnifyApps connection","OAuth — workspace","Service account"]} /></KField>
+              <div style={{ padding:"13px 14px", borderRadius:9, background:"var(--green-fill)", border:"1px solid var(--green-soft)", fontSize:12.5, color:"var(--ink-2)", display:"flex", alignItems:"center", gap:9 }}><span style={{ color:"var(--green)" }}>✓</span>Connected as workspace admin · 2,102 files visible</div>
+            </div>}
+
+            {step===3 && <div>
+              <KField label="Folder path" hint="Leave empty to import only the root folder."><KSelect value="" onChange={function(){}} placeholder="Select folders" options={["/Sales","/Sales/Contracts","/Sales/Quotes","/Legal"]} /></KField>
+              <KField label="File type" hint="Filter by extension (PDF, DOCX…). Leave empty for all."><KChipMulti value={[]} onChange={function(){}} options={["PDF","DOCX","XLSX","PPTX","CSV","TXT"]} placeholder="All types" /></KField>
+              <KToggleRow on={true} onToggle={function(){}} title="Recursive indexing" desc="Recursively index all folders inside the specified folder." />
+              <KToggleRow on={false} onToggle={function(){}} title="Include shared drive items" desc="Also include items inside the shared drive." />
+            </div>}
+
+            {step===4 && <div>
+              <div style={{ padding:"14px 16px", borderRadius:10, background:"var(--purple-fill)", border:"1px solid var(--purple-soft)", marginBottom:18 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:5 }}><span style={{ color:"var(--purple)" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></span><span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>Scan before you index</span></div>
+                <div style={{ fontSize:12.5, color:"var(--ink-2)", lineHeight:1.55 }}>You're about to index a source you may not fully know. A quick discovery scan samples the corpus and tells you what kinds of documents are in there — so your indexing, enrichment and masking choices are informed, not blind.</div>
+              </div>
+              {!scanned && !scanning && <button className="btn-dark" style={{ padding:"10px 18px" }} onClick={runScan}>↻ Run discovery scan (sample)</button>}
+              {scanning && <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:13, color:"var(--ink-2)" }}><span style={{ width:16, height:16, border:"2px solid var(--purple-soft)", borderTopColor:"var(--purple)", borderRadius:"50%", display:"inline-block", animation:"kspin 0.7s linear infinite" }} />Sampling 500 of 2,102 files…</div>}
+              {scanned && <div>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}><KPill tone="green">Scan complete</KPill><span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:11, color:"var(--ink-3)" }}>profiled 500 files · 92% confidence</span></div>
+                <KStackBar segments={previewKinds} height={14} />
+                <div style={{ marginTop:14 }}>
+                  {previewKinds.map(function(k){ var pct=Math.round((k.count/previewKinds.reduce(function(a,x){return a+x.count;},0))*100); return <div key={k.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", borderTop:"1px solid var(--line-2)" }}><span style={{ width:10, height:10, borderRadius:3, background:ktone(k.tone).c }} /><span style={{ flex:1, fontSize:12.5, color:"var(--ink)" }}>{k.label}</span><KSens s={k.sens} /><span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:11.5, color:"var(--ink-3)", width:36, textAlign:"right" }}>{pct}%</span></div>; })}
+                </div>
+                <div style={{ marginTop:16, padding:"12px 14px", borderRadius:9, background:"var(--panel)", border:"1px solid var(--line)", fontSize:12.5, color:"var(--ink-2)" }}>Discovery drafted <b>4 indexing rules</b> and <b>2 masking rules</b> from this scan. You'll review them in the Discovery tab after adding.</div>
+              </div>}
+            </div>}
+
+            {step===5 && <div>
+              <KToggleRow on={false} onToggle={function(){}} title="Knowledge Retention" desc="Automatically remove added knowledge after a set duration." />
+              <KToggleRow on={false} onToggle={function(){}} title="Skip user-level source permission checks" desc="Allow users to access all application knowledge regardless of source permissions." />
+              <KToggleRow on={true} onToggle={function(){}} title="Schedule Knowledge Sync" desc="Keep knowledge up to date at regular intervals.">
+                <div style={{ display:"flex", gap:10 }}><KSelect value="Every 6 hours" onChange={function(){}} options={["Every hour","Every 6 hours","Daily","Weekly"]} /></div>
+              </KToggleRow>
+            </div>}
+          </div>
+        </div>
+        <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
+          <button className="btn-ghost" onClick={function(){ if(step>1) setStep(step-1); }} disabled={step===1} style={{ opacity: step===1?0.4:1 }}>← Back</button>
+          <span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:11, color:"var(--ink-3)" }}>Step {step} of {KSRC_STEPS.length} · {KSRC_STEPS[step-1]}</span>
+          <div style={{ display:"flex", gap:8 }}>
+            <button className="btn-ghost" onClick={onClose}>Cancel</button>
+            {step<KSRC_STEPS.length ? <button className="btn-dark" disabled={!canContinue()} style={{ opacity: canContinue()?1:0.45 }} onClick={function(){ setStep(step+1); }}>Continue →</button> : <button className="btn-dark" onClick={onClose}>Add knowledge ↵</button>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────── New Discovery Scan modal ──────────────────────────────────
+function NewDiscoveryScanModal({ set, onClose }){
+  var [sources, setSources] = useState((set.sources||[]).map(function(s){ return KSOURCE_APPS[s.app].label; }));
+  var [depth, setDepth] = useState("sample");
+  var [mode, setMode] = useState("open");
+  var [expected, setExpected] = useState(["Contracts","Invoices","NDAs"]);
+  var [model, setModel] = useState("Claude Sonnet 4.6");
+  var srcOptions = (set.sources||[]).map(function(s){ return KSOURCE_APPS[s.app].label; });
+  return (
+    <KModal onClose={onClose} width={580} title="Run discovery scan" subtitle="Profile the corpus to reveal what kinds of documents are in there — before committing to full indexing."
+      icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>}
+      footer={<><button className="btn-ghost" onClick={onClose}>Cancel</button><button className="btn-dark" onClick={onClose}>↻ Run scan</button></>}>
+      <KField label="Sources to scan">{srcOptions.length ? <KChipMulti value={sources} onChange={setSources} options={srcOptions} placeholder="Select sources" /> : <div style={{ fontSize:12.5, color:"var(--ink-3)" }}>No connected sources yet — add one first.</div>}</KField>
+      <KField label="Sampling depth" hint="Sampling is fast and cheap; full reads every document.">
+        <KRadioCards value={depth} onChange={setDepth} cols={3} options={[
+          { id:"quick", label:"Quick", desc:"~200 files" },
+          { id:"sample", label:"Sample", desc:"Stratified ~25%" },
+          { id:"full", label:"Full", desc:"Every file" },
+        ]} />
+      </KField>
+      <KField label="Taxonomy mode">
+        <KRadioCards value={mode} onChange={setMode} cols={2} options={[
+          { id:"open", label:"Open", desc:"Discover whatever kinds exist (emergent)" },
+          { id:"guided", label:"Guided", desc:"Classify against expected kinds" },
+        ]} />
+      </KField>
+      {mode==="guided" && <KField label="Expected kinds" hint="Anything outside these lands in an 'Unexpected' bucket."><KChipMulti value={expected} onChange={setExpected} options={["Contracts","Invoices","NDAs","Order Forms","Call Notes","Proposals","Resumes","Policies","Reports"]} placeholder="Add expected kinds" /></KField>}
+      <KField label="Classification model"><KSelect value={model} onChange={setModel} options={["Claude Sonnet 4.6","Claude Haiku 4.6","OpenAI GPT 4.1 mini","Gemini 3 Flash"]} /></KField>
+    </KModal>
+  );
+}
+
 // Per-tab empty state — used when the current graph is blank (no nodes yet).
 function WorkspaceEmpty({ icon, eyebrow, title, desc, ctaLabel, onCta, secondaryLabel, onSecondary }) {
   return (
@@ -21867,7 +22953,7 @@ function App() {
   // Top-level navigation mirrored into query params so a graph/tab/node/pane is
   // shareable and reload/back-forward safe. Child views (node detail, governance)
   // own their own params via useUrlParam.
-  var TAB_NAMES = ["Graph", "Nodes", "Edges", "Sources", "Records", "Violations", "Governance"];
+  var TAB_NAMES = ["Graph", "Nodes", "Edges", "Knowledge", "Sources", "Records", "Violations", "Governance"];
   function tabFromUrl(s) {
     if (!s) return "Graph";
     var m = TAB_NAMES.find(function(t){ return t.toLowerCase() === s.toLowerCase(); });
@@ -21921,6 +23007,7 @@ function App() {
     // Tidy params owned by child views once their parent view is closed.
     if (!detailId) params.delete("ntab");
     if (tab !== "Governance") { params.delete("gsec"); params.delete("gdetail"); params.delete("gnew"); }
+    if (tab !== "Knowledge") { params.delete("kset"); params.delete("ksec"); params.delete("kkind"); params.delete("ksrc"); params.delete("ksrcv"); }
     var struct = [currentGraphId || "", tab, detailId || ""].join("|");
     var isStruct = struct !== structRef.current;
     structRef.current = struct;
@@ -21997,6 +23084,8 @@ function App() {
         />
       ) : tab === "Edges" ? (
         <GlobalEdgesView nodes={nodes} edges={edges} />
+      ) : tab === "Knowledge" ? (
+        <KnowledgeView />
       ) : isBlank && tab === "Sources" ? (
         <WorkspaceEmpty
           eyebrow="SOURCES"
