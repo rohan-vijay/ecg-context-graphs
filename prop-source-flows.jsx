@@ -10,50 +10,123 @@ const { useState, useRef, useEffect, useMemo } = React;
 // `kind` splits the catalog into structured systems vs unstructured sources.
 const SOURCE_SYSTEMS = [
   // ── Structured systems (databases, warehouses, apps with records) ──
-  { id: "salesforce",  name: "Salesforce",            tag: "CRM",          kind: "structured",   status: "healthy",  icon: "S",   slug: "salesforce",          color: "#00A1E0", desc: "Accounts, contacts, opportunities and custom objects." },
-  { id: "hubspot",     name: "HubSpot",               tag: "Marketing",    kind: "structured",   status: "degraded", icon: "H",   slug: "hubspot",             color: "#FF7A59", desc: "Contacts, deals, companies and marketing events." },
-  { id: "snowflake",   name: "Snowflake",             tag: "Warehouse",    kind: "structured",   status: "healthy",  icon: "❄",  slug: "snowflake",           color: "#29B5E8", desc: "Cloud data-warehouse tables and views." },
-  { id: "bigquery",    name: "Google BigQuery",       tag: "Warehouse",    kind: "structured",   status: "healthy",  icon: "BQ",  slug: "googlebigquery",      color: "#669DF6", desc: "Serverless warehouse datasets and tables." },
-  { id: "databricks",  name: "Databricks",            tag: "Lakehouse",    kind: "structured",   status: "healthy",  icon: "DB",  slug: "databricks",          color: "#FF3621", desc: "Delta tables and Unity Catalog assets." },
-  { id: "redshift",    name: "Amazon Redshift",       tag: "Warehouse",    kind: "structured",   status: "healthy",  icon: "RS",  slug: "amazonredshift",      color: "#8C4FFF", desc: "Columnar warehouse schemas and tables." },
-  { id: "postgres",    name: "PostgreSQL",            tag: "Database",     kind: "structured",   status: "healthy",  icon: "PG",  slug: "postgresql",          color: "#4169E1", desc: "Relational tables, views and materialised views." },
-  { id: "mysql",       name: "MySQL",                 tag: "Database",     kind: "structured",   status: "healthy",  icon: "My",  slug: "mysql",               color: "#4479A1", desc: "Relational tables from a MySQL instance." },
-  { id: "sqlserver",   name: "Microsoft SQL Server",  tag: "Database",     kind: "structured",   status: "healthy",  icon: "MS",  slug: "microsoftsqlserver",  color: "#CC2927", desc: "Tables, views and stored procedures." },
-  { id: "oracle",      name: "Oracle Database",       tag: "Database",     kind: "structured",   status: "healthy",  icon: "Or",  slug: "oracle",              color: "#F80000", desc: "Enterprise relational schemas." },
-  { id: "mongodb",     name: "MongoDB",               tag: "NoSQL",        kind: "structured",   status: "healthy",  icon: "Mo",  slug: "mongodb",             color: "#47A248", desc: "Document collections and embedded records." },
-  { id: "netsuite",    name: "NetSuite ERP",          tag: "ERP",          kind: "structured",   status: "healthy",  icon: "N",   slug: "",                    color: "#1F7A3D", desc: "Invoices, agreements and financial records." },
-  { id: "sap",         name: "SAP",                   tag: "ERP",          kind: "structured",   status: "healthy",  icon: "SAP", slug: "sap",                 color: "#0FAAFF", desc: "ERP modules, materials and finance documents." },
-  { id: "stripe",      name: "Stripe",                tag: "Billing",      kind: "structured",   status: "healthy",  icon: "$",   slug: "stripe",              color: "#635BFF", desc: "Customers, subscriptions, invoices and payouts." },
-  { id: "shopify",     name: "Shopify",               tag: "Commerce",     kind: "structured",   status: "healthy",  icon: "Sh",  slug: "shopify",             color: "#7AB55C", desc: "Orders, products, customers and inventory." },
-  { id: "airtable",    name: "Airtable",              tag: "Database",     kind: "structured",   status: "healthy",  icon: "At",  slug: "airtable",            color: "#18BFFF", desc: "Bases, tables and linked records." },
-  { id: "googlesheets",name: "Google Sheets",         tag: "Spreadsheet",  kind: "structured",   status: "healthy",  icon: "GS",  slug: "googlesheets",        color: "#34A853", desc: "Spreadsheet rows as structured records." },
-  { id: "segment",     name: "Segment",               tag: "CDP",          kind: "structured",   status: "healthy",  icon: "Sg",  slug: "segment",             color: "#52BD94", desc: "Event streams and identity profiles." },
-  { id: "okta",        name: "Okta",                  tag: "Identity",     kind: "structured",   status: "healthy",  icon: "O",   slug: "okta",                color: "#007DC1", desc: "Users, groups and identity mappings." },
-  { id: "kafka",       name: "Apache Kafka",          tag: "Streaming",    kind: "structured",   status: "healthy",  icon: "K",   slug: "apachekafka",         color: "#231F20", desc: "Event topics consumed as a stream." },
-  { id: "jira",        name: "Jira",                  tag: "Issues",       kind: "structured",   status: "healthy",  icon: "Jr",  slug: "jira",                color: "#0052CC", desc: "Issues, sprints and project tracking." },
-  { id: "zendesk",     name: "Zendesk",               tag: "Support",      kind: "structured",   status: "healthy",  icon: "Z",   slug: "zendesk",             color: "#03363D", desc: "Tickets, macros and help-center articles." },
-  { id: "asana",       name: "Asana",                 tag: "Tasks",        kind: "structured",   status: "healthy",  icon: "As",  slug: "asana",               color: "#F06A6A", desc: "Projects, tasks and portfolios." },
-  { id: "linear",      name: "Linear",                tag: "Issues",       kind: "structured",   status: "healthy",  icon: "Ln",  slug: "linear",              color: "#5E6AD2", desc: "Issues, cycles and project updates." },
+  { id: "salesforce", cat: "CRM & Marketing",  name: "Salesforce",            tag: "CRM",          kind: "structured",   status: "healthy",  icon: "S",   slug: "salesforce",          color: "#00A1E0", desc: "Accounts, contacts, opportunities and custom objects." },
+  { id: "hubspot", cat: "CRM & Marketing",     name: "HubSpot",               tag: "Marketing",    kind: "structured",   status: "degraded", icon: "H",   slug: "hubspot",             color: "#FF7A59", desc: "Contacts, deals, companies and marketing events." },
+  { id: "snowflake", cat: "Data Warehouse",   name: "Snowflake",             tag: "Warehouse",    kind: "structured",   status: "healthy",  icon: "❄",  slug: "snowflake",           color: "#29B5E8", desc: "Cloud data-warehouse tables and views." },
+  { id: "bigquery", cat: "Data Warehouse",    name: "Google BigQuery",       tag: "Warehouse",    kind: "structured",   status: "healthy",  icon: "BQ",  slug: "googlebigquery",      color: "#669DF6", desc: "Serverless warehouse datasets and tables." },
+  { id: "databricks", cat: "Data Warehouse",  name: "Databricks",            tag: "Lakehouse",    kind: "structured",   status: "healthy",  icon: "DB",  slug: "databricks",          color: "#FF3621", desc: "Delta tables and Unity Catalog assets." },
+  { id: "redshift", cat: "Data Warehouse",    name: "Amazon Redshift",       tag: "Warehouse",    kind: "structured",   status: "healthy",  icon: "RS",  slug: "amazonredshift",      color: "#8C4FFF", desc: "Columnar warehouse schemas and tables." },
+  { id: "postgres", cat: "Databases",    name: "PostgreSQL",            tag: "Database",     kind: "structured",   status: "healthy",  icon: "PG",  slug: "postgresql",          color: "#4169E1", desc: "Relational tables, views and materialised views." },
+  { id: "mysql", cat: "Databases",       name: "MySQL",                 tag: "Database",     kind: "structured",   status: "healthy",  icon: "My",  slug: "mysql",               color: "#4479A1", desc: "Relational tables from a MySQL instance." },
+  { id: "sqlserver", cat: "Databases",   name: "Microsoft SQL Server",  tag: "Database",     kind: "structured",   status: "healthy",  icon: "MS",  slug: "microsoftsqlserver",  color: "#CC2927", desc: "Tables, views and stored procedures." },
+  { id: "oracle", cat: "Databases",      name: "Oracle Database",       tag: "Database",     kind: "structured",   status: "healthy",  icon: "Or",  slug: "oracle",              color: "#F80000", desc: "Enterprise relational schemas." },
+  { id: "mongodb", cat: "Databases",     name: "MongoDB",               tag: "NoSQL",        kind: "structured",   status: "healthy",  icon: "Mo",  slug: "mongodb",             color: "#47A248", desc: "Document collections and embedded records." },
+  { id: "netsuite", cat: "ERP & Finance",    name: "NetSuite ERP",          tag: "ERP",          kind: "structured",   status: "healthy",  icon: "N",   slug: "",                    color: "#1F7A3D", desc: "Invoices, agreements and financial records." },
+  { id: "sap", cat: "ERP & Finance",         name: "SAP",                   tag: "ERP",          kind: "structured",   status: "healthy",  icon: "SAP", slug: "sap",                 color: "#0FAAFF", desc: "ERP modules, materials and finance documents." },
+  { id: "stripe", cat: "ERP & Finance",      name: "Stripe",                tag: "Billing",      kind: "structured",   status: "healthy",  icon: "$",   slug: "stripe",              color: "#635BFF", desc: "Customers, subscriptions, invoices and payouts." },
+  { id: "shopify", cat: "ERP & Finance",     name: "Shopify",               tag: "Commerce",     kind: "structured",   status: "healthy",  icon: "Sh",  slug: "shopify",             color: "#7AB55C", desc: "Orders, products, customers and inventory." },
+  { id: "airtable", cat: "Databases",    name: "Airtable",              tag: "Database",     kind: "structured",   status: "healthy",  icon: "At",  slug: "airtable",            color: "#18BFFF", desc: "Bases, tables and linked records." },
+  { id: "googlesheets", cat: "Files & Storage",name: "Google Sheets",         tag: "Spreadsheet",  kind: "structured",   status: "healthy",  icon: "GS",  slug: "googlesheets",        color: "#34A853", desc: "Spreadsheet rows as structured records." },
+  { id: "segment", cat: "Identity & Events",     name: "Segment",               tag: "CDP",          kind: "structured",   status: "healthy",  icon: "Sg",  slug: "segment",             color: "#52BD94", desc: "Event streams and identity profiles." },
+  { id: "okta", cat: "Identity & Events",        name: "Okta",                  tag: "Identity",     kind: "structured",   status: "healthy",  icon: "O",   slug: "okta",                color: "#007DC1", desc: "Users, groups and identity mappings." },
+  { id: "kafka", cat: "Identity & Events",       name: "Apache Kafka",          tag: "Streaming",    kind: "structured",   status: "healthy",  icon: "K",   slug: "apachekafka",         color: "#231F20", desc: "Event topics consumed as a stream." },
+  { id: "jira", cat: "Project & Support",        name: "Jira",                  tag: "Issues",       kind: "structured",   status: "healthy",  icon: "Jr",  slug: "jira",                color: "#0052CC", desc: "Issues, sprints and project tracking." },
+  { id: "zendesk", cat: "Project & Support",     name: "Zendesk",               tag: "Support",      kind: "structured",   status: "healthy",  icon: "Z",   slug: "zendesk",             color: "#03363D", desc: "Tickets, macros and help-center articles." },
+  { id: "asana", cat: "Project & Support",       name: "Asana",                 tag: "Tasks",        kind: "structured",   status: "healthy",  icon: "As",  slug: "asana",               color: "#F06A6A", desc: "Projects, tasks and portfolios." },
+  { id: "linear", cat: "Project & Support",      name: "Linear",                tag: "Issues",       kind: "structured",   status: "healthy",  icon: "Ln",  slug: "linear",              color: "#5E6AD2", desc: "Issues, cycles and project updates." },
   // ── Unstructured sources (docs, files, messages, wikis) ──
-  { id: "googledrive", name: "Google Drive",          tag: "Files",        kind: "unstructured", status: "healthy",  icon: "GD",  slug: "googledrive",         color: "#1FA463", desc: "Docs, Sheets, Slides and stored files." },
-  { id: "slack",       name: "Slack",                 tag: "Messaging",    kind: "unstructured", status: "healthy",  icon: "Sl",  slug: "slack",               color: "#4A154B", desc: "Channels, threads and message history." },
-  { id: "confluence",  name: "Confluence",            tag: "Wiki",         kind: "unstructured", status: "healthy",  icon: "Cf",  slug: "confluence",          color: "#172B4D", desc: "Spaces, pages and knowledge bases." },
-  { id: "notion",      name: "Notion",                tag: "Wiki",         kind: "unstructured", status: "healthy",  icon: "No",  slug: "notion",              color: "#000000", desc: "Pages, wikis and databases." },
-  { id: "sharepoint",  name: "SharePoint",            tag: "Files",        kind: "unstructured", status: "healthy",  icon: "SP",  slug: "microsoftsharepoint", color: "#0078D4", desc: "Document libraries and team sites." },
-  { id: "onedrive",    name: "OneDrive",              tag: "Files",        kind: "unstructured", status: "healthy",  icon: "OD",  slug: "microsoftonedrive",   color: "#0078D4", desc: "Personal and shared cloud files." },
-  { id: "dropbox",     name: "Dropbox",               tag: "Files",        kind: "unstructured", status: "healthy",  icon: "Dx",  slug: "dropbox",             color: "#0061FF", desc: "Synced files, folders and content." },
-  { id: "box",         name: "Box",                   tag: "Files",        kind: "unstructured", status: "healthy",  icon: "Bx",  slug: "box",                 color: "#0061D5", desc: "Enterprise content and shared files." },
-  { id: "s3",          name: "Amazon S3",             tag: "Object store", kind: "unstructured", status: "healthy",  icon: "S3",  slug: "amazons3",            color: "#569A31", desc: "Objects and files in S3 buckets." },
-  { id: "gcs",         name: "Google Cloud Storage",  tag: "Object store", kind: "unstructured", status: "healthy",  icon: "GCS", slug: "googlecloud",         color: "#4285F4", desc: "Objects and files in GCS buckets." },
-  { id: "gmail",       name: "Gmail",                 tag: "Email",        kind: "unstructured", status: "healthy",  icon: "GM",  slug: "gmail",               color: "#EA4335", desc: "Email threads, messages and attachments." },
-  { id: "outlook",     name: "Outlook",               tag: "Email",        kind: "unstructured", status: "healthy",  icon: "Ol",  slug: "microsoftoutlook",    color: "#0078D4", desc: "Mailboxes, threads and calendar items." },
-  { id: "github",      name: "GitHub",                tag: "Code",         kind: "unstructured", status: "healthy",  icon: "GH",  slug: "github",              color: "#181717", desc: "Repos, pull requests, issues and READMEs." },
-  { id: "gitlab",      name: "GitLab",                tag: "Code",         kind: "unstructured", status: "healthy",  icon: "GL",  slug: "gitlab",              color: "#FC6D26", desc: "Repositories, merge requests and CI." },
-  { id: "intercom",    name: "Intercom",              tag: "Support",      kind: "unstructured", status: "healthy",  icon: "Ic",  slug: "intercom",            color: "#1F8DED", desc: "Conversations and help articles." },
-  { id: "figma",       name: "Figma",                 tag: "Design",       kind: "unstructured", status: "healthy",  icon: "Fg",  slug: "figma",               color: "#F24E1E", desc: "Design files, frames and comments." },
-  { id: "zoom",        name: "Zoom",                  tag: "Meetings",     kind: "unstructured", status: "healthy",  icon: "Zm",  slug: "zoom",                color: "#0B5CFF", desc: "Recordings and meeting transcripts." },
-  { id: "custom",      name: "Custom connector",      tag: "Custom",       kind: "structured",   status: null,       icon: "+",   slug: "",                    color: "#A09E88", desc: "Bring your own REST, JDBC, gRPC or file source." },
+  { id: "googledrive", cat: "Files & Storage", name: "Google Drive",          tag: "Files",        kind: "unstructured", status: "healthy",  icon: "GD",  slug: "googledrive",         color: "#1FA463", desc: "Docs, Sheets, Slides and stored files." },
+  { id: "slack", cat: "Messaging & Email",       name: "Slack",                 tag: "Messaging",    kind: "unstructured", status: "healthy",  icon: "Sl",  slug: "slack",               color: "#4A154B", desc: "Channels, threads and message history." },
+  { id: "confluence", cat: "Docs & Wikis",  name: "Confluence",            tag: "Wiki",         kind: "unstructured", status: "healthy",  icon: "Cf",  slug: "confluence",          color: "#172B4D", desc: "Spaces, pages and knowledge bases." },
+  { id: "notion", cat: "Docs & Wikis",      name: "Notion",                tag: "Wiki",         kind: "unstructured", status: "healthy",  icon: "No",  slug: "notion",              color: "#000000", desc: "Pages, wikis and databases." },
+  { id: "sharepoint", cat: "Files & Storage",  name: "SharePoint",            tag: "Files",        kind: "unstructured", status: "healthy",  icon: "SP",  slug: "microsoftsharepoint", color: "#0078D4", desc: "Document libraries and team sites." },
+  { id: "onedrive", cat: "Files & Storage",    name: "OneDrive",              tag: "Files",        kind: "unstructured", status: "healthy",  icon: "OD",  slug: "microsoftonedrive",   color: "#0078D4", desc: "Personal and shared cloud files." },
+  { id: "dropbox", cat: "Files & Storage",     name: "Dropbox",               tag: "Files",        kind: "unstructured", status: "healthy",  icon: "Dx",  slug: "dropbox",             color: "#0061FF", desc: "Synced files, folders and content." },
+  { id: "box", cat: "Files & Storage",         name: "Box",                   tag: "Files",        kind: "unstructured", status: "healthy",  icon: "Bx",  slug: "box",                 color: "#0061D5", desc: "Enterprise content and shared files." },
+  { id: "s3", cat: "Files & Storage",          name: "Amazon S3",             tag: "Object store", kind: "unstructured", status: "healthy",  icon: "S3",  slug: "amazons3",            color: "#569A31", desc: "Objects and files in S3 buckets." },
+  { id: "gcs", cat: "Files & Storage",         name: "Google Cloud Storage",  tag: "Object store", kind: "unstructured", status: "healthy",  icon: "GCS", slug: "googlecloud",         color: "#4285F4", desc: "Objects and files in GCS buckets." },
+  { id: "gmail", cat: "Messaging & Email",       name: "Gmail",                 tag: "Email",        kind: "unstructured", status: "healthy",  icon: "GM",  slug: "gmail",               color: "#EA4335", desc: "Email threads, messages and attachments." },
+  { id: "outlook", cat: "Messaging & Email",     name: "Outlook",               tag: "Email",        kind: "unstructured", status: "healthy",  icon: "Ol",  slug: "microsoftoutlook",    color: "#0078D4", desc: "Mailboxes, threads and calendar items." },
+  { id: "github", cat: "Dev & Code",      name: "GitHub",                tag: "Code",         kind: "unstructured", status: "healthy",  icon: "GH",  slug: "github",              color: "#181717", desc: "Repos, pull requests, issues and READMEs." },
+  { id: "gitlab", cat: "Dev & Code",      name: "GitLab",                tag: "Code",         kind: "unstructured", status: "healthy",  icon: "GL",  slug: "gitlab",              color: "#FC6D26", desc: "Repositories, merge requests and CI." },
+  { id: "intercom", cat: "Project & Support",    name: "Intercom",              tag: "Support",      kind: "unstructured", status: "healthy",  icon: "Ic",  slug: "intercom",            color: "#1F8DED", desc: "Conversations and help articles." },
+  { id: "figma", cat: "Design",       name: "Figma",                 tag: "Design",       kind: "unstructured", status: "healthy",  icon: "Fg",  slug: "figma",               color: "#F24E1E", desc: "Design files, frames and comments." },
+  { id: "zoom", cat: "Messaging & Email",        name: "Zoom",                  tag: "Meetings",     kind: "unstructured", status: "healthy",  icon: "Zm",  slug: "zoom",                color: "#0B5CFF", desc: "Recordings and meeting transcripts." },
+  { id: "custom", cat: "Custom",      name: "Custom connector",      tag: "Custom",       kind: "structured",   status: null,       icon: "+",   slug: "",                    color: "#A09E88", desc: "Bring your own REST, JDBC, gRPC or file source." },
 ];
+
+// Connector category dropdown options for the picker (step 1).
+const SRC_CATEGORIES = ["CRM & Marketing", "ERP & Finance", "Data Warehouse", "Databases", "Files & Storage", "Docs & Wikis", "Messaging & Email", "Dev & Code", "Project & Support", "Identity & Events", "Design"];
+
+// Existing connections per source system (step 2). Falls back to a single default.
+const CONNECTIONS_BY_SYS = {
+  snowflake:  [
+    { id: "sf-prod", name: "Production warehouse",  detail: "acme.us-east-1 · ANALYTICS_WH", auth: "Key-pair",        status: "healthy", lastUsed: "2h ago" },
+    { id: "sf-stg",  name: "Staging warehouse",     detail: "acme.us-east-1 · STAGING_WH",   auth: "Key-pair",        status: "healthy", lastUsed: "3d ago" },
+  ],
+  salesforce: [
+    { id: "sfdc-prod", name: "Production org",       detail: "acme.my.salesforce.com",                  auth: "OAuth2", status: "healthy", lastUsed: "1h ago" },
+    { id: "sfdc-sbx",  name: "Sandbox",              detail: "acme--dev.sandbox.my.salesforce.com",     auth: "OAuth2", status: "degraded", lastUsed: "5d ago" },
+  ],
+  postgres:   [
+    { id: "pg-rep",   name: "Primary read-replica",  detail: "db.acme.internal:5432 · prod",  auth: "Password",  status: "healthy", lastUsed: "12m ago" },
+  ],
+  hubspot:    [
+    { id: "hs-mkt",   name: "Marketing hub",         detail: "portal 4821990",                auth: "OAuth2",    status: "degraded", lastUsed: "6h ago" },
+  ],
+};
+function getConnections(sysId, sel) {
+  if (CONNECTIONS_BY_SYS[sysId]) return CONNECTIONS_BY_SYS[sysId];
+  if (!sel) return [];
+  return [{ id: sysId + "-default", name: "Default connection", detail: sel.name + " · workspace", auth: "OAuth2", status: "healthy", lastUsed: "recently" }];
+}
+
+// Discoverable objects per source system (step 3). Falls back to generic tables.
+const OBJECTS_BY_SYS = {
+  salesforce: [
+    { name: "Account",     type: "Object", rows: "2.8K", cols: 42 },
+    { name: "Contact",     type: "Object", rows: "18K",  cols: 38 },
+    { name: "Opportunity", type: "Object", rows: "6.2K", cols: 51 },
+    { name: "Lead",        type: "Object", rows: "24K",  cols: 33 },
+    { name: "Case",        type: "Object", rows: "142K", cols: 29 },
+    { name: "Campaign",    type: "Object", rows: "320",  cols: 22 },
+    { name: "Task",        type: "Object", rows: "410K", cols: 18 },
+    { name: "User",        type: "Object", rows: "1.2K", cols: 44 },
+    { name: "Product2",    type: "Object", rows: "180",  cols: 26 },
+    { name: "Quote",       type: "Object", rows: "3.1K", cols: 35 },
+  ],
+  snowflake: [
+    { name: "ANALYTICS.ACCOUNTS",         type: "Table", rows: "2.8K", cols: 18 },
+    { name: "ANALYTICS.SUBSCRIPTIONS",    type: "Table", rows: "2.8K", cols: 11 },
+    { name: "ANALYTICS.INVOICES",         type: "Table", rows: "12K",  cols: 13 },
+    { name: "ANALYTICS.USAGE_EVENTS",     type: "Table", rows: "25M",  cols: 9  },
+    { name: "ANALYTICS.ACCOUNT_HEALTH_V", type: "View",  rows: "2.8K", cols: 7  },
+    { name: "RAW.SFDC_ACCOUNT",           type: "Table", rows: "2.8K", cols: 42 },
+  ],
+  postgres: [
+    { name: "public.accounts",      type: "Table", rows: "2.8K", cols: 18 },
+    { name: "public.users",         type: "Table", rows: "1.2K", cols: 14 },
+    { name: "public.orders",        type: "Table", rows: "12K",  cols: 16 },
+    { name: "public.order_items",   type: "Table", rows: "48K",  cols: 9  },
+    { name: "billing.invoices",     type: "Table", rows: "12K",  cols: 13 },
+  ],
+  stripe: [
+    { name: "customers",      type: "Object", rows: "2.8K", cols: 24 },
+    { name: "subscriptions",  type: "Object", rows: "2.8K", cols: 31 },
+    { name: "invoices",       type: "Object", rows: "12K",  cols: 28 },
+    { name: "charges",        type: "Object", rows: "96K",  cols: 22 },
+  ],
+};
+function getSourceObjects(sysId, sel) {
+  if (OBJECTS_BY_SYS[sysId]) return OBJECTS_BY_SYS[sysId];
+  return [
+    { name: "accounts", type: "Table", rows: "2.8K", cols: 18 },
+    { name: "contacts", type: "Table", rows: "18K",  cols: 14 },
+    { name: "orders",   type: "Table", rows: "12K",  cols: 13 },
+    { name: "events",   type: "Table", rows: "124K", cols: 9  },
+    { name: "users",    type: "Table", rows: "1.2K", cols: 12 },
+  ];
+}
 
 const DATA_TYPES = [
   { id: "string",    label: "string",    group: "Primitive", desc: "UTF-8 text, variable length" },
@@ -964,9 +1037,10 @@ function PropPreview({ p, node, nameCleaned }) {
 
 const SRC_STEPS = [
   { label: "Source system", hint: "Pick connector from catalog" },
-  { label: "Connection",    hint: "Object, PK, load strategy"  },
+  { label: "Connection",    hint: "Pick or add a connection"   },
+  { label: "Object",        hint: "Choose what to read"        },
   { label: "Column mapping",hint: "Map source → node props"    },
-  { label: "Schedule & SLO",hint: "Cadence, freshness, alerts" },
+  { label: "Schedule & SLO",hint: "Load, cadence, freshness"   },
   { label: "Review",        hint: "Config & publish"          },
 ];
 
@@ -986,7 +1060,8 @@ const ERROR_POLICIES = [
 function LinkSourceFlow({ node, existingSources, onClose }) {
   const [step, setStep] = useState(0);
   const [s, setS] = useState({
-    system: "", customName: "", table: "", query: "", inputMode: "table",
+    system: "", customName: "", connection: "", newConnName: "", newConnHost: "", newConnAuth: "OAuth2",
+    table: "", query: "", inputMode: "table",
     pkCol: "", joinCol: "", incrementalCol: "updated_at",
     loadStrategy: "incremental", mapping: {}, unmappedPolicy: "ignore",
     cadence: "5min", freshnessSLO: "30m", batchWindow: "15m",
@@ -1000,7 +1075,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const srcCols = s.system ? getSourceCols(s.system) : [];
   const nodeProps = (window.PROPS_BY_NODE?.[node?.id] || []).map(p => ({ id: p.name, label: p.name, type: p.type }));
   const mappedCount = Object.values(s.mapping).filter(Boolean).length;
-  const canNext = step === 0 ? !!s.system : step === 1 ? !!(s.table || s.query) : true;
+  const canNext = step === 0 ? !!s.system : step === 1 ? !!s.connection : step === 2 ? !!(s.table || s.query) : true;
 
   const titleFrom = sel ? (
     <span className="flow-title-from">
@@ -1026,13 +1101,14 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
       onNext={() => setStep(x => x + 1)}
       onPublish={onClose}
       onClose={onClose}
-      rightPane={step === 0 ? null : <SrcPreview s={s} sel={sel} node={node} srcCols={srcCols} nodeProps={nodeProps} mappedCount={mappedCount} />}
+      rightPane={step <= 2 ? null : <SrcPreview s={s} sel={sel} node={node} srcCols={srcCols} nodeProps={nodeProps} mappedCount={mappedCount} />}
     >
       {step === 0 && <SrcSystem s={s} set={set} />}
-      {step === 1 && <SrcConnection s={s} set={set} sel={sel} srcCols={srcCols} />}
-      {step === 2 && <SrcMapping s={s} set={set} srcCols={srcCols} nodeProps={nodeProps} node={node} sel={sel} />}
-      {step === 3 && <SrcSchedule s={s} set={set} />}
-      {step === 4 && <SrcReview s={s} set={set} node={node} sel={sel} srcCols={srcCols} mappedCount={mappedCount} onClose={onClose} />}
+      {step === 1 && <SrcConnection s={s} set={set} sel={sel} />}
+      {step === 2 && <SrcObject s={s} set={set} sel={sel} srcCols={srcCols} />}
+      {step === 3 && <SrcMapping s={s} set={set} srcCols={srcCols} nodeProps={nodeProps} node={node} sel={sel} />}
+      {step === 4 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
+      {step === 5 && <SrcReview s={s} set={set} node={node} sel={sel} srcCols={srcCols} mappedCount={mappedCount} onClose={onClose} />}
     </WizardShell>
   );
 }
@@ -1055,20 +1131,16 @@ function SrcConnectorLogo({ c, size }) {
 
 function SrcSystem({ s, set }) {
   const [q, setQ] = useState("");
-  const [kind, setKind] = useState("all");
-  const KINDS = [
-    { id: "all", label: "All" },
-    { id: "structured", label: "Structured" },
-    { id: "unstructured", label: "Unstructured" },
-  ];
+  const [cat, setCat] = useState("all");
+  const catOptions = [{ id: "all", label: "All categories" }].concat(SRC_CATEGORIES.map(c => ({ id: c, label: c })));
   const list = SOURCE_SYSTEMS.filter(c => c.id !== "custom").filter(c => {
-    if (kind !== "all" && c.kind !== kind) return false;
-    if (q && (c.name + " " + (c.desc || "") + " " + c.tag).toLowerCase().indexOf(q.toLowerCase()) < 0) return false;
+    if (cat !== "all" && c.cat !== cat) return false;
+    if (q && (c.name + " " + (c.desc || "")).toLowerCase().indexOf(q.toLowerCase()) < 0) return false;
     return true;
   });
   return (
-    <StepWrap eyebrow="STEP 1 · SOURCE SYSTEM" title="Pick a source connector" desc="Search the catalog and choose the system that owns this data. Both structured systems and unstructured sources are supported.">
-      {/* search + kind filter */}
+    <StepWrap eyebrow="STEP 1 · SOURCE SYSTEM" title="Pick a source connector" desc="Search the catalog or filter by category, then choose the system that owns this data.">
+      {/* search + category dropdown */}
       <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
         <div style={{ position: "relative", flex: 1 }}>
           <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--ink-3)", display: "flex" }}>
@@ -1076,11 +1148,8 @@ function SrcSystem({ s, set }) {
           </span>
           <input className="winput" style={{ paddingLeft: 36 }} placeholder="Search connectors…" value={q} onChange={e => setQ(e.target.value)} autoFocus />
         </div>
-        <div style={{ display: "flex", gap: 3, padding: 3, borderRadius: 9, border: "1px solid var(--line)", background: "var(--bg-canvas)" }}>
-          {KINDS.map(k => {
-            const on = kind === k.id;
-            return <button key={k.id} onClick={() => setKind(k.id)} style={{ padding: "6px 12px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: on ? 600 : 500, background: on ? "var(--ink)" : "transparent", color: on ? "var(--bg-canvas)" : "var(--ink-2)" }}>{k.label}</button>;
-          })}
+        <div style={{ width: 230, flexShrink: 0 }}>
+          <CustomSelect value={cat} onChange={setCat} options={catOptions} />
         </div>
       </div>
 
@@ -1098,12 +1167,10 @@ function SrcSystem({ s, set }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{c.name}</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: "0.4px", textTransform: "uppercase", padding: "2px 6px", borderRadius: 4, color: c.kind === "structured" ? "var(--blue)" : "var(--gold)", background: c.kind === "structured" ? "var(--blue-fill)" : "var(--gold-fill)" }}>{c.kind === "structured" ? "Structured" : "Unstructured"}</span>
                   {c.status === "degraded" && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: "var(--gold)" }}>● degraded</span>}
                 </div>
                 <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.desc}</div>
               </div>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-4)", flexShrink: 0 }}>{c.tag}</span>
               {on
                 ? <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: "50%", background: "var(--ink)", color: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>✓</span>
                 : <span style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, color: "var(--ink-3)", padding: "5px 12px", borderRadius: 7, border: "1px solid var(--line)" }}>Select</span>}
@@ -1112,23 +1179,149 @@ function SrcSystem({ s, set }) {
         })}
         {list.length === 0 && <div style={{ padding: "32px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No connectors match “{q}”.</div>}
       </div>
+    </StepWrap>
+  );
+}
 
-      <button onClick={() => set({ system: "custom" })}
-        style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "12px 14px", borderRadius: 10, border: "1px dashed var(--line)", background: s.system === "custom" ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--ink-2)" }}>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-3)" }}>+</span>
-        Set up a custom connector
-        {s.system === "custom" && <span style={{ marginLeft: "auto", color: "var(--green)", fontWeight: 700 }}>✓</span>}
+// ── Src Step 2: Connection ────────────────────────────────────────────────────
+
+function SrcConnStatusDot({ status }) {
+  const col = status === "healthy" ? "var(--green)" : status === "degraded" ? "var(--gold)" : "var(--ink-3)";
+  return <span style={{ width: 7, height: 7, borderRadius: "50%", background: col, flexShrink: 0 }} />;
+}
+
+function SrcConnection({ s, set, sel }) {
+  const conns = sel ? getConnections(sel.id, sel) : [];
+  const addingNew = s.connection === "__new__";
+  const hostLabel = sel?.id === "salesforce" ? "Instance URL"
+    : sel?.cat === "Data Warehouse" || sel?.cat === "Databases" ? "Host / account"
+    : sel?.cat === "Files & Storage" ? "Bucket / site"
+    : "Endpoint";
+  return (
+    <StepWrap eyebrow="STEP 2 · CONNECTION" title={sel ? `Connect to ${sel.name}` : "Pick a connection"} desc="Pick one of your existing connections, or add a new one. A connection stores the host and credentials for this source.">
+      {conns.length > 0 && (
+        <>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.5px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 8 }}>Your connections</div>
+          <div style={{ border: "1px solid var(--line)", borderRadius: 11, overflow: "hidden", background: "var(--panel)" }}>
+            {conns.map((cn, i) => {
+              const on = s.connection === cn.id;
+              return (
+                <button key={cn.id} onClick={() => set({ connection: cn.id })}
+                  style={{ display: "flex", alignItems: "center", gap: 13, width: "100%", padding: "13px 14px", border: "none", borderTop: i ? "1px solid var(--line-2)" : "none", background: on ? "var(--bg-canvas)" : "transparent", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}
+                  onMouseEnter={e => { if (!on) e.currentTarget.style.background = "var(--panel-2)"; }}
+                  onMouseLeave={e => { if (!on) e.currentTarget.style.background = "transparent"; }}>
+                  {sel && <SrcConnectorLogo c={sel} size={20} />}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <SrcConnStatusDot status={cn.status} />
+                      <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{cn.name}</span>
+                      {cn.status === "degraded" && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: "var(--gold)" }}>degraded</span>}
+                    </div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--ink-3)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cn.detail}</div>
+                  </div>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-4)", flexShrink: 0, textAlign: "right" }}>{cn.auth}<br />used {cn.lastUsed}</span>
+                  {on
+                    ? <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: "50%", background: "var(--ink)", color: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>✓</span>
+                    : <span style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, color: "var(--ink-3)", padding: "5px 12px", borderRadius: 7, border: "1px solid var(--line)" }}>Use</span>}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      <button onClick={() => set({ connection: "__new__" })}
+        style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 14px", borderRadius: 10, border: "1px solid " + (addingNew ? "var(--ink)" : "var(--line)"), borderStyle: addingNew ? "solid" : "dashed", background: addingNew ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--ink)", boxShadow: addingNew ? "0 0 0 2px color-mix(in oklab, var(--ink) 12%, transparent)" : "none" }}>
+        <span style={{ width: 22, height: 22, borderRadius: 6, background: "var(--chip)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-2)", flexShrink: 0 }}>+</span>
+        <span style={{ fontWeight: 600 }}>Add a new connection</span>
+        <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--ink-3)" }}>{sel ? "to " + sel.name : ""}</span>
       </button>
 
-      {s.system === "custom" && (
-        <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
-          <FormRow label="Connector name">
-            <input className="winput" placeholder="My connector" value={s.customName} onChange={e => set({ customName: e.target.value })} />
+      {addingNew && (
+        <div style={{ marginTop: 14, padding: "16px", border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)", display: "grid", gap: 12 }}>
+          <FormRow label="Connection name" required>
+            <input className="winput" placeholder={sel ? sel.name + " — production" : "My connection"} value={s.newConnName} onChange={e => set({ newConnName: e.target.value })} autoFocus />
           </FormRow>
-          <FormRow label="Connector type" last>
-            <CustomSelect value={s.customType || "REST API"} onChange={v => set({ customType: v })} options={
-              ["REST API", "GraphQL", "JDBC", "gRPC", "Webhook", "File (S3/GCS)", "SFTP", "Custom script"].map(t => ({ id: t, label: t }))
-            } />
+          <FormRow label={hostLabel} required>
+            <input className="winput winput-mono" placeholder={sel?.id === "salesforce" ? "acme.my.salesforce.com" : sel?.cat === "Files & Storage" ? "s3://acme-bucket" : "host.acme.internal"} value={s.newConnHost} onChange={e => set({ newConnHost: e.target.value })} />
+          </FormRow>
+          <FormRow label="Authentication" last>
+            <CustomSelect value={s.newConnAuth} onChange={v => set({ newConnAuth: v })} options={["OAuth2", "API key", "Key-pair", "Username / password", "Service account"].map(t => ({ id: t, label: t }))} />
+          </FormRow>
+          <div style={{ fontSize: 11.5, color: "var(--ink-4)", lineHeight: 1.5 }}>You'll be redirected to authorize. Credentials are stored encrypted and reused across pipelines.</div>
+        </div>
+      )}
+    </StepWrap>
+  );
+}
+
+// ── Src Step 3: Object ────────────────────────────────────────────────────────
+
+function SrcObject({ s, set, sel, srcCols }) {
+  const [q, setQ] = useState("");
+  const [mode, setMode] = useState(s.query ? "query" : "browse");
+  const objects = sel ? getSourceObjects(sel.id, sel) : [];
+  const list = objects.filter(o => !q || o.name.toLowerCase().indexOf(q.toLowerCase()) >= 0);
+  const MODES = [{ id: "browse", label: "Browse objects" }, { id: "query", label: "Custom SQL" }];
+  return (
+    <StepWrap eyebrow="STEP 3 · OBJECT" title="Select the object to read" desc={`Search the objects available on ${sel ? sel.name : "the source"} and pick the one to fetch data from.`}>
+      <div style={{ display: "flex", gap: 3, padding: 3, borderRadius: 9, border: "1px solid var(--line)", background: "var(--bg-canvas)", width: "fit-content", marginBottom: 16 }}>
+        {MODES.map(m => {
+          const on = mode === m.id;
+          return <button key={m.id} onClick={() => setMode(m.id)} style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: on ? 600 : 500, background: on ? "var(--ink)" : "transparent", color: on ? "var(--bg-canvas)" : "var(--ink-2)" }}>{m.label}</button>;
+        })}
+      </div>
+
+      {mode === "browse" && (
+        <>
+          <div style={{ position: "relative", marginBottom: 12 }}>
+            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--ink-3)", display: "flex" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
+            </span>
+            <input className="winput" style={{ paddingLeft: 36 }} placeholder="Search objects…" value={q} onChange={e => setQ(e.target.value)} autoFocus />
+          </div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.5px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 8 }}>{list.length} objects</div>
+          <div style={{ border: "1px solid var(--line)", borderRadius: 11, overflow: "hidden", background: "var(--panel)", maxHeight: 320, overflowY: "auto" }}>
+            {list.map((o, i) => {
+              const on = s.table === o.name;
+              return (
+                <button key={o.name} onClick={() => set({ table: o.name, query: "" })}
+                  style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "11px 14px", border: "none", borderTop: i ? "1px solid var(--line-2)" : "none", background: on ? "var(--bg-canvas)" : "transparent", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}
+                  onMouseEnter={e => { if (!on) e.currentTarget.style.background = "var(--panel-2)"; }}
+                  onMouseLeave={e => { if (!on) e.currentTarget.style.background = "transparent"; }}>
+                  <span style={{ width: 26, height: 26, borderRadius: 6, background: "var(--chip)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-3)", flexShrink: 0 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">{o.type === "View" ? <><circle cx="12" cy="12" r="3" /><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /></> : <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 9v11" /></>}</svg>
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, fontWeight: 600, color: "var(--ink)" }}>{o.name}</code>
+                    <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>{o.type} · {o.cols} columns</div>
+                  </div>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--ink-3)", flexShrink: 0 }}>{o.rows} rows</span>
+                  {on
+                    ? <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: "50%", background: "var(--ink)", color: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>✓</span>
+                    : <span style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, color: "var(--ink-3)", padding: "5px 12px", borderRadius: 7, border: "1px solid var(--line)" }}>Select</span>}
+                </button>
+              );
+            })}
+            {list.length === 0 && <div style={{ padding: "28px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No objects match “{q}”.</div>}
+          </div>
+        </>
+      )}
+
+      {mode === "query" && (
+        <FormRow label="Custom SQL" required hint="Define exactly what to read. Columns are discovered from the query result.">
+          <textarea className="winput winput-mono winput-code" rows="7" placeholder={"SELECT id, name, industry, arr_usd, updated_at\nFROM accounts\nWHERE is_deleted = false"} value={s.query} onChange={e => set({ query: e.target.value, table: "" })} />
+        </FormRow>
+      )}
+
+      {(s.table || s.query) && (
+        <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--line-2)" }}>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.5px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 4 }}>{srcCols.length} columns discovered{s.table ? " · " + s.table : ""}</div>
+          <FormRow label="Primary key column" hint="Used for deduplication — must be unique and stable.">
+            <ColSelect cols={srcCols} value={s.pkCol} onChange={v => set({ pkCol: v })} placeholder="— pick PK column —" />
+          </FormRow>
+          <FormRow label="Join key → node property" hint="The column that matches an existing node instance's identifier." last>
+            <ColSelect cols={srcCols} value={s.joinCol} onChange={v => set({ joinCol: v })} placeholder="— pick join column —" />
           </FormRow>
         </div>
       )}
@@ -1136,62 +1329,14 @@ function SrcSystem({ s, set }) {
   );
 }
 
-// ── Src Step 2: Connection ────────────────────────────────────────────────────
-
-function SrcConnection({ s, set, sel, srcCols }) {
-  return (
-    <StepWrap eyebrow="STEP 2 · CONNECTION" title="Configure object and join key" desc="Tell the pipeline which object to read and how to match rows to node instances.">
-      <FormRow label="Input mode">
-        <Seg options={["table","query","topic"]} value={s.inputMode} onChange={v => set({ inputMode: v })} />
-      </FormRow>
-
-      {s.inputMode === "table" && (
-        <FormRow label="Source table / object" required hint={s.table && srcCols.length ? `${srcCols.length} columns discovered` : ""}>
-          <input className="winput winput-mono" placeholder={sel?.id === "salesforce" ? "Account" : "accounts"} value={s.table} onChange={e => set({ table: e.target.value })} />
-        </FormRow>
-      )}
-
-      {s.inputMode === "query" && (
-        <FormRow label="Custom SQL" required>
-          <textarea className="winput winput-mono winput-code" rows="6" placeholder={"SELECT id, name, industry, arr_usd, updated_at\nFROM accounts\nWHERE is_deleted = false"} value={s.query} onChange={e => set({ query: e.target.value })} />
-        </FormRow>
-      )}
-
-      {s.inputMode === "topic" && (
-        <FormRow label="Topic / stream name" required>
-          <input className="winput winput-mono" placeholder="events.accounts.upserted" value={s.table} onChange={e => set({ table: e.target.value })} />
-        </FormRow>
-      )}
-
-      <FormRow label="Primary key column" hint="Used for deduplication — must be unique and stable.">
-        <ColSelect cols={srcCols} value={s.pkCol} onChange={v => set({ pkCol: v })} placeholder="— pick PK column —" />
-      </FormRow>
-
-      <FormRow label="Join key → node property" hint="The column that matches an existing node instance's identifier.">
-        <ColSelect cols={srcCols} value={s.joinCol} onChange={v => set({ joinCol: v })} placeholder="— pick join column —" />
-      </FormRow>
-
-      <FormRow label="Load strategy">
-        <RadioList options={LOAD_STRATEGIES} value={s.loadStrategy} onChange={v => set({ loadStrategy: v })} />
-      </FormRow>
-
-      {s.loadStrategy === "incremental" && (
-        <FormRow label="Watermark column" hint="Must be an indexed timestamp the source updates on every row change." last>
-          <ColSelect cols={srcCols.filter(c => c.type === "timestamp" || c.col.includes("at") || c.col.includes("date"))} value={s.incrementalCol} onChange={v => set({ incrementalCol: v })} />
-        </FormRow>
-      )}
-    </StepWrap>
-  );
-}
-
-// ── Src Step 3: Column Mapping ────────────────────────────────────────────────
+// ── Src Step 4: Column Mapping ────────────────────────────────────────────────
 
 function SrcMapping({ s, set, srcCols, nodeProps, node, sel }) {
   const updateMap = (col, propId) => set({ mapping: { ...s.mapping, [col]: propId } });
   const mappedCount = Object.values(s.mapping).filter(Boolean).length;
 
   return (
-    <StepWrap eyebrow="STEP 3 · COLUMN MAPPING" title="Map source columns to node properties" desc="Unmapped source columns are dropped. Unmapped node properties retain their current value.">
+    <StepWrap eyebrow="STEP 4 · COLUMN MAPPING" title="Map source columns to node properties" desc="Unmapped source columns are dropped. Unmapped node properties retain their current value.">
       <FormRow label={`Coverage · ${mappedCount} / ${srcCols.length} columns mapped`} hint="Coercion is applied automatically when types differ. Override per column if needed.">
         <div style={{ height: 4, background: "var(--line-2)", borderRadius: 2, overflow: "hidden", marginBottom: 2 }}>
           <div style={{ height: "100%", width: (srcCols.length > 0 ? mappedCount/srcCols.length*100 : 0) + "%", background: mappedCount > 0 ? "var(--green)" : "var(--line)", transition: "width 200ms" }} />
@@ -1237,7 +1382,7 @@ function SrcMapping({ s, set, srcCols, nodeProps, node, sel }) {
 
 // ── Src Step 4: Schedule ──────────────────────────────────────────────────────
 
-function SrcSchedule({ s, set }) {
+function SrcSchedule({ s, set, srcCols }) {
   const CADENCE_OPTS = [
     { id: "streaming", label: "Streaming",    desc: "< 2s latency · requires CDC or stream source" },
     { id: "1min",      label: "Every minute", desc: "High-frequency — use sparingly" },
@@ -1254,7 +1399,17 @@ function SrcSchedule({ s, set }) {
   const TEAM_OPTS = ["data-platform","fin-ops","cs-platform","governance","applied-ml"].map(t => ({ id: t, label: t }));
 
   return (
-    <StepWrap eyebrow="STEP 4 · SCHEDULE & SLO" title="Freshness, cadence, and error behaviour" desc="The SLO becomes a contractual commitment visible to all downstream consumers. Set it conservatively — you can tighten later.">
+    <StepWrap eyebrow="STEP 5 · SCHEDULE & SLO" title="Load, cadence, freshness, and error behaviour" desc="How data is loaded and kept fresh. The SLO becomes a contractual commitment visible to all downstream consumers — set it conservatively.">
+      <FormRow label="Load strategy">
+        <RadioList options={LOAD_STRATEGIES} value={s.loadStrategy} onChange={v => set({ loadStrategy: v })} />
+      </FormRow>
+
+      {s.loadStrategy === "incremental" && (
+        <FormRow label="Watermark column" hint="Must be an indexed timestamp the source updates on every row change.">
+          <ColSelect cols={(srcCols || []).filter(c => c.type === "timestamp" || c.col.includes("at") || c.col.includes("date"))} value={s.incrementalCol} onChange={v => set({ incrementalCol: v })} />
+        </FormRow>
+      )}
+
       <FormRow label="Sync cadence">
         <CustomSelect value={s.cadence} onChange={v => set({ cadence: v })} options={CADENCE_OPTS} />
       </FormRow>
@@ -1322,7 +1477,7 @@ ${s.backfill ? `backfill:\n  window: ${s.backfillWindow}` : "# backfill: disable
 owner: ${s.owner}`;
 
   return (
-    <StepWrap eyebrow="STEP 5 · REVIEW & PUBLISH" title="Review pipeline configuration" desc="Once published this pipeline appears in the Sources tab and begins syncing on the configured schedule.">
+    <StepWrap eyebrow="STEP 6 · REVIEW & PUBLISH" title="Review pipeline configuration" desc="Once published this pipeline appears in the Sources tab and begins syncing on the configured schedule.">
       <div className="review-grid">
         <section className="card review-summary">
           <div className="card-head">Summary</div>
