@@ -14705,11 +14705,12 @@ function RecordDetailView({ record, node, onBack, onNavigate }) {
 
 function RecordsView() {
   var entityNodes = NODES.filter(function(n){ return n.type !== "source"; });
-  var [nodeFilter, setNodeFilter] = React.useState(entityNodes[0] ? entityNodes[0].id : "account");
+  // Node-type filter + open record both live in the URL so a specific record
+  // detail page is shareable ("rnode" = node type, "rec" = record id).
+  var [nodeFilter, setNodeFilter] = useUrlFlow("rnode", entityNodes[0] ? entityNodes[0].id : "account");
   var [dropOpen, setDropOpen] = React.useState(false);
   var [search, setSearch] = React.useState("");
-  var [selectedRecord, setSelectedRecord] = React.useState(null);
-  var [selectedNode, setSelectedNode] = React.useState(null);
+  var [recId, setRecId] = useUrlFlow("rec", "");
 
   var selectedNodeObj = NODES.find(function(n){ return n.id === nodeFilter; }) || entityNodes[0];
   var c = colorForNode(selectedNodeObj);
@@ -14722,12 +14723,19 @@ function RecordsView() {
       })
     : records;
 
-  if (selectedRecord && selectedNode) {
+  // Resolve the open record from its URL id within the current node's records.
+  var selectedRecord = recId ? (records.find(function(r){ return r.id === recId; }) || null) : null;
+  var selectedNode = selectedRecord ? selectedNodeObj : null;
+  // Drop a stale "rec" param if it no longer matches the current node type
+  // (e.g. the node filter was switched while a record was open).
+  React.useEffect(function(){ if (recId && !selectedRecord) setRecId(""); }, [recId, selectedRecord]);
+
+  if (selectedRecord) {
     return <RecordDetailView
       record={selectedRecord}
       node={selectedNode}
-      onBack={function(){ setSelectedRecord(null); setSelectedNode(null); }}
-      onNavigate={function(rec, n){ setSelectedRecord(rec); setSelectedNode(n); if (n.id !== nodeFilter) setNodeFilter(n.id); }}
+      onBack={function(){ setRecId(""); }}
+      onNavigate={function(rec, n){ if (n.id !== nodeFilter) setNodeFilter(n.id); setRecId(rec.id); }}
     />;
   }
 
@@ -14859,7 +14867,7 @@ function RecordsView() {
           var statusColor = r.status === "active" ? "var(--green)" : r.status === "review" ? "var(--gold)" : "var(--coral)";
           return (
             <div key={r.id}
-              onClick={function(){ setSelectedRecord(r); setSelectedNode(selectedNodeObj); }}
+              onClick={function(){ setRecId(r.id); }}
               style={{ display:"grid", gridTemplateColumns:gridCols, gap:12, padding:"12px 18px", borderBottom: i < filteredRecords.length-1 ? "1px solid var(--line-2)" : "none", cursor:"pointer", alignItems:"center", transition:"background 80ms" }}
               onMouseEnter={function(e){ e.currentTarget.style.background = "var(--panel-2)"; }}
               onMouseLeave={function(e){ e.currentTarget.style.background = "transparent"; }}>
@@ -15158,7 +15166,8 @@ function generateStewardshipTasks() {
 
 function StewardshipView({ initialRuleFilter, onClearRuleFilter }) {
   var [tasks] = useState(function(){ return generateStewardshipTasks(); });
-  var [selectedId, setSelectedId] = useState(null);
+  // Open violation/task id lives in the URL so an individual item is shareable.
+  var [selectedId, setSelectedId] = useUrlFlow("task", "");
   var [statusFilter, setStatusFilter] = useState("open");
   var [kindFilter, setKindFilter] = useState("all");
   var [assigneeFilter, setAssigneeFilter] = useState("all");
