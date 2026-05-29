@@ -1065,7 +1065,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     system: "", customName: "", connection: "", newConnName: "", newConnHost: "", newConnAuth: "OAuth2",
     table: "", query: "", inputMode: "table",
     pkCol: "", joinCol: "", incrementalCol: "updated_at",
-    loadStrategy: "incremental", mapping: {}, unmappedPolicy: "ignore",
+    loadStrategy: "incremental", mapping: {}, transforms: {}, unmappedPolicy: "ignore",
     cadence: "5min", freshnessSLO: "30m", batchWindow: "15m",
     retryCount: 3, retryDelay: "5m", onError: "alert",
     alertChannel: "#schema-alerts", owner: "data-platform",
@@ -1333,51 +1333,149 @@ function SrcObject({ s, set, sel, srcCols }) {
 
 // ── Src Step 4: Column Mapping ────────────────────────────────────────────────
 
+// Transformation functions available per mapped field (matches the connector catalog).
+const TRANSFORM_FUNCTIONS = [
+  { id: "cast",       label: "Cast",                glyph: "⇲" },
+  { id: "extract",    label: "Extract Text",        glyph: "</>" },
+  { id: "flatten",    label: "Flatten JSON",        glyph: "{}" },
+  { id: "hash",       label: "Hash",                glyph: "#" },
+  { id: "mask",       label: "Mask",                glyph: "•••" },
+  { id: "replace",    label: "Replace Value",       glyph: "⇄" },
+  { id: "lower",      label: "To Lowercase",        glyph: "a" },
+  { id: "upper",      label: "To Uppercase",        glyph: "A" },
+  { id: "b64enc",     label: "Base64 Encode",       glyph: "64" },
+  { id: "b64dec",     label: "Base64 Decode",       glyph: "64" },
+  { id: "aes_enc",    label: "AES Encryption",      glyph: "🔒" },
+  { id: "aes_dec",    label: "AES Decryption",      glyph: "🔓" },
+  { id: "duplicate",  label: "Duplicate Field",     glyph: "⧉" },
+  { id: "dl_s3",      label: "Download from S3",    glyph: "↓" },
+  { id: "ul_s3",      label: "Upload to S3",        glyph: "↑" },
+];
+function tfLabel(id){ return (TRANSFORM_FUNCTIONS.find(f => f.id === id) || {}).label || ""; }
+
+const MAP_TYPE_GLYPH = {
+  string: { g: "T", c: "var(--blue)" }, "string[]": { g: "[T]", c: "var(--blue)" },
+  int: { g: "#", c: "var(--gold)" }, float: { g: ".5", c: "var(--gold)" }, decimal: { g: "#", c: "var(--gold)" },
+  bool: { g: "01", c: "var(--coral)" }, timestamp: { g: "TS", c: "var(--green)" }, date: { g: "DT", c: "var(--green)" },
+  datetime: { g: "DT", c: "var(--green)" }, uuid: { g: "ID", c: "var(--purple)" }, json: { g: "{}", c: "var(--ink-3)" },
+  enum: { g: "E", c: "var(--purple)" }, fk: { g: "FK", c: "var(--purple)" },
+};
+function MapTypeGlyph({ type, size }) {
+  const m = MAP_TYPE_GLYPH[type] || { g: "T", c: "var(--ink-3)" };
+  size = size || 26;
+  return <span style={{ width: size, height: size, borderRadius: 6, border: "1px solid var(--line)", background: "var(--bg-canvas)", color: m.c, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, flexShrink: 0 }}>{m.g}</span>;
+}
+function MapBadge({ children, tone }) {
+  return <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, letterSpacing: "0.4px", padding: "1px 5px", borderRadius: 4, color: tone || "var(--ink-3)", border: "1px solid var(--line)", background: "var(--bg-canvas)" }}>{children}</span>;
+}
+
+// Per-field transformation chain editor (add one or many, in order).
+function SrcTransformEditor({ col, list, onChange }) {
+  const add = () => onChange(list.concat([{ fn: "" }]));
+  const setFn = (i, fn) => onChange(list.map((t, j) => j === i ? { ...t, fn } : t));
+  const remove = i => onChange(list.filter((_, j) => j !== i));
+  return (
+    <div style={{ background: "var(--panel-2)", borderTop: "1px solid var(--line-2)", padding: "14px 16px 16px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <span style={{ color: "var(--ink-3)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 7h11M4 7l3-3M4 7l3 3M20 17H9M20 17l-3-3M20 17l-3 3"/></svg></span>
+        <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink)" }}>Transformations</span>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--ink-3)" }}>on <code>{col}</code> — applied top to bottom</span>
+      </div>
+      {list.length === 0 && <div style={{ fontSize: 12, color: "var(--ink-4)", marginBottom: 12 }}>No transformations yet. The raw value is written as-is.</div>}
+      {list.map((t, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <span style={{ width: 22, height: 22, borderRadius: "50%", background: "var(--ink)", color: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
+          <div style={{ flex: 1 }}>
+            <CustomSelect value={t.fn} onChange={v => setFn(i, v)} placeholder="Select a function"
+              options={TRANSFORM_FUNCTIONS.map(f => ({ id: f.id, label: f.label }))}
+              renderTrigger={o => <span style={{ display: "flex", alignItems: "center", gap: 9 }}><span style={{ width: 22, height: 22, borderRadius: 5, border: "1px solid var(--line)", background: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--ink-2)" }}>{(TRANSFORM_FUNCTIONS.find(f => f.id === o.id) || {}).glyph}</span>{o.label}</span>}
+              renderOption={o => <span style={{ display: "flex", alignItems: "center", gap: 9 }}><span style={{ width: 22, height: 22, borderRadius: 5, border: "1px solid var(--line)", background: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--ink-2)" }}>{(TRANSFORM_FUNCTIONS.find(f => f.id === o.id) || {}).glyph}</span>{o.label}</span>} />
+          </div>
+          <button onClick={() => remove(i)} title="Remove" style={{ width: 30, height: 30, borderRadius: 7, border: "1px solid var(--line)", background: "var(--bg-canvas)", cursor: "pointer", color: "var(--ink-3)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>
+          </button>
+        </div>
+      ))}
+      <button onClick={add} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 13px", border: "1px dashed var(--line)", borderRadius: 8, background: "var(--bg-canvas)", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, color: "var(--ink-2)", marginTop: 2 }}>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-3)" }}>+</span> Transformation
+      </button>
+    </div>
+  );
+}
+
 function SrcMapping({ s, set, srcCols, nodeProps, node, sel }) {
+  const [q, setQ] = useState("");
+  const [tab, setTab] = useState("all");
+  const [openCol, setOpenCol] = useState("");
+  const transforms = s.transforms || {};
   const updateMap = (col, propId) => set({ mapping: { ...s.mapping, [col]: propId } });
+  const setTransforms = (col, arr) => set({ transforms: { ...transforms, [col]: arr } });
   const mappedCount = Object.values(s.mapping).filter(Boolean).length;
+  const rows = srcCols.filter(c => !q || c.col.toLowerCase().indexOf(q.toLowerCase()) >= 0);
+  const GRID = "minmax(180px,1.3fr) minmax(190px,1.2fr) 34px minmax(190px,1.3fr)";
 
   return (
-    <StepWrap wide eyebrow="STEP 4 · COLUMN MAPPING" title="Map source columns to node properties" desc="Unmapped source columns are dropped. Unmapped node properties retain their current value.">
-      <FormRow label={`Coverage · ${mappedCount} / ${srcCols.length} columns mapped`} hint="Coercion is applied automatically when types differ. Override per column if needed.">
-        <div style={{ height: 4, background: "var(--line-2)", borderRadius: 2, overflow: "hidden", marginBottom: 2 }}>
-          <div style={{ height: "100%", width: (srcCols.length > 0 ? mappedCount/srcCols.length*100 : 0) + "%", background: mappedCount > 0 ? "var(--green)" : "var(--line)", transition: "width 200ms" }} />
-        </div>
-      </FormRow>
-
-      <FormRow label="Column mapping" last>
-        <div className="wmap-table">
-          <div className="wmap-head">
-            <div>Source column <span className="map-src-tag">{sel?.name?.split(" ")[0] || "source"}</span></div>
-            <div></div>
-            <div>Node property <span className="map-src-tag">:{node?.label}</span></div>
-            <div>Coercion</div>
-          </div>
-          {srcCols.map(col => {
-            const mapped = s.mapping[col.col];
-            const targetProp = nodeProps.find(p => p.id === mapped);
-            const mismatch = mapped && targetProp && targetProp.type !== col.type;
-            return (
-              <div key={col.col} className={"wmap-row" + (mapped ? " mapped" : "")}>
-                <div className="wmap-src">
-                  <code className="wmap-col">{col.col}</code>
-                  <span className="wmap-type">{col.type}</span>
-                  <span className="wmap-sample">{col.sample}</span>
-                </div>
-                <div className="wmap-arrow">{mapped ? <span style={{ color: "var(--green)" }}>→</span> : <span style={{ color: "var(--line)" }}>—</span>}</div>
-                <select className={"input input-select input-sm" + (mapped ? " map-select-on" : "")} value={mapped || ""} onChange={e => updateMap(col.col, e.target.value)}>
-                  <option value="">ignore</option>
-                  {nodeProps.map(p => <option key={p.id} value={p.id}>{p.id} ({p.type})</option>)}
-                  <option value="__new__">+ New property…</option>
-                </select>
-                <div style={{ fontSize: 11, fontFamily: "JetBrains Mono", color: mismatch ? "var(--gold)" : "var(--green)" }}>
-                  {mapped ? (mismatch ? "cast" : "✓ match") : ""}
-                </div>
-              </div>
-            );
+    <StepWrap wide eyebrow="STEP 4 · COLUMN MAPPING" title={`Map ${sel ? sel.name : "source"} fields to ${node?.label || "the node"}`} desc="Map each source field to a destination property and chain transformations in between. Unmapped fields are ignored.">
+      {/* toolbar */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <div style={{ display: "flex", gap: 3, padding: 3, borderRadius: 9, border: "1px solid var(--line)", background: "var(--bg-canvas)" }}>
+          {[["all", "All fields"], ["mapped", "Mapped"], ["unmapped", "Unmapped"]].map(t => {
+            const on = tab === t[0];
+            return <button key={t[0]} onClick={() => setTab(t[0])} style={{ padding: "6px 12px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: on ? 600 : 500, background: on ? "var(--ink)" : "transparent", color: on ? "var(--bg-canvas)" : "var(--ink-2)" }}>{t[1]}</button>;
           })}
         </div>
-      </FormRow>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, color: "var(--ink-3)" }}>{mappedCount} / {srcCols.length} mapped</span>
+        <div style={{ position: "relative", marginLeft: "auto", width: 240 }}>
+          <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--ink-3)", display: "flex" }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
+          </span>
+          <input className="winput" style={{ paddingLeft: 34 }} placeholder="Search fields…" value={q} onChange={e => setQ(e.target.value)} />
+        </div>
+      </div>
+
+      {/* table */}
+      <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "10px 16px", background: "var(--panel-2)", borderBottom: "1px solid var(--line)", borderRadius: "11px 11px 0 0", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)" }}>
+          <div>Source fields</div><div>Transformations</div><div></div><div>Destination fields</div>
+        </div>
+        {rows.filter(col => tab === "all" || (tab === "mapped" ? !!s.mapping[col.col] : !s.mapping[col.col])).map((col, i) => {
+          const mapped = s.mapping[col.col];
+          const tlist = transforms[col.col] || [];
+          const isOpen = openCol === col.col;
+          const isPK = col.col === s.pkCol;
+          return (
+            <div key={col.col} style={{ borderTop: i ? "1px solid var(--line-2)" : "none" }}>
+              <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "12px 16px", alignItems: "center" }}>
+                {/* source */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <MapTypeGlyph type={col.type} />
+                  <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{col.col}</code>
+                  {isPK && <MapBadge tone="var(--green)">PK</MapBadge>}
+                </div>
+                {/* transformations */}
+                <button onClick={() => setOpenCol(isOpen ? "" : col.col)}
+                  style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", width: "100%", padding: "7px 10px", borderRadius: 8, border: "1px solid " + (isOpen ? "var(--ink)" : tlist.length ? "var(--line)" : "transparent"), borderStyle: tlist.length || isOpen ? "solid" : "dashed", background: isOpen ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", minHeight: 34 }}
+                  onMouseEnter={e => { if (!isOpen && !tlist.length) e.currentTarget.style.borderColor = "var(--line)"; }}
+                  onMouseLeave={e => { if (!isOpen && !tlist.length) e.currentTarget.style.borderColor = "transparent"; }}>
+                  {tlist.length === 0
+                    ? <span style={{ fontSize: 12, color: "var(--ink-4)" }}>+ Add transformation</span>
+                    : tlist.map((t, j) => <span key={j} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, padding: "2px 7px", borderRadius: 5, background: "var(--chip)", border: "1px solid var(--line)", color: "var(--ink-2)" }}>{t.fn ? tfLabel(t.fn) : "function…"}</span>)}
+                  <span style={{ marginLeft: "auto", color: "var(--ink-4)", fontSize: 11, flexShrink: 0 }}>{isOpen ? "▲" : "▾"}</span>
+                </button>
+                {/* arrow */}
+                <div style={{ textAlign: "center", color: mapped ? "var(--green)" : "var(--ink-4)", fontSize: 15 }}>→</div>
+                {/* destination */}
+                <CustomSelect value={mapped || ""} onChange={v => updateMap(col.col, v)} placeholder="Select field"
+                  options={nodeProps.map(p => ({ id: p.id, label: p.id, type: p.type })).concat([{ id: "__new__", label: "+ New property…" }])}
+                  renderTrigger={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={22} /><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{o.label}</span>{o.id === "id" && <><MapBadge tone="var(--green)">PK</MapBadge><MapBadge>UK</MapBadge></>}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-4)" }}>{o.label || "Select field"}</span>}
+                  renderOption={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={20} />{o.label}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-3)" }}>{o.label}</span>} />
+              </div>
+              {isOpen && <SrcTransformEditor col={col.col} list={tlist} onChange={arr => setTransforms(col.col, arr)} />}
+            </div>
+          );
+        })}
+        {rows.length === 0 && <div style={{ padding: "32px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No fields match “{q}”.</div>}
+      </div>
     </StepWrap>
   );
 }
