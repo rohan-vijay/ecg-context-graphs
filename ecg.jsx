@@ -17791,7 +17791,7 @@ function NodesView({ onSelect, onSwitchToCanvas, onAddNode, nodes: liveNodes }) 
         <div className="nv-row nv-head-row">
           <button className="nv-th nv-th-name"     onClick={() => onSort("label")}>Node type{sortIcon("label")}</button>
           <button className="nv-th nv-th-cat"      onClick={() => onSort("category")}>Category{sortIcon("category")}</button>
-          <button className="nv-th nv-th-num"      onClick={() => onSort("instances")}>Instances{sortIcon("instances")}</button>
+          <button className="nv-th nv-th-num"      onClick={() => onSort("instances")}>Records{sortIcon("instances")}</button>
           <button className="nv-th nv-th-num"      onClick={() => onSort("props")}>Props{sortIcon("props")}</button>
           <button className="nv-th nv-th-num"      onClick={() => onSort("edges")}>Edges{sortIcon("edges")}</button>
           <button className="nv-th nv-th-num"      onClick={() => onSort("sources")}>Sources{sortIcon("sources")}</button>
