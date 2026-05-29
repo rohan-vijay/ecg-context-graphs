@@ -18519,10 +18519,57 @@ function AddNodeFlow({ onClose, onCreate }) {
 
   // Step 3 - identity
   var [pkField, setPkField] = useState("");
-  var [advancedPropIdx, setAdvancedPropIdx] = useState(null);
-  var [hoverRow, setHoverRow] = useState(-1);
+  var [advancedPropPath, setAdvancedPropPath] = useState(null);
+  var [hoverKey, setHoverKey] = useState("");
   var [expandedRows, setExpandedRows] = useState({});
-  function toggleExpand(i){ setExpandedRows(function(m){ var n = Object.assign({}, m); n[i] = !n[i]; return n; }); }
+  function toggleExpand(key){ setExpandedRows(function(m){ var n = Object.assign({}, m); n[key] = !n[key]; return n; }); }
+  function pathKey(path){ return path.join("."); }
+  function getByPath(path){ var arr = properties, node = null; for (var k = 0; k < path.length; k++){ node = arr[path[k]]; if (!node) return null; arr = node.children || []; } return node; }
+  function mutateAt(arr, path, fn){ var idx = path[0]; return arr.map(function(n, i){ if (i !== idx) return n; if (path.length === 1) return fn(n); var nn = Object.assign({}, n); nn.children = mutateAt(n.children || [], path.slice(1), fn); return nn; }); }
+  function updatePath(path, key, val){ setProperties(function(arr){ return mutateAt(arr, path, function(n){ var nn = Object.assign({}, n); nn[key] = val; return nn; }); }); }
+  function removePath(path){ setProperties(function(arr){ if (path.length === 1){ var p = arr[path[0]]; if (p && pkField === p.name) setPkField(""); return arr.filter(function(_, i){ return i !== path[0]; }); } return mutateAt(arr, path.slice(0, -1), function(n){ var nn = Object.assign({}, n); nn.children = (n.children || []).filter(function(_, j){ return j !== path[path.length - 1]; }); return nn; }); }); }
+  function addChildPath(path){ setProperties(function(arr){ return mutateAt(arr, path, function(n){ var nn = Object.assign({}, n); nn.children = (n.children || []).concat([{ name: "new_field", type: "string" }]); return nn; }); }); setExpandedRows(function(m){ var n = Object.assign({}, m); n[pathKey(path)] = true; return n; }); }
+  // Recursive property row — renders identically at any depth (name · type · PK/REQ/IDX/PII · settings · delete).
+  function renderPropRow(p, path, depth){
+    var key = pathKey(path);
+    var isPk = depth === 0 ? (p.name === pkField) : !!p.pk;
+    var advCount = ["nestUnder","unique","hashing","secure","display","search","sort","filter"].filter(function(k){ return !!p[k]; }).length;
+    var nestable = !!PROP_NESTABLE[p.type];
+    var kids = p.children || [];
+    var expanded = !!expandedRows[key];
+    return (
+      <div key={key} onMouseEnter={function(){ setHoverKey(key); }} onMouseLeave={function(){ setHoverKey(function(h){ return h === key ? "" : h; }); }}
+        style={{ borderBottom: depth === 0 ? "1px solid var(--line-2)" : "none", background: depth === 0 ? (path[0] % 2 === 1 ? "transparent" : "var(--bg-canvas)") : "transparent" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1.7fr 150px 40px 40px 40px 40px 24px 32px", gap:8, padding:"8px 18px", alignItems:"center" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:6, paddingLeft: depth * 18 }}>
+            {kids.length > 0
+              ? <button onClick={function(){ toggleExpand(key); }} title={expanded ? "Collapse" : "Expand"} style={{ width:18, height:18, flexShrink:0, border:"none", background:"none", cursor:"pointer", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expanded ? "rotate(90deg)" : "none", transition:"transform 120ms" }}><path d="M9 6l6 6-6 6"/></svg>
+                </button>
+              : <span style={{ width:18, flexShrink:0 }} />}
+            {depth > 0 && <span style={{ color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:11, flexShrink:0 }}>└</span>}
+            <input value={p.name} onChange={function(e){ updatePath(path, "name", e.target.value); }} style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12, fontFamily:"JetBrains Mono" })} />
+            {nestable && <button onClick={function(){ addChildPath(path); }} title="Add child property"
+              style={{ width:20, height:20, flexShrink:0, borderRadius:5, border:"1px dashed var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontWeight:700, fontSize:13, lineHeight:1, opacity: hoverKey === key ? 1 : 0, transition:"opacity 120ms" }}>+</button>}
+            {p.confidence && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color: p.confidence >= 0.9 ? "var(--green)" : "var(--gold)", flexShrink:0, fontWeight:700 }} title={"LLM confidence " + p.confidence}>{Math.round(p.confidence * 100) + "%"}</span>}
+            {p.detectedFrom && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", flexShrink:0 }} title={p.detectedFrom}>↩</span>}
+          </div>
+          <TypePicker value={p.type} onChange={function(v){ updatePath(path, "type", v); }} />
+          <input type="checkbox" checked={isPk} onChange={function(e){ if (depth === 0){ if (e.target.checked) setPkField(p.name); else if (isPk) setPkField(""); } else { updatePath(path, "pk", e.target.checked); } }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
+          <input type="checkbox" checked={p.required || false} onChange={function(e){ updatePath(path, "required", e.target.checked); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
+          <input type="checkbox" checked={p.indexed || false} onChange={function(e){ updatePath(path, "indexed", e.target.checked); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
+          <input type="checkbox" checked={p.pii || false} onChange={function(e){ updatePath(path, "pii", e.target.checked); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
+          <button onClick={function(){ setAdvancedPropPath(path); }} title={advCount > 0 ? "Advanced settings (" + advCount + " active)" : "Advanced settings"}
+            style={{ width:22, height:22, borderRadius:5, border:"none", background:"transparent", color: advCount > 0 ? "var(--ink-2)" : "var(--ink-4)", cursor:"pointer", display:"inline-flex", alignItems:"center", justifyContent:"center", padding:0, position:"relative", justifySelf:"center" }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            {advCount > 0 && <span style={{ position:"absolute", top:-2, right:-2, width:6, height:6, borderRadius:3, background:"var(--blue)" }} />}
+          </button>
+          <button onClick={function(){ removePath(path); }} style={{ width:24, height:24, borderRadius:5, border:"1px solid var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", justifySelf:"center" }}>×</button>
+        </div>
+        {nestable && expanded && kids.map(function(c, ci){ return renderPropRow(c, path.concat(ci), depth + 1); })}
+      </div>
+    );
+  }
   var [naturalKeys, setNaturalKeys] = useState([]);
   var [dedupStrategy, setDedupStrategy] = useState("on_natural_key"); // none / on_pk / on_natural_key / probabilistic
 
@@ -19191,64 +19238,7 @@ function AddNodeFlow({ onClose, onCreate }) {
                         No fields yet. Click <b>+ Add field</b> to start.
                       </div>
                     )}
-                    {properties.map(function(p, i, arr) {
-                      var isPk = p.name === pkField;
-                      var advancedCount = ["nestUnder","unique","hashing","secure","display","search","sort","filter"].filter(function(k){ return !!p[k]; }).length;
-                      var nestable = !!PROP_NESTABLE[p.type];
-                      var kids = p.children || [];
-                      return (
-                        <div key={i} onMouseEnter={function(){ setHoverRow(i); }} onMouseLeave={function(){ setHoverRow(function(h){ return h === i ? -1 : h; }); }} style={{ borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)" }}>
-                          <div style={{ display:"grid", gridTemplateColumns:"1.7fr 150px 40px 40px 40px 40px 24px 32px", gap:8, padding:"8px 18px", alignItems:"center" }}>
-                            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                              {nestable
-                                ? <button onClick={function(){ toggleExpand(i); }} title={expandedRows[i] ? "Collapse" : "Expand child properties"} style={{ width:18, height:18, flexShrink:0, border:"none", background:"none", cursor:"pointer", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>
-                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expandedRows[i] ? "rotate(90deg)" : "none", transition:"transform 120ms" }}><path d="M9 6l6 6-6 6"/></svg>
-                                  </button>
-                                : <span style={{ width:18, flexShrink:0 }} />}
-                              <input value={p.name} onChange={function(e){ updateProp(i, "name", e.target.value); }} style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12, fontFamily:"JetBrains Mono" })} />
-                              {p.confidence && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color: p.confidence >= 0.9 ? "var(--green)" : "var(--gold)", flexShrink:0, fontWeight:700 }} title={"LLM confidence " + p.confidence}>{Math.round(p.confidence * 100) + "%"}</span>}
-                              {p.detectedFrom && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", flexShrink:0 }} title={p.detectedFrom}>↩</span>}
-                            </div>
-                            <TypePicker value={p.type} onChange={function(v){ updateProp(i, "type", v); }} />
-                            <input type="checkbox" checked={isPk} onChange={function(e){ if (e.target.checked) setPkField(p.name); else if (isPk) setPkField(""); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
-                            <input type="checkbox" checked={p.required || false} onChange={function(e){ updateProp(i, "required", e.target.checked); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
-                            <input type="checkbox" checked={p.indexed || false} onChange={function(e){ updateProp(i, "indexed", e.target.checked); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
-                            <input type="checkbox" checked={p.pii || false} onChange={function(e){ updateProp(i, "pii", e.target.checked); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
-                            <button onClick={function(){ setAdvancedPropIdx(i); }} title={advancedCount > 0 ? "Advanced settings (" + advancedCount + " active)" : "Advanced settings"}
-                              style={{ width:22, height:22, borderRadius:5, border:"none", background:"transparent", color: advancedCount > 0 ? "var(--ink-2)" : "var(--ink-4)", cursor:"pointer", display:"inline-flex", alignItems:"center", justifyContent:"center", padding:0, position:"relative", justifySelf:"center" }}>
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                              {advancedCount > 0 && <span style={{ position:"absolute", top:-2, right:-2, width:6, height:6, borderRadius:3, background:"var(--blue)" }} />}
-                            </button>
-                            <button onClick={function(){ removeProp(i); }} style={{ width:24, height:24, borderRadius:5, border:"1px solid var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", justifySelf:"center" }}>×</button>
-                          </div>
-
-                          {/* Nested child properties — revealed by the row's expand toggle. */}
-                          {nestable && expandedRows[i] && (
-                            <div style={{ padding:"0 18px 10px 44px" }}>
-                              {kids.map(function(c, ci){
-                                return (
-                                  <div key={ci} style={{ display:"grid", gridTemplateColumns:"1.7fr 150px 28px", gap:8, padding:"4px 0", alignItems:"center" }}>
-                                    <div style={{ display:"flex", alignItems:"center", gap:7 }}>
-                                      <span style={{ color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:12, flexShrink:0 }}>{ci === kids.length-1 ? "└─" : "├─"}</span>
-                                      <input value={c.name} onChange={function(e){ updateChild(i, ci, "name", e.target.value); }} style={Object.assign({}, inp, { padding:"5px 9px", fontSize:12, fontFamily:"JetBrains Mono" })} />
-                                    </div>
-                                    <TypePicker value={c.type} onChange={function(v){ updateChild(i, ci, "type", v); }} />
-                                    <button onClick={function(){ removeChild(i, ci); }} style={{ width:22, height:22, borderRadius:5, border:"1px solid var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", justifySelf:"center" }}>×</button>
-                                  </div>
-                                );
-                              })}
-                              {kids.length === 0 && <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", padding:"2px 0 2px 22px" }}>No child properties</div>}
-                              <button onClick={function(){ addChild(i); }}
-                                onMouseEnter={function(e){ e.currentTarget.style.color = "var(--ink-2)"; }}
-                                onMouseLeave={function(e){ e.currentTarget.style.color = "var(--ink-4)"; }}
-                                style={{ display:"inline-flex", alignItems:"center", gap:6, marginTop:5, marginLeft:22, padding:"3px 6px", border:"none", background:"none", cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)" }}>
-                                <span style={{ fontWeight:700 }}>+</span> child property
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {properties.map(function(p, i) { return renderPropRow(p, [i], 0); })}
                   </div>
                 )}
               </div>
@@ -19444,10 +19434,11 @@ function AddNodeFlow({ onClose, onCreate }) {
       </div>
 
       {/* ADVANCED SETTINGS — popup-over-modal for a single property */}
-      {advancedPropIdx !== null && properties[advancedPropIdx] && (function(){
-        var p = properties[advancedPropIdx];
-        var i = advancedPropIdx;
-        var close = function(){ setAdvancedPropIdx(null); };
+      {advancedPropPath !== null && getByPath(advancedPropPath) && (function(){
+        var p = getByPath(advancedPropPath);
+        var i = advancedPropPath;
+        var updateProp = function(_p, key, val){ updatePath(advancedPropPath, key, val); };
+        var close = function(){ setAdvancedPropPath(null); };
         return (
           <div onClick={close} style={{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,0.32)", zIndex:260, display:"flex", alignItems:"center", justifyContent:"center" }}>
             <div onClick={function(e){ e.stopPropagation(); }} style={{ width:520, maxHeight:"82vh", display:"flex", flexDirection:"column", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:12, boxShadow:"0 24px 60px rgba(0,0,0,0.25)", overflow:"hidden" }}>
@@ -19464,7 +19455,7 @@ function AddNodeFlow({ onClose, onCreate }) {
                   <label style={Object.assign({}, lbl, { marginBottom:6 })}>NEST UNDER</label>
                   <select value={p.nestUnder || ""} onChange={function(e){ updateProp(i, "nestUnder", e.target.value); }} style={Object.assign({}, inp, { padding:"7px 10px", fontSize:12 })}>
                     <option value="">— top level —</option>
-                    {properties.filter(function(other, j){ return j !== i && other.type === "struct"; }).map(function(other){ return <option key={other.name} value={other.name}>{other.name}</option>; })}
+                    {properties.filter(function(other){ return other !== p && (other.type === "struct" || other.type === "object"); }).map(function(other){ return <option key={other.name} value={other.name}>{other.name}</option>; })}
                   </select>
                   <div style={{ fontFamily:"JetBrains Mono", fontSize:9.5, color:"var(--ink-4)", marginTop:5, lineHeight:1.5 }}>Group this field inside a struct property.</div>
                 </div>

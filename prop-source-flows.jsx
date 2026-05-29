@@ -11,7 +11,7 @@ const { useState, useRef, useEffect, useMemo } = React;
 const SOURCE_SYSTEMS = [
   // ── Structured systems (databases, warehouses, apps with records) ──
   { id: "salesforce", cat: "CRM & Marketing", domain: "salesforce.com",  name: "Salesforce",            tag: "CRM",          kind: "structured",   status: "healthy",  icon: "S",   slug: "salesforce",          color: "#00A1E0", desc: "Accounts, contacts, opportunities and custom objects." },
-  { id: "hubspot", cat: "CRM & Marketing", domain: "hubspot.com",     name: "HubSpot",               tag: "Marketing",    kind: "structured",   status: "degraded", icon: "H",   slug: "hubspot",             color: "#FF7A59", desc: "Contacts, deals, companies and marketing events." },
+  { id: "hubspot", cat: "CRM & Marketing", domain: "hubspot.com",     name: "HubSpot",               tag: "Marketing",    kind: "structured",   status: "healthy",  icon: "H",   slug: "hubspot",             color: "#FF7A59", desc: "Contacts, deals, companies and marketing events." },
   { id: "snowflake", cat: "Data Warehouse", domain: "snowflake.com",   name: "Snowflake",             tag: "Warehouse",    kind: "structured",   status: "healthy",  icon: "❄",  slug: "snowflake",           color: "#29B5E8", desc: "Cloud data-warehouse tables and views." },
   { id: "bigquery", cat: "Data Warehouse", domain: "cloud.google.com",    name: "Google BigQuery",       tag: "Warehouse",    kind: "structured",   status: "healthy",  icon: "BQ",  slug: "googlebigquery",      color: "#669DF6", desc: "Serverless warehouse datasets and tables." },
   { id: "databricks", cat: "Data Warehouse", domain: "databricks.com",  name: "Databricks",            tag: "Lakehouse",    kind: "structured",   status: "healthy",  icon: "DB",  slug: "databricks",          color: "#FF3621", desc: "Delta tables and Unity Catalog assets." },
@@ -72,7 +72,7 @@ const CONNECTIONS_BY_SYS = {
     { id: "pg-rep",   name: "Primary read-replica",  detail: "db.acme.internal:5432 · prod",  auth: "Password",  status: "healthy", lastUsed: "12m ago" },
   ],
   hubspot:    [
-    { id: "hs-mkt",   name: "Marketing hub",         detail: "portal 4821990",                auth: "OAuth2",    status: "degraded", lastUsed: "6h ago" },
+    { id: "hs-mkt",   name: "Marketing hub",         detail: "portal 4821990",                auth: "OAuth2",    status: "healthy", lastUsed: "6h ago" },
   ],
 };
 function getConnections(sysId, sel) {
@@ -1261,7 +1261,7 @@ function SrcConnection({ s, set, sel }) {
       )}
 
       <button onClick={() => set({ connection: "__new__" })}
-        style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 14px", borderRadius: 10, border: "1px solid " + (addingNew ? "var(--ink)" : "var(--line)"), borderStyle: addingNew ? "solid" : "dashed", background: addingNew ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--ink)", boxShadow: addingNew ? "0 0 0 2px color-mix(in oklab, var(--ink) 12%, transparent)" : "none" }}>
+        style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 14px", borderRadius: 10, borderWidth: 1, borderStyle: addingNew ? "solid" : "dashed", borderColor: addingNew ? "var(--ink)" : "var(--line)", background: addingNew ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--ink)", boxShadow: addingNew ? "0 0 0 2px color-mix(in oklab, var(--ink) 12%, transparent)" : "none" }}>
         <span style={{ width: 22, height: 22, borderRadius: 6, background: "var(--chip)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-2)", flexShrink: 0 }}>+</span>
         <span style={{ fontWeight: 600 }}>Add a new connection</span>
         <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--ink-3)" }}>{sel ? "to " + sel.name : ""}</span>
@@ -1329,24 +1329,26 @@ function SrcObject({ s, set, sel, srcCols }) {
 // ── Src Step 4: Column Mapping ────────────────────────────────────────────────
 
 // Transformation functions available per mapped field (matches the connector catalog).
+// Each function declares its dependent config fields (rendered below the picker).
 const TRANSFORM_FUNCTIONS = [
-  { id: "cast",       label: "Cast",                glyph: "⇲" },
-  { id: "extract",    label: "Extract Text",        glyph: "</>" },
-  { id: "flatten",    label: "Flatten JSON",        glyph: "{}" },
-  { id: "hash",       label: "Hash",                glyph: "#" },
-  { id: "mask",       label: "Mask",                glyph: "•••" },
-  { id: "replace",    label: "Replace Value",       glyph: "⇄" },
-  { id: "lower",      label: "To Lowercase",        glyph: "a" },
-  { id: "upper",      label: "To Uppercase",        glyph: "A" },
-  { id: "b64enc",     label: "Base64 Encode",       glyph: "64" },
-  { id: "b64dec",     label: "Base64 Decode",       glyph: "64" },
-  { id: "aes_enc",    label: "AES Encryption",      glyph: "🔒" },
-  { id: "aes_dec",    label: "AES Decryption",      glyph: "🔓" },
-  { id: "duplicate",  label: "Duplicate Field",     glyph: "⧉" },
-  { id: "dl_s3",      label: "Download from S3",    glyph: "↓" },
-  { id: "ul_s3",      label: "Upload to S3",        glyph: "↑" },
+  { id: "cast",       label: "Cast",             glyph: "⇲",   fields: [{ key: "to", label: "Cast to", type: "select", options: ["string", "integer", "float", "boolean", "date", "timestamp", "json"], required: true }] },
+  { id: "extract",    label: "Extract Text",     glyph: "</>", fields: [{ key: "pattern", label: "Pattern (regex)", type: "text", placeholder: "e.g. \\d{3}-\\d{4}", hint: "The first capture group becomes the value." }] },
+  { id: "flatten",    label: "Flatten JSON",     glyph: "{}",  fields: [{ key: "depth", label: "Max depth", type: "select", options: ["1", "2", "3", "Unlimited"] }] },
+  { id: "hash",       label: "Hash",             glyph: "#",   fields: [{ key: "algo", label: "Algorithm", type: "select", options: ["MD5", "SHA-1", "SHA-256", "SHA-512"], required: true }] },
+  { id: "mask",       label: "Mask",             glyph: "•••", fields: [{ key: "keep", label: "Keep last N chars", type: "text", placeholder: "4" }, { key: "char", label: "Mask character", type: "text", placeholder: "*" }] },
+  { id: "replace",    label: "Replace Value",    glyph: "⇄",   fields: [{ key: "find", label: "Find", type: "text", placeholder: "value to match" }, { key: "replace", label: "Replace with", type: "text", placeholder: "replacement value" }] },
+  { id: "lower",      label: "To Lowercase",     glyph: "a",   fields: [] },
+  { id: "upper",      label: "To Uppercase",     glyph: "A",   fields: [] },
+  { id: "b64enc",     label: "Base64 Encode",    glyph: "64",  fields: [] },
+  { id: "b64dec",     label: "Base64 Decode",    glyph: "64",  fields: [] },
+  { id: "aes_enc",    label: "AES Encryption",   glyph: "🔒",  fields: [{ key: "conn", label: "AES connection", type: "select", options: ["Vault — prod", "Vault — staging", "KMS key — primary"], required: true, placeholder: "Select connection" }] },
+  { id: "aes_dec",    label: "AES Decryption",   glyph: "🔓",  fields: [{ key: "conn", label: "AES connection", type: "select", options: ["Vault — prod", "Vault — staging", "KMS key — primary"], required: true, placeholder: "Select connection" }] },
+  { id: "duplicate",  label: "Duplicate Field",  glyph: "⧉",   fields: [], alwaysSaveNew: true },
+  { id: "dl_s3",      label: "Download from S3",  glyph: "↓",  fields: [{ key: "conn", label: "S3 connection", type: "select", options: ["s3-prod", "s3-archive"], placeholder: "Select connection" }, { key: "path", label: "Path / key", type: "text", placeholder: "bucket/prefix/" }] },
+  { id: "ul_s3",      label: "Upload to S3",      glyph: "↑",  fields: [{ key: "conn", label: "S3 connection", type: "select", options: ["s3-prod", "s3-archive"], placeholder: "Select connection" }, { key: "path", label: "Path / key", type: "text", placeholder: "bucket/prefix/" }] },
 ];
-function tfLabel(id){ return (TRANSFORM_FUNCTIONS.find(f => f.id === id) || {}).label || ""; }
+function tfDef(id){ return TRANSFORM_FUNCTIONS.find(f => f.id === id) || null; }
+function tfLabel(id){ return (tfDef(id) || {}).label || ""; }
 
 const MAP_TYPE_GLYPH = {
   string: { g: "T", c: "var(--blue)" }, "string[]": { g: "[T]", c: "var(--blue)" },
@@ -1367,10 +1369,12 @@ function MapBadge({ children, tone }) {
 // Per-field transformation chain editor — a focused right-side drawer.
 // Add one or many functions, applied top to bottom, before the value is written.
 function SrcTransformDrawer({ col, type, sel, list, onChange, onClose }) {
-  const add = () => onChange(list.concat([{ fn: "" }]));
-  const setFn = (i, fn) => onChange(list.map((t, j) => j === i ? { ...t, fn } : t));
+  const add = () => onChange(list.concat([{ fn: "", cfg: {}, saveNew: false, newField: "" }]));
+  const setFn = (i, fn) => onChange(list.map((t, j) => j === i ? { fn: fn, cfg: {}, saveNew: !!(tfDef(fn) || {}).alwaysSaveNew, newField: t.newField || "" } : t));
+  const setCfg = (i, key, val) => onChange(list.map((t, j) => j === i ? { ...t, cfg: { ...(t.cfg || {}), [key]: val } } : t));
+  const setItem = (i, patch) => onChange(list.map((t, j) => j === i ? { ...t, ...patch } : t));
   const remove = i => onChange(list.filter((_, j) => j !== i));
-  const fnGlyph = id => (TRANSFORM_FUNCTIONS.find(f => f.id === id) || {}).glyph;
+  const fnGlyph = id => (tfDef(id) || {}).glyph;
   return (
     <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.28)", zIndex: 60, display: "flex", justifyContent: "flex-end", animation: "flow-fade-in 140ms ease-out" }}>
       <div onClick={e => e.stopPropagation()} style={{ width: 440, maxWidth: "80%", height: "100%", background: "var(--panel)", borderLeft: "1px solid var(--line)", boxShadow: "-24px 0 60px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column" }}>
@@ -1390,29 +1394,54 @@ function SrcTransformDrawer({ col, type, sel, list, onChange, onClose }) {
         {/* body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "18px 20px" }}>
           <div style={{ fontSize: 12.5, color: "var(--ink-3)", lineHeight: 1.55, marginBottom: 16 }}>Functions run top to bottom on the source value before it's written to the destination field. Drag-free reorder by removing and re-adding.</div>
-          {list.length === 0 && (
-            <div style={{ border: "1px dashed var(--line)", borderRadius: 10, padding: "26px 18px", textAlign: "center", marginBottom: 14 }}>
-              <div style={{ fontSize: 13, color: "var(--ink-2)", fontWeight: 600 }}>No transformations</div>
-              <div style={{ fontSize: 12, color: "var(--ink-4)", marginTop: 4 }}>The raw value is written as-is. Add one to start a chain.</div>
-            </div>
-          )}
-          {list.map((t, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
-                <span style={{ width: 24, height: 24, borderRadius: "50%", background: "var(--ink)", color: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700 }}>{i + 1}</span>
-                {i < list.length - 1 && <span style={{ width: 1, height: 14, background: "var(--line)", marginTop: 2 }} />}
+          {list.map((t, i) => {
+            const def = tfDef(t.fn);
+            const cfg = t.cfg || {};
+            const forceSave = def && def.alwaysSaveNew;
+            const showNewField = forceSave || t.saveNew;
+            return (
+              <div key={i} style={{ border: "1px solid var(--line)", borderRadius: 10, background: "var(--bg-canvas)", marginBottom: 12 }}>
+                {/* header: step + function picker + remove */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderBottom: def ? "1px solid var(--line-2)" : "none" }}>
+                  <span style={{ width: 22, height: 22, borderRadius: "50%", background: "var(--ink)", color: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <CustomSelect value={t.fn} onChange={v => setFn(i, v)} placeholder="Select a function"
+                      options={TRANSFORM_FUNCTIONS.map(f => ({ id: f.id, label: f.label }))}
+                      renderTrigger={o => <span style={{ display: "flex", alignItems: "center", gap: 9 }}><span style={{ width: 22, height: 22, borderRadius: 5, border: "1px solid var(--line)", background: "var(--panel)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--ink-2)" }}>{fnGlyph(o.id)}</span>{o.label}</span>}
+                      renderOption={o => <span style={{ display: "flex", alignItems: "center", gap: 9 }}><span style={{ width: 22, height: 22, borderRadius: 5, border: "1px solid var(--line)", background: "var(--panel)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--ink-2)" }}>{fnGlyph(o.id)}</span>{o.label}</span>} />
+                  </div>
+                  <button onClick={() => remove(i)} title="Remove" style={{ width: 30, height: 30, borderRadius: 7, border: "1px solid var(--line)", background: "var(--panel)", cursor: "pointer", color: "var(--ink-3)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" /></svg>
+                  </button>
+                </div>
+                {/* dependent config */}
+                {def && (
+                  <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: 12 }}>
+                    {def.fields.map(f => (
+                      <div key={f.key}>
+                        <label style={{ display: "block", fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 6 }}>{f.label}{f.required && <span style={{ color: "var(--coral)" }}> *</span>}</label>
+                        {f.type === "select"
+                          ? <CustomSelect value={cfg[f.key] || ""} onChange={v => setCfg(i, f.key, v)} placeholder={f.placeholder || "Select…"} options={f.options.map(o => ({ id: o, label: o }))} />
+                          : <input className="winput" placeholder={f.placeholder || ""} value={cfg[f.key] || ""} onChange={e => setCfg(i, f.key, e.target.value)} />}
+                        {f.hint && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 5 }}>{f.hint}</div>}
+                      </div>
+                    ))}
+                    {/* save output in new field */}
+                    <label style={{ display: "flex", alignItems: "center", gap: 9, cursor: forceSave ? "default" : "pointer", opacity: forceSave ? 0.7 : 1 }}>
+                      <input type="checkbox" checked={showNewField} disabled={forceSave} onChange={e => setItem(i, { saveNew: e.target.checked })} style={{ accentColor: "var(--ink)", width: 15, height: 15 }} />
+                      <span style={{ fontSize: 12.5, color: "var(--ink-2)" }}>Save output in a new field{forceSave ? " (required)" : ""}</span>
+                    </label>
+                    {showNewField && (
+                      <div>
+                        <label style={{ display: "block", fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 6 }}>Transformed field name <span style={{ color: "var(--coral)" }}>*</span></label>
+                        <input className="winput winput-mono" placeholder={col + "_transformed"} value={t.newField || ""} onChange={e => setItem(i, { newField: e.target.value })} />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-              <div style={{ flex: 1 }}>
-                <CustomSelect value={t.fn} onChange={v => setFn(i, v)} placeholder="Select a function"
-                  options={TRANSFORM_FUNCTIONS.map(f => ({ id: f.id, label: f.label }))}
-                  renderTrigger={o => <span style={{ display: "flex", alignItems: "center", gap: 9 }}><span style={{ width: 22, height: 22, borderRadius: 5, border: "1px solid var(--line)", background: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--ink-2)" }}>{fnGlyph(o.id)}</span>{o.label}</span>}
-                  renderOption={o => <span style={{ display: "flex", alignItems: "center", gap: 9 }}><span style={{ width: 22, height: 22, borderRadius: 5, border: "1px solid var(--line)", background: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--ink-2)" }}>{fnGlyph(o.id)}</span>{o.label}</span>} />
-              </div>
-              <button onClick={() => remove(i)} title="Remove" style={{ width: 32, height: 32, borderRadius: 7, border: "1px solid var(--line)", background: "var(--bg-canvas)", cursor: "pointer", color: "var(--ink-3)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" /></svg>
-              </button>
-            </div>
-          ))}
+            );
+          })}
           <button onClick={add} style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 14px", border: "1px dashed var(--line)", borderRadius: 9, background: "var(--bg-canvas)", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--ink-2)", marginTop: 2, width: "100%", justifyContent: "center" }}>
             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-3)" }}>+</span> Add transformation
           </button>
@@ -1477,7 +1506,7 @@ function SrcMapping({ s, set, srcCols, nodeProps, node, sel, openCol, setOpenCol
                 </div>
                 {/* transformations */}
                 <button onClick={() => setOpenCol(col.col)}
-                  style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", width: "100%", padding: "7px 10px", borderRadius: 8, border: "1px solid " + (isOpen ? "var(--ink)" : tlist.length ? "var(--line)" : "transparent"), borderStyle: tlist.length || isOpen ? "solid" : "dashed", background: isOpen ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", minHeight: 34 }}
+                  style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", width: "100%", padding: "7px 10px", borderRadius: 8, borderWidth: 1, borderStyle: tlist.length || isOpen ? "solid" : "dashed", borderColor: isOpen ? "var(--ink)" : tlist.length ? "var(--line)" : "transparent", background: isOpen ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", minHeight: 34 }}
                   onMouseEnter={e => { e.currentTarget.style.background = "var(--panel-2)"; if (!tlist.length && !isOpen) e.currentTarget.style.borderColor = "var(--line)"; }}
                   onMouseLeave={e => { if (!isOpen) e.currentTarget.style.background = "transparent"; if (!tlist.length && !isOpen) e.currentTarget.style.borderColor = "transparent"; }}>
                   {tlist.length === 0
