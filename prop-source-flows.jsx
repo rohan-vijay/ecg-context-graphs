@@ -510,7 +510,7 @@ function BackfillBanner({ backfill, onChange, estimate }) {
 
 // ─── FLOW SHELL (shared wrapper) ──────────────────────────────────────────────
 
-function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage, steps, step, setStep, onClose, rightPane, children, canNext, onNext, onPublish, hideKeymap, hideFootHelp, hideStage }) {
+function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage, steps, step, setStep, onClose, rightPane, children, canNext, onNext, onPublish, hideKeymap, hideFootHelp, hideStage, overlay }) {
   return (
     <div className="flow-overlay" onClick={onClose}>
       <div className="flow-shell" onClick={e => e.stopPropagation()}>
@@ -567,6 +567,7 @@ function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage
             }
           </div>
         </div>
+        {overlay}
       </div>
     </div>
   );
@@ -1061,6 +1062,7 @@ const ERROR_POLICIES = [
 
 function LinkSourceFlow({ node, existingSources, onClose }) {
   const [step, setStep] = useState(0);
+  const [mapOpenCol, setMapOpenCol] = useState("");
   const [s, setS] = useState({
     system: "", customName: "", connection: "", newConnName: "", newConnHost: "", newConnAuth: "OAuth2",
     table: "", query: "", inputMode: "table",
@@ -1117,11 +1119,15 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
       onPublish={onClose}
       onClose={onClose}
       rightPane={null}
+      overlay={mapOpenCol ? (function(){
+        const c = srcCols.find(x => x.col === mapOpenCol);
+        return <SrcTransformDrawer col={mapOpenCol} type={c ? c.type : "string"} sel={sel} list={(s.transforms || {})[mapOpenCol] || []} onChange={arr => set({ transforms: Object.assign({}, s.transforms, (function(){ var o = {}; o[mapOpenCol] = arr; return o; })()) })} onClose={() => setMapOpenCol("")} />;
+      })() : null}
     >
       {step === 0 && <SrcSystem s={s} set={set} />}
       {step === 1 && <SrcConnection s={s} set={set} sel={sel} />}
       {step === 2 && <SrcObject s={s} set={set} sel={sel} srcCols={srcCols} />}
-      {step === 3 && <SrcMapping s={s} set={set} srcCols={srcCols} nodeProps={nodeProps} node={node} sel={sel} />}
+      {step === 3 && <SrcMapping s={s} set={set} srcCols={srcCols} nodeProps={nodeProps} node={node} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} />}
       {step === 4 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
       {step === 5 && <SrcReview s={s} set={set} node={node} sel={sel} srcCols={srcCols} mappedCount={mappedCount} onClose={onClose} />}
     </WizardShell>
@@ -1366,8 +1372,8 @@ function SrcTransformDrawer({ col, type, sel, list, onChange, onClose }) {
   const remove = i => onChange(list.filter((_, j) => j !== i));
   const fnGlyph = id => (TRANSFORM_FUNCTIONS.find(f => f.id === id) || {}).glyph;
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.32)", zIndex: 400, display: "flex", justifyContent: "flex-end" }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 460, maxWidth: "94vw", height: "100%", background: "var(--panel)", borderLeft: "1px solid var(--line)", boxShadow: "-24px 0 60px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column" }}>
+    <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.28)", zIndex: 60, display: "flex", justifyContent: "flex-end", animation: "flow-fade-in 140ms ease-out" }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 440, maxWidth: "80%", height: "100%", background: "var(--panel)", borderLeft: "1px solid var(--line)", boxShadow: "-24px 0 60px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column" }}>
         {/* header */}
         <div style={{ padding: "18px 20px", borderBottom: "1px solid var(--line-2)", display: "flex", alignItems: "flex-start", gap: 12, flexShrink: 0 }}>
           <span style={{ width: 34, height: 34, borderRadius: 8, background: "var(--bg-canvas)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-2)", flexShrink: 0 }}>
@@ -1421,10 +1427,9 @@ function SrcTransformDrawer({ col, type, sel, list, onChange, onClose }) {
   );
 }
 
-function SrcMapping({ s, set, srcCols, nodeProps, node, sel }) {
+function SrcMapping({ s, set, srcCols, nodeProps, node, sel, openCol, setOpenCol }) {
   const [q, setQ] = useState("");
   const [tab, setTab] = useState("all");
-  const [openCol, setOpenCol] = useState("");
   const transforms = s.transforms || {};
   const updateMap = (col, propId) => set({ mapping: { ...s.mapping, [col]: propId } });
   const setTransforms = (col, arr) => set({ transforms: { ...transforms, [col]: arr } });
@@ -1495,11 +1500,6 @@ function SrcMapping({ s, set, srcCols, nodeProps, node, sel }) {
         })}
         {rows.length === 0 && <div style={{ padding: "32px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No fields match “{q}”.</div>}
       </div>
-
-      {openCol && (() => {
-        const c = srcCols.find(x => x.col === openCol);
-        return <SrcTransformDrawer col={openCol} type={c ? c.type : "string"} sel={sel} list={transforms[openCol] || []} onChange={arr => setTransforms(openCol, arr)} onClose={() => setOpenCol("")} />;
-      })()}
     </StepWrap>
   );
 }
