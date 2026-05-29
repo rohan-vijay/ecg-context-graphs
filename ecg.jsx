@@ -21012,7 +21012,7 @@ function GraphLandingEmpty({ onCreate, onBack }) {
 }
 
 function GraphLandingView({ onOpenGraph }) {
-  var [newGraphOpen, setNewGraphOpen] = useState(false);
+  var [newGraphOpen, setNewGraphOpen] = useUrlFlow("newgraph", "");
   var [view, setView]     = useState("grid"); // grid | list
   var [search, setSearch] = useState("");
   var [sort, setSort]     = useState("active");
@@ -21036,8 +21036,8 @@ function GraphLandingView({ onOpenGraph }) {
   if (emptyState) {
     return (
       <>
-        <GraphLandingEmpty onCreate={function(){ setNewGraphOpen(true); }} onBack={function(){ setEmptyState(false); }} />
-        {newGraphOpen && <NewGraphFlow onClose={function(){ setNewGraphOpen(false); }} onCreate={function(g){ setNewGraphOpen(false); setEmptyState(false); if (g && g.id) onOpenGraph(g.id); }} />}
+        <GraphLandingEmpty onCreate={function(){ setNewGraphOpen("1"); }} onBack={function(){ setEmptyState(false); }} />
+        {newGraphOpen && <NewGraphFlow onClose={function(){ setNewGraphOpen(""); }} onCreate={function(g){ setNewGraphOpen(""); setEmptyState(false); if (g && g.id) onOpenGraph(g.id); }} />}
       </>
     );
   }
@@ -21122,7 +21122,7 @@ function GraphLandingView({ onOpenGraph }) {
               </>
             )}
           </div>
-          <button className="btn-dark" style={{ padding:"7px 14px" }} onClick={function(){ setNewGraphOpen(true); }}>+ New graph</button>
+          <button className="btn-dark" style={{ padding:"7px 14px" }} onClick={function(){ setNewGraphOpen("1"); }}>+ New graph</button>
         </div>
       </div>
 
@@ -21405,7 +21405,7 @@ function GraphLandingView({ onOpenGraph }) {
         </div>
       )}
 
-      {newGraphOpen && <NewGraphFlow onClose={function(){ setNewGraphOpen(false); }} onCreate={function(g){ setNewGraphOpen(false); if (g && g.id) { onOpenGraph(g.id); } else if (g && g.name && window.__openBlankGraph) { window.__openBlankGraph(g.name, g.entities || []); } }} />}
+      {newGraphOpen && <NewGraphFlow onClose={function(){ setNewGraphOpen(""); }} onCreate={function(g){ setNewGraphOpen(""); if (g && g.id) { onOpenGraph(g.id); } else if (g && g.name && window.__openBlankGraph) { window.__openBlankGraph(g.name, g.entities || []); } }} />}
     </div>
   );
 }
