@@ -5,16 +5,54 @@ const { useState, useRef, useEffect, useMemo } = React;
 
 // ─── DATA ─────────────────────────────────────────────────────────────────────
 
+// Connector catalog. `slug` is a Simple Icons slug used to render the real brand
+// logo (https://cdn.simpleicons.org/<slug>/<hex>); `icon` is the text fallback.
+// `kind` splits the catalog into structured systems vs unstructured sources.
 const SOURCE_SYSTEMS = [
-  { id: "salesforce", name: "Salesforce CRM",     tag: "CRM",       status: "healthy",  icon: "S", color: "#1798c1" },
-  { id: "netsuite",   name: "NetSuite ERP",         tag: "ERP",       status: "healthy",  icon: "N", color: "#b8923a" },
-  { id: "okta",       name: "Okta Identity",        tag: "IdP",       status: "healthy",  icon: "O", color: "#007dc1" },
-  { id: "snowflake",  name: "Snowflake Warehouse",  tag: "Warehouse", status: "healthy",  icon: "❄", color: "#29b5e8" },
-  { id: "hubspot",    name: "HubSpot Marketing",    tag: "Marketing", status: "degraded", icon: "H", color: "#ff7a59" },
-  { id: "zendesk",    name: "Zendesk Support",      tag: "Support",   status: "healthy",  icon: "Z", color: "#03363d" },
-  { id: "stripe",     name: "Stripe Billing",       tag: "Billing",   status: "healthy",  icon: "$", color: "#6772e5" },
-  { id: "kafka",      name: "Kafka event stream",   tag: "Stream",    status: "healthy",  icon: "K", color: "#6f8b5f" },
-  { id: "custom",     name: "Custom connector",     tag: "Custom",    status: null,       icon: "+", color: "#a09e88" },
+  // ── Structured systems (databases, warehouses, apps with records) ──
+  { id: "salesforce",  name: "Salesforce",            tag: "CRM",          kind: "structured",   status: "healthy",  icon: "S",   slug: "salesforce",          color: "#00A1E0", desc: "Accounts, contacts, opportunities and custom objects." },
+  { id: "hubspot",     name: "HubSpot",               tag: "Marketing",    kind: "structured",   status: "degraded", icon: "H",   slug: "hubspot",             color: "#FF7A59", desc: "Contacts, deals, companies and marketing events." },
+  { id: "snowflake",   name: "Snowflake",             tag: "Warehouse",    kind: "structured",   status: "healthy",  icon: "❄",  slug: "snowflake",           color: "#29B5E8", desc: "Cloud data-warehouse tables and views." },
+  { id: "bigquery",    name: "Google BigQuery",       tag: "Warehouse",    kind: "structured",   status: "healthy",  icon: "BQ",  slug: "googlebigquery",      color: "#669DF6", desc: "Serverless warehouse datasets and tables." },
+  { id: "databricks",  name: "Databricks",            tag: "Lakehouse",    kind: "structured",   status: "healthy",  icon: "DB",  slug: "databricks",          color: "#FF3621", desc: "Delta tables and Unity Catalog assets." },
+  { id: "redshift",    name: "Amazon Redshift",       tag: "Warehouse",    kind: "structured",   status: "healthy",  icon: "RS",  slug: "amazonredshift",      color: "#8C4FFF", desc: "Columnar warehouse schemas and tables." },
+  { id: "postgres",    name: "PostgreSQL",            tag: "Database",     kind: "structured",   status: "healthy",  icon: "PG",  slug: "postgresql",          color: "#4169E1", desc: "Relational tables, views and materialised views." },
+  { id: "mysql",       name: "MySQL",                 tag: "Database",     kind: "structured",   status: "healthy",  icon: "My",  slug: "mysql",               color: "#4479A1", desc: "Relational tables from a MySQL instance." },
+  { id: "sqlserver",   name: "Microsoft SQL Server",  tag: "Database",     kind: "structured",   status: "healthy",  icon: "MS",  slug: "microsoftsqlserver",  color: "#CC2927", desc: "Tables, views and stored procedures." },
+  { id: "oracle",      name: "Oracle Database",       tag: "Database",     kind: "structured",   status: "healthy",  icon: "Or",  slug: "oracle",              color: "#F80000", desc: "Enterprise relational schemas." },
+  { id: "mongodb",     name: "MongoDB",               tag: "NoSQL",        kind: "structured",   status: "healthy",  icon: "Mo",  slug: "mongodb",             color: "#47A248", desc: "Document collections and embedded records." },
+  { id: "netsuite",    name: "NetSuite ERP",          tag: "ERP",          kind: "structured",   status: "healthy",  icon: "N",   slug: "",                    color: "#1F7A3D", desc: "Invoices, agreements and financial records." },
+  { id: "sap",         name: "SAP",                   tag: "ERP",          kind: "structured",   status: "healthy",  icon: "SAP", slug: "sap",                 color: "#0FAAFF", desc: "ERP modules, materials and finance documents." },
+  { id: "stripe",      name: "Stripe",                tag: "Billing",      kind: "structured",   status: "healthy",  icon: "$",   slug: "stripe",              color: "#635BFF", desc: "Customers, subscriptions, invoices and payouts." },
+  { id: "shopify",     name: "Shopify",               tag: "Commerce",     kind: "structured",   status: "healthy",  icon: "Sh",  slug: "shopify",             color: "#7AB55C", desc: "Orders, products, customers and inventory." },
+  { id: "airtable",    name: "Airtable",              tag: "Database",     kind: "structured",   status: "healthy",  icon: "At",  slug: "airtable",            color: "#18BFFF", desc: "Bases, tables and linked records." },
+  { id: "googlesheets",name: "Google Sheets",         tag: "Spreadsheet",  kind: "structured",   status: "healthy",  icon: "GS",  slug: "googlesheets",        color: "#34A853", desc: "Spreadsheet rows as structured records." },
+  { id: "segment",     name: "Segment",               tag: "CDP",          kind: "structured",   status: "healthy",  icon: "Sg",  slug: "segment",             color: "#52BD94", desc: "Event streams and identity profiles." },
+  { id: "okta",        name: "Okta",                  tag: "Identity",     kind: "structured",   status: "healthy",  icon: "O",   slug: "okta",                color: "#007DC1", desc: "Users, groups and identity mappings." },
+  { id: "kafka",       name: "Apache Kafka",          tag: "Streaming",    kind: "structured",   status: "healthy",  icon: "K",   slug: "apachekafka",         color: "#231F20", desc: "Event topics consumed as a stream." },
+  { id: "jira",        name: "Jira",                  tag: "Issues",       kind: "structured",   status: "healthy",  icon: "Jr",  slug: "jira",                color: "#0052CC", desc: "Issues, sprints and project tracking." },
+  { id: "zendesk",     name: "Zendesk",               tag: "Support",      kind: "structured",   status: "healthy",  icon: "Z",   slug: "zendesk",             color: "#03363D", desc: "Tickets, macros and help-center articles." },
+  { id: "asana",       name: "Asana",                 tag: "Tasks",        kind: "structured",   status: "healthy",  icon: "As",  slug: "asana",               color: "#F06A6A", desc: "Projects, tasks and portfolios." },
+  { id: "linear",      name: "Linear",                tag: "Issues",       kind: "structured",   status: "healthy",  icon: "Ln",  slug: "linear",              color: "#5E6AD2", desc: "Issues, cycles and project updates." },
+  // ── Unstructured sources (docs, files, messages, wikis) ──
+  { id: "googledrive", name: "Google Drive",          tag: "Files",        kind: "unstructured", status: "healthy",  icon: "GD",  slug: "googledrive",         color: "#1FA463", desc: "Docs, Sheets, Slides and stored files." },
+  { id: "slack",       name: "Slack",                 tag: "Messaging",    kind: "unstructured", status: "healthy",  icon: "Sl",  slug: "slack",               color: "#4A154B", desc: "Channels, threads and message history." },
+  { id: "confluence",  name: "Confluence",            tag: "Wiki",         kind: "unstructured", status: "healthy",  icon: "Cf",  slug: "confluence",          color: "#172B4D", desc: "Spaces, pages and knowledge bases." },
+  { id: "notion",      name: "Notion",                tag: "Wiki",         kind: "unstructured", status: "healthy",  icon: "No",  slug: "notion",              color: "#000000", desc: "Pages, wikis and databases." },
+  { id: "sharepoint",  name: "SharePoint",            tag: "Files",        kind: "unstructured", status: "healthy",  icon: "SP",  slug: "microsoftsharepoint", color: "#0078D4", desc: "Document libraries and team sites." },
+  { id: "onedrive",    name: "OneDrive",              tag: "Files",        kind: "unstructured", status: "healthy",  icon: "OD",  slug: "microsoftonedrive",   color: "#0078D4", desc: "Personal and shared cloud files." },
+  { id: "dropbox",     name: "Dropbox",               tag: "Files",        kind: "unstructured", status: "healthy",  icon: "Dx",  slug: "dropbox",             color: "#0061FF", desc: "Synced files, folders and content." },
+  { id: "box",         name: "Box",                   tag: "Files",        kind: "unstructured", status: "healthy",  icon: "Bx",  slug: "box",                 color: "#0061D5", desc: "Enterprise content and shared files." },
+  { id: "s3",          name: "Amazon S3",             tag: "Object store", kind: "unstructured", status: "healthy",  icon: "S3",  slug: "amazons3",            color: "#569A31", desc: "Objects and files in S3 buckets." },
+  { id: "gcs",         name: "Google Cloud Storage",  tag: "Object store", kind: "unstructured", status: "healthy",  icon: "GCS", slug: "googlecloud",         color: "#4285F4", desc: "Objects and files in GCS buckets." },
+  { id: "gmail",       name: "Gmail",                 tag: "Email",        kind: "unstructured", status: "healthy",  icon: "GM",  slug: "gmail",               color: "#EA4335", desc: "Email threads, messages and attachments." },
+  { id: "outlook",     name: "Outlook",               tag: "Email",        kind: "unstructured", status: "healthy",  icon: "Ol",  slug: "microsoftoutlook",    color: "#0078D4", desc: "Mailboxes, threads and calendar items." },
+  { id: "github",      name: "GitHub",                tag: "Code",         kind: "unstructured", status: "healthy",  icon: "GH",  slug: "github",              color: "#181717", desc: "Repos, pull requests, issues and READMEs." },
+  { id: "gitlab",      name: "GitLab",                tag: "Code",         kind: "unstructured", status: "healthy",  icon: "GL",  slug: "gitlab",              color: "#FC6D26", desc: "Repositories, merge requests and CI." },
+  { id: "intercom",    name: "Intercom",              tag: "Support",      kind: "unstructured", status: "healthy",  icon: "Ic",  slug: "intercom",            color: "#1F8DED", desc: "Conversations and help articles." },
+  { id: "figma",       name: "Figma",                 tag: "Design",       kind: "unstructured", status: "healthy",  icon: "Fg",  slug: "figma",               color: "#F24E1E", desc: "Design files, frames and comments." },
+  { id: "zoom",        name: "Zoom",                  tag: "Meetings",     kind: "unstructured", status: "healthy",  icon: "Zm",  slug: "zoom",                color: "#0B5CFF", desc: "Recordings and meeting transcripts." },
+  { id: "custom",      name: "Custom connector",      tag: "Custom",       kind: "structured",   status: null,       icon: "+",   slug: "",                    color: "#A09E88", desc: "Bring your own REST, JDBC, gRPC or file source." },
 ];
 
 const DATA_TYPES = [
@@ -420,7 +458,7 @@ function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage
             </button>
           </div>
         </div>
-        <div className="flow-body">
+        <div className="flow-body" style={!rightPane ? { gridTemplateColumns: "240px minmax(0, 1fr)" } : undefined}>
           <aside className="flow-steps">
             {steps.map((s, i) => (
               <button key={i} className={"flow-step" + (i === step ? " on" : "") + (i < step ? " done" : "")} onClick={() => setStep(i)}>
@@ -988,7 +1026,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
       onNext={() => setStep(x => x + 1)}
       onPublish={onClose}
       onClose={onClose}
-      rightPane={<SrcPreview s={s} sel={sel} node={node} srcCols={srcCols} nodeProps={nodeProps} mappedCount={mappedCount} />}
+      rightPane={step === 0 ? null : <SrcPreview s={s} sel={sel} node={node} srcCols={srcCols} nodeProps={nodeProps} mappedCount={mappedCount} />}
     >
       {step === 0 && <SrcSystem s={s} set={set} />}
       {step === 1 && <SrcConnection s={s} set={set} sel={sel} srcCols={srcCols} />}
@@ -1001,44 +1039,98 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
 
 // ── Src Step 1: System ────────────────────────────────────────────────────────
 
-function SrcSystem({ s, set }) {
-  const sel = SOURCE_SYSTEMS.find(x => x.id === s.system);
+function SrcConnectorLogo({ c, size }) {
+  size = size || 22;
+  const box = size + 12;
   return (
-    <StepWrap eyebrow="STEP 1 · SOURCE SYSTEM" title="Pick a source connector" desc="Select the system that owns this data. Health indicators reflect the connector's current status in this environment.">
-      <FormRow label="Source system" required hint={sel?.status === "degraded" ? "⚠ This connector is currently degraded. Schema discovery may be incomplete." : sel ? `Connected · ${sel.tag} · ${sel.status}` : ""}>
-        <SysSelect value={s.system} onChange={v => set({ system: v })} />
-      </FormRow>
+    <span style={{ width: box, height: box, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: "#fff", border: "1px solid var(--line)" }}>
+      {c.slug
+        ? <img src={"https://cdn.simpleicons.org/" + c.slug + "/" + c.color.replace("#", "")} width={size} height={size} alt="" style={{ display: "block" }}
+            onError={e => { e.currentTarget.style.display = "none"; const g = e.currentTarget.parentNode.querySelector(".csrc-glyph"); if (g) g.style.display = "flex"; }} />
+        : null}
+      <span className="csrc-glyph" style={{ display: c.slug ? "none" : "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", color: c.color, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: size > 20 ? 12 : 10 }}>{c.icon}</span>
+    </span>
+  );
+}
 
-      {sel && (
-        <FormRow label="Connector details" last>
-          <div className="wconn-details">
-            {[
-              ["Connector version", "2.4.1"],
-              ["Auth",              "OAuth2 + service account"],
-              ["Last schema sync",  "4 min ago"],
-              ["Available objects", "142"],
-              ["Status",            sel.status],
-            ].map(([k, v]) => (
-              <div key={k} className="wconn-row">
-                <span className="wconn-k">{k}</span>
-                <span className="wconn-v" style={k === "Status" ? { color: sel.status === "healthy" ? "var(--green)" : "var(--gold)" } : {}}>{v}</span>
+function SrcSystem({ s, set }) {
+  const [q, setQ] = useState("");
+  const [kind, setKind] = useState("all");
+  const KINDS = [
+    { id: "all", label: "All" },
+    { id: "structured", label: "Structured" },
+    { id: "unstructured", label: "Unstructured" },
+  ];
+  const list = SOURCE_SYSTEMS.filter(c => c.id !== "custom").filter(c => {
+    if (kind !== "all" && c.kind !== kind) return false;
+    if (q && (c.name + " " + (c.desc || "") + " " + c.tag).toLowerCase().indexOf(q.toLowerCase()) < 0) return false;
+    return true;
+  });
+  return (
+    <StepWrap eyebrow="STEP 1 · SOURCE SYSTEM" title="Pick a source connector" desc="Search the catalog and choose the system that owns this data. Both structured systems and unstructured sources are supported.">
+      {/* search + kind filter */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+        <div style={{ position: "relative", flex: 1 }}>
+          <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--ink-3)", display: "flex" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
+          </span>
+          <input className="winput" style={{ paddingLeft: 36 }} placeholder="Search connectors…" value={q} onChange={e => setQ(e.target.value)} autoFocus />
+        </div>
+        <div style={{ display: "flex", gap: 3, padding: 3, borderRadius: 9, border: "1px solid var(--line)", background: "var(--bg-canvas)" }}>
+          {KINDS.map(k => {
+            const on = kind === k.id;
+            return <button key={k.id} onClick={() => setKind(k.id)} style={{ padding: "6px 12px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: on ? 600 : 500, background: on ? "var(--ink)" : "transparent", color: on ? "var(--bg-canvas)" : "var(--ink-2)" }}>{k.label}</button>;
+          })}
+        </div>
+      </div>
+
+      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.5px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 8 }}>{list.length} connectors</div>
+
+      <div style={{ border: "1px solid var(--line)", borderRadius: 11, overflow: "hidden", background: "var(--panel)" }}>
+        {list.map((c, i) => {
+          const on = s.system === c.id;
+          return (
+            <button key={c.id} onClick={() => set({ system: c.id })}
+              style={{ display: "flex", alignItems: "center", gap: 13, width: "100%", padding: "12px 14px", border: "none", borderTop: i ? "1px solid var(--line-2)" : "none", background: on ? "var(--bg-canvas)" : "transparent", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}
+              onMouseEnter={e => { if (!on) e.currentTarget.style.background = "var(--panel-2)"; }}
+              onMouseLeave={e => { if (!on) e.currentTarget.style.background = "transparent"; }}>
+              <SrcConnectorLogo c={c} size={22} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{c.name}</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: "0.4px", textTransform: "uppercase", padding: "2px 6px", borderRadius: 4, color: c.kind === "structured" ? "var(--blue)" : "var(--gold)", background: c.kind === "structured" ? "var(--blue-fill)" : "var(--gold-fill)" }}>{c.kind === "structured" ? "Structured" : "Unstructured"}</span>
+                  {c.status === "degraded" && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: "var(--gold)" }}>● degraded</span>}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.desc}</div>
               </div>
-            ))}
-          </div>
-        </FormRow>
-      )}
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-4)", flexShrink: 0 }}>{c.tag}</span>
+              {on
+                ? <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: "50%", background: "var(--ink)", color: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>✓</span>
+                : <span style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, color: "var(--ink-3)", padding: "5px 12px", borderRadius: 7, border: "1px solid var(--line)" }}>Select</span>}
+            </button>
+          );
+        })}
+        {list.length === 0 && <div style={{ padding: "32px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No connectors match “{q}”.</div>}
+      </div>
+
+      <button onClick={() => set({ system: "custom" })}
+        style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "12px 14px", borderRadius: 10, border: "1px dashed var(--line)", background: s.system === "custom" ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--ink-2)" }}>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-3)" }}>+</span>
+        Set up a custom connector
+        {s.system === "custom" && <span style={{ marginLeft: "auto", color: "var(--green)", fontWeight: 700 }}>✓</span>}
+      </button>
 
       {s.system === "custom" && (
-        <>
+        <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
           <FormRow label="Connector name">
             <input className="winput" placeholder="My connector" value={s.customName} onChange={e => set({ customName: e.target.value })} />
           </FormRow>
           <FormRow label="Connector type" last>
             <CustomSelect value={s.customType || "REST API"} onChange={v => set({ customType: v })} options={
-              ["REST API","GraphQL","JDBC","gRPC","Webhook","File (S3/GCS)","SFTP","Custom script"].map(t => ({ id: t, label: t }))
+              ["REST API", "GraphQL", "JDBC", "gRPC", "Webhook", "File (S3/GCS)", "SFTP", "Custom script"].map(t => ({ id: t, label: t }))
             } />
           </FormRow>
-        </>
+        </div>
       )}
     </StepWrap>
   );
@@ -1279,28 +1371,6 @@ function SrcPreview({ s, sel, node, srcCols, nodeProps, mappedCount }) {
   const nc = node ? (window.colorForNode?.(node) || { fill: "var(--blue-fill)", stroke: "var(--blue)" }) : { fill: "var(--chip)", stroke: "var(--line)" };
   return (
     <div className="preview-stack">
-      <div className="preview-block">
-        <div className="preview-head">Pipeline diagram</div>
-        <svg viewBox="0 0 280 120" style={{ width: "100%", height: 120, display: "block", background: "var(--bg-canvas)" }}>
-          {sel ? (
-            <g>
-              <rect x="8" y="40" width="86" height="40" rx="6" fill={sel.color + "15"} stroke={sel.color} strokeWidth="1.2" />
-              <text x="51" y="57" textAnchor="middle" fontFamily="Geist, system-ui" fontSize="11" fill="var(--ink)" fontWeight="600">{sel.icon} {sel.name.split(" ")[0]}</text>
-              <text x="51" y="72" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="9" fill="var(--ink-3)">{s.table || "—"}</text>
-            </g>
-          ) : (
-            <rect x="8" y="40" width="86" height="40" rx="6" fill="var(--chip)" stroke="var(--line)" strokeWidth="1.2" strokeDasharray="4 3" />
-          )}
-          <path d="M 94 60 L 112 60" stroke="var(--ink-3)" strokeWidth="1.2" markerEnd="url(#sp-arr)" />
-          <rect x="112" y="47" width="56" height="26" rx="5" fill="var(--panel-2)" stroke="var(--line)" strokeWidth="1" />
-          <text x="140" y="61" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="9" fill="var(--ink-2)">{mappedCount} col · {s.cadence}</text>
-          <path d="M 168 60 L 186 60" stroke="var(--ink-3)" strokeWidth="1.2" markerEnd="url(#sp-arr)" />
-          <circle cx="212" cy="60" r="24" fill={nc.fill} stroke={nc.stroke} strokeWidth="1.4" />
-          <text x="212" y="64" textAnchor="middle" fontFamily="Geist, system-ui" fontSize="10" fill="var(--ink)" fontWeight="500">{node?.label?.slice(0,7) || "?"}</text>
-          {s.freshnessSLO && <g transform="translate(140,96)"><rect x="-22" y="-9" width="44" height="16" rx="4" fill="var(--green-fill)" stroke="var(--green)" strokeWidth="0.8" /><text textAnchor="middle" y="2.5" fontFamily="JetBrains Mono" fontSize="9" fill="var(--green)">SLO {s.freshnessSLO}</text></g>}
-          <defs><marker id="sp-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink-3)" /></marker></defs>
-        </svg>
-      </div>
       <div className="preview-block">
         <div className="preview-head">Validation</div>
         <ul className="preview-checks">
