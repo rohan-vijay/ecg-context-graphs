@@ -18574,7 +18574,6 @@ function AddNodeFlow({ onClose, onCreate }) {
               style={{ width:20, height:20, flexShrink:0, borderRadius:5, border:"1px dashed var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontWeight:700, fontSize:13, lineHeight:1 }}
               onMouseEnter={function(e){ e.currentTarget.style.background = "var(--chip)"; e.currentTarget.style.color = "var(--ink)"; }}
               onMouseLeave={function(e){ e.currentTarget.style.background = "var(--panel-2)"; e.currentTarget.style.color = "var(--ink-3)"; }}>+</button>}
-            {p.confidence && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color: p.confidence >= 0.9 ? "var(--green)" : "var(--gold)", flexShrink:0, fontWeight:700 }} title={"LLM confidence " + p.confidence}>{Math.round(p.confidence * 100) + "%"}</span>}
             {p.detectedFrom && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", flexShrink:0 }} title={p.detectedFrom}>↩</span>}
           </div>
           <TypePicker value={p.type} onChange={function(v){ updatePath(path, "type", v); }} />
@@ -18638,7 +18637,7 @@ function AddNodeFlow({ onClose, onCreate }) {
 
   function canContinue() {
     if (step === 1) return nameOk && !!category;
-    if (step === 2) return properties.length >= 1 && !!pkField;
+    if (step === 2) return propMode === "skip" || (properties.length >= 1 && !!pkField);
     // Step 3 = Governance. Step 4 = Review.
     return true;
   }
@@ -18993,7 +18992,9 @@ function AddNodeFlow({ onClose, onCreate }) {
                 { id:"spreadsheet", label:"From spreadsheet", color:"var(--green)",  desc:"Drop a CSV or Excel file. We auto-detect columns and their types as your property list.",
                   icon:(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="1.5"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="4" x2="10" y2="20"/></svg>) },
                 { id:"manual",      label:"Define manually",  color:"var(--coral)",  desc:"Type each field by hand. Best when you know the exact shape you want.",
-                  icon:(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4 L20 8 L9 19 L4 20 L5 15 z"/><line x1="14" y1="6" x2="18" y2="10"/></svg>) }
+                  icon:(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4 L20 8 L9 19 L4 20 L5 15 z"/><line x1="14" y1="6" x2="18" y2="10"/></svg>) },
+                { id:"skip",        label:"Skip for now",     color:"var(--ink-3)",  desc:"Create the node without properties — add them later from the node page.",
+                  icon:(<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>) }
               ];
               var selectedMode = PROP_MODES.find(function(m){ return m.id === propMode; });
               return (
@@ -19031,7 +19032,7 @@ function AddNodeFlow({ onClose, onCreate }) {
                           {PROP_MODES.map(function(o, i){
                             var isSel = propMode === o.id;
                             return (
-                              <button key={o.id} onClick={function(){ setPropMode(o.id); setPropModeOpen(false); }}
+                              <button key={o.id} onClick={function(){ setPropMode(o.id); setPropModeOpen(false); if (o.id === "skip") { setProperties([]); setUploadedFileName(""); } }}
                                 style={{ display:"flex", alignItems:"flex-start", gap:12, width:"100%", padding:"10px 12px", borderRadius:7, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom: i < PROP_MODES.length-1 ? 2 : 0 }}
                                 onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
                                 onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
@@ -19243,8 +19244,21 @@ function AddNodeFlow({ onClose, onCreate }) {
                   </div>
                 )}
 
+                {/* SKIP MODE — no fields now, add later */}
+                {propMode === "skip" && (
+                  <div style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"16px 18px", borderRadius:10, border:"1px dashed var(--line)", background:"var(--panel-2)" }}>
+                    <span style={{ width:34, height:34, borderRadius:7, background:"var(--chip)", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                    </span>
+                    <div>
+                      <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>No properties for now</div>
+                      <div style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)", marginTop:3, lineHeight:1.5 }}>The node will be created empty. You can add properties anytime from its Properties tab.</div>
+                    </div>
+                  </div>
+                )}
+
                 {/* SHARED PROPERTIES TABLE — prominent card, stands out from background */}
-                {(properties.length > 0 || propMode === "manual") && (
+                {((properties.length > 0 || propMode === "manual") && propMode !== "skip") && (
                   <div className="card" style={{ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 1px 0 var(--line-2), 0 4px 14px rgba(40,40,20,0.04)", overflow:"hidden" }}>
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 18px", borderBottom:"1px solid var(--line-2)", background:"var(--panel-2)" }}>
                       <div>
