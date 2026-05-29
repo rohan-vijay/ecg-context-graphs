@@ -18521,6 +18521,8 @@ function AddNodeFlow({ onClose, onCreate }) {
   var [pkField, setPkField] = useState("");
   var [advancedPropIdx, setAdvancedPropIdx] = useState(null);
   var [hoverRow, setHoverRow] = useState(-1);
+  var [expandedRows, setExpandedRows] = useState({});
+  function toggleExpand(i){ setExpandedRows(function(m){ var n = Object.assign({}, m); n[i] = !n[i]; return n; }); }
   var [naturalKeys, setNaturalKeys] = useState([]);
   var [dedupStrategy, setDedupStrategy] = useState("on_natural_key"); // none / on_pk / on_natural_key / probabilistic
 
@@ -18598,6 +18600,7 @@ function AddNodeFlow({ onClose, onCreate }) {
       n.children = (p.children || []).concat([{ name: "item", type: "string" }]);
       return n;
     }); });
+    setExpandedRows(function(m){ var n = Object.assign({}, m); n[idx] = true; return n; });
   }
   function updateChild(idx, ci, key, val) {
     setProperties(function(arr){ return arr.map(function(p, i){
@@ -19180,8 +19183,8 @@ function AddNodeFlow({ onClose, onCreate }) {
                       </div>
                       <button onClick={addManualProp} className="btn-ghost" style={{ fontSize:12 }}>+ Add field</button>
                     </div>
-                    <div style={{ display:"grid", gridTemplateColumns:"1.4fr 130px 1.2fr 40px 40px 40px 40px 24px 32px", gap:8, padding:"9px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
-                      <div>Name</div><div>Type</div><div>Description</div><div title="Primary key" style={{ textAlign:"center" }}>PK</div><div title="Required" style={{ textAlign:"center" }}>REQ</div><div title="Indexed" style={{ textAlign:"center" }}>IDX</div><div title="PII" style={{ textAlign:"center" }}>PII</div><div/><div/>
+                    <div style={{ display:"grid", gridTemplateColumns:"1.7fr 150px 40px 40px 40px 40px 24px 32px", gap:8, padding:"9px 18px", background:"var(--panel-2)", borderBottom:"1px solid var(--line-2)", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.5px", color:"var(--ink-3)", textTransform:"uppercase" }}>
+                      <div>Name</div><div>Type</div><div title="Primary key" style={{ textAlign:"center" }}>PK</div><div title="Required" style={{ textAlign:"center" }}>REQ</div><div title="Indexed" style={{ textAlign:"center" }}>IDX</div><div title="PII" style={{ textAlign:"center" }}>PII</div><div/><div/>
                     </div>
                     {properties.length === 0 && (
                       <div style={{ padding:"50px 18px", textAlign:"center", color:"var(--ink-3)", fontSize:13 }}>
@@ -19195,14 +19198,18 @@ function AddNodeFlow({ onClose, onCreate }) {
                       var kids = p.children || [];
                       return (
                         <div key={i} onMouseEnter={function(){ setHoverRow(i); }} onMouseLeave={function(){ setHoverRow(function(h){ return h === i ? -1 : h; }); }} style={{ borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)" }}>
-                          <div style={{ display:"grid", gridTemplateColumns:"1.4fr 130px 1.2fr 40px 40px 40px 40px 24px 32px", gap:8, padding:"8px 18px", alignItems:"center" }}>
+                          <div style={{ display:"grid", gridTemplateColumns:"1.7fr 150px 40px 40px 40px 40px 24px 32px", gap:8, padding:"8px 18px", alignItems:"center" }}>
                             <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                              {nestable
+                                ? <button onClick={function(){ toggleExpand(i); }} title={expandedRows[i] ? "Collapse" : "Expand child properties"} style={{ width:18, height:18, flexShrink:0, border:"none", background:"none", cursor:"pointer", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expandedRows[i] ? "rotate(90deg)" : "none", transition:"transform 120ms" }}><path d="M9 6l6 6-6 6"/></svg>
+                                  </button>
+                                : <span style={{ width:18, flexShrink:0 }} />}
                               <input value={p.name} onChange={function(e){ updateProp(i, "name", e.target.value); }} style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12, fontFamily:"JetBrains Mono" })} />
                               {p.confidence && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color: p.confidence >= 0.9 ? "var(--green)" : "var(--gold)", flexShrink:0, fontWeight:700 }} title={"LLM confidence " + p.confidence}>{Math.round(p.confidence * 100) + "%"}</span>}
                               {p.detectedFrom && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", flexShrink:0 }} title={p.detectedFrom}>↩</span>}
                             </div>
                             <TypePicker value={p.type} onChange={function(v){ updateProp(i, "type", v); }} />
-                            <input value={p.description || ""} onChange={function(e){ updateProp(i, "description", e.target.value); }} placeholder="optional" style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12 })} />
                             <input type="checkbox" checked={isPk} onChange={function(e){ if (e.target.checked) setPkField(p.name); else if (isPk) setPkField(""); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
                             <input type="checkbox" checked={p.required || false} onChange={function(e){ updateProp(i, "required", e.target.checked); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
                             <input type="checkbox" checked={p.indexed || false} onChange={function(e){ updateProp(i, "indexed", e.target.checked); }} style={{ accentColor:"var(--ink)", justifySelf:"center", width:16, height:16 }} />
@@ -19215,24 +19222,27 @@ function AddNodeFlow({ onClose, onCreate }) {
                             <button onClick={function(){ removeProp(i); }} style={{ width:24, height:24, borderRadius:5, border:"1px solid var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", justifySelf:"center" }}>×</button>
                           </div>
 
-                          {/* Nested child properties — for array / object / struct types. */}
-                          {nestable && (
-                            <div style={{ padding:"2px 18px 10px 42px", opacity: (kids.length > 0 || hoverRow === i) ? 1 : 0.6, transition:"opacity 120ms" }}>
+                          {/* Nested child properties — revealed by the row's expand toggle. */}
+                          {nestable && expandedRows[i] && (
+                            <div style={{ padding:"0 18px 10px 44px" }}>
                               {kids.map(function(c, ci){
                                 return (
-                                  <div key={ci} style={{ display:"grid", gridTemplateColumns:"1.4fr 130px 1fr 28px", gap:8, padding:"4px 0", alignItems:"center" }}>
+                                  <div key={ci} style={{ display:"grid", gridTemplateColumns:"1.7fr 150px 28px", gap:8, padding:"4px 0", alignItems:"center" }}>
                                     <div style={{ display:"flex", alignItems:"center", gap:7 }}>
                                       <span style={{ color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:12, flexShrink:0 }}>{ci === kids.length-1 ? "└─" : "├─"}</span>
                                       <input value={c.name} onChange={function(e){ updateChild(i, ci, "name", e.target.value); }} style={Object.assign({}, inp, { padding:"5px 9px", fontSize:12, fontFamily:"JetBrains Mono" })} />
                                     </div>
                                     <TypePicker value={c.type} onChange={function(v){ updateChild(i, ci, "type", v); }} />
-                                    <input value={c.description || ""} onChange={function(e){ updateChild(i, ci, "description", e.target.value); }} placeholder="optional" style={Object.assign({}, inp, { padding:"5px 9px", fontSize:12 })} />
                                     <button onClick={function(){ removeChild(i, ci); }} style={{ width:22, height:22, borderRadius:5, border:"1px solid var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", justifySelf:"center" }}>×</button>
                                   </div>
                                 );
                               })}
-                              <button onClick={function(){ addChild(i); }} style={{ display:"inline-flex", alignItems:"center", gap:6, marginTop: kids.length ? 5 : 0, marginLeft:22, padding:"5px 11px", border:"1px dashed var(--line)", borderRadius:7, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", fontSize:11.5, color:"var(--ink-2)" }}>
-                                <span style={{ fontFamily:"JetBrains Mono", fontWeight:700, color:"var(--ink-3)" }}>+</span> child property
+                              {kids.length === 0 && <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", padding:"2px 0 2px 22px" }}>No child properties</div>}
+                              <button onClick={function(){ addChild(i); }}
+                                onMouseEnter={function(e){ e.currentTarget.style.color = "var(--ink-2)"; }}
+                                onMouseLeave={function(e){ e.currentTarget.style.color = "var(--ink-4)"; }}
+                                style={{ display:"inline-flex", alignItems:"center", gap:6, marginTop:5, marginLeft:22, padding:"3px 6px", border:"none", background:"none", cursor:"pointer", fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-4)" }}>
+                                <span style={{ fontWeight:700 }}>+</span> child property
                               </button>
                             </div>
                           )}
