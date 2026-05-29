@@ -18550,7 +18550,7 @@ function AddNodeFlow({ onClose, onCreate }) {
             {depth > 0 && <span style={{ color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:11, flexShrink:0 }}>└</span>}
             <input value={p.name} onChange={function(e){ updatePath(path, "name", e.target.value); }} style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12, fontFamily:"JetBrains Mono" })} />
             {nestable && <button onClick={function(){ addChildPath(path); }} title="Add child property"
-              style={{ width:20, height:20, flexShrink:0, borderRadius:5, border:"1px dashed var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontWeight:700, fontSize:13, lineHeight:1, opacity: hoverKey === key ? 1 : 0, transition:"opacity 120ms" }}>+</button>}
+              style={{ width:20, height:20, flexShrink:0, borderRadius:5, border:"1px dashed var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontWeight:700, fontSize:13, lineHeight:1 }}>+</button>}
             {p.confidence && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color: p.confidence >= 0.9 ? "var(--green)" : "var(--gold)", flexShrink:0, fontWeight:700 }} title={"LLM confidence " + p.confidence}>{Math.round(p.confidence * 100) + "%"}</span>}
             {p.detectedFrom && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", flexShrink:0 }} title={p.detectedFrom}>↩</span>}
           </div>
