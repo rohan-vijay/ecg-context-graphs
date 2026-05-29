@@ -1357,36 +1357,65 @@ function MapBadge({ children, tone }) {
   return <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, letterSpacing: "0.4px", padding: "1px 5px", borderRadius: 4, color: tone || "var(--ink-3)", border: "1px solid var(--line)", background: "var(--bg-canvas)" }}>{children}</span>;
 }
 
-// Per-field transformation chain editor (add one or many, in order).
-function SrcTransformEditor({ col, list, onChange }) {
+// Per-field transformation chain editor — a focused right-side drawer.
+// Add one or many functions, applied top to bottom, before the value is written.
+function SrcTransformDrawer({ col, type, sel, list, onChange, onClose }) {
   const add = () => onChange(list.concat([{ fn: "" }]));
   const setFn = (i, fn) => onChange(list.map((t, j) => j === i ? { ...t, fn } : t));
   const remove = i => onChange(list.filter((_, j) => j !== i));
+  const fnGlyph = id => (TRANSFORM_FUNCTIONS.find(f => f.id === id) || {}).glyph;
   return (
-    <div style={{ background: "var(--panel-2)", borderTop: "1px solid var(--line-2)", padding: "14px 16px 16px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <span style={{ color: "var(--ink-3)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 7h11M4 7l3-3M4 7l3 3M20 17H9M20 17l-3-3M20 17l-3 3"/></svg></span>
-        <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink)" }}>Transformations</span>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--ink-3)" }}>on <code>{col}</code> — applied top to bottom</span>
-      </div>
-      {list.length === 0 && <div style={{ fontSize: 12, color: "var(--ink-4)", marginBottom: 12 }}>No transformations yet. The raw value is written as-is.</div>}
-      {list.map((t, i) => (
-        <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-          <span style={{ width: 22, height: 22, borderRadius: "50%", background: "var(--ink)", color: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{i + 1}</span>
-          <div style={{ flex: 1 }}>
-            <CustomSelect value={t.fn} onChange={v => setFn(i, v)} placeholder="Select a function"
-              options={TRANSFORM_FUNCTIONS.map(f => ({ id: f.id, label: f.label }))}
-              renderTrigger={o => <span style={{ display: "flex", alignItems: "center", gap: 9 }}><span style={{ width: 22, height: 22, borderRadius: 5, border: "1px solid var(--line)", background: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--ink-2)" }}>{(TRANSFORM_FUNCTIONS.find(f => f.id === o.id) || {}).glyph}</span>{o.label}</span>}
-              renderOption={o => <span style={{ display: "flex", alignItems: "center", gap: 9 }}><span style={{ width: 22, height: 22, borderRadius: 5, border: "1px solid var(--line)", background: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--ink-2)" }}>{(TRANSFORM_FUNCTIONS.find(f => f.id === o.id) || {}).glyph}</span>{o.label}</span>} />
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.32)", zIndex: 400, display: "flex", justifyContent: "flex-end" }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 460, maxWidth: "94vw", height: "100%", background: "var(--panel)", borderLeft: "1px solid var(--line)", boxShadow: "-24px 0 60px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column" }}>
+        {/* header */}
+        <div style={{ padding: "18px 20px", borderBottom: "1px solid var(--line-2)", display: "flex", alignItems: "flex-start", gap: 12, flexShrink: 0 }}>
+          <span style={{ width: 34, height: 34, borderRadius: 8, background: "var(--bg-canvas)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-2)", flexShrink: 0 }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 7h11M4 7l3-3M4 7l3 3M20 17H9M20 17l-3-3M20 17l-3 3" /></svg>
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: "'Instrument Serif', serif", fontSize: 21, color: "var(--ink)", lineHeight: 1.1 }}>Transformations</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--ink-3)", marginTop: 3, display: "flex", alignItems: "center", gap: 6 }}>
+              <MapTypeGlyph type={type} size={18} /> <code>{col}</code> {sel ? "· " + sel.name : ""}
+            </div>
           </div>
-          <button onClick={() => remove(i)} title="Remove" style={{ width: 30, height: 30, borderRadius: 7, border: "1px solid var(--line)", background: "var(--bg-canvas)", cursor: "pointer", color: "var(--ink-3)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>
+          <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid var(--line)", background: "none", cursor: "pointer", color: "var(--ink-3)", flexShrink: 0, fontSize: 13 }}>✕</button>
+        </div>
+        {/* body */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "18px 20px" }}>
+          <div style={{ fontSize: 12.5, color: "var(--ink-3)", lineHeight: 1.55, marginBottom: 16 }}>Functions run top to bottom on the source value before it's written to the destination field. Drag-free reorder by removing and re-adding.</div>
+          {list.length === 0 && (
+            <div style={{ border: "1px dashed var(--line)", borderRadius: 10, padding: "26px 18px", textAlign: "center", marginBottom: 14 }}>
+              <div style={{ fontSize: 13, color: "var(--ink-2)", fontWeight: 600 }}>No transformations</div>
+              <div style={{ fontSize: 12, color: "var(--ink-4)", marginTop: 4 }}>The raw value is written as-is. Add one to start a chain.</div>
+            </div>
+          )}
+          {list.map((t, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+                <span style={{ width: 24, height: 24, borderRadius: "50%", background: "var(--ink)", color: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700 }}>{i + 1}</span>
+                {i < list.length - 1 && <span style={{ width: 1, height: 14, background: "var(--line)", marginTop: 2 }} />}
+              </div>
+              <div style={{ flex: 1 }}>
+                <CustomSelect value={t.fn} onChange={v => setFn(i, v)} placeholder="Select a function"
+                  options={TRANSFORM_FUNCTIONS.map(f => ({ id: f.id, label: f.label }))}
+                  renderTrigger={o => <span style={{ display: "flex", alignItems: "center", gap: 9 }}><span style={{ width: 22, height: 22, borderRadius: 5, border: "1px solid var(--line)", background: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--ink-2)" }}>{fnGlyph(o.id)}</span>{o.label}</span>}
+                  renderOption={o => <span style={{ display: "flex", alignItems: "center", gap: 9 }}><span style={{ width: 22, height: 22, borderRadius: 5, border: "1px solid var(--line)", background: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--ink-2)" }}>{fnGlyph(o.id)}</span>{o.label}</span>} />
+              </div>
+              <button onClick={() => remove(i)} title="Remove" style={{ width: 32, height: 32, borderRadius: 7, border: "1px solid var(--line)", background: "var(--bg-canvas)", cursor: "pointer", color: "var(--ink-3)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" /></svg>
+              </button>
+            </div>
+          ))}
+          <button onClick={add} style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 14px", border: "1px dashed var(--line)", borderRadius: 9, background: "var(--bg-canvas)", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--ink-2)", marginTop: 2, width: "100%", justifyContent: "center" }}>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-3)" }}>+</span> Add transformation
           </button>
         </div>
-      ))}
-      <button onClick={add} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 13px", border: "1px dashed var(--line)", borderRadius: 8, background: "var(--bg-canvas)", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, color: "var(--ink-2)", marginTop: 2 }}>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-3)" }}>+</span> Transformation
-      </button>
+        {/* footer */}
+        <div style={{ flexShrink: 0, padding: "14px 20px", borderTop: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--panel-2)" }}>
+          <button onClick={() => onChange([])} disabled={!list.length} className="btn-ghost" style={{ opacity: list.length ? 1 : 0.4 }}>Clear all</button>
+          <button onClick={onClose} className="btn-dark">Done</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1441,14 +1470,16 @@ function SrcMapping({ s, set, srcCols, nodeProps, node, sel }) {
                   {isPK && <MapBadge tone="var(--green)">PK</MapBadge>}
                 </div>
                 {/* transformations */}
-                <button onClick={() => setOpenCol(isOpen ? "" : col.col)}
+                <button onClick={() => setOpenCol(col.col)}
                   style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", width: "100%", padding: "7px 10px", borderRadius: 8, border: "1px solid " + (isOpen ? "var(--ink)" : tlist.length ? "var(--line)" : "transparent"), borderStyle: tlist.length || isOpen ? "solid" : "dashed", background: isOpen ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", minHeight: 34 }}
-                  onMouseEnter={e => { if (!isOpen && !tlist.length) e.currentTarget.style.borderColor = "var(--line)"; }}
-                  onMouseLeave={e => { if (!isOpen && !tlist.length) e.currentTarget.style.borderColor = "transparent"; }}>
+                  onMouseEnter={e => { e.currentTarget.style.background = "var(--panel-2)"; if (!tlist.length && !isOpen) e.currentTarget.style.borderColor = "var(--line)"; }}
+                  onMouseLeave={e => { if (!isOpen) e.currentTarget.style.background = "transparent"; if (!tlist.length && !isOpen) e.currentTarget.style.borderColor = "transparent"; }}>
                   {tlist.length === 0
                     ? <span style={{ fontSize: 12, color: "var(--ink-4)" }}>+ Add transformation</span>
                     : tlist.map((t, j) => <span key={j} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, padding: "2px 7px", borderRadius: 5, background: "var(--chip)", border: "1px solid var(--line)", color: "var(--ink-2)" }}>{t.fn ? tfLabel(t.fn) : "function…"}</span>)}
-                  <span style={{ marginLeft: "auto", color: "var(--ink-4)", fontSize: 11, flexShrink: 0 }}>{isOpen ? "▲" : "▾"}</span>
+                  <span style={{ marginLeft: "auto", color: "var(--ink-3)", flexShrink: 0, display: "flex" }} title="Edit transformations">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z" /></svg>
+                  </span>
                 </button>
                 {/* arrow */}
                 <div style={{ textAlign: "center", color: mapped ? "var(--green)" : "var(--ink-4)", fontSize: 15 }}>→</div>
@@ -1458,12 +1489,16 @@ function SrcMapping({ s, set, srcCols, nodeProps, node, sel }) {
                   renderTrigger={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={22} /><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{o.label}</span>{o.id === "id" && <><MapBadge tone="var(--green)">PK</MapBadge><MapBadge>UK</MapBadge></>}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-4)" }}>{o.label || "Select field"}</span>}
                   renderOption={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={20} />{o.label}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-3)" }}>{o.label}</span>} />
               </div>
-              {isOpen && <SrcTransformEditor col={col.col} list={tlist} onChange={arr => setTransforms(col.col, arr)} />}
             </div>
           );
         })}
         {rows.length === 0 && <div style={{ padding: "32px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No fields match “{q}”.</div>}
       </div>
+
+      {openCol && (() => {
+        const c = srcCols.find(x => x.col === openCol);
+        return <SrcTransformDrawer col={openCol} type={c ? c.type : "string"} sel={sel} list={transforms[openCol] || []} onChange={arr => setTransforms(openCol, arr)} onClose={() => setOpenCol("")} />;
+      })()}
     </StepWrap>
   );
 }
