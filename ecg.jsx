@@ -18437,9 +18437,13 @@ var PROP_TYPE_META = {
   "date":      { color:"var(--green)",  glyph:"DT"  },
   "datetime":  { color:"var(--green)",  glyph:"DT"  },
   "enum":      { color:"var(--purple)", glyph:"E"   },
-  "struct":    { color:"var(--ink-3)",  glyph:"{}"  }
+  "struct":    { color:"var(--ink-3)",  glyph:"{}"  },
+  "array":     { color:"var(--blue)",   glyph:"[ ]" },
+  "object":    { color:"var(--ink-3)",  glyph:"{ }" }
 };
-var PROP_TYPE_OPTIONS = ["uuid", "string", "string[]", "decimal", "float", "bool", "timestamp", "date", "datetime", "enum", "struct"];
+var PROP_TYPE_OPTIONS = ["uuid", "string", "string[]", "decimal", "float", "bool", "timestamp", "date", "datetime", "enum", "array", "object", "struct"];
+// Types that can carry nested child properties (a child schema).
+var PROP_NESTABLE = { array: true, object: true, struct: true };
 
 function AddNodeFlow({ onClose, onCreate }) {
   var [step, setStep] = useWizardStep("astep", 1);
@@ -18516,6 +18520,7 @@ function AddNodeFlow({ onClose, onCreate }) {
   // Step 3 - identity
   var [pkField, setPkField] = useState("");
   var [advancedPropIdx, setAdvancedPropIdx] = useState(null);
+  var [hoverRow, setHoverRow] = useState(-1);
   var [naturalKeys, setNaturalKeys] = useState([]);
   var [dedupStrategy, setDedupStrategy] = useState("on_natural_key"); // none / on_pk / on_natural_key / probabilistic
 
@@ -18582,6 +18587,31 @@ function AddNodeFlow({ onClose, onCreate }) {
       var n = {}; Object.keys(p).forEach(function(k){ n[k] = p[k]; });
       n[key] = val;
       if (key === "pk" && val === true) { setPkField(p.name); }
+      return n;
+    }); });
+  }
+  // Nested child properties (for array / object / struct types).
+  function addChild(idx) {
+    setProperties(function(arr){ return arr.map(function(p, i){
+      if (i !== idx) return p;
+      var n = Object.assign({}, p);
+      n.children = (p.children || []).concat([{ name: "item", type: "string" }]);
+      return n;
+    }); });
+  }
+  function updateChild(idx, ci, key, val) {
+    setProperties(function(arr){ return arr.map(function(p, i){
+      if (i !== idx) return p;
+      var n = Object.assign({}, p);
+      n.children = (p.children || []).map(function(c, j){ if (j !== ci) return c; var cc = Object.assign({}, c); cc[key] = val; return cc; });
+      return n;
+    }); });
+  }
+  function removeChild(idx, ci) {
+    setProperties(function(arr){ return arr.map(function(p, i){
+      if (i !== idx) return p;
+      var n = Object.assign({}, p);
+      n.children = (p.children || []).filter(function(_, j){ return j !== ci; });
       return n;
     }); });
   }
@@ -19161,9 +19191,11 @@ function AddNodeFlow({ onClose, onCreate }) {
                     {properties.map(function(p, i, arr) {
                       var isPk = p.name === pkField;
                       var advancedCount = ["nestUnder","unique","hashing","secure","display","search","sort","filter"].filter(function(k){ return !!p[k]; }).length;
+                      var nestable = !!PROP_NESTABLE[p.type];
+                      var kids = p.children || [];
                       return (
-                        <div key={i}>
-                          <div style={{ display:"grid", gridTemplateColumns:"1.4fr 130px 1.2fr 40px 40px 40px 40px 24px 32px", gap:8, padding:"8px 18px", alignItems:"center", borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)" }}>
+                        <div key={i} onMouseEnter={function(){ setHoverRow(i); }} onMouseLeave={function(){ setHoverRow(function(h){ return h === i ? -1 : h; }); }} style={{ borderBottom: i < arr.length-1 ? "1px solid var(--line-2)" : "none", background: i % 2 === 1 ? "transparent" : "var(--bg-canvas)" }}>
+                          <div style={{ display:"grid", gridTemplateColumns:"1.4fr 130px 1.2fr 40px 40px 40px 40px 24px 32px", gap:8, padding:"8px 18px", alignItems:"center" }}>
                             <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                               <input value={p.name} onChange={function(e){ updateProp(i, "name", e.target.value); }} style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12, fontFamily:"JetBrains Mono" })} />
                               {p.confidence && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color: p.confidence >= 0.9 ? "var(--green)" : "var(--gold)", flexShrink:0, fontWeight:700 }} title={"LLM confidence " + p.confidence}>{Math.round(p.confidence * 100) + "%"}</span>}
@@ -19183,6 +19215,27 @@ function AddNodeFlow({ onClose, onCreate }) {
                             <button onClick={function(){ removeProp(i); }} style={{ width:24, height:24, borderRadius:5, border:"1px solid var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", justifySelf:"center" }}>×</button>
                           </div>
 
+                          {/* Nested child properties — for array / object / struct types. */}
+                          {nestable && (
+                            <div style={{ padding:"2px 18px 10px 42px", opacity: (kids.length > 0 || hoverRow === i) ? 1 : 0.6, transition:"opacity 120ms" }}>
+                              {kids.map(function(c, ci){
+                                return (
+                                  <div key={ci} style={{ display:"grid", gridTemplateColumns:"1.4fr 130px 1fr 28px", gap:8, padding:"4px 0", alignItems:"center" }}>
+                                    <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+                                      <span style={{ color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:12, flexShrink:0 }}>{ci === kids.length-1 ? "└─" : "├─"}</span>
+                                      <input value={c.name} onChange={function(e){ updateChild(i, ci, "name", e.target.value); }} style={Object.assign({}, inp, { padding:"5px 9px", fontSize:12, fontFamily:"JetBrains Mono" })} />
+                                    </div>
+                                    <TypePicker value={c.type} onChange={function(v){ updateChild(i, ci, "type", v); }} />
+                                    <input value={c.description || ""} onChange={function(e){ updateChild(i, ci, "description", e.target.value); }} placeholder="optional" style={Object.assign({}, inp, { padding:"5px 9px", fontSize:12 })} />
+                                    <button onClick={function(){ removeChild(i, ci); }} style={{ width:22, height:22, borderRadius:5, border:"1px solid var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", justifySelf:"center" }}>×</button>
+                                  </div>
+                                );
+                              })}
+                              <button onClick={function(){ addChild(i); }} style={{ display:"inline-flex", alignItems:"center", gap:6, marginTop: kids.length ? 5 : 0, marginLeft:22, padding:"5px 11px", border:"1px dashed var(--line)", borderRadius:7, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", fontSize:11.5, color:"var(--ink-2)" }}>
+                                <span style={{ fontFamily:"JetBrains Mono", fontWeight:700, color:"var(--ink-3)" }}>+</span> child property
+                              </button>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -23693,6 +23746,6 @@ function ConfirmDialog({ title, body, confirmLabel, secondaryLabel, danger, onCo
   );
 }
 
-Object.assign(window, { NODES, EDGES, ListGlyph, colorForNode, CAT_META, metricColor });
+Object.assign(window, { NODES, EDGES, ListGlyph, colorForNode, CAT_META, metricColor, generateProps });
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);

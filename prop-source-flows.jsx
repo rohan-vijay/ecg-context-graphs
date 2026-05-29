@@ -1075,7 +1075,8 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const set = patch => setS(v => ({ ...v, ...patch }));
   const sel = SOURCE_SYSTEMS.find(x => x.id === s.system);
   const srcCols = s.system ? getSourceCols(s.system) : [];
-  const nodeProps = (window.PROPS_BY_NODE?.[node?.id] || []).map(p => ({ id: p.name, label: p.name, type: p.type }));
+  const rawNodeProps = node ? (window.generateProps ? window.generateProps(node) : (window.PROPS_BY_NODE?.[node.id] || [])) : [];
+  const nodeProps = rawNodeProps.map(p => ({ id: p.name, label: p.name, type: p.type }));
   const mappedCount = Object.values(s.mapping).filter(Boolean).length;
   const canNext = step === 0 ? !!s.system : step === 1 ? !!s.connection : step === 2 ? !!(s.table || s.query) : true;
 
