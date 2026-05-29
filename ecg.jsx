@@ -21629,7 +21629,7 @@ function KModal({ icon, title, subtitle, onClose, children, footer, width }){
     <div onClick={function(e){ if(e.target===e.currentTarget) onClose(); }} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
       <div onClick={function(e){ e.stopPropagation(); }} style={{ width:"100%", maxWidth:width||540, maxHeight:"88vh", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:14, boxShadow:"0 32px 80px rgba(0,0,0,0.32)", display:"flex", flexDirection:"column", overflow:"hidden" }}>
         <div style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"20px 22px 16px", borderBottom:"1px solid var(--line-2)" }}>
-          {icon && <div style={{ width:40, height:40, borderRadius:10, background:"var(--purple-fill)", color:"var(--purple)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{icon}</div>}
+          {icon && <div style={{ width:40, height:40, borderRadius:10, background:"var(--chip)", color:"var(--ink-2)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{icon}</div>}
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontFamily:"'Instrument Serif', serif", fontSize:22, color:"var(--ink)", lineHeight:1.12 }}>{title}</div>
             {subtitle && <div style={{ fontSize:12.5, color:"var(--ink-3)", marginTop:4, lineHeight:1.5 }}>{subtitle}</div>}
@@ -21643,7 +21643,7 @@ function KModal({ icon, title, subtitle, onClose, children, footer, width }){
   );
 }
 var K_LBL = { display:"block", fontFamily:"'JetBrains Mono', monospace", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:7 };
-var K_INP = { border:"1px solid var(--line)", borderRadius:8, padding:"10px 12px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--bg-canvas)", outline:"none", boxSizing:"border-box", width:"100%" };
+var K_INP = { border:"1px solid var(--line)", borderRadius:8, padding:"10px 12px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--bg-canvas)", outline:"none", boxSizing:"border-box", width:"100%", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.5)" };
 function KField({ label, hint, children }){
   return (
     <div style={{ marginBottom:18 }}>
@@ -21684,13 +21684,13 @@ function KChipMulti({ value, options, placeholder, onChange }){
     <div style={{ position:"relative" }}>
       <button onClick={function(){ setOpen(!open); }} style={Object.assign({}, K_INP, { display:"flex", alignItems:"center", flexWrap:"wrap", gap:5, cursor:"pointer", minHeight:42 })}>
         {value.length===0 && <span style={{ color:"var(--ink-4)" }}>{placeholder||"Select…"}</span>}
-        {value.map(function(v){ return <span key={v} style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"'JetBrains Mono', monospace", fontSize:10.5, padding:"3px 4px 3px 8px", borderRadius:5, background:"var(--purple-fill)", color:"var(--purple)", fontWeight:600 }}>{v}<span onClick={function(e){ e.stopPropagation(); toggle(v); }} style={{ cursor:"pointer", opacity:0.6 }}>×</span></span>; })}
+        {value.map(function(v){ return <span key={v} style={{ display:"inline-flex", alignItems:"center", gap:5, fontFamily:"'JetBrains Mono', monospace", fontSize:10.5, padding:"3px 4px 3px 8px", borderRadius:5, background:"var(--chip)", color:"var(--ink)", border:"1px solid var(--line)", fontWeight:600 }}>{v}<span onClick={function(e){ e.stopPropagation(); toggle(v); }} style={{ cursor:"pointer", opacity:0.6 }}>×</span></span>; })}
         <span style={{ marginLeft:"auto", color:"var(--ink-3)", fontSize:11 }}>▾</span>
       </button>
       {open && <>
         <div style={{ position:"fixed", inset:0, zIndex:210 }} onClick={function(){ setOpen(false); }} />
         <div style={{ position:"absolute", top:"calc(100% + 5px)", left:0, right:0, zIndex:211, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:9, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", padding:6, display:"flex", flexWrap:"wrap", gap:5, maxHeight:200, overflowY:"auto" }}>
-          {options.map(function(o){ var on = value.includes(o); return <button key={o} onClick={function(){ toggle(o); }} style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:10.5, padding:"5px 9px", borderRadius:5, cursor:"pointer", border:"1px solid "+(on?"var(--purple-soft)":"var(--line)"), background: on?"var(--purple-fill)":"transparent", color: on?"var(--purple)":"var(--ink-2)", fontWeight: on?700:500 }}>{on&&"✓ "}{o}</button>; })}
+          {options.map(function(o){ var on = value.includes(o); return <button key={o} onClick={function(){ toggle(o); }} style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:10.5, padding:"5px 9px", borderRadius:5, cursor:"pointer", border:"1px solid "+(on?"var(--ink)":"var(--line)"), background: on?"var(--chip)":"transparent", color: on?"var(--ink)":"var(--ink-2)", fontWeight: on?700:500 }}>{on&&"✓ "}{o}</button>; })}
         </div>
       </>}
     </div>
@@ -21704,7 +21704,7 @@ function KToggleRow({ on, onToggle, title, desc, children }){
           <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{title}</div>
           {desc && <div style={{ fontSize:12, color:"var(--ink-3)", marginTop:3, lineHeight:1.5 }}>{desc}</div>}
         </div>
-        <button onClick={onToggle} style={{ width:38, height:22, borderRadius:11, border:"none", cursor:"pointer", background: on?"var(--purple)":"var(--line)", position:"relative", flexShrink:0, transition:"background 120ms" }}>
+        <button onClick={onToggle} style={{ width:38, height:22, borderRadius:11, border:"none", cursor:"pointer", background: on?"var(--ink)":"var(--line)", position:"relative", flexShrink:0, transition:"background 120ms" }}>
           <span style={{ position:"absolute", top:2, left: on?18:2, width:18, height:18, borderRadius:"50%", background:"#fff", transition:"left 120ms", boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }} />
         </button>
       </div>
@@ -21716,9 +21716,9 @@ function KRadioCards({ value, options, onChange, cols }){
   return (
     <div style={{ display:"grid", gridTemplateColumns:"repeat("+(cols||options.length)+", 1fr)", gap:10 }}>
       {options.map(function(o){ var on = o.id===value;
-        return <button key={o.id} onClick={function(){ onChange(o.id); }} style={{ padding:"13px 14px", textAlign:"left", border:"1px solid "+(on?"var(--purple)":"var(--line)"), borderRadius:9, background:"var(--bg-canvas)", cursor:"pointer", fontFamily:"inherit", boxShadow: on?"0 0 0 2px var(--purple-fill)":"none" }}>
+        return <button key={o.id} onClick={function(){ onChange(o.id); }} style={{ padding:"13px 14px", textAlign:"left", border:"1px solid "+(on?"var(--ink)":"var(--line)"), borderRadius:9, background:"var(--bg-canvas)", cursor:"pointer", fontFamily:"inherit", boxShadow: on?"0 0 0 2px color-mix(in oklab, var(--ink) 12%, transparent)":"none" }}>
           <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom: o.desc?5:0 }}>
-            <span style={{ width:14, height:14, borderRadius:"50%", border:"1px solid "+(on?"var(--purple)":"var(--line)"), background: on?"var(--purple)":"transparent", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>{on && <span style={{ width:5, height:5, borderRadius:"50%", background:"#fff" }} />}</span>
+            <span style={{ width:14, height:14, borderRadius:"50%", border:"1px solid "+(on?"var(--ink)":"var(--line)"), background: on?"var(--ink)":"transparent", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>{on && <span style={{ width:5, height:5, borderRadius:"50%", background:"#fff" }} />}</span>
             <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{o.label}</span>
           </div>
           {o.desc && <div style={{ fontSize:11.5, color:"var(--ink-3)", lineHeight:1.45, paddingLeft:22 }}>{o.desc}</div>}
@@ -21804,7 +21804,7 @@ function KSetsList({ onOpen }){
             return (
               <button key={s.id} className="nv-row" onClick={function(){ onOpen(s.id); }} style={{ gridTemplateColumns:"minmax(220px,1.6fr) 90px 100px 150px 110px 1fr 130px 100px" }}>
                 <div className="nv-cell nv-th-name" style={{ display:"flex", gap:11, alignItems:"center", minWidth:0 }}>
-                  <span style={{ width:32, height:32, borderRadius:8, background:"var(--purple-fill)", color:"var(--purple)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  <span style={{ width:32, height:32, borderRadius:8, background:"var(--chip)", color:"var(--ink-2)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 7a2 2 0 012-2h4l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2V7z"/></svg>
                   </span>
                   <div style={{ minWidth:0 }}>
@@ -21895,10 +21895,10 @@ function KSetDetail({ set, onBack }){
       <div style={{ display:"flex", flex:1, minHeight:0 }}>
         <div style={{ width:210, flexShrink:0, borderRight:"1px solid var(--line)", padding:"16px 12px", overflowY:"auto" }}>
           {KSECTIONS.map(function(s){ var on = sec===s.id;
-            return <button key={s.id} onClick={function(){ setSec(s.id); }} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:8, border:"none", background: on?"var(--purple-fill)":"transparent", color: on?"var(--purple)":"var(--ink-2)", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight: on?600:500, textAlign:"left", marginBottom:2 }}
+            return <button key={s.id} onClick={function(){ setSec(s.id); }} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 12px", borderRadius:8, border:"none", background: on?"var(--chip)":"transparent", color: on?"var(--ink)":"var(--ink-2)", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight: on?600:500, textAlign:"left", marginBottom:2 }}
               onMouseEnter={function(e){ if(!on) e.currentTarget.style.background="var(--bg-canvas)"; }} onMouseLeave={function(e){ if(!on) e.currentTarget.style.background="transparent"; }}>
-              <span style={{ display:"flex", color: on?"var(--purple)":"var(--ink-3)" }}>{KSEC_ICONS[s.id]}</span>{s.label}
-              {s.id==="discovery" && <span style={{ marginLeft:"auto", width:6, height:6, borderRadius:"50%", background:"var(--purple)" }} />}
+              <span style={{ display:"flex", color: on?"var(--ink)":"var(--ink-3)" }}>{KSEC_ICONS[s.id]}</span>{s.label}
+              {s.id==="discovery" && <span style={{ marginLeft:"auto", width:6, height:6, borderRadius:"50%", background:"var(--ink-3)" }} />}
             </button>;
           })}
         </div>
@@ -21926,7 +21926,7 @@ function DiscoveryModule({ set, disco, onAddSource }){
   var f = disco.funnel;
   var funnelSteps = [
     { k:"discovered", label:"Discovered", v:f.discovered, tone:"slate", sub:"files found" },
-    { k:"profiled", label:"Profiled", v:f.profiled, tone:"purple", sub:"classified" },
+    { k:"profiled", label:"Profiled", v:f.profiled, tone:"teal", sub:"classified" },
     { k:"indexed", label:"Indexed", v:f.indexed, tone:"blue", sub:"embedded" },
     { k:"enriched", label:"Enriched", v:f.enriched, tone:"green", sub:"metadata added" },
     { k:"failed", label:"Failed", v:f.failed, tone:"coral", sub:"need attention" },
@@ -21951,7 +21951,7 @@ function DiscoveryModule({ set, disco, onAddSource }){
       <KSectionHead title="Discovery"
         desc="What's actually in this knowledge — profiled from a representative sample before full indexing. Every finding can be turned into an indexing, enrichment or masking rule."
         right={<div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <KPill tone="purple" soft>{disco.taxonomy} taxonomy</KPill>
+          <KPill tone="slate" soft>{disco.taxonomy} taxonomy</KPill>
           <button className="btn-dark" style={{ padding:"8px 14px" }} onClick={function(){ setScanOpen("1"); }}>↻ Re-scan</button>
         </div>} />
 
@@ -22012,7 +22012,7 @@ function DiscoveryModule({ set, disco, onAddSource }){
             </div>;
           })}
         </KCard>
-        <KCard title="Entities" right={<span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:10, color:"var(--purple)" }}>→ feed the graph</span>}>
+        <KCard title="Entities" right={<span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:10, color:"var(--ink-3)" }}>→ feed the graph</span>}>
           {disco.entities.map(function(g,i){
             return <div key={i} style={{ marginBottom: i<disco.entities.length-1?14:0 }}>
               <div style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:9.5, letterSpacing:"0.5px", textTransform:"uppercase", color:"var(--ink-4)", marginBottom:7 }}>{g.group}</div>
@@ -22136,8 +22136,8 @@ function DiscoveryKindDrawer({ kind, total, onClose }){
               {kind.samples.map(function(sf,i){ return <div key={i} style={{ display:"flex", alignItems:"center", gap:9, padding:"9px 12px", borderTop: i?"1px solid var(--line-2)":"none", fontSize:12, color:"var(--ink-2)", fontFamily:"'JetBrains Mono', monospace" }}><span style={{ color:"var(--ink-4)" }}>▤</span>{sf}</div>; })}
             </div>
           </div>
-          <div style={{ padding:"14px", borderRadius:10, background:"var(--purple-fill)", border:"1px solid var(--purple-soft)" }}>
-            <div style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:9.5, letterSpacing:"0.5px", textTransform:"uppercase", color:"var(--purple)", marginBottom:6 }}>Suggested strategy</div>
+          <div style={{ padding:"14px", borderRadius:10, background:"var(--bg-canvas)", border:"1px solid var(--line)" }}>
+            <div style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:9.5, letterSpacing:"0.5px", textTransform:"uppercase", color:"var(--ink-3)", marginBottom:6 }}>Suggested strategy</div>
             <div style={{ fontSize:12.5, color:"var(--ink)", lineHeight:1.55 }}>{kind.strategy}</div>
           </div>
         </div>
@@ -22209,8 +22209,8 @@ function KSourceOverview({ src, onBack }){
         <div style={{ marginBottom:14 }}><KStackBar segments={src.breakdown} height={14} /></div>
         <div style={{ display:"flex", flexWrap:"wrap", gap:14 }}>{src.breakdown.map(function(b){ return <span key={b[0]} style={{ display:"inline-flex", alignItems:"center", gap:7, fontSize:12, color:"var(--ink-2)" }}><span style={{ width:9, height:9, borderRadius:2, background:ktone(b[2]).c }} />{b[0]}<span style={{ fontFamily:"'JetBrains Mono', monospace", color:"var(--ink-3)" }}>{kfmt(b[1])}</span></span>; })}</div>
       </KCard>}
-      <div style={{ marginTop:16, padding:"14px 16px", borderRadius:10, background:"var(--purple-fill)", border:"1px solid var(--purple-soft)", display:"flex", alignItems:"center", gap:12 }}>
-        <span style={{ color:"var(--purple)" }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></span>
+      <div style={{ marginTop:16, padding:"14px 16px", borderRadius:10, background:"var(--bg-canvas)", border:"1px solid var(--line)", display:"flex", alignItems:"center", gap:12 }}>
+        <span style={{ color:"var(--ink-2)" }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></span>
         <div style={{ flex:1 }}><div style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>This breakdown is by file format only</div><div style={{ fontSize:12, color:"var(--ink-2)", marginTop:2 }}>Run Discovery to see the semantic breakdown — contracts, invoices, NDAs and what's inside them.</div></div>
         <button className="btn-dark" style={{ padding:"7px 13px", fontSize:12 }} onClick={onBack}>Go to Discovery</button>
       </div>
@@ -22268,7 +22268,7 @@ function NewIndexingStrategyModal({ onClose }){
       {method==="agentic" && <KField label="Parsing model"><KSelect value={model} onChange={setModel} options={["Claude Sonnet 4.6","Claude Opus 4.8","OpenAI GPT 4.1","Gemini 3 Flash","Qwen 3"]} /></KField>}
       {method==="automation" && <KField label="Automation"><KSelect value="" onChange={function(){}} placeholder="Select Automation" options={["Parse PDFs v2","OCR pipeline","Custom extractor"]} /></KField>}
       <div style={{ borderTop:"1px solid var(--line-2)", paddingTop:16, marginBottom:12 }}><div style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>Chunking</div></div>
-      <div style={{ display:"flex", gap:4, marginBottom:14 }}>{["text","image","audio","tabular"].map(function(t){ return <button key={t} onClick={function(){ setCtab(t); }} style={{ padding:"6px 12px", borderRadius:7, border:"1px solid "+(ctab===t?"var(--purple)":"var(--line)"), background: ctab===t?"var(--purple-fill)":"transparent", color: ctab===t?"var(--purple)":"var(--ink-2)", cursor:"pointer", fontSize:12, fontFamily:"inherit", textTransform:"capitalize", fontWeight: ctab===t?600:500 }}>{t==="tabular"?"Tabular Data":t}</button>; })}</div>
+      <div style={{ display:"flex", gap:4, marginBottom:14 }}>{["text","image","audio","tabular"].map(function(t){ return <button key={t} onClick={function(){ setCtab(t); }} style={{ padding:"6px 12px", borderRadius:7, border:"1px solid "+(ctab===t?"var(--ink)":"var(--line)"), background: ctab===t?"var(--chip)":"transparent", color: ctab===t?"var(--ink)":"var(--ink-2)", cursor:"pointer", fontSize:12, fontFamily:"inherit", textTransform:"capitalize", fontWeight: ctab===t?600:500 }}>{t==="tabular"?"Tabular Data":t}</button>; })}</div>
       {ctab==="text" && <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}><KField label="Max chunk size"><input value={maxc} onChange={function(e){ setMaxc(e.target.value); }} style={K_INP} /></KField><KField label="Chunking algorithm"><KSelect value="Token Text Splitter" onChange={function(){}} options={["Token Text Splitter","Recursive","Sentence","Semantic"]} /></KField></div>}
       {ctab==="tabular" && <KRadioCards value="embed" onChange={function(){}} cols={1} options={[{id:"embed",label:"Tables → Embedding",desc:"Convert tabular data into vector representations"},{id:"sql",label:"Tables → SQL",desc:"Transform into SQL structures for relational querying"}]} />}
       {(ctab==="image"||ctab==="audio") && <div style={{ fontSize:12.5, color:"var(--ink-3)", padding:"12px 0" }}>{ctab==="image"?"Image":"Audio"} chunking uses model defaults; configure overrides per source.</div>}
@@ -22295,8 +22295,8 @@ function NewEnrichmentStrategyModal({ onClose }){
         icon={KSEC_ICONS.enrichment}>
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {[["manual","Manual Value","Define a static value applied to all chunks"],["llm","LLM Powered","AI generation with custom instructions and field references"],["automation","Automation","Apply a pre-configured automation workflow to enrich this field"]].map(function(o){
-            return <button key={o[0]} onClick={function(){ setType(o[0]); }} style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"15px 16px", border:"1px solid var(--line)", borderRadius:10, background:"var(--bg-canvas)", cursor:"pointer", textAlign:"left", fontFamily:"inherit" }} onMouseEnter={function(e){ e.currentTarget.style.borderColor="var(--purple)"; }} onMouseLeave={function(e){ e.currentTarget.style.borderColor="var(--line)"; }}>
-              <span style={{ width:34, height:34, borderRadius:8, background:"var(--purple-fill)", color:"var(--purple)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{o[0]==="manual"?"≡":o[0]==="llm"?"✦":"⚡"}</span>
+            return <button key={o[0]} onClick={function(){ setType(o[0]); }} style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"15px 16px", border:"1px solid var(--line)", borderRadius:10, background:"var(--bg-canvas)", cursor:"pointer", textAlign:"left", fontFamily:"inherit" }} onMouseEnter={function(e){ e.currentTarget.style.borderColor="var(--ink)"; }} onMouseLeave={function(e){ e.currentTarget.style.borderColor="var(--line)"; }}>
+              <span style={{ width:34, height:34, borderRadius:8, background:"var(--chip)", color:"var(--ink-2)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{o[0]==="manual"?"≡":o[0]==="llm"?"✦":"⚡"}</span>
               <div><div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{o[1]}</div><div style={{ fontSize:12, color:"var(--ink-3)", marginTop:3, lineHeight:1.45 }}>{o[2]}</div></div>
             </button>;
           })}
@@ -22315,7 +22315,7 @@ function NewEnrichmentStrategyModal({ onClose }){
           <KSelect value="" onChange={function(){}} placeholder="Select field" options={["doc_kind","counterparty","effective_date","total_value","sentiment","next_steps"]} />
           <input style={K_INP} placeholder={type==="manual"?"Static value":type==="llm"?"e.g. Classify the document kind…":"map output…"} defaultValue={type==="llm"?"Classify this chunk's document kind: contract, invoice, NDA, call note…":""} />
         </div>
-        <button style={{ width:"100%", padding:"10px", border:"none", borderTop:"1px solid var(--line-2)", background:"transparent", color:"var(--purple)", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, fontWeight:600 }}>+ Add field</button>
+        <button style={{ width:"100%", padding:"10px", border:"none", borderTop:"1px solid var(--line-2)", background:"transparent", color:"var(--ink-2)", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, fontWeight:600 }}>+ Add field</button>
       </div>
     </KModal>
   );
@@ -22356,22 +22356,99 @@ function KStorageSection(){
 }
 
 // ──────────────── Add Knowledge Source wizard (with Discover step) ──────────
-var KSRC_STEPS = ["App & Action","Connection","Input","Discover","Settings"];
+var KSRC_STEPS = ["App","What to index","Connection","Discover","Settings"];
 var KSRC_APP_LIST = [
   ["gdrive","Google Drive","▲","#1a73e8"],["s3","Amazon S3","S3","#e25444"],["confluence","Confluence","C","#1868db"],
   ["sharepoint","SharePoint","SP","#0a7c8a"],["notion","Notion","N","#1f211b"],["website","Website","🌐","#5b6470"],
   ["catalog","Data Catalog","▥","#8a78a8"],["doc","Document upload","📄","#6a6c5c"],
 ];
+// Source-specific "What to index" — each connector exposes different scoping.
+function KWhatToIndex({ appId }){
+  var [scope, setScope] = useState("folders");
+  var [folders, setFolders] = useState([]);
+  var [ftypes, setFtypes] = useState([]);
+  var [spaces, setSpaces] = useState([]);
+  var [tables, setTables] = useState([]);
+  var [t1, setT1] = useState(true), [t2, setT2] = useState(false), [t3, setT3] = useState(false);
+
+  if (appId==="gdrive" || appId==="sharepoint"){
+    var isSP = appId==="sharepoint";
+    return <div>
+      <KField label="Index the following">
+        <KRadioCards value={scope} onChange={setScope} cols={3} options={[
+          { id:"everything", label:"Everything", desc: isSP?"All sites & libraries":"All files in Drive" },
+          { id:"folders", label:"Folders", desc:"Choose specific folders" },
+          { id:"files", label:"Files", desc:"Pick individual files" },
+        ]} />
+      </KField>
+      {scope==="folders" && <KField label={isSP?"Libraries / folders":"Folders"} hint="Leave empty to index the root."><KChipMulti value={folders} onChange={setFolders} options={["/Sales","/Sales/Contracts","/Sales/Quotes","/Legal","/Finance"]} placeholder="Select folders" /></KField>}
+      {scope==="files" && <KField label="Files"><KChipMulti value={folders} onChange={setFolders} options={["Acme_MSA_2024.pdf","Q2_Forecast.xlsx","Pitch_Globex.pptx"]} placeholder="Select files" /></KField>}
+      <KField label="File types to include" hint="Leave empty for all types."><KChipMulti value={ftypes} onChange={setFtypes} options={["PDF","DOCX","XLSX","PPTX","CSV","TXT","Images"]} placeholder="All file types" /></KField>
+      <KToggleRow on={t1} onToggle={function(){ setT1(!t1); }} title="Recursive indexing" desc="Index all nested folders inside the selected ones." />
+      <KToggleRow on={t2} onToggle={function(){ setT2(!t2); }} title={isSP?"Include other site collections":"Include shared drives"} desc={isSP?"Index document libraries across site collections.":"Index files from shared team drives."} />
+      <KToggleRow on={t3} onToggle={function(){ setT3(!t3); }} title="Only index files modified after a date" desc="Skip older files to cut volume and cost."><input type="date" style={Object.assign({},K_INP,{width:200})} /></KToggleRow>
+    </div>;
+  }
+  if (appId==="s3"){
+    return <div>
+      <KField label="Bucket"><KSelect value="" onChange={function(){}} placeholder="Select bucket" options={["s3://sales-docs","s3://legal-archive","s3://exports"]} /></KField>
+      <KField label="Prefix / path" hint="Restrict to a key prefix. Leave empty for the whole bucket."><input style={K_INP} placeholder="e.g. contracts/2026/" /></KField>
+      <KField label="File types to include"><KChipMulti value={ftypes} onChange={setFtypes} options={["PDF","DOCX","CSV","JSON","Parquet","TXT"]} placeholder="All file types" /></KField>
+      <KToggleRow on={t1} onToggle={function(){ setT1(!t1); }} title="Recurse into sub-prefixes" desc="Index objects under every nested prefix." />
+      <KToggleRow on={t2} onToggle={function(){ setT2(!t2); }} title="Include previous versions" desc="Index non-current object versions too." />
+    </div>;
+  }
+  if (appId==="confluence"){
+    return <div>
+      <KField label="Spaces" hint="Pick the Confluence spaces to index."><KChipMulti value={spaces} onChange={setSpaces} options={["Sales","Legal","Product","Engineering","HR"]} placeholder="Select spaces" /></KField>
+      <KToggleRow on={t1} onToggle={function(){ setT1(!t1); }} title="Include attachments" desc="Index PDFs and files attached to pages." />
+      <KToggleRow on={t2} onToggle={function(){ setT2(!t2); }} title="Include archived pages" desc="Also index archived content." />
+    </div>;
+  }
+  if (appId==="notion"){
+    return <div>
+      <KField label="Pages & databases"><KChipMulti value={spaces} onChange={setSpaces} options={["Sales Wiki","Playbooks","Deal Desk","Onboarding"]} placeholder="Select pages / databases" /></KField>
+      <KToggleRow on={t1} onToggle={function(){ setT1(!t1); }} title="Include subpages" desc="Recurse into nested pages." />
+      <KToggleRow on={t2} onToggle={function(){ setT2(!t2); }} title="Index database rows" desc="Treat each database row as a document." />
+    </div>;
+  }
+  if (appId==="website"){
+    return <div>
+      <KField label="URLs to crawl" hint="One per line — the crawl starts from each."><textarea rows={3} style={Object.assign({},K_INP,{resize:"vertical",fontFamily:"'JetBrains Mono', monospace",lineHeight:1.5})} placeholder={"https://docs.example.com\nhttps://example.com/pricing"} /></KField>
+      <KField label="Crawl depth"><KSelect value="2" onChange={function(){}} options={[{id:"1",label:"1 — only these pages"},{id:"2",label:"2 — + linked pages"},{id:"3",label:"3 — deep crawl"}]} /></KField>
+      <KToggleRow on={t1} onToggle={function(){ setT1(!t1); }} title="Follow links to subdomains" desc="Crawl pages on *.example.com too." />
+      <KToggleRow on={t2} onToggle={function(){ setT2(!t2); }} title="Use sitemap.xml" desc="Seed the crawl from the site's sitemap." />
+      <KToggleRow on={t3} onToggle={function(){ setT3(!t3); }} title="Respect robots.txt" desc="Skip paths disallowed by robots.txt." />
+    </div>;
+  }
+  if (appId==="catalog"){
+    return <div>
+      <KField label="Catalog"><KSelect value="" onChange={function(){}} placeholder="Select catalog" options={["Snowflake — PROD","Databricks Unity","Glue Data Catalog"]} /></KField>
+      <KField label="Schema"><KSelect value="" onChange={function(){}} placeholder="Select schema" options={["SALES","FINANCE","SUPPORT","PUBLIC"]} /></KField>
+      <KField label="Tables / entities" hint="Pick the tables to index as knowledge."><KChipMulti value={tables} onChange={setTables} options={["ACCOUNTS","CONTRACTS","INVOICES","OPPORTUNITIES","TICKETS"]} placeholder="Select tables" /></KField>
+    </div>;
+  }
+  // document upload
+  return <div>
+    <div style={{ border:"1px dashed var(--line)", borderRadius:12, padding:"40px 20px", textAlign:"center", background:"var(--panel)", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.5)" }}>
+      <div style={{ fontSize:26, color:"var(--ink-4)" }}>⤓</div>
+      <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)", marginTop:8 }}>Drop files here or click to upload</div>
+      <div style={{ fontSize:12, color:"var(--ink-3)", marginTop:4 }}>PDF, DOCX, PPTX, XLSX, CSV, TXT — up to 50 MB each</div>
+      <button className="btn-ghost" style={{ marginTop:14, border:"1px solid var(--line)", borderRadius:8, padding:"8px 14px" }}>Choose files</button>
+    </div>
+  </div>;
+}
+
 function AddKnowledgeSourceWizard({ set, onClose }){
   var [step, setStep] = useWizardStep("ksrcstep", 1);
   var [appId, setAppId] = useUrlFlow("ksrcapp", "gdrive");
-  var [action, setAction] = useUrlFlow("ksrcact", "folder");
   var [scanned, setScanned] = useUrlFlow("ksrcdone", "");
   var [scanning, setScanning] = useState(false);
-  var app = KSRC_APP_LIST.find(function(a){ return a[0]===appId; });
-  function canContinue(){ if(step===1) return !!appId && !!action; return true; }
+  var app = KSRC_APP_LIST.find(function(a){ return a[0]===appId; }) || KSRC_APP_LIST[0];
+  function canContinue(){ if(step===1) return !!appId; return true; }
   function runScan(){ setScanning(true); setTimeout(function(){ setScanning(false); setScanned("1"); }, 1400); }
   var previewKinds = SALES_KINDS.slice(0,6);
+  var subs = [app[1], "scope & filters", "auth", "recommended", "sync & retention"];
 
   return (
     <div onClick={function(e){ if(e.target===e.currentTarget) onClose(); }} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.42)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
@@ -22388,8 +22465,8 @@ function AddKnowledgeSourceWizard({ set, onClose }){
           <div style={{ background:"var(--panel-2)", borderRight:"1px solid var(--line)", padding:"20px 14px", display:"flex", flexDirection:"column", gap:4, overflowY:"auto" }}>
             {KSRC_STEPS.map(function(name,i){ var n=i+1; var on=step===n; var done=step>n;
               return <button key={n} onClick={function(){ if(n<step||canContinue()) setStep(n); }} style={{ display:"flex", gap:11, padding:"10px 12px", borderRadius:7, border: on?"1px solid var(--line)":"1px solid transparent", background: on?"var(--bg-canvas)":"transparent", cursor:"pointer", textAlign:"left", alignItems:"center" }}>
-                <span style={{ width:26, height:26, borderRadius:"50%", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, border:"1px solid "+(done?"var(--green)":on?"var(--purple)":"var(--line)"), background: done?"var(--green)":on?"var(--purple)":"var(--bg-canvas)", color: done||on?"#fff":"var(--ink-3)" }}>{done?"✓":n}</span>
-                <div style={{ minWidth:0 }}><div style={{ fontSize:13, color:"var(--ink)", fontWeight: on?600:400 }}>{name}</div>{name==="Discover" && <div style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:9.5, color:"var(--purple)", marginTop:2 }}>recommended</div>}</div>
+                <span style={{ width:26, height:26, borderRadius:"50%", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, border:"1px solid "+(done?"var(--green)":on?"var(--ink)":"var(--line)"), background: done?"var(--green)":on?"var(--ink)":"var(--bg-canvas)", color: done||on?"var(--bg-canvas)":"var(--ink-3)" }}>{done?"✓":n}</span>
+                <div style={{ minWidth:0 }}><div style={{ fontSize:13, color:"var(--ink)", fontWeight: on?600:400 }}>{name}</div><div style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:9.5, color: name==="Discover"?"var(--ink-2)":"var(--ink-3)", marginTop:2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{subs[i]}</div></div>
               </button>;
             })}
           </div>
@@ -22402,36 +22479,29 @@ function AddKnowledgeSourceWizard({ set, onClose }){
 
             {step===1 && <div>
               <div style={K_LBL}>Select an app</div>
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:22 }}>
-                {KSRC_APP_LIST.map(function(a){ var on=a[0]===appId; return <button key={a[0]} onClick={function(){ setAppId(a[0]); }} style={{ padding:"16px 10px", border:"1px solid "+(on?"var(--purple)":"var(--line)"), borderRadius:10, background:"var(--panel)", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:8, boxShadow: on?"0 0 0 2px var(--purple-fill)":"none" }}><span style={{ width:34, height:34, borderRadius:8, background:"var(--bg-canvas)", border:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"center", color:a[3], fontFamily:"'JetBrains Mono', monospace", fontWeight:700, fontSize:13 }}>{a[2]}</span><span style={{ fontSize:11.5, color:"var(--ink-2)", textAlign:"center" }}>{a[1]}</span></button>; })}
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
+                {KSRC_APP_LIST.map(function(a){ var on=a[0]===appId; return <button key={a[0]} onClick={function(){ setAppId(a[0]); }} style={{ padding:"16px 10px", border:"1px solid "+(on?"var(--ink)":"var(--line)"), borderRadius:10, background:"var(--panel)", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:8, boxShadow: on?"0 0 0 2px color-mix(in oklab, var(--ink) 12%, transparent)":"inset 0 1px 0 rgba(255,255,255,0.5)" }}><span style={{ width:34, height:34, borderRadius:8, background:"var(--bg-canvas)", border:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"center", color:a[3], fontFamily:"'JetBrains Mono', monospace", fontWeight:700, fontSize:13 }}>{a[2]}</span><span style={{ fontSize:11.5, color:"var(--ink-2)", textAlign:"center" }}>{a[1]}</span></button>; })}
               </div>
-              <div style={K_LBL}>Action</div>
-              <KRadioCards value={action} onChange={setAction} cols={1} options={[
-                { id:"folder", label:"Index a folder — all files", desc:"Index all the files and folders inside a specific folder" },
-                { id:"file", label:"Index a file", desc:"Index a particular file's data" },
-                { id:"all", label:"Import all files", desc:"Import every file from the source" },
-              ]} />
+              <div style={{ marginTop:16, fontSize:12, color:"var(--ink-3)", lineHeight:1.5 }}>Pick the source to connect. The next step — <b>what to index</b> — adapts to whichever app you choose.</div>
             </div>}
 
             {step===2 && <div>
+              <div style={{ marginBottom:16, fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5 }}>Scope what {app[1]} should bring in. These options are specific to this source.</div>
+              <KWhatToIndex appId={appId} />
+            </div>}
+
+            {step===3 && <div>
               <KField label="Connection"><KSelect value="UnifyApps connection" onChange={function(){}} options={["UnifyApps connection","OAuth — workspace","Service account"]} /></KField>
               <div style={{ padding:"13px 14px", borderRadius:9, background:"var(--green-fill)", border:"1px solid var(--green-soft)", fontSize:12.5, color:"var(--ink-2)", display:"flex", alignItems:"center", gap:9 }}><span style={{ color:"var(--green)" }}>✓</span>Connected as workspace admin · 2,102 files visible</div>
             </div>}
 
-            {step===3 && <div>
-              <KField label="Folder path" hint="Leave empty to import only the root folder."><KSelect value="" onChange={function(){}} placeholder="Select folders" options={["/Sales","/Sales/Contracts","/Sales/Quotes","/Legal"]} /></KField>
-              <KField label="File type" hint="Filter by extension (PDF, DOCX…). Leave empty for all."><KChipMulti value={[]} onChange={function(){}} options={["PDF","DOCX","XLSX","PPTX","CSV","TXT"]} placeholder="All types" /></KField>
-              <KToggleRow on={true} onToggle={function(){}} title="Recursive indexing" desc="Recursively index all folders inside the specified folder." />
-              <KToggleRow on={false} onToggle={function(){}} title="Include shared drive items" desc="Also include items inside the shared drive." />
-            </div>}
-
             {step===4 && <div>
-              <div style={{ padding:"14px 16px", borderRadius:10, background:"var(--purple-fill)", border:"1px solid var(--purple-soft)", marginBottom:18 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:5 }}><span style={{ color:"var(--purple)" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></span><span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>Scan before you index</span></div>
+              <div style={{ padding:"14px 16px", borderRadius:10, background:"var(--panel)", border:"1px solid var(--line)", marginBottom:18, boxShadow:"inset 0 1px 0 rgba(255,255,255,0.5)" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:5 }}><span style={{ color:"var(--ink-2)" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></span><span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>Scan before you index</span></div>
                 <div style={{ fontSize:12.5, color:"var(--ink-2)", lineHeight:1.55 }}>You're about to index a source you may not fully know. A quick discovery scan samples the corpus and tells you what kinds of documents are in there — so your indexing, enrichment and masking choices are informed, not blind.</div>
               </div>
               {!scanned && !scanning && <button className="btn-dark" style={{ padding:"10px 18px" }} onClick={runScan}>↻ Run discovery scan (sample)</button>}
-              {scanning && <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:13, color:"var(--ink-2)" }}><span style={{ width:16, height:16, border:"2px solid var(--purple-soft)", borderTopColor:"var(--purple)", borderRadius:"50%", display:"inline-block", animation:"kspin 0.7s linear infinite" }} />Sampling 500 of 2,102 files…</div>}
+              {scanning && <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:13, color:"var(--ink-2)" }}><span style={{ width:16, height:16, border:"2px solid var(--line)", borderTopColor:"var(--ink)", borderRadius:"50%", display:"inline-block", animation:"kspin 0.7s linear infinite" }} />Sampling 500 of 2,102 files…</div>}
               {scanned && <div>
                 <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}><KPill tone="green">Scan complete</KPill><span style={{ fontFamily:"'JetBrains Mono', monospace", fontSize:11, color:"var(--ink-3)" }}>profiled 500 files · 92% confidence</span></div>
                 <KStackBar segments={previewKinds} height={14} />
