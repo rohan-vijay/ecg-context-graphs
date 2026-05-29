@@ -1315,18 +1315,6 @@ function SrcObject({ s, set, sel, srcCols }) {
         })}
         {list.length === 0 && <div style={{ padding: "32px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No objects match “{q}”.</div>}
       </div>
-
-      {(s.table || s.query) && (
-        <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--line-2)" }}>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.5px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 4 }}>{srcCols.length} columns discovered{s.table ? " · " + s.table : ""}</div>
-          <FormRow label="Primary key column" hint="Used for deduplication — must be unique and stable.">
-            <ColSelect cols={srcCols} value={s.pkCol} onChange={v => set({ pkCol: v })} placeholder="— pick PK column —" />
-          </FormRow>
-          <FormRow label="Join key → node property" hint="The column that matches an existing node instance's identifier." last>
-            <ColSelect cols={srcCols} value={s.joinCol} onChange={v => set({ joinCol: v })} placeholder="— pick join column —" />
-          </FormRow>
-        </div>
-      )}
     </StepWrap>
   );
 }
