@@ -10,48 +10,48 @@ const { useState, useRef, useEffect, useMemo } = React;
 // `kind` splits the catalog into structured systems vs unstructured sources.
 const SOURCE_SYSTEMS = [
   // ── Structured systems (databases, warehouses, apps with records) ──
-  { id: "salesforce", cat: "CRM & Marketing",  name: "Salesforce",            tag: "CRM",          kind: "structured",   status: "healthy",  icon: "S",   slug: "salesforce",          color: "#00A1E0", desc: "Accounts, contacts, opportunities and custom objects." },
-  { id: "hubspot", cat: "CRM & Marketing",     name: "HubSpot",               tag: "Marketing",    kind: "structured",   status: "degraded", icon: "H",   slug: "hubspot",             color: "#FF7A59", desc: "Contacts, deals, companies and marketing events." },
-  { id: "snowflake", cat: "Data Warehouse",   name: "Snowflake",             tag: "Warehouse",    kind: "structured",   status: "healthy",  icon: "❄",  slug: "snowflake",           color: "#29B5E8", desc: "Cloud data-warehouse tables and views." },
-  { id: "bigquery", cat: "Data Warehouse",    name: "Google BigQuery",       tag: "Warehouse",    kind: "structured",   status: "healthy",  icon: "BQ",  slug: "googlebigquery",      color: "#669DF6", desc: "Serverless warehouse datasets and tables." },
-  { id: "databricks", cat: "Data Warehouse",  name: "Databricks",            tag: "Lakehouse",    kind: "structured",   status: "healthy",  icon: "DB",  slug: "databricks",          color: "#FF3621", desc: "Delta tables and Unity Catalog assets." },
-  { id: "redshift", cat: "Data Warehouse",    name: "Amazon Redshift",       tag: "Warehouse",    kind: "structured",   status: "healthy",  icon: "RS",  slug: "amazonredshift",      color: "#8C4FFF", desc: "Columnar warehouse schemas and tables." },
-  { id: "postgres", cat: "Databases",    name: "PostgreSQL",            tag: "Database",     kind: "structured",   status: "healthy",  icon: "PG",  slug: "postgresql",          color: "#4169E1", desc: "Relational tables, views and materialised views." },
-  { id: "mysql", cat: "Databases",       name: "MySQL",                 tag: "Database",     kind: "structured",   status: "healthy",  icon: "My",  slug: "mysql",               color: "#4479A1", desc: "Relational tables from a MySQL instance." },
-  { id: "sqlserver", cat: "Databases",   name: "Microsoft SQL Server",  tag: "Database",     kind: "structured",   status: "healthy",  icon: "MS",  slug: "microsoftsqlserver",  color: "#CC2927", desc: "Tables, views and stored procedures." },
-  { id: "oracle", cat: "Databases",      name: "Oracle Database",       tag: "Database",     kind: "structured",   status: "healthy",  icon: "Or",  slug: "oracle",              color: "#F80000", desc: "Enterprise relational schemas." },
-  { id: "mongodb", cat: "Databases",     name: "MongoDB",               tag: "NoSQL",        kind: "structured",   status: "healthy",  icon: "Mo",  slug: "mongodb",             color: "#47A248", desc: "Document collections and embedded records." },
-  { id: "netsuite", cat: "ERP & Finance",    name: "NetSuite ERP",          tag: "ERP",          kind: "structured",   status: "healthy",  icon: "N",   slug: "",                    color: "#1F7A3D", desc: "Invoices, agreements and financial records." },
-  { id: "sap", cat: "ERP & Finance",         name: "SAP",                   tag: "ERP",          kind: "structured",   status: "healthy",  icon: "SAP", slug: "sap",                 color: "#0FAAFF", desc: "ERP modules, materials and finance documents." },
-  { id: "stripe", cat: "ERP & Finance",      name: "Stripe",                tag: "Billing",      kind: "structured",   status: "healthy",  icon: "$",   slug: "stripe",              color: "#635BFF", desc: "Customers, subscriptions, invoices and payouts." },
-  { id: "shopify", cat: "ERP & Finance",     name: "Shopify",               tag: "Commerce",     kind: "structured",   status: "healthy",  icon: "Sh",  slug: "shopify",             color: "#7AB55C", desc: "Orders, products, customers and inventory." },
-  { id: "airtable", cat: "Databases",    name: "Airtable",              tag: "Database",     kind: "structured",   status: "healthy",  icon: "At",  slug: "airtable",            color: "#18BFFF", desc: "Bases, tables and linked records." },
-  { id: "googlesheets", cat: "Files & Storage",name: "Google Sheets",         tag: "Spreadsheet",  kind: "structured",   status: "healthy",  icon: "GS",  slug: "googlesheets",        color: "#34A853", desc: "Spreadsheet rows as structured records." },
-  { id: "segment", cat: "Identity & Events",     name: "Segment",               tag: "CDP",          kind: "structured",   status: "healthy",  icon: "Sg",  slug: "segment",             color: "#52BD94", desc: "Event streams and identity profiles." },
-  { id: "okta", cat: "Identity & Events",        name: "Okta",                  tag: "Identity",     kind: "structured",   status: "healthy",  icon: "O",   slug: "okta",                color: "#007DC1", desc: "Users, groups and identity mappings." },
-  { id: "kafka", cat: "Identity & Events",       name: "Apache Kafka",          tag: "Streaming",    kind: "structured",   status: "healthy",  icon: "K",   slug: "apachekafka",         color: "#231F20", desc: "Event topics consumed as a stream." },
-  { id: "jira", cat: "Project & Support",        name: "Jira",                  tag: "Issues",       kind: "structured",   status: "healthy",  icon: "Jr",  slug: "jira",                color: "#0052CC", desc: "Issues, sprints and project tracking." },
-  { id: "zendesk", cat: "Project & Support",     name: "Zendesk",               tag: "Support",      kind: "structured",   status: "healthy",  icon: "Z",   slug: "zendesk",             color: "#03363D", desc: "Tickets, macros and help-center articles." },
-  { id: "asana", cat: "Project & Support",       name: "Asana",                 tag: "Tasks",        kind: "structured",   status: "healthy",  icon: "As",  slug: "asana",               color: "#F06A6A", desc: "Projects, tasks and portfolios." },
-  { id: "linear", cat: "Project & Support",      name: "Linear",                tag: "Issues",       kind: "structured",   status: "healthy",  icon: "Ln",  slug: "linear",              color: "#5E6AD2", desc: "Issues, cycles and project updates." },
+  { id: "salesforce", cat: "CRM & Marketing", domain: "salesforce.com",  name: "Salesforce",            tag: "CRM",          kind: "structured",   status: "healthy",  icon: "S",   slug: "salesforce",          color: "#00A1E0", desc: "Accounts, contacts, opportunities and custom objects." },
+  { id: "hubspot", cat: "CRM & Marketing", domain: "hubspot.com",     name: "HubSpot",               tag: "Marketing",    kind: "structured",   status: "degraded", icon: "H",   slug: "hubspot",             color: "#FF7A59", desc: "Contacts, deals, companies and marketing events." },
+  { id: "snowflake", cat: "Data Warehouse", domain: "snowflake.com",   name: "Snowflake",             tag: "Warehouse",    kind: "structured",   status: "healthy",  icon: "❄",  slug: "snowflake",           color: "#29B5E8", desc: "Cloud data-warehouse tables and views." },
+  { id: "bigquery", cat: "Data Warehouse", domain: "cloud.google.com",    name: "Google BigQuery",       tag: "Warehouse",    kind: "structured",   status: "healthy",  icon: "BQ",  slug: "googlebigquery",      color: "#669DF6", desc: "Serverless warehouse datasets and tables." },
+  { id: "databricks", cat: "Data Warehouse", domain: "databricks.com",  name: "Databricks",            tag: "Lakehouse",    kind: "structured",   status: "healthy",  icon: "DB",  slug: "databricks",          color: "#FF3621", desc: "Delta tables and Unity Catalog assets." },
+  { id: "redshift", cat: "Data Warehouse", domain: "aws.amazon.com",    name: "Amazon Redshift",       tag: "Warehouse",    kind: "structured",   status: "healthy",  icon: "RS",  slug: "amazonredshift",      color: "#8C4FFF", desc: "Columnar warehouse schemas and tables." },
+  { id: "postgres", cat: "Databases", domain: "postgresql.org",    name: "PostgreSQL",            tag: "Database",     kind: "structured",   status: "healthy",  icon: "PG",  slug: "postgresql",          color: "#4169E1", desc: "Relational tables, views and materialised views." },
+  { id: "mysql", cat: "Databases", domain: "mysql.com",       name: "MySQL",                 tag: "Database",     kind: "structured",   status: "healthy",  icon: "My",  slug: "mysql",               color: "#4479A1", desc: "Relational tables from a MySQL instance." },
+  { id: "sqlserver", cat: "Databases", domain: "microsoft.com",   name: "Microsoft SQL Server",  tag: "Database",     kind: "structured",   status: "healthy",  icon: "MS",  slug: "microsoftsqlserver",  color: "#CC2927", desc: "Tables, views and stored procedures." },
+  { id: "oracle", cat: "Databases", domain: "oracle.com",      name: "Oracle Database",       tag: "Database",     kind: "structured",   status: "healthy",  icon: "Or",  slug: "oracle",              color: "#F80000", desc: "Enterprise relational schemas." },
+  { id: "mongodb", cat: "Databases", domain: "mongodb.com",     name: "MongoDB",               tag: "NoSQL",        kind: "structured",   status: "healthy",  icon: "Mo",  slug: "mongodb",             color: "#47A248", desc: "Document collections and embedded records." },
+  { id: "netsuite", cat: "ERP & Finance", domain: "netsuite.com",    name: "NetSuite ERP",          tag: "ERP",          kind: "structured",   status: "healthy",  icon: "N",   slug: "",                    color: "#1F7A3D", desc: "Invoices, agreements and financial records." },
+  { id: "sap", cat: "ERP & Finance", domain: "sap.com",         name: "SAP",                   tag: "ERP",          kind: "structured",   status: "healthy",  icon: "SAP", slug: "sap",                 color: "#0FAAFF", desc: "ERP modules, materials and finance documents." },
+  { id: "stripe", cat: "ERP & Finance", domain: "stripe.com",      name: "Stripe",                tag: "Billing",      kind: "structured",   status: "healthy",  icon: "$",   slug: "stripe",              color: "#635BFF", desc: "Customers, subscriptions, invoices and payouts." },
+  { id: "shopify", cat: "ERP & Finance", domain: "shopify.com",     name: "Shopify",               tag: "Commerce",     kind: "structured",   status: "healthy",  icon: "Sh",  slug: "shopify",             color: "#7AB55C", desc: "Orders, products, customers and inventory." },
+  { id: "airtable", cat: "Databases", domain: "airtable.com",    name: "Airtable",              tag: "Database",     kind: "structured",   status: "healthy",  icon: "At",  slug: "airtable",            color: "#18BFFF", desc: "Bases, tables and linked records." },
+  { id: "googlesheets", cat: "Files & Storage", domain: "google.com",name: "Google Sheets",         tag: "Spreadsheet",  kind: "structured",   status: "healthy",  icon: "GS",  slug: "googlesheets",        color: "#34A853", desc: "Spreadsheet rows as structured records." },
+  { id: "segment", cat: "Identity & Events", domain: "segment.com",     name: "Segment",               tag: "CDP",          kind: "structured",   status: "healthy",  icon: "Sg",  slug: "segment",             color: "#52BD94", desc: "Event streams and identity profiles." },
+  { id: "okta", cat: "Identity & Events", domain: "okta.com",        name: "Okta",                  tag: "Identity",     kind: "structured",   status: "healthy",  icon: "O",   slug: "okta",                color: "#007DC1", desc: "Users, groups and identity mappings." },
+  { id: "kafka", cat: "Identity & Events", domain: "apache.org",       name: "Apache Kafka",          tag: "Streaming",    kind: "structured",   status: "healthy",  icon: "K",   slug: "apachekafka",         color: "#231F20", desc: "Event topics consumed as a stream." },
+  { id: "jira", cat: "Project & Support", domain: "atlassian.com",        name: "Jira",                  tag: "Issues",       kind: "structured",   status: "healthy",  icon: "Jr",  slug: "jira",                color: "#0052CC", desc: "Issues, sprints and project tracking." },
+  { id: "zendesk", cat: "Project & Support", domain: "zendesk.com",     name: "Zendesk",               tag: "Support",      kind: "structured",   status: "healthy",  icon: "Z",   slug: "zendesk",             color: "#03363D", desc: "Tickets, macros and help-center articles." },
+  { id: "asana", cat: "Project & Support", domain: "asana.com",       name: "Asana",                 tag: "Tasks",        kind: "structured",   status: "healthy",  icon: "As",  slug: "asana",               color: "#F06A6A", desc: "Projects, tasks and portfolios." },
+  { id: "linear", cat: "Project & Support", domain: "linear.app",      name: "Linear",                tag: "Issues",       kind: "structured",   status: "healthy",  icon: "Ln",  slug: "linear",              color: "#5E6AD2", desc: "Issues, cycles and project updates." },
   // ── Unstructured sources (docs, files, messages, wikis) ──
-  { id: "googledrive", cat: "Files & Storage", name: "Google Drive",          tag: "Files",        kind: "unstructured", status: "healthy",  icon: "GD",  slug: "googledrive",         color: "#1FA463", desc: "Docs, Sheets, Slides and stored files." },
-  { id: "slack", cat: "Messaging & Email",       name: "Slack",                 tag: "Messaging",    kind: "unstructured", status: "healthy",  icon: "Sl",  slug: "slack",               color: "#4A154B", desc: "Channels, threads and message history." },
-  { id: "confluence", cat: "Docs & Wikis",  name: "Confluence",            tag: "Wiki",         kind: "unstructured", status: "healthy",  icon: "Cf",  slug: "confluence",          color: "#172B4D", desc: "Spaces, pages and knowledge bases." },
-  { id: "notion", cat: "Docs & Wikis",      name: "Notion",                tag: "Wiki",         kind: "unstructured", status: "healthy",  icon: "No",  slug: "notion",              color: "#000000", desc: "Pages, wikis and databases." },
-  { id: "sharepoint", cat: "Files & Storage",  name: "SharePoint",            tag: "Files",        kind: "unstructured", status: "healthy",  icon: "SP",  slug: "microsoftsharepoint", color: "#0078D4", desc: "Document libraries and team sites." },
-  { id: "onedrive", cat: "Files & Storage",    name: "OneDrive",              tag: "Files",        kind: "unstructured", status: "healthy",  icon: "OD",  slug: "microsoftonedrive",   color: "#0078D4", desc: "Personal and shared cloud files." },
-  { id: "dropbox", cat: "Files & Storage",     name: "Dropbox",               tag: "Files",        kind: "unstructured", status: "healthy",  icon: "Dx",  slug: "dropbox",             color: "#0061FF", desc: "Synced files, folders and content." },
-  { id: "box", cat: "Files & Storage",         name: "Box",                   tag: "Files",        kind: "unstructured", status: "healthy",  icon: "Bx",  slug: "box",                 color: "#0061D5", desc: "Enterprise content and shared files." },
-  { id: "s3", cat: "Files & Storage",          name: "Amazon S3",             tag: "Object store", kind: "unstructured", status: "healthy",  icon: "S3",  slug: "amazons3",            color: "#569A31", desc: "Objects and files in S3 buckets." },
-  { id: "gcs", cat: "Files & Storage",         name: "Google Cloud Storage",  tag: "Object store", kind: "unstructured", status: "healthy",  icon: "GCS", slug: "googlecloud",         color: "#4285F4", desc: "Objects and files in GCS buckets." },
-  { id: "gmail", cat: "Messaging & Email",       name: "Gmail",                 tag: "Email",        kind: "unstructured", status: "healthy",  icon: "GM",  slug: "gmail",               color: "#EA4335", desc: "Email threads, messages and attachments." },
-  { id: "outlook", cat: "Messaging & Email",     name: "Outlook",               tag: "Email",        kind: "unstructured", status: "healthy",  icon: "Ol",  slug: "microsoftoutlook",    color: "#0078D4", desc: "Mailboxes, threads and calendar items." },
-  { id: "github", cat: "Dev & Code",      name: "GitHub",                tag: "Code",         kind: "unstructured", status: "healthy",  icon: "GH",  slug: "github",              color: "#181717", desc: "Repos, pull requests, issues and READMEs." },
-  { id: "gitlab", cat: "Dev & Code",      name: "GitLab",                tag: "Code",         kind: "unstructured", status: "healthy",  icon: "GL",  slug: "gitlab",              color: "#FC6D26", desc: "Repositories, merge requests and CI." },
-  { id: "intercom", cat: "Project & Support",    name: "Intercom",              tag: "Support",      kind: "unstructured", status: "healthy",  icon: "Ic",  slug: "intercom",            color: "#1F8DED", desc: "Conversations and help articles." },
-  { id: "figma", cat: "Design",       name: "Figma",                 tag: "Design",       kind: "unstructured", status: "healthy",  icon: "Fg",  slug: "figma",               color: "#F24E1E", desc: "Design files, frames and comments." },
-  { id: "zoom", cat: "Messaging & Email",        name: "Zoom",                  tag: "Meetings",     kind: "unstructured", status: "healthy",  icon: "Zm",  slug: "zoom",                color: "#0B5CFF", desc: "Recordings and meeting transcripts." },
+  { id: "googledrive", cat: "Files & Storage", domain: "google.com", name: "Google Drive",          tag: "Files",        kind: "unstructured", status: "healthy",  icon: "GD",  slug: "googledrive",         color: "#1FA463", desc: "Docs, Sheets, Slides and stored files." },
+  { id: "slack", cat: "Messaging & Email", domain: "slack.com",       name: "Slack",                 tag: "Messaging",    kind: "unstructured", status: "healthy",  icon: "Sl",  slug: "slack",               color: "#4A154B", desc: "Channels, threads and message history." },
+  { id: "confluence", cat: "Docs & Wikis", domain: "atlassian.com",  name: "Confluence",            tag: "Wiki",         kind: "unstructured", status: "healthy",  icon: "Cf",  slug: "confluence",          color: "#172B4D", desc: "Spaces, pages and knowledge bases." },
+  { id: "notion", cat: "Docs & Wikis", domain: "notion.so",      name: "Notion",                tag: "Wiki",         kind: "unstructured", status: "healthy",  icon: "No",  slug: "notion",              color: "#000000", desc: "Pages, wikis and databases." },
+  { id: "sharepoint", cat: "Files & Storage", domain: "microsoft.com",  name: "SharePoint",            tag: "Files",        kind: "unstructured", status: "healthy",  icon: "SP",  slug: "microsoftsharepoint", color: "#0078D4", desc: "Document libraries and team sites." },
+  { id: "onedrive", cat: "Files & Storage", domain: "microsoft.com",    name: "OneDrive",              tag: "Files",        kind: "unstructured", status: "healthy",  icon: "OD",  slug: "microsoftonedrive",   color: "#0078D4", desc: "Personal and shared cloud files." },
+  { id: "dropbox", cat: "Files & Storage", domain: "dropbox.com",     name: "Dropbox",               tag: "Files",        kind: "unstructured", status: "healthy",  icon: "Dx",  slug: "dropbox",             color: "#0061FF", desc: "Synced files, folders and content." },
+  { id: "box", cat: "Files & Storage", domain: "box.com",         name: "Box",                   tag: "Files",        kind: "unstructured", status: "healthy",  icon: "Bx",  slug: "box",                 color: "#0061D5", desc: "Enterprise content and shared files." },
+  { id: "s3", cat: "Files & Storage", domain: "aws.amazon.com",          name: "Amazon S3",             tag: "Object store", kind: "unstructured", status: "healthy",  icon: "S3",  slug: "amazons3",            color: "#569A31", desc: "Objects and files in S3 buckets." },
+  { id: "gcs", cat: "Files & Storage", domain: "cloud.google.com",         name: "Google Cloud Storage",  tag: "Object store", kind: "unstructured", status: "healthy",  icon: "GCS", slug: "googlecloud",         color: "#4285F4", desc: "Objects and files in GCS buckets." },
+  { id: "gmail", cat: "Messaging & Email", domain: "google.com",       name: "Gmail",                 tag: "Email",        kind: "unstructured", status: "healthy",  icon: "GM",  slug: "gmail",               color: "#EA4335", desc: "Email threads, messages and attachments." },
+  { id: "outlook", cat: "Messaging & Email", domain: "outlook.com",     name: "Outlook",               tag: "Email",        kind: "unstructured", status: "healthy",  icon: "Ol",  slug: "microsoftoutlook",    color: "#0078D4", desc: "Mailboxes, threads and calendar items." },
+  { id: "github", cat: "Dev & Code", domain: "github.com",      name: "GitHub",                tag: "Code",         kind: "unstructured", status: "healthy",  icon: "GH",  slug: "github",              color: "#181717", desc: "Repos, pull requests, issues and READMEs." },
+  { id: "gitlab", cat: "Dev & Code", domain: "gitlab.com",      name: "GitLab",                tag: "Code",         kind: "unstructured", status: "healthy",  icon: "GL",  slug: "gitlab",              color: "#FC6D26", desc: "Repositories, merge requests and CI." },
+  { id: "intercom", cat: "Project & Support", domain: "intercom.com",    name: "Intercom",              tag: "Support",      kind: "unstructured", status: "healthy",  icon: "Ic",  slug: "intercom",            color: "#1F8DED", desc: "Conversations and help articles." },
+  { id: "figma", cat: "Design", domain: "figma.com",       name: "Figma",                 tag: "Design",       kind: "unstructured", status: "healthy",  icon: "Fg",  slug: "figma",               color: "#F24E1E", desc: "Design files, frames and comments." },
+  { id: "zoom", cat: "Messaging & Email", domain: "zoom.us",        name: "Zoom",                  tag: "Meetings",     kind: "unstructured", status: "healthy",  icon: "Zm",  slug: "zoom",                color: "#0B5CFF", desc: "Recordings and meeting transcripts." },
   { id: "custom", cat: "Custom",      name: "Custom connector",      tag: "Custom",       kind: "structured",   status: null,       icon: "+",   slug: "",                    color: "#A09E88", desc: "Bring your own REST, JDBC, gRPC or file source." },
 ];
 
@@ -510,7 +510,7 @@ function BackfillBanner({ backfill, onChange, estimate }) {
 
 // ─── FLOW SHELL (shared wrapper) ──────────────────────────────────────────────
 
-function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage, steps, step, setStep, onClose, rightPane, children, canNext, onNext, onPublish }) {
+function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage, steps, step, setStep, onClose, rightPane, children, canNext, onNext, onPublish, hideKeymap, hideFootHelp, hideStage }) {
   return (
     <div className="flow-overlay" onClick={onClose}>
       <div className="flow-shell" onClick={e => e.stopPropagation()}>
@@ -525,7 +525,7 @@ function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage
             </div>
           </div>
           <div className="flow-head-right">
-            <span className="flow-stage-pill">target · <b>{stage}</b></span>
+            {!hideStage && <span className="flow-stage-pill">target · <b>{stage}</b></span>}
             <button className="flow-close" onClick={onClose}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
             </button>
@@ -542,12 +542,14 @@ function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage
                 </div>
               </button>
             ))}
-            <div className="flow-steps-foot">
-              <div className="flow-keymap">
-                <span className="kbd">⌘↵</span><span>Publish</span>
-                <span className="kbd">⌘S</span><span>Draft</span>
+            {!hideKeymap && (
+              <div className="flow-steps-foot">
+                <div className="flow-keymap">
+                  <span className="kbd">⌘↵</span><span>Publish</span>
+                  <span className="kbd">⌘S</span><span>Draft</span>
+                </div>
               </div>
-            </div>
+            )}
           </aside>
           <main className="flow-main">{children}</main>
           {rightPane && <aside className="flow-preview">{rightPane}</aside>}
@@ -555,13 +557,13 @@ function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage
         <div className="flow-foot">
           <div className="flow-foot-left">
             <button className="btn-ghost" onClick={() => setStep(s => Math.max(0, s - 1))} disabled={step === 0}>← Back</button>
-            <span className="flow-foot-help">Step {step + 1} of {steps.length} · <b>{steps[step].label}</b></span>
+            {!hideFootHelp && <span className="flow-foot-help">Step {step + 1} of {steps.length} · <b>{steps[step].label}</b></span>}
           </div>
           <div className="flow-foot-right">
             <button className="btn-ghost">Save draft</button>
             {step < steps.length - 1
               ? <button className="btn-dark" onClick={onNext} disabled={!canNext}>Continue →</button>
-              : <button className="btn-dark" onClick={onPublish}>Publish to {stage} ↵</button>
+              : <button className="btn-dark" onClick={onPublish}>{hideStage ? "Publish ↵" : "Publish to " + stage + " ↵"}</button>
             }
           </div>
         </div>
@@ -571,9 +573,9 @@ function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage
 }
 
 // Step wrapper
-function StepWrap({ eyebrow, title, desc, children }) {
+function StepWrap({ eyebrow, title, desc, children, wide }) {
   return (
-    <div className="wstep">
+    <div className={"wstep" + (wide ? " wstep-wide" : "")}>
       <div className="wstep-head">
         <div className="step-eyebrow">{eyebrow}</div>
         <div className="wstep-title">{title}</div>
@@ -1077,6 +1079,18 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const mappedCount = Object.values(s.mapping).filter(Boolean).length;
   const canNext = step === 0 ? !!s.system : step === 1 ? !!s.connection : step === 2 ? !!(s.table || s.query) : true;
 
+  // Sidebar hints reflect the live selections, not static copy.
+  const conns = sel ? getConnections(sel.id, sel) : [];
+  const connLabel = s.connection === "__new__" ? "New connection" : (conns.find(c => c.id === s.connection)?.name || "Pick or add a connection");
+  const srcSteps = [
+    { label: "Source system",  hint: sel ? sel.name : "Pick connector from catalog" },
+    { label: "Connection",     hint: connLabel },
+    { label: "Object",         hint: s.table || (s.query ? "Custom SQL" : "Choose what to read") },
+    { label: "Column mapping", hint: mappedCount ? `${mappedCount} columns mapped` : "Map source → node props" },
+    { label: "Schedule & SLO", hint: `${(LOAD_STRATEGIES.find(l => l.id === s.loadStrategy) || {}).label || "Load"} · ${s.cadence}` },
+    { label: "Review",         hint: "Config & publish" },
+  ];
+
   const titleFrom = sel ? (
     <span className="flow-title-from">
       <span className="csel-sys-icon" style={{ background: sel.color + "1a", color: sel.color, borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>{sel.icon}</span>
@@ -1095,8 +1109,8 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     <WizardShell
       eyebrow={`SCHEMA · ${node?.label?.toUpperCase()} · LINK SOURCE`}
       titleFrom={titleFrom} titleTo={titleTo}
-      stage={s.stage}
-      steps={SRC_STEPS} step={step} setStep={setStep}
+      stage={s.stage} hideStage hideKeymap hideFootHelp
+      steps={srcSteps} step={step} setStep={setStep}
       canNext={canNext}
       onNext={() => setStep(x => x + 1)}
       onPublish={onClose}
@@ -1115,16 +1129,25 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
 
 // ── Src Step 1: System ────────────────────────────────────────────────────────
 
+// Logo with a graceful fallback chain: Simple Icons brand mark → the brand's
+// favicon (covers logos removed from Simple Icons, e.g. Salesforce, Slack,
+// Microsoft & AWS products) → a coloured text glyph.
 function SrcConnectorLogo({ c, size }) {
   size = size || 22;
   const box = size + 12;
+  const simple = c.slug ? "https://cdn.simpleicons.org/" + c.slug + "/" + c.color.replace("#", "") : "";
+  const favicon = c.domain ? "https://www.google.com/s2/favicons?sz=64&domain=" + c.domain : "";
+  const [src, setSrc] = useState(simple || favicon);
+  const [failed, setFailed] = useState(!simple && !favicon);
+  const onErr = () => {
+    if (src === simple && favicon) setSrc(favicon);
+    else setFailed(true);
+  };
   return (
-    <span style={{ width: box, height: box, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: "#fff", border: "1px solid var(--line)" }}>
-      {c.slug
-        ? <img src={"https://cdn.simpleicons.org/" + c.slug + "/" + c.color.replace("#", "")} width={size} height={size} alt="" style={{ display: "block" }}
-            onError={e => { e.currentTarget.style.display = "none"; const g = e.currentTarget.parentNode.querySelector(".csrc-glyph"); if (g) g.style.display = "flex"; }} />
-        : null}
-      <span className="csrc-glyph" style={{ display: c.slug ? "none" : "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", color: c.color, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: size > 20 ? 12 : 10 }}>{c.icon}</span>
+    <span style={{ width: box, height: box, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: "#fff", border: "1px solid var(--line)", overflow: "hidden" }}>
+      {!failed && src
+        ? <img src={src} width={size} height={size} alt="" style={{ display: "block", objectFit: "contain" }} onError={onErr} />
+        : <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", color: c.color, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: size > 20 ? 12 : 10 }}>{c.icon}</span>}
     </span>
   );
 }
@@ -1139,7 +1162,7 @@ function SrcSystem({ s, set }) {
     return true;
   });
   return (
-    <StepWrap eyebrow="STEP 1 · SOURCE SYSTEM" title="Pick a source connector" desc="Search the catalog or filter by category, then choose the system that owns this data.">
+    <StepWrap wide eyebrow="STEP 1 · SOURCE SYSTEM" title="Pick a source connector" desc="Search the catalog or filter by category, then choose the system that owns this data.">
       {/* search + category dropdown */}
       <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
         <div style={{ position: "relative", flex: 1 }}>
@@ -1198,7 +1221,7 @@ function SrcConnection({ s, set, sel }) {
     : sel?.cat === "Files & Storage" ? "Bucket / site"
     : "Endpoint";
   return (
-    <StepWrap eyebrow="STEP 2 · CONNECTION" title={sel ? `Connect to ${sel.name}` : "Pick a connection"} desc="Pick one of your existing connections, or add a new one. A connection stores the host and credentials for this source.">
+    <StepWrap wide eyebrow="STEP 2 · CONNECTION" title={sel ? `Connect to ${sel.name}` : "Pick a connection"} desc="Pick one of your existing connections, or add a new one. A connection stores the host and credentials for this source.">
       {conns.length > 0 && (
         <>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.5px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 8 }}>Your connections</div>
@@ -1264,7 +1287,7 @@ function SrcObject({ s, set, sel, srcCols }) {
   const list = objects.filter(o => !q || o.name.toLowerCase().indexOf(q.toLowerCase()) >= 0);
   const MODES = [{ id: "browse", label: "Browse objects" }, { id: "query", label: "Custom SQL" }];
   return (
-    <StepWrap eyebrow="STEP 3 · OBJECT" title="Select the object to read" desc={`Search the objects available on ${sel ? sel.name : "the source"} and pick the one to fetch data from.`}>
+    <StepWrap wide eyebrow="STEP 3 · OBJECT" title="Select the object to read" desc={`Search the objects available on ${sel ? sel.name : "the source"} and pick the one to fetch data from.`}>
       <div style={{ display: "flex", gap: 3, padding: 3, borderRadius: 9, border: "1px solid var(--line)", background: "var(--bg-canvas)", width: "fit-content", marginBottom: 16 }}>
         {MODES.map(m => {
           const on = mode === m.id;
