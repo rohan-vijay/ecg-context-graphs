@@ -18549,7 +18549,7 @@ function AddNodeFlow({ onClose, onCreate }) {
   function mutateAt(arr, path, fn){ var idx = path[0]; return arr.map(function(n, i){ if (i !== idx) return n; if (path.length === 1) return fn(n); var nn = Object.assign({}, n); nn.children = mutateAt(n.children || [], path.slice(1), fn); return nn; }); }
   function updatePath(path, key, val){ setProperties(function(arr){ return mutateAt(arr, path, function(n){ var nn = Object.assign({}, n); nn[key] = val; return nn; }); }); }
   function removePath(path){ setProperties(function(arr){ if (path.length === 1){ var p = arr[path[0]]; if (p && pkField === p.name) setPkField(""); return arr.filter(function(_, i){ return i !== path[0]; }); } return mutateAt(arr, path.slice(0, -1), function(n){ var nn = Object.assign({}, n); nn.children = (n.children || []).filter(function(_, j){ return j !== path[path.length - 1]; }); return nn; }); }); }
-  function addChildPath(path){ setProperties(function(arr){ return mutateAt(arr, path, function(n){ var nn = Object.assign({}, n); if (!PROP_NESTABLE[nn.type]) nn.type = "object"; nn.children = (n.children || []).concat([{ name: "new_field", type: "string" }]); return nn; }); }); setExpandedRows(function(m){ var n = Object.assign({}, m); n[pathKey(path)] = true; return n; }); }
+  function addChildPath(path){ setProperties(function(arr){ return mutateAt(arr, path, function(n){ var nn = Object.assign({}, n); nn.children = (n.children || []).concat([{ name: "new_field", type: "string" }]); return nn; }); }); setExpandedRows(function(m){ var n = Object.assign({}, m); n[pathKey(path)] = true; return n; }); }
   // Recursive property row — renders identically at any depth (name · type · PK/REQ/IDX/PII · settings · delete).
   function renderPropRow(p, path, depth){
     var key = pathKey(path);
@@ -18570,10 +18570,10 @@ function AddNodeFlow({ onClose, onCreate }) {
               : <span style={{ width:18, flexShrink:0 }} />}
             {depth > 0 && <span style={{ color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:11, flexShrink:0 }}>└</span>}
             <input value={p.name} onChange={function(e){ updatePath(path, "name", e.target.value); }} style={Object.assign({}, inp, { padding:"6px 9px", fontSize:12, fontFamily:"JetBrains Mono", maxWidth: depth > 0 ? Math.max(150, 420 - (depth - 1) * 64) : undefined })} />
-            <button onClick={function(){ addChildPath(path); }} title="Add a child field"
+            {nestable && <button onClick={function(){ addChildPath(path); }} title="Add a child field"
               style={{ width:20, height:20, flexShrink:0, borderRadius:5, border:"1px dashed var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontWeight:700, fontSize:13, lineHeight:1 }}
               onMouseEnter={function(e){ e.currentTarget.style.background = "var(--chip)"; e.currentTarget.style.color = "var(--ink)"; }}
-              onMouseLeave={function(e){ e.currentTarget.style.background = "var(--panel-2)"; e.currentTarget.style.color = "var(--ink-3)"; }}>+</button>
+              onMouseLeave={function(e){ e.currentTarget.style.background = "var(--panel-2)"; e.currentTarget.style.color = "var(--ink-3)"; }}>+</button>}
             {p.confidence && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color: p.confidence >= 0.9 ? "var(--green)" : "var(--gold)", flexShrink:0, fontWeight:700 }} title={"LLM confidence " + p.confidence}>{Math.round(p.confidence * 100) + "%"}</span>}
             {p.detectedFrom && <span style={{ fontFamily:"JetBrains Mono", fontSize:9, color:"var(--ink-4)", flexShrink:0 }} title={p.detectedFrom}>↩</span>}
           </div>
@@ -18589,7 +18589,7 @@ function AddNodeFlow({ onClose, onCreate }) {
           </button>
           <button onClick={function(){ removePath(path); }} style={{ width:24, height:24, borderRadius:5, border:"1px solid var(--line)", background:"var(--panel-2)", color:"var(--ink-3)", cursor:"pointer", justifySelf:"center" }}>×</button>
         </div>
-        {expanded && kids.map(function(c, ci){ return renderPropRow(c, path.concat(ci), depth + 1); })}
+        {nestable && expanded && kids.map(function(c, ci){ return renderPropRow(c, path.concat(ci), depth + 1); })}
       </div>
     );
   }
