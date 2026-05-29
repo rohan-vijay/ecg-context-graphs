@@ -5665,6 +5665,8 @@ function PropertiesPane({ node, properties }) {
   const [sort, setSort] = useState({ col: "name", dir: "asc" });
   const [selectedProp, setSelectedProp] = useState(null);
   const [propEditRow, setPropEditRow]   = useState(null); // when set, AddPropertyFlow opens in edit mode pre-filled
+  const [propFlowParent, setPropFlowParent] = useState(""); // when set, Add Property opens with this parent pre-nested
+  const [hoverRowKey, setHoverRowKey]   = useState(null);   // path key of the row being hovered (for the inline "+ child")
   // Track which struct properties are expanded to reveal their nested fields inline.
   const [expandedNested, setExpandedNested] = useState({});
   // Global override: when true, every nested struct is expanded regardless of
@@ -5898,9 +5900,13 @@ function PropertiesPane({ node, properties }) {
               // directly under URL's chevron rather than offset to the left.
               var INDENT = 14;
               var namePadLeft = depth > 0 ? (depth * INDENT) : undefined;
+              var nestable = p.type === "struct" || p.type === "array" || p.type === "object";
+              var rowHovered = hoverRowKey === keyId;
               return (
                 <div key={keyId} className="props-row" style={{ gridTemplateColumns:"2fr 1.6fr 1fr 150px 170px 96px 32px", position:"relative" }}
-                  onClick={function(){ setPropEditRow(p); setPropFlowMode("manual"); setPropFlowOpen(true); }}>
+                  onMouseEnter={function(){ setHoverRowKey(keyId); }}
+                  onMouseLeave={function(){ setHoverRowKey(function(k){ return k === keyId ? null : k; }); }}
+                  onClick={function(){ setPropEditRow(p); setPropFlowParent(""); setPropFlowMode("manual"); setPropFlowOpen(true); }}>
                   <div className="props-cell props-name-cell" style={{ paddingLeft: namePadLeft }}>
                     {disclosure}
                     <span style={{ fontSize:13, color:"var(--ink)", fontWeight:500 }}>{displayName}</span>
@@ -5938,7 +5944,23 @@ function PropertiesPane({ node, properties }) {
                     {p.pii      && <FlagPill title="PII"        tone={{ bg:"var(--chip)",       fg:"var(--ink-2)"  }} icon={PII_ICON} />}
                     {!p.required && !p.indexed && !p.unique && !p.pii && <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)" }}>—</span>}
                   </div>
-                  <div className="props-cell props-chevron">›</div>
+                  <div className="props-cell props-chevron" style={{ position:"relative" }}>
+                    {nestable && rowHovered ? (
+                      <button
+                        title={"Add a child field under " + displayName}
+                        onClick={function(e){
+                          e.stopPropagation();
+                          setPropEditRow(null);
+                          setPropFlowParent(keyId);
+                          setPropFlowMode("manual");
+                          setPropFlowOpen(true);
+                        }}
+                        style={{ width:22, height:22, padding:0, border:"1px solid var(--line)", background:"var(--panel)", borderRadius:5, display:"inline-flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:"var(--ink-2)", fontFamily:"JetBrains Mono", fontSize:14, fontWeight:700, lineHeight:1 }}
+                        onMouseEnter={function(e){ e.currentTarget.style.background = "var(--chip)"; e.currentTarget.style.color = "var(--ink)"; }}
+                        onMouseLeave={function(e){ e.currentTarget.style.background = "var(--panel)"; e.currentTarget.style.color = "var(--ink-2)"; }}
+                      >+</button>
+                    ) : <span>›</span>}
+                  </div>
                 </div>
               );
             }
@@ -5977,8 +5999,8 @@ function PropertiesPane({ node, properties }) {
       </div>
 
       {propFlowOpen && propFlowMode === "snippet"
-        ? <CodeSnippetFlow node={node} onClose={() => { setPropFlowOpen(false); setPropFlowMode(null); setPropEditRow(null); }} />
-        : (propFlowOpen && AddPropertyFlow && <AddPropertyFlow node={node} mode={propFlowMode || "manual"} initialProperty={propEditRow} onClose={() => { setPropFlowOpen(false); setPropFlowMode(null); setPropEditRow(null); }} />)
+        ? <CodeSnippetFlow node={node} onClose={() => { setPropFlowOpen(false); setPropFlowMode(null); setPropEditRow(null); setPropFlowParent(""); }} />
+        : (propFlowOpen && AddPropertyFlow && <AddPropertyFlow node={node} mode={propFlowMode || "manual"} initialProperty={propEditRow} seedParent={propFlowParent} onClose={() => { setPropFlowOpen(false); setPropFlowMode(null); setPropEditRow(null); setPropFlowParent(""); }} />)
       }
 
       {settingsOpen && <PropertiesSettingsModal node={node} properties={properties} onClose={function(){ setSettingsOpen(false); }} />}
@@ -6505,7 +6527,7 @@ function ParentFieldPicker({ value, onChange, properties }) {
   );
 }
 
-function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, onClose }) {
+function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, seedParent, onClose }) {
   mode = mode || "manual";
   // ── Edit mode: pre-fill the form state from an existing property row ──
   var isEditProp = !!initialProperty;
@@ -6696,8 +6718,8 @@ function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, onClo
   }
   // Nested field — allows defining the property under a parent struct/object field.
   // When on, the property's effective path becomes parent.key (e.g. "address.street").
-  const [pIsNested, setPIsNested] = useState(false);
-  const [pParent, setPParent]     = useState("");
+  const [pIsNested, setPIsNested] = useState(!!seedParent);
+  const [pParent, setPParent]     = useState(seedParent || "");
   // Existing properties on this node — used to populate the parent picker.
   // We include any property as a potential parent so users aren't forced to declare
   // a struct upfront; the runtime treats it as path nesting regardless.

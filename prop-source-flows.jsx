@@ -1160,15 +1160,26 @@ function SrcConnectorLogo({ c, size }) {
 }
 
 // Sticky bar pinned to the top of a long list so the current selection stays visible.
-function SrcSelectedBar({ c, eyebrow, name, sub }) {
+// A quiet selected-state chip that lives inline within the sticky list meta row —
+// integrated rather than a forced bordered banner on top of the list.
+function SrcSelectedChip({ c, name, sub }) {
   return (
-    <div style={{ position: "sticky", top: 0, zIndex: 6, background: "var(--bg-canvas)", borderWidth: 1, borderStyle: "solid", borderColor: "var(--ink)", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 12, boxShadow: "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" }}>
-      {c ? <SrcConnectorLogo c={c} size={20} /> : null}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)" }}>{eyebrow}</div>
-        <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}{sub ? <span style={{ fontWeight: 400, color: "var(--ink-3)" }}>{"  ·  " + sub}</span> : ""}</div>
-      </div>
-      <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: "50%", background: "var(--ink)", color: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>✓</span>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0, maxWidth: "60%" }}>
+      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-4)", flexShrink: 0 }}>Selected</span>
+      {c ? <SrcConnectorLogo c={c} size={15} /> : null}
+      <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+      {sub ? <span style={{ fontSize: 11.5, color: "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 1 }}>{"· " + sub}</span> : null}
+      <span style={{ flexShrink: 0, color: "var(--green)", fontSize: 13, fontWeight: 700, lineHeight: 1 }}>✓</span>
+    </span>
+  );
+}
+
+// Sticky meta row: list count on the left, the (optional) quiet selected chip on the right.
+function SrcListMeta({ count, noun, chip }) {
+  return (
+    <div style={{ position: "sticky", top: 0, zIndex: 6, background: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "9px 2px", marginBottom: 4, borderBottom: chip ? "1px solid var(--line-2)" : "none" }}>
+      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.5px", color: "var(--ink-3)", textTransform: "uppercase", flexShrink: 0 }}>{count} {noun}</span>
+      {chip}
     </div>
   );
 }
@@ -1185,7 +1196,6 @@ function SrcSystem({ s, set }) {
   });
   return (
     <StepWrap wide eyebrow="STEP 1 · SOURCE SYSTEM" title="Pick a source connector" desc="Search the catalog or filter by category, then choose the system that owns this data.">
-      {sel && <SrcSelectedBar c={sel} eyebrow="Selected source" name={sel.name} sub={sel.tag} />}
       {/* search + category dropdown */}
       <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
         <div style={{ position: "relative", flex: 1 }}>
@@ -1199,7 +1209,7 @@ function SrcSystem({ s, set }) {
         </div>
       </div>
 
-      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.5px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 8 }}>{list.length} connectors</div>
+      <SrcListMeta count={list.length} noun="connectors" chip={sel ? <SrcSelectedChip c={sel} name={sel.name} sub={sel.tag} /> : null} />
 
       <div style={{ border: "1px solid var(--line)", borderRadius: 11, overflow: "hidden", background: "var(--panel)" }}>
         {list.map((c, i) => {
@@ -1310,14 +1320,13 @@ function SrcObject({ s, set, sel, srcCols }) {
   const selObj = objects.find(o => o.name === s.table);
   return (
     <StepWrap wide eyebrow="STEP 3 · OBJECT" title="Select the object to read" desc={`Search the objects available on ${sel ? sel.name : "the source"} and pick the one to fetch data from.`}>
-      {s.table && <SrcSelectedBar c={sel} eyebrow="Selected object" name={s.table} sub={selObj ? selObj.type + " · " + selObj.cols + " columns" : ""} />}
       <div style={{ position: "relative", marginBottom: 12 }}>
         <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--ink-3)", display: "flex" }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
         </span>
         <input className="winput" style={{ paddingLeft: 40, height: 44 }} placeholder="Search objects…" value={q} onChange={e => setQ(e.target.value)} autoFocus />
       </div>
-      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.5px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 8 }}>{list.length} objects</div>
+      <SrcListMeta count={list.length} noun="objects" chip={s.table ? <SrcSelectedChip c={sel} name={s.table} sub={selObj ? selObj.type + " · " + selObj.cols + " cols" : ""} /> : null} />
       <div style={{ border: "1px solid var(--line)", borderRadius: 11, overflow: "hidden", background: "var(--panel)" }}>
         {list.map((o, i) => {
           const on = s.table === o.name;
@@ -1555,15 +1564,6 @@ function SrcMapping({ s, set, srcCols, nodeProps, node, sel, openCol, setOpenCol
 
 // ── Src Step 4: Schedule ──────────────────────────────────────────────────────
 
-// Two-column settings row: label + description on the left, control on the right.
-function SetRow({ label, desc, children, last }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 32, padding: "22px 0", borderBottom: last ? "none" : "1px solid var(--line-2)", alignItems: "flex-start" }}>
-      <div><div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{label}</div><div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 4, lineHeight: 1.5 }}>{desc}</div></div>
-      <div style={{ minWidth: 0 }}>{children}</div>
-    </div>
-  );
-}
 // Selectable radio card used across settings.
 function SetCard({ on, title, desc, onClick }) {
   return (
@@ -1583,8 +1583,7 @@ function SrcSchedule({ s, set, srcCols }) {
   const lbl2 = { display: "block", fontSize: 12.5, fontWeight: 600, color: "var(--ink)", marginBottom: 7 };
   return (
     <StepWrap wide eyebrow="STEP 5 · SETTINGS" title="Pipeline settings" desc="Configure how this pipeline runs, ingests, maps, and scales.">
-      {/* Pipeline Type */}
-      <SetRow label="Pipeline Type" desc="Select the type of pipeline">
+      <FormRow label="Pipeline Type" hint="Select the type of pipeline">
         <SetCard on={pType === "realtime"} onClick={() => set({ pipelineType: "realtime" })} title="Real Time" desc="Pipeline ingests, transforms and loads data to destination in real-time" />
         <SetCard on={pType === "scheduled"} onClick={() => set({ pipelineType: "scheduled" })} title="Scheduled" desc="Pipeline operates at a recurring schedule" />
         {pType === "scheduled" && (
@@ -1614,51 +1613,43 @@ function SrcSchedule({ s, set, srcCols }) {
             )}
           </div>
         )}
-      </SetRow>
+      </FormRow>
 
-      {/* Ingestion Mode */}
-      <SetRow label="Ingestion Mode" desc="Select the ingestion mode for your data pipeline">
+      <FormRow label="Ingestion Mode" hint="Select the ingestion mode for your data pipeline">
         <SetCard on={ingMode === "hist_live"} onClick={() => set({ ingestMode: "hist_live" })} title="Historical and Live" desc="Ingest all historical data and process new data in real-time" />
         <SetCard on={ingMode === "live"} onClick={() => set({ ingestMode: "live" })} title="Live only" desc="Only process new data from connection time onward" />
         <SetCard on={ingMode === "hist"} onClick={() => set({ ingestMode: "hist" })} title="Historical only" desc="Backfill existing data once, with no live updates" />
-      </SetRow>
+      </FormRow>
 
-      {/* Ingestion Order */}
-      <SetRow label="Ingestion Order (Optional)" desc="Sets ingestion order for source objects">
+      <FormRow label="Ingestion Order" optional hint="Sets ingestion order for source objects">
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", borderRadius: 9, background: "var(--gold-fill)", border: "1px solid var(--gold-soft)", marginBottom: 12 }}>
           <span style={{ color: "var(--gold)", flexShrink: 0, fontSize: 15 }}>⚠</span>
           <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>Applicable for historic data only.</span>
         </div>
         <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--ink-3)", marginBottom: 8 }}>(0/3)</div>
         <button style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px", borderRadius: 9, border: "1px dashed var(--line)", background: "var(--panel)", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--ink-2)" }}><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-3)" }}>+</span> Add Source Objects</button>
-      </SetRow>
+      </FormRow>
 
-      {/* Capture Raw Records */}
-      <SetRow label="Capture Raw Records (Optional)" desc="Captures raw records with selected status in logs">
+      <FormRow label="Capture Raw Records" optional hint="Records with the selected status will be captured in logs.">
         <div style={lbl2}>Status</div>
         <CustomSelect value={v("captureStatus", "Failed")} onChange={x => set({ captureStatus: x })} options={["None", "Failed", "Success", "All"].map(x => ({ id: x, label: x }))} />
-        <div style={{ fontSize: 11.5, color: "var(--ink-4)", marginTop: 6 }}>Records with the selected status will be captured.</div>
-      </SetRow>
+      </FormRow>
 
-      {/* Avoid Duplicate Operations */}
-      <SetRow label="Avoid Duplicate Operations (Optional)" desc="Enable duplicate operations prevention in your destination">
+      <FormRow label="Avoid Duplicate Operations" optional hint="Enable duplicate operations prevention in your destination">
         <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
           <input type="checkbox" checked={!!s.avoidDup} onChange={e => set({ avoidDup: e.target.checked })} style={{ accentColor: "var(--ink)", width: 15, height: 15, marginTop: 2 }} />
           <span><span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>Avoid Duplicate Operations</span><span style={{ display: "block", fontSize: 12, color: "var(--ink-3)", marginTop: 3, lineHeight: 1.5 }}>Avoid duplicate operations and cyclical writes between pipelines. Checks existing record hashes to ensure one-way data flow.</span></span>
         </label>
-      </SetRow>
+      </FormRow>
 
-      {/* Schema Mapping Method */}
-      <SetRow label="Schema Mapping Method" desc="How destination objects are created or matched">
+      <FormRow label="Schema Mapping Method" hint="How destination objects are created or matched">
         <SetCard on={schemaMethod === "manual"} onClick={() => set({ schemaMethod: "manual" })} title="Map Manually" desc="Map selected source objects to existing destination objects" />
         <SetCard on={schemaMethod === "replicate"} onClick={() => set({ schemaMethod: "replicate" })} title="Replicate Source" desc="Creates an exact replica of selected source objects in destination" />
-      </SetRow>
+      </FormRow>
 
-      {/* Resource Tier */}
-      <SetRow label="Resource Tier" desc="Select resource tier for pipeline resources" last>
-        <div style={lbl2}>Resource Tier</div>
+      <FormRow label="Resource Tier" hint="Select resource tier for pipeline resources" last>
         <CustomSelect value={v("resourceTier", "Small")} onChange={x => set({ resourceTier: x })} options={["Small", "Medium", "Large", "X-Large"].map(x => ({ id: x, label: x }))} />
-      </SetRow>
+      </FormRow>
     </StepWrap>
   );
 }
