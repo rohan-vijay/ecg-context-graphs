@@ -58,6 +58,37 @@ function useUrlParam(key, defaultVal, opts) {
   return [val, set];
 }
 
+// Like useUrlParam but the param is removed when the owning component unmounts.
+// Use for modal/flow open-state so a closed popup never lingers in the URL,
+// even when its parent view is torn down by back/forward navigation.
+function useUrlFlow(key, defaultVal, opts) {
+  var pair = useUrlParam(key, defaultVal, opts);
+  useEffect(function() {
+    return function() {
+      var params = ecgReadParams();
+      if (params.has(key)) { params.delete(key); ecgApplyUrl(ecgQueryString(params), false); }
+    };
+  }, []);
+  return pair;
+}
+
+// Numeric wizard step bound to a query param, self-clearing on unmount.
+// Returns [stepNumber, setStep] where setStep accepts a number or updater fn —
+// a drop-in replacement for useState(initial) in multi-step flows.
+function useWizardStep(key, initial) {
+  initial = initial || 1;
+  var [raw, setRaw] = useUrlFlow(key, String(initial));
+  var step = Number(raw) || initial;
+  var setStep = useCallback(function(next) {
+    setRaw(function(prevRaw) {
+      var prev = Number(prevRaw) || initial;
+      var v = typeof next === "function" ? next(prev) : next;
+      return String(v);
+    });
+  }, [key]);
+  return [step, setStep];
+}
+
 // ---------- DATA ------------------------------------------------------------
 
 const _ENT_NODES = [
@@ -2236,7 +2267,9 @@ function GlobalEdgesView({ nodes: liveNodes, edges: liveEdges }) {
   const [kindFilter, setKindFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState({ col: "label", dir: "asc" });
-  const [newEdgeOpen, setNewEdgeOpen] = useState(false);
+  const [_edgeFlowRaw, _setEdgeFlowRaw] = useUrlFlow("edge", "");
+  const newEdgeOpen = _edgeFlowRaw === "1";
+  const setNewEdgeOpen = function(v){ _setEdgeFlowRaw(v ? "1" : ""); };
   const _nodes = liveNodes && liveNodes.length ? liveNodes : NODES;
   const _edges = liveEdges && liveEdges.length ? liveEdges : EDGES;
 
@@ -5622,8 +5655,10 @@ function PropertiesSettingsModal({ node, properties, onClose }) {
 }
 
 function PropertiesPane({ node, properties }) {
-  const [propFlowOpen, setPropFlowOpen] = useState(false);
-  const [propFlowMode, setPropFlowMode] = useState(null); // "manual" | "spreadsheet" | "document" | "template"
+  // Property-add flow open-state + mode in one URL param ("" = closed).
+  const [propFlowMode, setPropFlowMode] = useUrlFlow("prop", ""); // "manual" | "spreadsheet" | "document" | "template" | "snippet"
+  const propFlowOpen = propFlowMode !== "" && propFlowMode != null;
+  const setPropFlowOpen = function(open){ if (!open) setPropFlowMode(""); };
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -6148,7 +6183,9 @@ function PropertiesPane({ node, properties }) {
 }
 
 function EdgesPane({ node, outgoing, incoming }) {
-  const [flowOpen, setFlowOpen] = useState(false);
+  const [_nedgeRaw, _setNedgeRaw] = useUrlFlow("nedge", "");
+  const flowOpen = _nedgeRaw === "1";
+  const setFlowOpen = function(v){ _setNedgeRaw(v ? "1" : ""); };
   const [dirFilter, setDirFilter] = useState("all");
   const AddEdgeFlow = AddEdgeFlowModal;
   const allRows = [...outgoing.map(e => ({ ...e, dir: "out" })), ...incoming.map(e => ({ ...e, dir: "in" }))];
@@ -6476,7 +6513,7 @@ function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, onClo
   //     reads "New computation" rather than "Add property manually" so it's
   //     contextually correct when invoked from the Computations tab.
   var isComputationEntry = !!seedComputed && !isEditProp;
-  const [step, setStep]           = useState(1); // manual: 1=basics, 2=behaviour, 3=governance, 4=review
+  const [step, setStep]           = useWizardStep("pstep", 1); // manual: 1=basics, 2=behaviour, 3=governance, 4=review
   const [pName, setPName]         = useState(isEditProp ? (initialProperty.name || "") : "");
   const [pType, setPType]         = useState(isEditProp ? (initialProperty.type || "") : "");
   const [pTypeOpen, setPTypeOpen] = useState(false);
@@ -8383,7 +8420,7 @@ function AddEdgeFlowModal({ fromNode, onClose }) {
   // Stripped: description (redundant), inverse label (rarely used),
   // risk classification, tags, access roles, target stage —
   // those add cognitive load without changing the schema contract.
-  const [step, setStep]           = useState(1);
+  const [step, setStep]           = useWizardStep("estep", 1);
   const [eLabel, setELabel]       = useState("");
   const [eTarget, setETarget]     = useState("");
   const [eCard, setECard]         = useState("1:N");
@@ -18396,7 +18433,7 @@ var PROP_TYPE_META = {
 var PROP_TYPE_OPTIONS = ["uuid", "string", "string[]", "decimal", "float", "bool", "timestamp", "date", "datetime", "enum", "struct"];
 
 function AddNodeFlow({ onClose, onCreate }) {
-  var [step, setStep] = useState(1);
+  var [step, setStep] = useWizardStep("astep", 1);
 
   // Step 1
   var [name, setName] = useState("");
@@ -20449,7 +20486,7 @@ function NewGraphFlow({ onClose, onCreate }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function NewEdgeFlow({ onClose, onCreate, fromNode, toNode, initialLabel, nodes: liveNodes }) {
-  var [step, setStep]                 = useState(1);
+  var [step, setStep]                 = useWizardStep("estep", 1);
   var [label, setLabel]               = useState(initialLabel || "");
   var [desc, setDesc]                 = useState("");
   var [fromId, setFromId]             = useState(fromNode ? fromNode.id : null);
@@ -21840,7 +21877,8 @@ function App() {
       setCurrentGraphId(g);
       setBlankGraphName(null);
       setNodes(NODES.filter(function(n){ return n.type !== "agent"; }));
-      setEditMode(false);
+      setEditMode(p.get("edit") === "1");
+      setCursorMode(p.get("cur") || "add");
       setSidebarOpen(true);
       setTab(tabFromUrl(p.get("tab")));
       setDetailId(p.get("node") || null);
@@ -21868,6 +21906,8 @@ function App() {
     // Inspector / canvas selection — only meaningful on the Graph tab.
     if (currentGraphId && !detailId && tab === "Graph") params.set("sel", selected || "none"); else params.delete("sel");
     if (currentGraphId && addNodeOpen) params.set("add", "1"); else params.delete("add");
+    if (currentGraphId && editMode) params.set("edit", "1"); else params.delete("edit");
+    if (currentGraphId && editMode && cursorMode && cursorMode !== "add") params.set("cur", cursorMode); else params.delete("cur");
     if (currentGraphId && tab === "Violations" && stewardshipRuleFilter) params.set("rule", stewardshipRuleFilter); else params.delete("rule");
     // Tidy params owned by child views once their parent view is closed.
     if (!detailId) params.delete("ntab");
@@ -21876,7 +21916,7 @@ function App() {
     var isStruct = struct !== structRef.current;
     structRef.current = struct;
     ecgApplyUrl(ecgQueryString(params), isStruct);
-  }, [currentGraphId, tab, detailId, selected, addNodeOpen, stewardshipRuleFilter]);
+  }, [currentGraphId, tab, detailId, selected, addNodeOpen, editMode, cursorMode, stewardshipRuleFilter]);
 
   // Restore on mount + react to browser back/forward.
   useEffect(function() {
