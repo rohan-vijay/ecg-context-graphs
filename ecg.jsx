@@ -19142,10 +19142,11 @@ function AddNodeFlow({ onClose, onCreate }) {
                             var spaceBelow = window.innerHeight - rect.bottom - FOOTER_SAFE;
                             var spaceAbove = rect.top - TOP_SAFE;
                             var openUp = spaceBelow < 300 && spaceAbove > spaceBelow;
+                            // Fixed height (not max) so the panel doesn't shrink when few/no results match.
                             var maxH = Math.max(260, Math.min(560, (openUp ? spaceAbove : spaceBelow) - GAP));
-                            pos = { position:"fixed", left:rect.left, width:rect.width, top: openUp ? Math.max(TOP_SAFE, rect.top - GAP - maxH) : rect.bottom + GAP, maxHeight:maxH, zIndex:1000 };
+                            pos = { position:"fixed", left:rect.left, width:rect.width, top: openUp ? Math.max(TOP_SAFE, rect.top - GAP - maxH) : rect.bottom + GAP, height:maxH, zIndex:1000 };
                           } else {
-                            pos = { position:"absolute", top:"calc(100% + 6px)", left:0, right:0, maxHeight:540, zIndex:1000 };
+                            pos = { position:"absolute", top:"calc(100% + 6px)", left:0, right:0, height:540, zIndex:1000 };
                           }
                           return (
                           <>
@@ -19158,7 +19159,7 @@ function AddNodeFlow({ onClose, onCreate }) {
                                     <circle cx="6.5" cy="6.5" r="4.5" />
                                     <line x1="10" y1="10" x2="14" y2="14" />
                                   </svg>
-                                  <input type="text" value={templateQuery} onChange={function(e){ setTemplateQuery(e.target.value); }} placeholder="Search all templates, departments, or fields…" autoFocus
+                                  <input type="text" value={templateQuery} onChange={function(e){ setTemplateQuery(e.target.value); }} placeholder="Search…" autoFocus
                                     style={{ width:"100%", padding:"7px 11px 7px 28px", fontSize:12.5, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:6, outline:"none", boxSizing:"border-box" }} />
                                 </div>
                               </div>
