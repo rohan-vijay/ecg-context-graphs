@@ -17891,6 +17891,23 @@ var NODE_TEMPLATE_DEPARTMENTS = [
   { id:"financial-svc", label:"Financial Services",color:"var(--blue)"   }
 ];
 
+// Maps each template to a built-in NODE_GLYPHS line icon (drawn in [-4..4] space).
+var TEMPLATE_GLYPH = {
+  contract:"contract", customer:"person", ticket:"ticket", invoice:"invoice", product:"tag",
+  employee:"employee", opportunity:"target", interaction:"message", account:"account", lead:"funnel",
+  quote:"document", subscription:"subscription", contact:"contact", "case":"briefcase", entitlement:"license",
+  knowledge_article:"idea", sla:"shield", payment:"payment", journal_entry:"report", expense:"receipt",
+  worker:"person", position:"briefcase", team:"team", asset:"archive", inventory:"database",
+  campaign:"trend", marketing_list:"bookmark", segment:"pie", vendor:"organization", purchase_order:"order",
+  task:"task", policy:"policy", risk:"risk", compliance_case:"audit", patient:"heart",
+  encounter:"schedule", bank_account:"card", transaction:"sync", kyc_case:"shield"
+};
+function templateGlyphSvg(t, size) {
+  var gd = glyphById(TEMPLATE_GLYPH[t.id] || "document");
+  if (!gd) return (t.icon || t.name.slice(0, 2).toUpperCase());
+  return <svg width={size} height={size} viewBox="-4 -4 8 8" style={{ display:"block" }}>{gd.render({ fill:"none", stroke:"var(--ink-3)" })}</svg>;
+}
+
 // Pre-built property templates by node archetype
 var NODE_TEMPLATES = [
   {
@@ -18503,10 +18520,25 @@ function AddNodeFlow({ onClose, onCreate }) {
   // is kept locally so each pill manages its own popover.
   function TypePicker({ value, onChange }) {
     var [open, setOpen] = useState(false);
+    var btnRef = React.useRef(null);
     var meta = PROP_TYPE_META[value] || PROP_TYPE_META.string;
+    // Fixed-positioned menu anchored to the trigger so it escapes the modal clip
+    // and flips upward near the bottom — never tucks behind the modal footer.
+    var menuPos;
+    if (open && btnRef.current) {
+      var r = btnRef.current.getBoundingClientRect();
+      var GAP = 4, FOOTER_SAFE = 96, TOP_SAFE = 16, DESIRED = 280;
+      var below = window.innerHeight - r.bottom - FOOTER_SAFE;
+      var above = r.top - TOP_SAFE;
+      var up = below < Math.min(DESIRED, 200) && above > below;
+      var mh = Math.max(160, Math.min(DESIRED, (up ? above : below) - GAP));
+      menuPos = { position:"fixed", left:r.left, minWidth:Math.max(150, r.width), top: up ? Math.max(TOP_SAFE, r.top - GAP - mh) : r.bottom + GAP, maxHeight:mh, zIndex:1000 };
+    } else {
+      menuPos = { position:"absolute", top:"calc(100% + 4px)", left:0, minWidth:150, maxHeight:280, zIndex:1000 };
+    }
     return (
       <div style={{ position:"relative" }}>
-        <button onClick={function(){ setOpen(function(o){ return !o; }); }}
+        <button ref={btnRef} onClick={function(){ setOpen(function(o){ return !o; }); }}
           style={{ display:"flex", alignItems:"center", gap:7, width:"100%", padding:"5px 8px", border:"1px solid var(--line)", borderRadius:6, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.5)" }}>
           <span style={{ minWidth:22, height:18, padding:"0 5px", borderRadius:4, background:meta.color, color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:9.5, fontWeight:700, letterSpacing:"0.3px", flexShrink:0 }}>{meta.glyph}</span>
           <span style={{ flex:1, fontFamily:"JetBrains Mono", fontSize:11.5, color:"var(--ink-2)" }}>{value}</span>
@@ -18514,8 +18546,8 @@ function AddNodeFlow({ onClose, onCreate }) {
         </button>
         {open && (
           <>
-            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setOpen(false); }} />
-            <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:8, boxShadow:"0 10px 28px rgba(0,0,0,0.14)", padding:4, minWidth:150, maxHeight:280, overflowY:"auto" }}>
+            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:999 }} onClick={function(){ setOpen(false); }} />
+            <div style={Object.assign({ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:8, boxShadow:"0 10px 28px rgba(0,0,0,0.14)", padding:4, overflowY:"auto" }, menuPos)}>
               {PROP_TYPE_OPTIONS.map(function(t){
                 var m = PROP_TYPE_META[t] || PROP_TYPE_META.string;
                 var isSel = value === t;
@@ -18736,7 +18768,7 @@ function AddNodeFlow({ onClose, onCreate }) {
   var inp = { border:"1px solid var(--line)", borderRadius:7, padding:"11px 13px", fontSize:13, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", outline:"none", boxSizing:"border-box", width:"100%", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6), 0 1px 0 rgba(40,40,20,0.02)" };
   var lbl = { display:"block", fontFamily:"JetBrains Mono", fontSize:9.5, letterSpacing:"0.6px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:6 };
 
-  var stepNames = ["Identity", "Properties", "Review"];
+  var stepNames = ["Identity", "Properties"];
 
   function NodePreview({ size }) {
     size = size || 36;
@@ -18805,7 +18837,7 @@ function AddNodeFlow({ onClose, onCreate }) {
           {/* CENTER */}
           <div style={{ padding:"24px 32px 28px", overflowY:"auto" }}>
             <div style={{ marginBottom:20 }}>
-              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / 3"}</div>
+              <div style={{ fontFamily:"JetBrains Mono", fontSize:10, letterSpacing:"0.8px", color:"var(--ink-3)", textTransform:"uppercase", marginBottom:5 }}>{"STEP " + step + " / 2"}</div>
               <div style={{ fontFamily:"Instrument Serif", fontSize:26, color:"var(--ink)", lineHeight:1.1, marginBottom:8 }}>{stepNames[step-1]}</div>
               <div style={{ fontSize:13, color:"var(--ink-3)", lineHeight:1.55, maxWidth:680 }}>
                 {step === 1 && "Name the node type and pick its category. Use a singular capitalised noun — Account, Contract, Ticket."}
@@ -19064,7 +19096,7 @@ function AddNodeFlow({ onClose, onCreate }) {
                           style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid " + (selT ? "var(--ink-2)" : "var(--line)"), borderRadius:9, background: selT ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow: selT ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "inset 0 1px 0 rgba(255,255,255,0.6)" }}>
                           {selT ? (
                             <>
-                              <span style={{ width:34, height:34, borderRadius:7, background:"var(--chip)", border:"1px solid var(--line-2)", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0 }}>{selT.icon || selT.name.slice(0,2).toUpperCase()}</span>
+                              <span style={{ width:34, height:34, borderRadius:7, background:"var(--chip)", border:"1px solid var(--line-2)", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{templateGlyphSvg(selT, 19)}</span>
                               <div style={{ flex:1, minWidth:0 }}>
                                 <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{selT.name}</div>
                                 <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selT.brief}</div>
@@ -19161,7 +19193,7 @@ function AddNodeFlow({ onClose, onCreate }) {
                                         style={{ display:"flex", alignItems:"flex-start", gap:12, width:"100%", padding:"11px 14px", border:"none", borderBottom:"1px solid var(--line-2)", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
                                         onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
                                         onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
-                                        <span style={{ width:30, height:30, borderRadius:6, background:"var(--chip)", border:"1px solid var(--line-2)", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1, fontFamily:"JetBrains Mono", fontSize:10.5, fontWeight:700 }}>{t.icon || t.name.slice(0,2).toUpperCase()}</span>
+                                        <span style={{ width:30, height:30, borderRadius:6, background:"var(--chip)", border:"1px solid var(--line-2)", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>{templateGlyphSvg(t, 17)}</span>
                                         <div style={{ flex:1, minWidth:0 }}>
                                           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                                             <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{t.name}</span>
@@ -19501,12 +19533,12 @@ function AddNodeFlow({ onClose, onCreate }) {
         {/* FOOTER */}
         <div style={{ flexShrink:0, padding:"14px 22px", borderTop:"1px solid var(--line)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"var(--panel)" }}>
           <button className="btn-ghost" onClick={function(){ if (step > 1) setStep(function(s){ return s - 1; }); }} disabled={step === 1} style={{ opacity: step === 1 ? 0.4 : 1 }}>← Back</button>
-          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of 3 · " + stepNames[step-1]}</span>
+          <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{"Step " + step + " of 2 · " + stepNames[step-1]}</span>
           <div style={{ display:"flex", gap:8 }}>
             <button className="btn-ghost" onClick={onClose}>Cancel</button>
-            {step < 3
+            {step < 2
               ? <button className="btn-dark" disabled={!canContinue()} onClick={function(){ setStep(function(s){ return s + 1; }); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>Continue →</button>
-              : <button className="btn-dark" onClick={function(){ if (onCreate) onCreate({ name: name, category: category, properties: properties, shape: shape, description: description, glyph: glyph, glyphImage: glyphImage }); onClose(); }}>{activate ? "Create node type ↵" : "Save draft ↵"}</button>
+              : <button className="btn-dark" disabled={!canContinue()} onClick={function(){ if (!canContinue()) return; if (onCreate) onCreate({ name: name, category: category, properties: properties, shape: shape, description: description, glyph: glyph, glyphImage: glyphImage }); onClose(); }} style={{ opacity: canContinue() ? 1 : 0.45 }}>{activate ? "Create node type ↵" : "Save draft ↵"}</button>
             }
           </div>
         </div>
