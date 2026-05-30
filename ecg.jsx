@@ -19038,10 +19038,10 @@ function AddNodeFlow({ onClose, onCreate }) {
                   <label style={lbl}>HOW DO YOU WANT TO DEFINE PROPERTIES?</label>
                   <div style={{ position:"relative" }}>
                     <button onClick={function(){ setPropModeOpen(function(o){ return !o; }); }}
-                      style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid " + (selectedMode ? "var(--ink-2)" : "var(--line)"), borderRadius:9, background: selectedMode ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow: selectedMode ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+                      style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
                       {selectedMode ? (
                         <>
-                          <span style={{ width:34, height:34, borderRadius:7, background:selectedMode.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{selectedMode.icon}</span>
+                          <span style={{ width:34, height:34, borderRadius:7, background:"color-mix(in oklab, " + selectedMode.color + " 16%, transparent)", color:selectedMode.color, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{selectedMode.icon}</span>
                           <div style={{ flex:1, minWidth:0 }}>
                             <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{selectedMode.label}</div>
                             <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selectedMode.desc}</div>
@@ -19093,7 +19093,7 @@ function AddNodeFlow({ onClose, onCreate }) {
                       <label style={lbl}>TEMPLATE</label>
                       <div style={{ position:"relative" }}>
                         <button ref={templateBtnRef} onClick={function(){ setTemplatePickerOpen(function(o){ return !o; }); }}
-                          style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid " + (selT ? "var(--ink-2)" : "var(--line)"), borderRadius:9, background: selT ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow: selT ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+                          style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
                           {selT ? (
                             <>
                               <span style={{ width:34, height:34, borderRadius:7, background:"var(--chip)", border:"1px solid var(--line-2)", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{templateGlyphSvg(selT, 19)}</span>
@@ -19129,9 +19129,11 @@ function AddNodeFlow({ onClose, onCreate }) {
                           var rightItems = q ? qMatches : (templateCat === "all" ? NODE_TEMPLATES : NODE_TEMPLATES.filter(function(t){ return t.department === templateCat; }));
                           var deptById = function(id){ return NODE_TEMPLATE_DEPARTMENTS.find(function(d){ return d.id === id; }); };
                           var catCount = function(id){ var base = q ? qMatches : NODE_TEMPLATES; return id === "all" ? base.length : base.filter(function(t){ return t.department === id; }).length; };
-                          var leftCats = [{ id:"all", label:"All templates", color:"var(--ink-3)" }].concat(
-                            NODE_TEMPLATE_DEPARTMENTS.filter(function(d){ return !q || catCount(d.id) > 0; })
-                          );
+                          // Split the left nav into functional departments vs. industry verticals.
+                          var INDUSTRY_DEPTS = { healthcare:true, "financial-svc":true };
+                          var visibleDepts = NODE_TEMPLATE_DEPARTMENTS.filter(function(d){ return !q || catCount(d.id) > 0; });
+                          var funcDepts = visibleDepts.filter(function(d){ return !INDUSTRY_DEPTS[d.id]; });
+                          var industryDepts = visibleDepts.filter(function(d){ return INDUSTRY_DEPTS[d.id]; });
                           // Anchor with fixed positioning so the panel escapes the modal clip and is
                           // height-capped to never tuck behind the modal footer. Opens up if there's
                           // more room above the trigger.
@@ -19165,9 +19167,9 @@ function AddNodeFlow({ onClose, onCreate }) {
                               </div>
                               {/* TWO-PANE BODY */}
                               <div style={{ flex:1, display:"flex", minHeight:0 }}>
-                                {/* LEFT — CATEGORIES */}
-                                <div style={{ width:212, flexShrink:0, borderRight:"1px solid var(--line-2)", background:"var(--panel-2)", overflowY:"auto", padding:"6px 0" }}>
-                                  {leftCats.map(function(d){
+                                {/* LEFT — CATEGORIES (All · Departments · Industry) */}
+                                {(function(){
+                                  function catBtn(d){
                                     var on = leftActive === d.id;
                                     var cnt = catCount(d.id);
                                     return (
@@ -19179,10 +19181,20 @@ function AddNodeFlow({ onClose, onCreate }) {
                                         <span style={{ fontFamily:"JetBrains Mono", fontSize:10, fontWeight:600, color: on ? "var(--ink-2)" : "var(--ink-4)", flexShrink:0 }}>{cnt}</span>
                                       </button>
                                     );
-                                  })}
-                                </div>
+                                  }
+                                  var hdr = { padding:"12px 14px 4px", fontFamily:"JetBrains Mono", fontSize:8.5, letterSpacing:"0.9px", textTransform:"uppercase", color:"var(--ink-4)", fontWeight:600 };
+                                  return (
+                                    <div style={{ width:212, flexShrink:0, borderRight:"1px solid var(--line-2)", background:"var(--panel-2)", overflowY:"auto", padding:"6px 0" }}>
+                                      {catBtn({ id:"all", label:"All templates" })}
+                                      {funcDepts.length > 0 && <div style={hdr}>Departments</div>}
+                                      {funcDepts.map(catBtn)}
+                                      {industryDepts.length > 0 && <div style={hdr}>Industry</div>}
+                                      {industryDepts.map(catBtn)}
+                                    </div>
+                                  );
+                                })()}
                                 {/* RIGHT — TEMPLATES WITH FIELDS */}
-                                <div style={{ flex:1, minWidth:0, overflowY:"auto", padding:"6px 0" }}>
+                                <div style={{ flex:1, minWidth:0, overflowY:"auto", padding:"6px 0", display:"flex", flexDirection:"column" }}>
                                   {rightItems.map(function(t){
                                     var isSel = selectedTemplate === t.id;
                                     var dept = deptById(t.department) || { color:"var(--ink-3)" };
@@ -19217,9 +19229,12 @@ function AddNodeFlow({ onClose, onCreate }) {
                                     );
                                   })}
                                   {rightItems.length === 0 && (
-                                    <div style={{ padding:"42px 14px", textAlign:"center", color:"var(--ink-3)", fontSize:12 }}>
-                                      <div>No templates match "{templateQuery}"</div>
-                                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:4 }}>Try a department name, field name, or entity name</div>
+                                    <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", textAlign:"center", padding:"24px" }}>
+                                      <span style={{ width:46, height:46, borderRadius:"50%", background:"var(--chip)", border:"1px solid var(--line-2)", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:14, color:"var(--ink-4)" }}>
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" /><line x1="8" y1="11" x2="14" y2="11" /></svg>
+                                      </span>
+                                      <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink-2)" }}>No matches for “{templateQuery}”</div>
+                                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-4)", marginTop:5, maxWidth:230, lineHeight:1.55 }}>Try a department, field, or entity name.</div>
                                     </div>
                                   )}
                                 </div>
