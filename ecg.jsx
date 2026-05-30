@@ -19171,10 +19171,9 @@ function AddNodeFlow({ onClose, onCreate }) {
                                     var cnt = catCount(d.id);
                                     return (
                                       <button key={d.id} onClick={function(){ setTemplateCat(d.id); setTemplateQuery(""); }}
-                                        style={{ display:"flex", alignItems:"center", gap:9, width:"100%", padding:"8px 13px", border:"none", borderLeft:"2px solid " + (on ? "var(--ink)" : "transparent"), background: on ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
+                                        style={{ display:"flex", alignItems:"center", gap:9, width:"100%", padding:"8px 14px", border:"none", borderLeft:"2px solid " + (on ? "var(--ink)" : "transparent"), background: on ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
                                         onMouseEnter={function(e){ if (!on) e.currentTarget.style.background = "var(--panel)"; }}
                                         onMouseLeave={function(e){ if (!on) e.currentTarget.style.background = "transparent"; }}>
-                                        <span style={{ width:6, height:6, borderRadius:"50%", background:d.color, flexShrink:0 }} />
                                         <span style={{ flex:1, minWidth:0, fontSize:12.5, fontWeight: on ? 600 : 500, color: on ? "var(--ink)" : "var(--ink-2)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{d.label}</span>
                                         <span style={{ fontFamily:"JetBrains Mono", fontSize:10, fontWeight:600, color: on ? "var(--ink-2)" : "var(--ink-4)", flexShrink:0 }}>{cnt}</span>
                                       </button>
@@ -19190,15 +19189,14 @@ function AddNodeFlow({ onClose, onCreate }) {
                                     var shown = fieldNames.slice(0, 6);
                                     return (
                                       <button key={t.id} onClick={function(){ applyTemplate(t.id); setTemplatePickerOpen(false); setTemplateQuery(""); }}
-                                        style={{ display:"flex", alignItems:"flex-start", gap:12, width:"100%", padding:"11px 14px", border:"none", borderBottom:"1px solid var(--line-2)", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
+                                        style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"11px 16px", border:"none", borderBottom:"1px solid var(--line-2)", background: isSel ? "var(--bg-canvas)" : "transparent", boxShadow: isSel ? "inset 3px 0 0 var(--ink)" : "none", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
                                         onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
                                         onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
-                                        <span style={{ width:30, height:30, borderRadius:6, background:"var(--chip)", border:"1px solid var(--line-2)", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>{templateGlyphSvg(t, 17)}</span>
+                                        <span style={{ width:30, height:30, borderRadius:6, background:"var(--chip)", border:"1px solid var(--line-2)", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1, alignSelf:"flex-start" }}>{templateGlyphSvg(t, 17)}</span>
                                         <div style={{ flex:1, minWidth:0 }}>
                                           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                                             <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{t.name}</span>
                                             <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", fontWeight:600, letterSpacing:"0.3px" }}>{t.properties.length + " FIELDS"}</span>
-                                            {isSel && <span style={{ marginLeft:"auto", color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
                                           </div>
                                           <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3, lineHeight:1.45 }}>{t.brief}</div>
                                           <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:7 }}>
@@ -19210,6 +19208,10 @@ function AddNodeFlow({ onClose, onCreate }) {
                                             )}
                                           </div>
                                         </div>
+                                        {/* Circular selection indicator */}
+                                        <span style={{ flexShrink:0, width:22, height:22, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", background: isSel ? "var(--ink)" : "transparent", border: "1.5px solid " + (isSel ? "var(--ink)" : "var(--line)"), color:"var(--bg-canvas)" }}>
+                                          {isSel && <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg>}
+                                        </span>
                                       </button>
                                     );
                                   })}
