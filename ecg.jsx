@@ -18497,6 +18497,7 @@ function AddNodeFlow({ onClose, onCreate }) {
   var [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   var [templateQuery, setTemplateQuery] = useState("");
   var [templateCat, setTemplateCat] = useState("all"); // active department in the two-pane picker
+  var templateBtnRef = React.useRef(null);
 
   // Inline type picker for the Review & edit fields table. Per-row open state
   // is kept locally so each pill manages its own popover.
@@ -19059,11 +19060,11 @@ function AddNodeFlow({ onClose, onCreate }) {
                     <div>
                       <label style={lbl}>TEMPLATE</label>
                       <div style={{ position:"relative" }}>
-                        <button onClick={function(){ setTemplatePickerOpen(function(o){ return !o; }); }}
+                        <button ref={templateBtnRef} onClick={function(){ setTemplatePickerOpen(function(o){ return !o; }); }}
                           style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", border:"1px solid " + (selT ? "var(--ink-2)" : "var(--line)"), borderRadius:9, background: selT ? "var(--bg-canvas)" : "var(--panel)", cursor:"pointer", fontFamily:"inherit", textAlign:"left", boxShadow: selT ? "0 0 0 2px color-mix(in oklab, var(--ink) 7%, transparent)" : "inset 0 1px 0 rgba(255,255,255,0.6)" }}>
                           {selT ? (
                             <>
-                              <span style={{ width:34, height:34, borderRadius:7, background:"var(--blue-fill)", color:"var(--blue)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0 }}>{selT.icon || selT.name.slice(0,2).toUpperCase()}</span>
+                              <span style={{ width:34, height:34, borderRadius:7, background:"var(--chip)", border:"1px solid var(--line-2)", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"JetBrains Mono", fontSize:11, fontWeight:700, flexShrink:0 }}>{selT.icon || selT.name.slice(0,2).toUpperCase()}</span>
                               <div style={{ flex:1, minWidth:0 }}>
                                 <div style={{ fontSize:14, fontWeight:600, color:"var(--ink)" }}>{selT.name}</div>
                                 <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{selT.brief}</div>
@@ -19099,10 +19100,25 @@ function AddNodeFlow({ onClose, onCreate }) {
                           var leftCats = [{ id:"all", label:"All templates", color:"var(--ink-3)" }].concat(
                             NODE_TEMPLATE_DEPARTMENTS.filter(function(d){ return !q || catCount(d.id) > 0; })
                           );
+                          // Anchor with fixed positioning so the panel escapes the modal clip and is
+                          // height-capped to never tuck behind the modal footer. Opens up if there's
+                          // more room above the trigger.
+                          var rect = templateBtnRef.current ? templateBtnRef.current.getBoundingClientRect() : null;
+                          var GAP = 6, FOOTER_SAFE = 120, TOP_SAFE = 16;
+                          var pos;
+                          if (rect) {
+                            var spaceBelow = window.innerHeight - rect.bottom - FOOTER_SAFE;
+                            var spaceAbove = rect.top - TOP_SAFE;
+                            var openUp = spaceBelow < 300 && spaceAbove > spaceBelow;
+                            var maxH = Math.max(260, Math.min(560, (openUp ? spaceAbove : spaceBelow) - GAP));
+                            pos = { position:"fixed", left:rect.left, width:rect.width, top: openUp ? Math.max(TOP_SAFE, rect.top - GAP - maxH) : rect.bottom + GAP, maxHeight:maxH, zIndex:1000 };
+                          } else {
+                            pos = { position:"absolute", top:"calc(100% + 6px)", left:0, right:0, maxHeight:540, zIndex:1000 };
+                          }
                           return (
                           <>
-                            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setTemplatePickerOpen(false); }} />
-                            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", display:"flex", flexDirection:"column", overflow:"hidden", maxHeight:540 }}>
+                            <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:999 }} onClick={function(){ setTemplatePickerOpen(false); }} />
+                            <div style={Object.assign({ background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", display:"flex", flexDirection:"column", overflow:"hidden" }, pos)}>
                               {/* GLOBAL SEARCH HEADER */}
                               <div style={{ padding:"10px 12px", borderBottom:"1px solid var(--line-2)", background:"var(--panel-2)" }}>
                                 <div style={{ position:"relative" }}>
@@ -19145,7 +19161,7 @@ function AddNodeFlow({ onClose, onCreate }) {
                                         style={{ display:"flex", alignItems:"flex-start", gap:12, width:"100%", padding:"11px 14px", border:"none", borderBottom:"1px solid var(--line-2)", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
                                         onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
                                         onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
-                                        <span style={{ width:30, height:30, borderRadius:6, background:dept.color + "1f", color:dept.color, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1, fontFamily:"JetBrains Mono", fontSize:10.5, fontWeight:700 }}>{t.icon || t.name.slice(0,2).toUpperCase()}</span>
+                                        <span style={{ width:30, height:30, borderRadius:6, background:"var(--chip)", border:"1px solid var(--line-2)", color:"var(--ink-3)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1, fontFamily:"JetBrains Mono", fontSize:10.5, fontWeight:700 }}>{t.icon || t.name.slice(0,2).toUpperCase()}</span>
                                         <div style={{ flex:1, minWidth:0 }}>
                                           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                                             <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{t.name}</span>
