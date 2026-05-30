@@ -18496,6 +18496,7 @@ function AddNodeFlow({ onClose, onCreate }) {
   var [selectedTemplate, setSelectedTemplate] = useState(null);
   var [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   var [templateQuery, setTemplateQuery] = useState("");
+  var [templateCat, setTemplateCat] = useState("all"); // active department in the two-pane picker
 
   // Inline type picker for the Review & edit fields table. Per-row open state
   // is kept locally so each pill manages its own popover.
@@ -19083,72 +19084,98 @@ function AddNodeFlow({ onClose, onCreate }) {
                         </button>
                         {templatePickerOpen && (function(){
                           var q = templateQuery.trim().toLowerCase();
-                          var filtered = q ? NODE_TEMPLATES.filter(function(t){
-                            return t.name.toLowerCase().indexOf(q) >= 0
+                          var matchQ = function(t){
+                            return !q || t.name.toLowerCase().indexOf(q) >= 0
                               || t.brief.toLowerCase().indexOf(q) >= 0
                               || (t.department || "").indexOf(q) >= 0
                               || t.properties.some(function(p){ return p.name.indexOf(q) >= 0; });
-                          }) : NODE_TEMPLATES;
+                          };
+                          var qMatches = NODE_TEMPLATES.filter(matchQ);
+                          // When searching, results span all categories; otherwise the active category drives the right pane.
+                          var leftActive = q ? "all" : templateCat;
+                          var rightItems = q ? qMatches : (templateCat === "all" ? NODE_TEMPLATES : NODE_TEMPLATES.filter(function(t){ return t.department === templateCat; }));
+                          var deptById = function(id){ return NODE_TEMPLATE_DEPARTMENTS.find(function(d){ return d.id === id; }); };
+                          var catCount = function(id){ var base = q ? qMatches : NODE_TEMPLATES; return id === "all" ? base.length : base.filter(function(t){ return t.department === id; }).length; };
+                          var leftCats = [{ id:"all", label:"All templates", color:"var(--ink-3)" }].concat(
+                            NODE_TEMPLATE_DEPARTMENTS.filter(function(d){ return !q || catCount(d.id) > 0; })
+                          );
                           return (
                           <>
                             <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:99 }} onClick={function(){ setTemplatePickerOpen(false); }} />
-                            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", display:"flex", flexDirection:"column", overflow:"hidden", maxHeight:520 }}>
-                              {/* SEARCH HEADER */}
+                            <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, zIndex:100, background:"var(--panel)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 14px 38px rgba(0,0,0,0.18)", display:"flex", flexDirection:"column", overflow:"hidden", maxHeight:540 }}>
+                              {/* GLOBAL SEARCH HEADER */}
                               <div style={{ padding:"10px 12px", borderBottom:"1px solid var(--line-2)", background:"var(--panel-2)" }}>
                                 <div style={{ position:"relative" }}>
                                   <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--ink-3)" strokeWidth="1.5" style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
                                     <circle cx="6.5" cy="6.5" r="4.5" />
                                     <line x1="10" y1="10" x2="14" y2="14" />
                                   </svg>
-                                  <input type="text" value={templateQuery} onChange={function(e){ setTemplateQuery(e.target.value); }} placeholder="Search templates, departments, or fields…" autoFocus
+                                  <input type="text" value={templateQuery} onChange={function(e){ setTemplateQuery(e.target.value); }} placeholder="Search all templates, departments, or fields…" autoFocus
                                     style={{ width:"100%", padding:"7px 11px 7px 28px", fontSize:12.5, fontFamily:"inherit", color:"var(--ink)", background:"var(--panel)", border:"1px solid var(--line)", borderRadius:6, outline:"none", boxSizing:"border-box" }} />
                                 </div>
                               </div>
-                              {/* GROUPED RESULTS */}
-                              <div style={{ flex:1, overflowY:"auto", padding:"6px 0" }}>
-                                {NODE_TEMPLATE_DEPARTMENTS.map(function(dept){
-                                  var items = filtered.filter(function(t){ return t.department === dept.id; });
-                                  if (items.length === 0) return null;
-                                  return (
-                                    <div key={dept.id} style={{ padding:"4px 0" }}>
-                                      <div style={{ display:"flex", alignItems:"center", gap:7, padding:"6px 14px 4px", color:"var(--ink-4)", fontFamily:"JetBrains Mono", fontSize:9, letterSpacing:"0.7px", textTransform:"uppercase" }}>
-                                        <span style={{ width:5, height:5, borderRadius:"50%", background:dept.color }} />
-                                        <span>{dept.label}</span>
-                                        <span style={{ color:"var(--ink-4)" }}>·</span>
-                                        <span>{items.length}</span>
-                                      </div>
-                                      {items.map(function(t){
-                                        var isSel = selectedTemplate === t.id;
-                                        return (
-                                          <button key={t.id} onClick={function(){ applyTemplate(t.id); setTemplatePickerOpen(false); setTemplateQuery(""); }}
-                                            style={{ display:"flex", alignItems:"flex-start", gap:12, width:"100%", padding:"8px 14px", borderRadius:0, border:"none", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
-                                            onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
-                                            onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
-                                            <span style={{ width:30, height:30, borderRadius:6, background:dept.color + "1f", color:dept.color, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1, fontFamily:"JetBrains Mono", fontSize:10.5, fontWeight:700 }}>{t.icon || t.name.slice(0,2).toUpperCase()}</span>
-                                            <div style={{ flex:1, minWidth:0 }}>
-                                              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                                                <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{t.name}</span>
-                                                <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", fontWeight:600, letterSpacing:"0.3px" }}>{t.properties.length + " FIELDS"}</span>
-                                              </div>
-                                              <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3, lineHeight:1.45 }}>{t.brief}</div>
-                                            </div>
-                                            {isSel && <span style={{ color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
-                                          </button>
-                                        );
-                                      })}
+                              {/* TWO-PANE BODY */}
+                              <div style={{ flex:1, display:"flex", minHeight:0 }}>
+                                {/* LEFT — CATEGORIES */}
+                                <div style={{ width:212, flexShrink:0, borderRight:"1px solid var(--line-2)", background:"var(--panel-2)", overflowY:"auto", padding:"6px 0" }}>
+                                  {leftCats.map(function(d){
+                                    var on = leftActive === d.id;
+                                    var cnt = catCount(d.id);
+                                    return (
+                                      <button key={d.id} onClick={function(){ setTemplateCat(d.id); setTemplateQuery(""); }}
+                                        style={{ display:"flex", alignItems:"center", gap:9, width:"100%", padding:"8px 13px", border:"none", borderLeft:"2px solid " + (on ? "var(--ink)" : "transparent"), background: on ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
+                                        onMouseEnter={function(e){ if (!on) e.currentTarget.style.background = "var(--panel)"; }}
+                                        onMouseLeave={function(e){ if (!on) e.currentTarget.style.background = "transparent"; }}>
+                                        <span style={{ width:6, height:6, borderRadius:"50%", background:d.color, flexShrink:0 }} />
+                                        <span style={{ flex:1, minWidth:0, fontSize:12.5, fontWeight: on ? 600 : 500, color: on ? "var(--ink)" : "var(--ink-2)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{d.label}</span>
+                                        <span style={{ fontFamily:"JetBrains Mono", fontSize:10, fontWeight:600, color: on ? "var(--ink-2)" : "var(--ink-4)", flexShrink:0 }}>{cnt}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                {/* RIGHT — TEMPLATES WITH FIELDS */}
+                                <div style={{ flex:1, minWidth:0, overflowY:"auto", padding:"6px 0" }}>
+                                  {rightItems.map(function(t){
+                                    var isSel = selectedTemplate === t.id;
+                                    var dept = deptById(t.department) || { color:"var(--ink-3)" };
+                                    var fieldNames = t.properties.map(function(p){ return p.name; });
+                                    var shown = fieldNames.slice(0, 6);
+                                    return (
+                                      <button key={t.id} onClick={function(){ applyTemplate(t.id); setTemplatePickerOpen(false); setTemplateQuery(""); }}
+                                        style={{ display:"flex", alignItems:"flex-start", gap:12, width:"100%", padding:"11px 14px", border:"none", borderBottom:"1px solid var(--line-2)", background: isSel ? "var(--bg-canvas)" : "transparent", cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
+                                        onMouseEnter={function(e){ if (!isSel) e.currentTarget.style.background = "var(--panel-2)"; }}
+                                        onMouseLeave={function(e){ if (!isSel) e.currentTarget.style.background = "transparent"; }}>
+                                        <span style={{ width:30, height:30, borderRadius:6, background:dept.color + "1f", color:dept.color, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1, fontFamily:"JetBrains Mono", fontSize:10.5, fontWeight:700 }}>{t.icon || t.name.slice(0,2).toUpperCase()}</span>
+                                        <div style={{ flex:1, minWidth:0 }}>
+                                          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                                            <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>{t.name}</span>
+                                            <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"1.5px 6px", borderRadius:3, background:"var(--chip)", color:"var(--ink-3)", fontWeight:600, letterSpacing:"0.3px" }}>{t.properties.length + " FIELDS"}</span>
+                                            {isSel && <span style={{ marginLeft:"auto", color:"var(--green)", fontWeight:700, fontSize:13 }}>✓</span>}
+                                          </div>
+                                          <div style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginTop:3, lineHeight:1.45 }}>{t.brief}</div>
+                                          <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:7 }}>
+                                            {shown.map(function(fn){ return (
+                                              <span key={fn} style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"1.5px 6px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)", border:"1px solid var(--line-2)" }}>{fn}</span>
+                                            ); })}
+                                            {fieldNames.length > shown.length && (
+                                              <span style={{ fontFamily:"JetBrains Mono", fontSize:9.5, padding:"1.5px 6px", borderRadius:4, color:"var(--ink-4)" }}>{"+" + (fieldNames.length - shown.length) + " more"}</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                                  {rightItems.length === 0 && (
+                                    <div style={{ padding:"42px 14px", textAlign:"center", color:"var(--ink-3)", fontSize:12 }}>
+                                      <div>No templates match "{templateQuery}"</div>
+                                      <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:4 }}>Try a department name, field name, or entity name</div>
                                     </div>
-                                  );
-                                })}
-                                {filtered.length === 0 && (
-                                  <div style={{ padding:"36px 14px", textAlign:"center", color:"var(--ink-3)", fontSize:12 }}>
-                                    <div>No templates match "{templateQuery}"</div>
-                                    <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-4)", marginTop:4 }}>Try a department name, field name, or entity name</div>
-                                  </div>
-                                )}
+                                  )}
+                                </div>
                               </div>
                               {/* FOOTER */}
                               <div style={{ padding:"8px 12px", borderTop:"1px solid var(--line-2)", background:"var(--panel-2)", display:"flex", alignItems:"center", justifyContent:"space-between", fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)" }}>
-                                <span>{filtered.length + " of " + NODE_TEMPLATES.length + " templates across " + NODE_TEMPLATE_DEPARTMENTS.length + " departments"}</span>
+                                <span>{rightItems.length + (q ? " matching" : (leftActive === "all" ? "" : " in " + ((deptById(leftActive) || {}).label || ""))) + " · " + NODE_TEMPLATES.length + " templates across " + NODE_TEMPLATE_DEPARTMENTS.length + " departments"}</span>
                                 <button onClick={function(){ setTemplatePickerOpen(false); setTemplateQuery(""); }} className="btn-ghost" style={{ fontSize:11 }}>Done</button>
                               </div>
                             </div>
