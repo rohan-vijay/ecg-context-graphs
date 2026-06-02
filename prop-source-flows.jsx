@@ -1840,9 +1840,12 @@ function SrcMapping({ s, set, srcCols, nodeProps, node, sel, openCol, setOpenCol
 // Selectable radio card used across settings.
 function SetCard({ on, title, desc, onClick }) {
   return (
-    <button onClick={onClick} style={{ width: "100%", textAlign: "left", display: "flex", gap: 11, alignItems: "flex-start", padding: "13px 15px", borderRadius: 10, borderWidth: 1, borderStyle: "solid", borderColor: on ? "var(--ink)" : "var(--line)", background: on ? "var(--bg-canvas)" : "var(--panel)", cursor: "pointer", fontFamily: "inherit", boxShadow: on ? "0 0 0 2px color-mix(in oklab, var(--ink) 9%, transparent)" : "none", marginBottom: 10 }}>
-      <span style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0, marginTop: 1, border: "1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>{on && <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--bg-canvas)" }} />}</span>
-      <span><span style={{ display: "block", fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{title}</span><span style={{ display: "block", fontSize: 12, color: "var(--ink-3)", marginTop: 2, lineHeight: 1.45 }}>{desc}</span></span>
+    <button onClick={onClick} style={{ width: "100%", textAlign: "left", display: "flex", gap: 11, alignItems: "center", padding: "11px 15px", borderRadius: 10, borderWidth: 1, borderStyle: "solid", borderColor: on ? "color-mix(in oklab, var(--ink) 22%, var(--line))" : "var(--line)", background: on ? "var(--panel)" : "transparent", cursor: "pointer", fontFamily: "inherit", boxShadow: on ? "0 1px 2px rgba(40,40,20,0.06)" : "none", marginBottom: 10 }}>
+      <span style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0, border: "1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--ink)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>{on && <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--bg-canvas)" }} />}</span>
+      <span style={{ display: "flex", alignItems: "baseline", gap: 9, minWidth: 0, flex: 1 }}>
+        <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)", flexShrink: 0 }}>{title}</span>
+        <span style={{ fontSize: 12, color: "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{desc}</span>
+      </span>
     </button>
   );
 }
