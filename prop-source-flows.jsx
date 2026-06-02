@@ -1179,6 +1179,17 @@ function getReadConfig(sel) {
 const EXTRACT_AGENTS = ["Contract Analyst", "Document Extractor", "Risk Reviewer", "Invoice Parser", "Resume Screener"];
 const EXTRACT_AUTOMATIONS = ["PDF Form Parser", "Regex Extractor", "Apache Tika Pipeline", "AWS Textract Pipeline", "Layout Parser"];
 const EXTRACT_TYPES = ["string", "date", "number", "boolean", "enum", "list", "json"];
+// Auto-captured file/object metadata available to map for any unstructured source.
+const UNSTRUCTURED_META_COLS = [
+  { col: "file_id",     type: "uuid",      sample: "1aF3kq…",          meta: true },
+  { col: "file_name",   type: "string",    sample: "MSA_Acme.pdf",     meta: true },
+  { col: "file_type",   type: "string",    sample: "pdf",              meta: true },
+  { col: "source_url",  type: "string",    sample: "drive://…/MSA…",   meta: true },
+  { col: "owner",       type: "string",    sample: "legal@acme.com",   meta: true },
+  { col: "created_at",  type: "timestamp", sample: "2024-01-12",       meta: true },
+  { col: "modified_at", type: "timestamp", sample: "2024-06-01",       meta: true },
+  { col: "size_bytes",  type: "int",       sample: "284913",           meta: true },
+];
 
 function LinkSourceFlow({ node, existingSources, onClose }) {
   const [step, setStep] = useState(0);
@@ -1207,6 +1218,12 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const readCfg = getReadConfig(sel);
   const readLocs = s.readLocations || [];
   const extractFields = s.extractFields || [];
+  // For unstructured Map: the source "columns" are the auto-captured file metadata
+  // plus the user-defined extracted fields. These get mapped to node properties.
+  const unstructuredCols = unstructured ? UNSTRUCTURED_META_COLS.concat(
+    extractFields.filter(f => f.name).map(f => ({ col: f.name, type: f.type || "string", sample: f.description || "extracted", extracted: true }))
+  ) : [];
+  const mapCols = unstructured ? unstructuredCols : srcCols;
   const settingsHint = (s.pipelineType === "scheduled" ? "Scheduled" : "Real Time") + " · " + (s.resourceTier || "Small");
   const canNext = step === 0 ? !!s.system
     : step === 1 ? !!s.connection
@@ -1223,11 +1240,13 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     : readLocs.length ? readLocs.length + " " + (readLocs.length === 1 ? readCfg.container.replace(/s$/, "") : readCfg.container)
     : "Pick " + readCfg.container;
   const extractHint = extractFields.length ? extractFields.length + " field" + (extractFields.length === 1 ? "" : "s") : "Optional";
+  const mapHint = mappedCount ? `${mappedCount} mapped` : "Map fields → node props";
   const srcSteps = unstructured ? [
     { label: "Source system", hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",    hint: connLabel },
-    { label: "Read",          hint: readHint },
+    { label: "Scope",         hint: readHint },
     { label: "Extract",       hint: extractHint },
+    { label: "Map",           hint: mapHint },
     { label: "Settings",      hint: settingsHint },
     { label: "Review",        hint: "Config & publish" },
   ] : [
@@ -1265,16 +1284,30 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
       onClose={onClose}
       rightPane={null}
       overlay={mapOpenCol ? (function(){
-        const c = srcCols.find(x => x.col === mapOpenCol);
+        const c = mapCols.find(x => x.col === mapOpenCol);
         return <SrcTransformDrawer col={mapOpenCol} type={c ? c.type : "string"} sel={sel} list={(s.transforms || {})[mapOpenCol] || []} onChange={arr => set({ transforms: Object.assign({}, s.transforms, (function(){ var o = {}; o[mapOpenCol] = arr; return o; })()) })} onClose={() => setMapOpenCol("")} />;
       })() : null}
     >
       {step === 0 && <SrcSystem s={s} set={set} />}
       {step === 1 && <SrcConnection s={s} set={set} sel={sel} />}
-      {step === 2 && (unstructured ? <SrcRead s={s} set={set} sel={sel} /> : <SrcObject s={s} set={set} sel={sel} srcCols={srcCols} />)}
-      {step === 3 && (unstructured ? <SrcExtract s={s} set={set} node={node} /> : <SrcMapping s={s} set={set} srcCols={srcCols} nodeProps={nodeProps} node={node} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} />)}
-      {step === 4 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
-      {step === 5 && <SrcReview s={s} set={set} node={node} sel={sel} srcCols={srcCols} mappedCount={mappedCount} unstructured={unstructured} readCfg={readCfg} onClose={onClose} />}
+      {unstructured ? (
+        <>
+          {step === 2 && <SrcRead s={s} set={set} sel={sel} />}
+          {step === 3 && <SrcExtract s={s} set={set} node={node} />}
+          {step === 4 && <SrcMapping s={s} set={set} srcCols={mapCols} nodeProps={nodeProps} node={node} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol}
+            eyebrow="STEP 5 · MAP" title={`Map ${sel ? sel.name : "source"} fields to ${node?.label || "the node"}`}
+            desc="Map the captured file metadata and your extracted fields to destination properties. Chain transformations in between. Unmapped fields are ignored." />}
+          {step === 5 && <SrcSchedule s={s} set={set} srcCols={srcCols} eyebrow="STEP 6 · SETTINGS" />}
+          {step === 6 && <SrcReview s={s} set={set} node={node} sel={sel} srcCols={mapCols} mappedCount={mappedCount} unstructured={unstructured} readCfg={readCfg} eyebrow="STEP 7 · REVIEW & PUBLISH" onClose={onClose} />}
+        </>
+      ) : (
+        <>
+          {step === 2 && <SrcObject s={s} set={set} sel={sel} srcCols={srcCols} />}
+          {step === 3 && <SrcMapping s={s} set={set} srcCols={srcCols} nodeProps={nodeProps} node={node} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} />}
+          {step === 4 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
+          {step === 5 && <SrcReview s={s} set={set} node={node} sel={sel} srcCols={srcCols} mappedCount={mappedCount} unstructured={unstructured} readCfg={readCfg} onClose={onClose} />}
+        </>
+      )}
     </WizardShell>
   );
 }
@@ -1408,7 +1441,7 @@ function SrcConnection({ s, set, sel }) {
               const on = s.connection === cn.id;
               return (
                 <button key={cn.id} onClick={() => set({ connection: cn.id })}
-                  style={{ display: "flex", alignItems: "center", gap: 13, width: "100%", padding: "13px 14px", border: "none", borderTop: i ? "1px solid var(--line-2)" : "none", background: on ? "var(--bg-canvas)" : "transparent", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}
+                  style={{ display: "flex", alignItems: "center", gap: 13, width: "100%", padding: "13px 14px", border: "none", borderTop: i ? "1px solid var(--line-2)" : "none", background: on ? "var(--panel)" : "transparent", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}
                   onMouseEnter={e => { if (!on) e.currentTarget.style.background = "var(--panel-2)"; }}
                   onMouseLeave={e => { if (!on) e.currentTarget.style.background = "transparent"; }}>
                   {sel && <SrcConnectorLogo c={sel} size={20} />}
@@ -1568,7 +1601,7 @@ function SrcRead({ s, set, sel }) {
   const fileIcon = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><polyline points="14 3 14 8 19 8" /></svg>;
 
   return (
-    <StepWrap wide eyebrow="STEP 3 · READ" title={`What to read from ${sel.name}`} desc={`Choose the scope to index, then narrow it with the metadata ${sel.name} provides. Source-level metadata — owner, dates, file type — is captured automatically.`}>
+    <StepWrap wide eyebrow="STEP 3 · SCOPE" title={`What to read from ${sel.name}`} desc={`Choose the scope to index, then narrow it with the metadata ${sel.name} provides. Source-level metadata — owner, dates, file type — is captured automatically.`}>
       <FormRow label="Scope" hint="How much of the connection should we index?" last={!scope}>
         <SrcRichSelect value={scope} onChange={v => set({ readScope: v })} emptyLabel="Pick a scope"
           options={[
@@ -1800,7 +1833,7 @@ function SrcTransformDrawer({ col, type, sel, list, onChange, onClose }) {
   );
 }
 
-function SrcMapping({ s, set, srcCols, nodeProps, node, sel, openCol, setOpenCol }) {
+function SrcMapping({ s, set, srcCols, nodeProps, node, sel, openCol, setOpenCol, eyebrow, title, desc }) {
   const [q, setQ] = useState("");
   const [tab, setTab] = useState("all");
   const transforms = s.transforms || {};
@@ -1811,7 +1844,7 @@ function SrcMapping({ s, set, srcCols, nodeProps, node, sel, openCol, setOpenCol
   const GRID = "minmax(180px,1.3fr) minmax(190px,1.2fr) 34px minmax(190px,1.3fr)";
 
   return (
-    <StepWrap wide eyebrow="STEP 4 · COLUMN MAPPING" title={`Map ${sel ? sel.name : "source"} fields to ${node?.label || "the node"}`} desc="Map each source field to a destination property and chain transformations in between. Unmapped fields are ignored.">
+    <StepWrap wide eyebrow={eyebrow || "STEP 4 · COLUMN MAPPING"} title={title || `Map ${sel ? sel.name : "source"} fields to ${node?.label || "the node"}`} desc={desc || "Map each source field to a destination property and chain transformations in between. Unmapped fields are ignored."}>
       {/* toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 2, padding: 3, borderRadius: 9, border: "1px solid var(--line)", background: "var(--bg-canvas)" }}>
@@ -1903,7 +1936,7 @@ const SET_ICONS = {
   cursor: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M5 3l6 18 2-7 7-2z" /></svg>,
   copy: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>,
 };
-function SrcSchedule({ s, set, srcCols }) {
+function SrcSchedule({ s, set, srcCols, eyebrow }) {
   const v = (k, d) => (s[k] !== undefined ? s[k] : d);
   const pType = v("pipelineType", "realtime");
   const schedType = v("schedType", "interval");
@@ -1911,7 +1944,7 @@ function SrcSchedule({ s, set, srcCols }) {
   const schemaMethod = v("schemaMethod", "manual");
   const lbl2 = { display: "block", fontSize: 12.5, fontWeight: 600, color: "var(--ink)", marginBottom: 7 };
   return (
-    <StepWrap wide eyebrow="STEP 5 · SETTINGS" title="Pipeline settings" desc="Configure how this pipeline runs, ingests, maps, and scales.">
+    <StepWrap wide eyebrow={eyebrow || "STEP 5 · SETTINGS"} title="Pipeline settings" desc="Configure how this pipeline runs, ingests, maps, and scales.">
       <FormRow label="Pipeline Type" hint="Select the type of pipeline">
         <SrcRichSelect value={pType} onChange={x => set({ pipelineType: x })}
           options={[
@@ -1994,7 +2027,7 @@ function SrcSchedule({ s, set, srcCols }) {
 
 // ── Src Step 5: Review ────────────────────────────────────────────────────────
 
-function SrcReview({ s, set, node, sel, srcCols, mappedCount, unstructured, readCfg, onClose }) {
+function SrcReview({ s, set, node, sel, srcCols, mappedCount, unstructured, readCfg, eyebrow, onClose }) {
   const readLocs = s.readLocations || [];
   const readFilters = s.readFilters || {};
   const activeFilters = Object.keys(readFilters).filter(k => { const v = readFilters[k]; return Array.isArray(v) ? v.length : (!!v && v !== "all"); });
@@ -2038,17 +2071,18 @@ ${s.backfill ? `backfill:\n  window: ${s.backfillWindow}` : "# backfill: disable
 owner: ${s.owner}`;
 
   return (
-    <StepWrap wide eyebrow="STEP 6 · REVIEW & PUBLISH" title="Review pipeline configuration" desc="Once published this pipeline appears in the Sources tab and begins syncing on the configured schedule.">
+    <StepWrap wide eyebrow={eyebrow || "STEP 6 · REVIEW & PUBLISH"} title="Review pipeline configuration" desc="Once published this pipeline appears in the Sources tab and begins syncing on the configured schedule.">
       <div className="review-grid">
         <section className="card review-summary">
           <div className="card-head">Summary</div>
           <ul className="rev-list">
             {(unstructured ? [
               ["Source",     sel?.name || s.customName],
-              ["Read",       readScopeLabel],
+              ["Scope",      readScopeLabel],
               ["Filters",    activeFilters.length ? activeFilters.length + " active" : "none"],
               ["Extract",    !s.extractMethod ? "skipped" : (s.extractMethod === "automation" ? "Automation" : "Agent") + (s.extractMethod === "automation" ? (s.extractAutomation ? " · " + s.extractAutomation : "") : (s.extractAgent ? " · " + s.extractAgent : ""))],
               ["Schema",     extractFields.length + " field" + (extractFields.length === 1 ? "" : "s")],
+              ["Mapped",     mappedCount + " of " + srcCols.length + " fields"],
               ["Settings",   (s.pipelineType === "scheduled" ? "Scheduled" : "Real Time") + " · " + (s.resourceTier || "Small")],
               ["Owner",      s.owner],
             ] : [
