@@ -1060,6 +1060,126 @@ const ERROR_POLICIES = [
   { id: "dead_letter", label: "Dead-letter queue",  desc: "Route errors to DLQ; on-call paged after threshold." },
 ];
 
+// ── Unstructured "what to read" config ────────────────────────────────────────
+// Container/item nouns + the source-provided metadata filters + example document
+// sets, tuned per connector. Everything falls back to a sensible file/folder model.
+const READ_CONFIGS = {
+  _default: {
+    container: "folders", item: "files",
+    linkPh: "Paste a link or path…",
+    filters: [
+      { key: "fileTypes",     label: "File types",     type: "chips", options: ["PDF", "DOCX", "DOC", "TXT", "RTF", "PPTX", "XLSX", "CSV", "MD", "HTML"] },
+      { key: "owner",         label: "Owner / author", type: "text",  ph: "name or email" },
+      { key: "modifiedAfter", label: "Modified after", type: "date" },
+      { key: "addedAfter",    label: "Added after",    type: "date" },
+      { key: "nameContains",  label: "Name contains",  type: "text",  ph: "e.g. MSA, contract" },
+    ],
+    starts: ["Contracts", "MSAs", "NDAs", "SOWs", "Invoices", "Policies", "Reports"],
+  },
+  googledrive: { linkPh: "https://drive.google.com/drive/folders/…" },
+  sharepoint:  { container: "libraries", linkPh: "https://acme.sharepoint.com/sites/Legal/…" },
+  onedrive:    { linkPh: "https://acme-my.sharepoint.com/personal/…" },
+  dropbox:     { linkPh: "https://www.dropbox.com/home/…" },
+  box:         { linkPh: "https://app.box.com/folder/…" },
+  s3: {
+    container: "buckets / prefixes", item: "objects", linkPh: "s3://acme-legal/contracts/",
+    filters: [
+      { key: "fileTypes",     label: "File types",     type: "chips", options: ["PDF", "DOCX", "TXT", "CSV", "JSON", "PARQUET", "HTML", "EML"] },
+      { key: "prefix",        label: "Key prefix",     type: "text",  ph: "contracts/2024/" },
+      { key: "modifiedAfter", label: "Modified after", type: "date" },
+      { key: "minSize",       label: "Min object size", type: "select", options: ["Any", "> 10 KB", "> 100 KB", "> 1 MB"] },
+    ],
+    starts: ["Contracts", "Invoices", "Statements", "Reports", "Logs"],
+  },
+  gcs: {
+    container: "buckets / prefixes", item: "objects", linkPh: "gs://acme-legal/contracts/",
+    filters: [
+      { key: "fileTypes",     label: "File types",     type: "chips", options: ["PDF", "DOCX", "TXT", "CSV", "JSON", "PARQUET", "HTML"] },
+      { key: "prefix",        label: "Key prefix",     type: "text",  ph: "contracts/2024/" },
+      { key: "modifiedAfter", label: "Modified after", type: "date" },
+    ],
+    starts: ["Contracts", "Invoices", "Statements", "Reports"],
+  },
+  slack: {
+    container: "channels", item: "messages", linkPh: "#channel-name or channel link",
+    filters: [
+      { key: "fromUser", label: "From user",     type: "text",  ph: "@user" },
+      { key: "after",    label: "After",         type: "date" },
+      { key: "kind",     label: "Message kind",  type: "chips", options: ["Any", "With files", "Threads only", "Pinned"] },
+      { key: "contains", label: "Text contains", type: "text" },
+    ],
+    starts: ["Incidents", "Decisions", "Announcements", "Support threads"],
+  },
+  gmail: {
+    container: "labels", item: "emails", linkPh: "Label name…",
+    filters: [
+      { key: "from",      label: "From",             type: "text",  ph: "sender@…" },
+      { key: "subject",   label: "Subject contains", type: "text" },
+      { key: "after",     label: "After",            type: "date" },
+      { key: "hasAttach", label: "Has attachment",   type: "chips", options: ["Any", "With attachments"] },
+      { key: "fileTypes", label: "Attachment types", type: "chips", options: ["PDF", "DOCX", "XLSX", "CSV"] },
+    ],
+    starts: ["Invoices", "Contracts", "Receipts", "Statements"],
+  },
+  outlook: {
+    container: "folders", item: "emails", linkPh: "Folder name…",
+    filters: [
+      { key: "from",      label: "From",             type: "text",  ph: "sender@…" },
+      { key: "subject",   label: "Subject contains", type: "text" },
+      { key: "after",     label: "After",            type: "date" },
+      { key: "hasAttach", label: "Has attachment",   type: "chips", options: ["Any", "With attachments"] },
+    ],
+    starts: ["Invoices", "Contracts", "Receipts", "Statements"],
+  },
+  confluence: {
+    container: "spaces", item: "pages", linkPh: "Space key or page link",
+    filters: [
+      { key: "space",        label: "Space",         type: "text" },
+      { key: "labelTag",     label: "Label",         type: "text" },
+      { key: "author",       label: "Author",        type: "text" },
+      { key: "updatedAfter", label: "Updated after", type: "date" },
+    ],
+    starts: ["Runbooks", "Policies", "Design docs", "Specs"],
+  },
+  notion: {
+    container: "databases", item: "pages", linkPh: "Notion page or database link",
+    filters: [
+      { key: "author",       label: "Created by",    type: "text" },
+      { key: "updatedAfter", label: "Updated after", type: "date" },
+      { key: "nameContains", label: "Title contains", type: "text" },
+    ],
+    starts: ["Wikis", "Specs", "Notes", "Trackers"],
+  },
+  github: {
+    container: "repositories", item: "files", linkPh: "org/repo or repo URL",
+    filters: [
+      { key: "branch",       label: "Branch",        type: "text",  ph: "main" },
+      { key: "pathGlob",     label: "Path glob",     type: "text",  ph: "docs/**/*.md" },
+      { key: "fileTypes",    label: "File types",    type: "chips", options: ["MD", "TXT", "PY", "TS", "JSON", "YAML"] },
+      { key: "updatedAfter", label: "Updated after", type: "date" },
+    ],
+    starts: ["READMEs", "Docs", "ADRs", "Changelogs"],
+  },
+  gitlab: {
+    container: "repositories", item: "files", linkPh: "group/project or repo URL",
+    filters: [
+      { key: "branch",    label: "Branch",     type: "text",  ph: "main" },
+      { key: "pathGlob",  label: "Path glob",  type: "text",  ph: "docs/**/*.md" },
+      { key: "fileTypes", label: "File types", type: "chips", options: ["MD", "TXT", "PY", "TS", "JSON", "YAML"] },
+    ],
+    starts: ["READMEs", "Docs", "ADRs"],
+  },
+  intercom: { container: "inboxes", item: "conversations", linkPh: "Inbox name…", starts: ["Resolved", "Escalations", "Billing", "Onboarding"] },
+  zoom:     { container: "folders", item: "recordings",    linkPh: "Recording folder…", starts: ["All-hands", "Customer calls", "Interviews"] },
+  figma:    { container: "projects", item: "files",        linkPh: "Project or file link", starts: ["Specs", "Flows", "Components"] },
+};
+function getReadConfig(sel) {
+  return Object.assign({}, READ_CONFIGS._default, (sel && READ_CONFIGS[sel.id]) || {});
+}
+const EXTRACT_AGENTS = ["Contract Analyst", "Document Extractor", "Risk Reviewer", "Invoice Parser", "Resume Screener"];
+const EXTRACT_AUTOMATIONS = ["PDF Form Parser", "Regex Extractor", "Apache Tika Pipeline", "AWS Textract Pipeline", "Layout Parser"];
+const EXTRACT_TYPES = ["string", "date", "number", "boolean", "enum", "list", "json"];
+
 function LinkSourceFlow({ node, existingSources, onClose }) {
   const [step, setStep] = useState(0);
   const [mapOpenCol, setMapOpenCol] = useState("");
@@ -1072,6 +1192,9 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     retryCount: 3, retryDelay: "5m", onError: "alert",
     alertChannel: "#schema-alerts", owner: "data-platform",
     stage: "staging", backfill: true, backfillWindow: "30d", tags: [],
+    // Unstructured-source flow state
+    readScope: "all", readLocations: [], readFilters: {}, readStarts: [],
+    extractMethod: "agent", extractAgent: "", extractAutomation: "", extractFields: [],
   });
 
   const set = patch => setS(v => ({ ...v, ...patch }));
@@ -1080,17 +1203,37 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const rawNodeProps = node ? (window.generateProps ? window.generateProps(node) : (window.PROPS_BY_NODE?.[node.id] || [])) : [];
   const nodeProps = rawNodeProps.map(p => ({ id: p.name, label: p.name, type: p.type }));
   const mappedCount = Object.values(s.mapping).filter(Boolean).length;
-  const canNext = step === 0 ? !!s.system : step === 1 ? !!s.connection : step === 2 ? !!(s.table || s.query) : true;
+  const unstructured = !!(sel && sel.kind === "unstructured");
+  const readCfg = getReadConfig(sel);
+  const readLocs = s.readLocations || [];
+  const extractFields = s.extractFields || [];
+  const settingsHint = (s.pipelineType === "scheduled" ? "Scheduled" : "Real Time") + " · " + (s.resourceTier || "Small");
+  const canNext = step === 0 ? !!s.system
+    : step === 1 ? !!s.connection
+    : step === 2 ? (unstructured ? ((s.readScope || "all") === "all" || readLocs.length > 0) : !!(s.table || s.query))
+    : true;
 
   // Sidebar hints reflect the live selections, not static copy.
   const conns = sel ? getConnections(sel.id, sel) : [];
   const connLabel = s.connection === "__new__" ? "New connection" : (conns.find(c => c.id === s.connection)?.name || "Pick or add a connection");
-  const srcSteps = [
+  const readHint = (s.readScope || "all") === "all"
+    ? "All " + readCfg.item
+    : readLocs.length ? readLocs.length + " " + (readLocs.length === 1 ? readCfg.container.replace(/s$/, "") : readCfg.container)
+    : "Pick " + readCfg.container;
+  const extractHint = extractFields.length ? extractFields.length + " field" + (extractFields.length === 1 ? "" : "s") : "Optional";
+  const srcSteps = unstructured ? [
+    { label: "Source system", hint: sel ? sel.name : "Pick connector from catalog" },
+    { label: "Connection",    hint: connLabel },
+    { label: "Read",          hint: readHint },
+    { label: "Extract",       hint: extractHint },
+    { label: "Settings",      hint: settingsHint },
+    { label: "Review",        hint: "Config & publish" },
+  ] : [
     { label: "Source system",  hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",     hint: connLabel },
     { label: "Object",         hint: s.table || (s.query ? "Custom SQL" : "Choose what to read") },
     { label: "Column mapping", hint: mappedCount ? `${mappedCount} columns mapped` : "Map source → node props" },
-    { label: "Settings", hint: (s.pipelineType === "scheduled" ? "Scheduled" : "Real Time") + " · " + (s.resourceTier || "Small") },
+    { label: "Settings", hint: settingsHint },
     { label: "Review",         hint: "Config & publish" },
   ];
 
@@ -1126,10 +1269,10 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     >
       {step === 0 && <SrcSystem s={s} set={set} />}
       {step === 1 && <SrcConnection s={s} set={set} sel={sel} />}
-      {step === 2 && <SrcObject s={s} set={set} sel={sel} srcCols={srcCols} />}
-      {step === 3 && <SrcMapping s={s} set={set} srcCols={srcCols} nodeProps={nodeProps} node={node} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} />}
+      {step === 2 && (unstructured ? <SrcRead s={s} set={set} sel={sel} /> : <SrcObject s={s} set={set} sel={sel} srcCols={srcCols} />)}
+      {step === 3 && (unstructured ? <SrcExtract s={s} set={set} node={node} /> : <SrcMapping s={s} set={set} srcCols={srcCols} nodeProps={nodeProps} node={node} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} />)}
       {step === 4 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
-      {step === 5 && <SrcReview s={s} set={set} node={node} sel={sel} srcCols={srcCols} mappedCount={mappedCount} onClose={onClose} />}
+      {step === 5 && <SrcReview s={s} set={set} node={node} sel={sel} srcCols={srcCols} mappedCount={mappedCount} unstructured={unstructured} readCfg={readCfg} onClose={onClose} />}
     </WizardShell>
   );
 }
@@ -1349,6 +1492,136 @@ function SrcObject({ s, set, sel, srcCols }) {
         })}
         {list.length === 0 && <div style={{ padding: "32px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No objects match “{q}”.</div>}
       </div>
+    </StepWrap>
+  );
+}
+
+// ── Shared bits for the unstructured Read / Extract steps ─────────────────────
+const SRC_SUBLBL = { display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink)", marginBottom: 7 };
+const SRC_REMOVE_BTN = { width: 26, height: 26, flexShrink: 0, borderRadius: 6, borderWidth: 1, borderStyle: "solid", borderColor: "var(--line)", background: "var(--panel-2)", color: "var(--ink-3)", cursor: "pointer", fontSize: 14, lineHeight: 1, justifySelf: "center" };
+function SrcChipRow({ options, selected, onToggle }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+      {options.map(opt => {
+        const on = selected.indexOf(opt) >= 0;
+        return (
+          <button key={opt} onClick={() => onToggle(opt)}
+            style={{ padding: "6px 12px", borderRadius: 20, borderWidth: 1, borderStyle: "solid", borderColor: on ? "var(--ink)" : "var(--line)", background: on ? "var(--ink)" : "var(--panel)", color: on ? "var(--bg-canvas)" : "var(--ink-2)", fontSize: 12.5, fontWeight: on ? 600 : 500, cursor: "pointer", fontFamily: "inherit" }}>
+            {opt}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+function srcToggle(arr, val) { return arr.indexOf(val) >= 0 ? arr.filter(x => x !== val) : arr.concat([val]); }
+function srcCap(w) { return w ? w.charAt(0).toUpperCase() + w.slice(1) : w; }
+
+// ── Src Step 3 (unstructured): Read ───────────────────────────────────────────
+function SrcRead({ s, set, sel }) {
+  const cfg = getReadConfig(sel);
+  const scope = s.readScope || "all";
+  const locs = s.readLocations || [];
+  const filters = s.readFilters || {};
+  const starts = s.readStarts || [];
+  const [link, setLink] = useState("");
+  const specific = scope === "folders" || scope === "files";
+  const setFilter = (k, val) => set({ readFilters: Object.assign({}, filters, (function () { const o = {}; o[k] = val; return o; })()) });
+  const addLink = () => { const t = link.trim(); if (!t) return; set({ readLocations: locs.concat([{ id: "loc-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6), label: t }]) }); setLink(""); };
+  const removeLoc = id => set({ readLocations: locs.filter(x => x.id !== id) });
+  const folderIcon = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>;
+  const fileIcon = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><polyline points="14 3 14 8 19 8" /></svg>;
+
+  return (
+    <StepWrap wide eyebrow="STEP 3 · READ" title={`What to read from ${sel.name}`} desc={`Choose the scope to index, then narrow it with the metadata ${sel.name} provides. Source-level metadata — owner, dates, file type — is captured automatically.`}>
+      <FormRow label="Scope" hint="How much of the connection should we index?">
+        <SetCard on={scope === "all"} onClick={() => set({ readScope: "all" })} title={"All " + cfg.item} desc={"Index every " + cfg.item.replace(/s$/, "") + " reachable from this connection."} />
+        <SetCard on={scope === "folders"} onClick={() => set({ readScope: "folders" })} title={"Specific " + cfg.container} desc={"Pick " + cfg.container + "; everything inside is indexed and kept in sync."} />
+        <SetCard on={scope === "files"} onClick={() => set({ readScope: "files" })} title={"Specific " + cfg.item} desc={"Pick individual " + cfg.item + " to index."} />
+      </FormRow>
+
+      {specific && (
+        <FormRow label={(scope === "folders" ? srcCap(cfg.container) : srcCap(cfg.item)) + " to index"} required hint={locs.length ? locs.length + " added" : "Paste a link or path, then press Add (or Enter)."}>
+          {locs.length > 0 && (
+            <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", marginBottom: 10, background: "var(--panel)" }}>
+              {locs.map((l, i) => (
+                <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderTop: i ? "1px solid var(--line-2)" : "none" }}>
+                  <span style={{ flexShrink: 0, color: "var(--ink-3)", display: "flex" }}>{scope === "folders" ? folderIcon : fileIcon}</span>
+                  <code style={{ flex: 1, minWidth: 0, fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.label}</code>
+                  <button onClick={() => removeLoc(l.id)} style={SRC_REMOVE_BTN}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8 }}>
+            <input className="winput winput-mono" style={{ flex: 1 }} placeholder={cfg.linkPh} value={link} onChange={e => setLink(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addLink(); } }} />
+            <button onClick={addLink} style={{ flexShrink: 0, padding: "0 18px", borderRadius: 9, border: "1px solid var(--ink)", background: "var(--ink)", color: "var(--bg-canvas)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Add</button>
+          </div>
+          <div style={{ marginTop: 8, fontSize: 11.5, color: "var(--ink-4)" }}>Or <button style={{ background: "none", border: "none", padding: 0, color: "var(--ink-2)", textDecoration: "underline", cursor: "pointer", fontFamily: "inherit", fontSize: 11.5 }}>browse {sel.name}</button> to pick visually.</div>
+        </FormRow>
+      )}
+
+      <FormRow label="Filters" optional hint={"Only index " + cfg.item + " matching the " + sel.name + " metadata below. Leave blank to include everything."}>
+        <div style={{ display: "grid", gap: 14 }}>
+          {cfg.filters.map(f => (
+            <div key={f.key}>
+              <div style={SRC_SUBLBL}>{f.label}</div>
+              {f.type === "chips" ? <SrcChipRow options={f.options} selected={filters[f.key] || []} onToggle={opt => setFilter(f.key, srcToggle(filters[f.key] || [], opt))} />
+                : f.type === "select" ? <CustomSelect value={filters[f.key] || f.options[0]} onChange={v => setFilter(f.key, v)} options={f.options.map(x => ({ id: x, label: x }))} />
+                  : f.type === "date" ? <input className="winput" type="date" value={filters[f.key] || ""} onChange={e => setFilter(f.key, e.target.value)} />
+                    : <input className="winput" placeholder={f.ph || ""} value={filters[f.key] || ""} onChange={e => setFilter(f.key, e.target.value)} />}
+            </div>
+          ))}
+        </div>
+      </FormRow>
+
+      <FormRow label="Starting points" optional hint="Seed indexing from known document sets — useful when content isn't neatly foldered." last>
+        <SrcChipRow options={cfg.starts} selected={starts} onToggle={opt => set({ readStarts: srcToggle(starts, opt) })} />
+      </FormRow>
+    </StepWrap>
+  );
+}
+
+// ── Src Step 4 (unstructured): Extract ────────────────────────────────────────
+function SrcExtract({ s, set, node }) {
+  const method = s.extractMethod || "agent";
+  const fields = s.extractFields || [];
+  const updateField = (id, k, val) => set({ extractFields: fields.map(f => f.id === id ? Object.assign({}, f, (function () { const o = {}; o[k] = val; return o; })()) : f) });
+  const removeField = id => set({ extractFields: fields.filter(f => f.id !== id) });
+  const addField = () => set({ extractFields: fields.concat([{ id: "f-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6), name: "", type: "string", description: "" }]) });
+  const GRID = "minmax(150px,1fr) 116px minmax(200px,1.7fr) 30px";
+  return (
+    <StepWrap wide eyebrow="STEP 4 · EXTRACT" title="Extract fields from file contents" desc={"Source metadata is captured automatically — but the values inside each document aren't. Define the fields to pull out" + (node && node.label ? " for " + node.label : "") + ". This is the output schema your agent or automation fills."}>
+      <FormRow label="Extraction method" hint="How values are read from inside each document.">
+        <SetCard on={method === "agent"} onClick={() => set({ extractMethod: "agent" })} title="Agent" desc="An LLM agent reads each document and extracts the schema below." />
+        <SetCard on={method === "automation"} onClick={() => set({ extractMethod: "automation" })} title="Automation" desc="A deterministic automation / parser extracts the schema below." />
+        <div style={{ marginTop: 2 }}>
+          <div style={SRC_SUBLBL}>{method === "agent" ? "Agent" : "Automation"}</div>
+          {method === "agent"
+            ? <CustomSelect value={s.extractAgent} placeholder="Select an agent…" onChange={v => set({ extractAgent: v })} options={EXTRACT_AGENTS.map(x => ({ id: x, label: x }))} />
+            : <CustomSelect value={s.extractAutomation} placeholder="Select an automation…" onChange={v => set({ extractAutomation: v })} options={EXTRACT_AUTOMATIONS.map(x => ({ id: x, label: x }))} />}
+        </div>
+      </FormRow>
+
+      <FormRow label="Output schema" optional hint="The fields to extract from each document. The name + description tell the agent what to pull." last>
+        <div style={{ border: "1px solid var(--line)", borderRadius: 11, overflow: "hidden", background: "var(--panel)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 10, padding: "9px 14px", background: "var(--panel-2)", borderBottom: "1px solid var(--line-2)", fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", color: "var(--ink-3)", textTransform: "uppercase" }}>
+            <span>Field name</span><span>Type</span><span>Description</span><span />
+          </div>
+          {fields.map((f, i) => (
+            <div key={f.id} style={{ display: "grid", gridTemplateColumns: GRID, gap: 10, padding: "9px 14px", borderTop: i ? "1px solid var(--line-2)" : "none", alignItems: "center" }}>
+              <input className="winput winput-mono" style={{ padding: "7px 9px", fontSize: 12 }} placeholder="contract_start_date" value={f.name} onChange={e => updateField(f.id, "name", e.target.value)} />
+              <CustomSelect value={f.type || "string"} onChange={v => updateField(f.id, "type", v)} options={EXTRACT_TYPES.map(x => ({ id: x, label: x }))} />
+              <input className="winput" style={{ padding: "7px 9px", fontSize: 12 }} placeholder="When the contract term begins." value={f.description} onChange={e => updateField(f.id, "description", e.target.value)} />
+              <button onClick={() => removeField(f.id)} style={SRC_REMOVE_BTN}>×</button>
+            </div>
+          ))}
+          {fields.length === 0 && (
+            <div style={{ padding: "30px 14px", textAlign: "center", color: "var(--ink-3)", fontSize: 12.5 }}>No fields yet — add the values you want pulled from each document.</div>
+          )}
+        </div>
+        <button onClick={addField} style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "11px", borderRadius: 9, border: "1px dashed var(--line)", background: "var(--panel)", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--ink-2)" }}><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-3)" }}>+</span> Add field</button>
+      </FormRow>
     </StepWrap>
   );
 }
@@ -1656,8 +1929,27 @@ function SrcSchedule({ s, set, srcCols }) {
 
 // ── Src Step 5: Review ────────────────────────────────────────────────────────
 
-function SrcReview({ s, set, node, sel, srcCols, mappedCount, onClose }) {
-  const yaml = `name: ${node?.id || "node"}_from_${s.system || "source"}
+function SrcReview({ s, set, node, sel, srcCols, mappedCount, unstructured, readCfg, onClose }) {
+  const readLocs = s.readLocations || [];
+  const readFilters = s.readFilters || {};
+  const activeFilters = Object.keys(readFilters).filter(k => { const v = readFilters[k]; return Array.isArray(v) ? v.length : !!v; });
+  const extractFields = s.extractFields || [];
+  const readScopeLabel = (s.readScope || "all") === "all" ? "all " + (readCfg ? readCfg.item : "files")
+    : (s.readScope === "folders" ? readLocs.length + " " + (readCfg ? readCfg.container : "folders") : readLocs.length + " " + (readCfg ? readCfg.item : "files"));
+  const unstructuredYaml = `name: ${node?.id || "node"}_from_${s.system || "source"}
+source:
+  connector: ${s.system || "?"}
+  read:
+    scope: ${s.readScope || "all"}
+${readLocs.length ? "    locations:\n" + readLocs.map(l => "      - " + l.label).join("\n") + "\n" : ""}${activeFilters.length ? "    filters:\n" + activeFilters.map(k => "      " + k + ": " + (Array.isArray(readFilters[k]) ? "[" + readFilters[k].join(", ") + "]" : readFilters[k])).join("\n") + "\n" : ""}${(s.readStarts || []).length ? "    starting_points: [" + s.readStarts.join(", ") + "]\n" : ""}extract:
+  method: ${s.extractMethod || "agent"}
+  ${s.extractMethod === "automation" ? "automation: " + (s.extractAutomation || "(none)") : "agent: " + (s.extractAgent || "(none)")}
+  output_schema:
+${extractFields.length ? extractFields.map(f => "    - name: " + (f.name || "untitled") + "\n      type: " + (f.type || "string") + "\n      description: " + (f.description || "")).join("\n") : "    # (no fields defined)"}
+target:
+  node_type: ${node?.label?.replace(/\s/g, "") || "Node"}
+schedule:`;
+  const structuredYaml = `name: ${node?.id || "node"}_from_${s.system || "source"}
 source:
   connector: ${s.system || "?"}
   object: ${s.table || "(custom query)"}
@@ -1669,7 +1961,9 @@ target:
 mapping:
 ${Object.entries(s.mapping).filter(([,v])=>v).map(([k,v]) => `  ${k}: ${v}`).join("\n") || "  # (no mappings defined)"}
   unmapped_columns: ${s.unmappedPolicy}
-schedule:
+schedule:`;
+  const yamlHead = unstructured ? unstructuredYaml : structuredYaml;
+  const yaml = `${yamlHead}
   cadence: ${s.cadence}
   freshness_slo: ${s.freshnessSLO}
   retry: { count: ${s.retryCount}, delay: ${s.retryDelay} }
@@ -1684,7 +1978,15 @@ owner: ${s.owner}`;
         <section className="card review-summary">
           <div className="card-head">Summary</div>
           <ul className="rev-list">
-            {[
+            {(unstructured ? [
+              ["Source",     sel?.name || s.customName],
+              ["Read",       readScopeLabel],
+              ["Filters",    activeFilters.length ? activeFilters.length + " active" : "none"],
+              ["Extract",    (s.extractMethod === "automation" ? "Automation" : "Agent") + (s.extractMethod === "automation" ? (s.extractAutomation ? " · " + s.extractAutomation : "") : (s.extractAgent ? " · " + s.extractAgent : ""))],
+              ["Schema",     extractFields.length + " field" + (extractFields.length === 1 ? "" : "s")],
+              ["Settings",   (s.pipelineType === "scheduled" ? "Scheduled" : "Real Time") + " · " + (s.resourceTier || "Small")],
+              ["Owner",      s.owner],
+            ] : [
               ["Source",    sel?.name || s.customName],
               ["Object",    <code>{s.table || "(query)"}</code>],
               ["Strategy",  s.loadStrategy + (s.loadStrategy === "incremental" ? " · " + s.incrementalCol : "")],
@@ -1694,7 +1996,7 @@ owner: ${s.owner}`;
               ["On error",  s.onError],
               ["Backfill",  s.backfill ? "on · " + s.backfillWindow : "off"],
               ["Owner",     s.owner],
-            ].map(([k, v], i) => <li key={i}><span className="rev-k">{k}</span><span className="rev-v">{v}</span></li>)}
+            ]).map(([k, v], i) => <li key={i}><span className="rev-k">{k}</span><span className="rev-v">{v}</span></li>)}
           </ul>
         </section>
 
