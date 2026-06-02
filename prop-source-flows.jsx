@@ -535,7 +535,7 @@ function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage
           <aside className="flow-steps">
             {steps.map((s, i) => (
               <button key={i} className={"flow-step" + (i === step ? " on" : "") + (i < step ? " done" : "")} onClick={() => setStep(i)}>
-                <span className="flow-step-n">{i < step ? "✓" : i + 1}</span>
+                <span className="flow-step-n">{i < step ? <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg> : i + 1}</span>
                 <div className="flow-step-text">
                   <div className="flow-step-label">{s.label}</div>
                   <div className="flow-step-hint">{s.hint}</div>
@@ -1605,10 +1605,11 @@ function SrcRead({ s, set, sel }) {
             {cfg.filters.map(f => (
               <div key={f.key}>
                 <div style={SRC_SUBLBL}>{f.label}</div>
-                {f.type === "chips" ? <SrcChipRow options={f.options} selected={filters[f.key] || []} onToggle={opt => setFilter(f.key, srcToggle(filters[f.key] || [], opt))} />
-                  : f.type === "select" ? <CustomSelect value={filters[f.key] || f.options[0]} onChange={v => setFilter(f.key, v)} options={f.options.map(x => ({ id: x, label: x }))} />
-                    : f.type === "date" ? <input className="winput" type="date" value={filters[f.key] || ""} onChange={e => setFilter(f.key, e.target.value)} />
-                      : <input className="winput" placeholder={f.ph || ""} value={filters[f.key] || ""} onChange={e => setFilter(f.key, e.target.value)} />}
+                {f.key === "fileTypes" ? <CustomSelect value={filters[f.key] || "all"} onChange={v => setFilter(f.key, v)} options={[{ id: "all", label: "All file types" }].concat(f.options.map(x => ({ id: x, label: x })))} />
+                  : f.type === "chips" ? <SrcChipRow options={f.options} selected={filters[f.key] || []} onToggle={opt => setFilter(f.key, srcToggle(filters[f.key] || [], opt))} />
+                    : f.type === "select" ? <CustomSelect value={filters[f.key] || f.options[0]} onChange={v => setFilter(f.key, v)} options={f.options.map(x => ({ id: x, label: x }))} />
+                      : f.type === "date" ? <input className="winput" type="date" value={filters[f.key] || ""} onChange={e => setFilter(f.key, e.target.value)} />
+                        : <input className="winput" placeholder={f.ph || ""} value={filters[f.key] || ""} onChange={e => setFilter(f.key, e.target.value)} />}
               </div>
             ))}
           </div>
@@ -1893,6 +1894,15 @@ function SetCard({ on, title, desc, onClick }) {
   );
 }
 
+const SET_ICONS = {
+  bolt: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 4 14 11 14 10 22 19 10 12 10 13 2" /></svg>,
+  clock: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" /></svg>,
+  layers: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 22 8.5 12 15 2 8.5 12 2" /><polyline points="2 15.5 12 22 22 15.5" /></svg>,
+  live: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M3 12a9 9 0 0 1 9-9M21 12a9 9 0 0 1-9 9" /></svg>,
+  archive: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" /><line x1="10" y1="12" x2="14" y2="12" /></svg>,
+  cursor: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M5 3l6 18 2-7 7-2z" /></svg>,
+  copy: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>,
+};
 function SrcSchedule({ s, set, srcCols }) {
   const v = (k, d) => (s[k] !== undefined ? s[k] : d);
   const pType = v("pipelineType", "realtime");
@@ -1903,10 +1913,13 @@ function SrcSchedule({ s, set, srcCols }) {
   return (
     <StepWrap wide eyebrow="STEP 5 · SETTINGS" title="Pipeline settings" desc="Configure how this pipeline runs, ingests, maps, and scales.">
       <FormRow label="Pipeline Type" hint="Select the type of pipeline">
-        <SetCard on={pType === "realtime"} onClick={() => set({ pipelineType: "realtime" })} title="Real Time" desc="Pipeline ingests, transforms and loads data to destination in real-time" />
-        <SetCard on={pType === "scheduled"} onClick={() => set({ pipelineType: "scheduled" })} title="Scheduled" desc="Pipeline operates at a recurring schedule" />
+        <SrcRichSelect value={pType} onChange={x => set({ pipelineType: x })}
+          options={[
+            { id: "realtime", title: "Real Time", desc: "Ingests, transforms and loads data to destination in real-time.", icon: SET_ICONS.bolt },
+            { id: "scheduled", title: "Scheduled", desc: "Pipeline operates at a recurring schedule.", icon: SET_ICONS.clock },
+          ]} />
         {pType === "scheduled" && (
-          <div style={{ marginTop: 4 }}>
+          <div style={{ marginTop: 14 }}>
             <div style={lbl2}>Schedule type *</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
               {[["interval", "Interval"], ["cron", "Cron Expression"]].map(o => { const on = schedType === o[0]; return (
@@ -1935,9 +1948,12 @@ function SrcSchedule({ s, set, srcCols }) {
       </FormRow>
 
       <FormRow label="Ingestion Mode" hint="Select the ingestion mode for your data pipeline">
-        <SetCard on={ingMode === "hist_live"} onClick={() => set({ ingestMode: "hist_live" })} title="Historical and Live" desc="Ingest all historical data and process new data in real-time" />
-        <SetCard on={ingMode === "live"} onClick={() => set({ ingestMode: "live" })} title="Live only" desc="Only process new data from connection time onward" />
-        <SetCard on={ingMode === "hist"} onClick={() => set({ ingestMode: "hist" })} title="Historical only" desc="Backfill existing data once, with no live updates" />
+        <SrcRichSelect value={ingMode} onChange={x => set({ ingestMode: x })}
+          options={[
+            { id: "hist_live", title: "Historical and Live", desc: "Ingest all historical data and process new data in real-time.", icon: SET_ICONS.layers },
+            { id: "live", title: "Live only", desc: "Only process new data from connection time onward.", icon: SET_ICONS.live },
+            { id: "hist", title: "Historical only", desc: "Backfill existing data once, with no live updates.", icon: SET_ICONS.archive },
+          ]} />
       </FormRow>
 
       <FormRow label="Ingestion Order" optional hint="Sets ingestion order for source objects">
@@ -1962,8 +1978,11 @@ function SrcSchedule({ s, set, srcCols }) {
       </FormRow>
 
       <FormRow label="Schema Mapping Method" hint="How destination objects are created or matched">
-        <SetCard on={schemaMethod === "manual"} onClick={() => set({ schemaMethod: "manual" })} title="Map Manually" desc="Map selected source objects to existing destination objects" />
-        <SetCard on={schemaMethod === "replicate"} onClick={() => set({ schemaMethod: "replicate" })} title="Replicate Source" desc="Creates an exact replica of selected source objects in destination" />
+        <SrcRichSelect value={schemaMethod} onChange={x => set({ schemaMethod: x })}
+          options={[
+            { id: "manual", title: "Map Manually", desc: "Map selected source objects to existing destination objects.", icon: SET_ICONS.cursor },
+            { id: "replicate", title: "Replicate Source", desc: "Creates an exact replica of selected source objects in destination.", icon: SET_ICONS.copy },
+          ]} />
       </FormRow>
 
       <FormRow label="Resource Tier" hint="Select resource tier for pipeline resources" last>
@@ -1978,7 +1997,7 @@ function SrcSchedule({ s, set, srcCols }) {
 function SrcReview({ s, set, node, sel, srcCols, mappedCount, unstructured, readCfg, onClose }) {
   const readLocs = s.readLocations || [];
   const readFilters = s.readFilters || {};
-  const activeFilters = Object.keys(readFilters).filter(k => { const v = readFilters[k]; return Array.isArray(v) ? v.length : !!v; });
+  const activeFilters = Object.keys(readFilters).filter(k => { const v = readFilters[k]; return Array.isArray(v) ? v.length : (!!v && v !== "all"); });
   const extractFields = s.extractFields || [];
   const readScopeLabel = (s.readScope || "all") === "all" ? "all " + (readCfg ? readCfg.item : "files")
     : (s.readScope === "folders" ? readLocs.length + " " + (readCfg ? readCfg.container : "folders") : readLocs.length + " " + (readCfg ? readCfg.item : "files"));
