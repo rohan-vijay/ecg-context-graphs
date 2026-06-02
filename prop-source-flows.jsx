@@ -1193,8 +1193,8 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     alertChannel: "#schema-alerts", owner: "data-platform",
     stage: "staging", backfill: true, backfillWindow: "30d", tags: [],
     // Unstructured-source flow state
-    readScope: "all", readLocations: [], readFilters: {}, readStarts: [],
-    extractMethod: "agent", extractAgent: "", extractAutomation: "", extractFields: [],
+    readScope: "", readLocations: [], readFilters: {}, readStarts: [],
+    extractMethod: "", extractAgent: "", extractAutomation: "", extractFields: [],
   });
 
   const set = patch => setS(v => ({ ...v, ...patch }));
@@ -1210,13 +1210,15 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const settingsHint = (s.pipelineType === "scheduled" ? "Scheduled" : "Real Time") + " · " + (s.resourceTier || "Small");
   const canNext = step === 0 ? !!s.system
     : step === 1 ? !!s.connection
-    : step === 2 ? (unstructured ? ((s.readScope || "all") === "all" || readLocs.length > 0) : !!(s.table || s.query))
+    : step === 2 ? (unstructured ? (s.readScope === "all" || ((s.readScope === "folders" || s.readScope === "files") && readLocs.length > 0)) : !!(s.table || s.query))
     : true;
 
   // Sidebar hints reflect the live selections, not static copy.
   const conns = sel ? getConnections(sel.id, sel) : [];
   const connLabel = s.connection === "__new__" ? "New connection" : (conns.find(c => c.id === s.connection)?.name || "Pick or add a connection");
-  const readHint = (s.readScope || "all") === "all"
+  const readHint = !s.readScope
+    ? "Choose what to read"
+    : s.readScope === "all"
     ? "All " + readCfg.item
     : readLocs.length ? readLocs.length + " " + (readLocs.length === 1 ? readCfg.container.replace(/s$/, "") : readCfg.container)
     : "Pick " + readCfg.container;
@@ -1517,13 +1519,46 @@ function SrcChipRow({ options, selected, onToggle }) {
 function srcToggle(arr, val) { return arr.indexOf(val) >= 0 ? arr.filter(x => x !== val) : arr.concat([val]); }
 function srcCap(w) { return w ? w.charAt(0).toUpperCase() + w.slice(1) : w; }
 
+// Rich single-select that mirrors the "Pick a type" control: icon box + title +
+// sub line + chevron. options = [{ id, title, desc, icon }]. Empty shows a dashed +.
+function SrcRichSelect({ value, onChange, options, emptyLabel }) {
+  const iconBox = (content, dashed) => (
+    <span style={{ width: 34, height: 34, borderRadius: 7, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--chip)", borderWidth: 1, borderStyle: dashed ? "dashed" : "solid", borderColor: "var(--line)", color: "var(--ink-3)" }}>{content}</span>
+  );
+  const body = (icon, title, sub, ghost) => (
+    <span style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", minWidth: 0 }}>
+      {icon}
+      <span style={{ display: "flex", flexDirection: "column", minWidth: 0, gap: 1 }}>
+        <span style={{ fontSize: 14, fontWeight: ghost ? 400 : 600, color: ghost ? "var(--ink-3)" : "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</span>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--ink-4)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sub}</span>
+      </span>
+    </span>
+  );
+  return (
+    <CustomSelect
+      value={value} onChange={onChange} options={options}
+      placeholder={body(iconBox("+", true), emptyLabel || "Choose…", "Click to choose", true)}
+      renderTrigger={o => body(iconBox(o.icon), o.title, o.desc)}
+      renderOption={o => body(iconBox(o.icon), o.title, o.desc)}
+    />
+  );
+}
+const SRC_SCOPE_ICONS = {
+  all: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 22 8.5 12 15 2 8.5 12 2" /><polyline points="2 15.5 12 22 22 15.5" /></svg>,
+  folders: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>,
+  files: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><polyline points="14 3 14 8 19 8" /></svg>,
+};
+const SRC_METHOD_ICONS = {
+  agent: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z" /><circle cx="18" cy="17" r="1.4" /><circle cx="6" cy="16" r="1.1" /></svg>,
+  automation: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>,
+};
+
 // ── Src Step 3 (unstructured): Read ───────────────────────────────────────────
 function SrcRead({ s, set, sel }) {
   const cfg = getReadConfig(sel);
-  const scope = s.readScope || "all";
+  const scope = s.readScope || "";
   const locs = s.readLocations || [];
   const filters = s.readFilters || {};
-  const starts = s.readStarts || [];
   const [link, setLink] = useState("");
   const specific = scope === "folders" || scope === "files";
   const setFilter = (k, val) => set({ readFilters: Object.assign({}, filters, (function () { const o = {}; o[k] = val; return o; })()) });
@@ -1534,10 +1569,13 @@ function SrcRead({ s, set, sel }) {
 
   return (
     <StepWrap wide eyebrow="STEP 3 · READ" title={`What to read from ${sel.name}`} desc={`Choose the scope to index, then narrow it with the metadata ${sel.name} provides. Source-level metadata — owner, dates, file type — is captured automatically.`}>
-      <FormRow label="Scope" hint="How much of the connection should we index?">
-        <SetCard on={scope === "all"} onClick={() => set({ readScope: "all" })} title={"All " + cfg.item} desc={"Index every " + cfg.item.replace(/s$/, "") + " reachable from this connection."} />
-        <SetCard on={scope === "folders"} onClick={() => set({ readScope: "folders" })} title={"Specific " + cfg.container} desc={"Pick " + cfg.container + "; everything inside is indexed and kept in sync."} />
-        <SetCard on={scope === "files"} onClick={() => set({ readScope: "files" })} title={"Specific " + cfg.item} desc={"Pick individual " + cfg.item + " to index."} />
+      <FormRow label="Scope" hint="How much of the connection should we index?" last={!scope}>
+        <SrcRichSelect value={scope} onChange={v => set({ readScope: v })} emptyLabel="Pick a scope"
+          options={[
+            { id: "all", title: "All " + cfg.item, desc: "Index every " + cfg.item.replace(/s$/, "") + " reachable from this connection.", icon: SRC_SCOPE_ICONS.all },
+            { id: "folders", title: "Specific " + cfg.container, desc: "Pick " + cfg.container + "; everything inside is indexed and kept in sync.", icon: SRC_SCOPE_ICONS.folders },
+            { id: "files", title: "Specific " + cfg.item, desc: "Pick individual " + cfg.item + " to index.", icon: SRC_SCOPE_ICONS.files },
+          ]} />
       </FormRow>
 
       {specific && (
@@ -1561,30 +1599,28 @@ function SrcRead({ s, set, sel }) {
         </FormRow>
       )}
 
-      <FormRow label="Filters" optional hint={"Only index " + cfg.item + " matching the " + sel.name + " metadata below. Leave blank to include everything."}>
-        <div style={{ display: "grid", gap: 14 }}>
-          {cfg.filters.map(f => (
-            <div key={f.key}>
-              <div style={SRC_SUBLBL}>{f.label}</div>
-              {f.type === "chips" ? <SrcChipRow options={f.options} selected={filters[f.key] || []} onToggle={opt => setFilter(f.key, srcToggle(filters[f.key] || [], opt))} />
-                : f.type === "select" ? <CustomSelect value={filters[f.key] || f.options[0]} onChange={v => setFilter(f.key, v)} options={f.options.map(x => ({ id: x, label: x }))} />
-                  : f.type === "date" ? <input className="winput" type="date" value={filters[f.key] || ""} onChange={e => setFilter(f.key, e.target.value)} />
-                    : <input className="winput" placeholder={f.ph || ""} value={filters[f.key] || ""} onChange={e => setFilter(f.key, e.target.value)} />}
-            </div>
-          ))}
-        </div>
-      </FormRow>
-
-      <FormRow label="Starting points" optional hint="Seed indexing from known document sets — useful when content isn't neatly foldered." last>
-        <SrcChipRow options={cfg.starts} selected={starts} onToggle={opt => set({ readStarts: srcToggle(starts, opt) })} />
-      </FormRow>
+      {scope && (
+        <FormRow label="Filters" optional hint={"Only index " + cfg.item + " matching the " + sel.name + " metadata below. Leave blank to include everything."} last>
+          <div style={{ display: "grid", gap: 14 }}>
+            {cfg.filters.map(f => (
+              <div key={f.key}>
+                <div style={SRC_SUBLBL}>{f.label}</div>
+                {f.type === "chips" ? <SrcChipRow options={f.options} selected={filters[f.key] || []} onToggle={opt => setFilter(f.key, srcToggle(filters[f.key] || [], opt))} />
+                  : f.type === "select" ? <CustomSelect value={filters[f.key] || f.options[0]} onChange={v => setFilter(f.key, v)} options={f.options.map(x => ({ id: x, label: x }))} />
+                    : f.type === "date" ? <input className="winput" type="date" value={filters[f.key] || ""} onChange={e => setFilter(f.key, e.target.value)} />
+                      : <input className="winput" placeholder={f.ph || ""} value={filters[f.key] || ""} onChange={e => setFilter(f.key, e.target.value)} />}
+              </div>
+            ))}
+          </div>
+        </FormRow>
+      )}
     </StepWrap>
   );
 }
 
 // ── Src Step 4 (unstructured): Extract ────────────────────────────────────────
 function SrcExtract({ s, set, node }) {
-  const method = s.extractMethod || "agent";
+  const method = s.extractMethod || "";
   const fields = s.extractFields || [];
   const updateField = (id, k, val) => set({ extractFields: fields.map(f => f.id === id ? Object.assign({}, f, (function () { const o = {}; o[k] = val; return o; })()) : f) });
   const removeField = id => set({ extractFields: fields.filter(f => f.id !== id) });
@@ -1592,17 +1628,23 @@ function SrcExtract({ s, set, node }) {
   const GRID = "minmax(150px,1fr) 116px minmax(200px,1.7fr) 30px";
   return (
     <StepWrap wide eyebrow="STEP 4 · EXTRACT" title="Extract fields from file contents" desc={"Source metadata is captured automatically — but the values inside each document aren't. Define the fields to pull out" + (node && node.label ? " for " + node.label : "") + ". This is the output schema your agent or automation fills."}>
-      <FormRow label="Extraction method" hint="How values are read from inside each document.">
-        <SetCard on={method === "agent"} onClick={() => set({ extractMethod: "agent" })} title="Agent" desc="An LLM agent reads each document and extracts the schema below." />
-        <SetCard on={method === "automation"} onClick={() => set({ extractMethod: "automation" })} title="Automation" desc="A deterministic automation / parser extracts the schema below." />
-        <div style={{ marginTop: 2 }}>
-          <div style={SRC_SUBLBL}>{method === "agent" ? "Agent" : "Automation"}</div>
-          {method === "agent"
-            ? <CustomSelect value={s.extractAgent} placeholder="Select an agent…" onChange={v => set({ extractAgent: v })} options={EXTRACT_AGENTS.map(x => ({ id: x, label: x }))} />
-            : <CustomSelect value={s.extractAutomation} placeholder="Select an automation…" onChange={v => set({ extractAutomation: v })} options={EXTRACT_AUTOMATIONS.map(x => ({ id: x, label: x }))} />}
-        </div>
+      <FormRow label="Extraction method" hint="How values are read from inside each document." last={!method}>
+        <SrcRichSelect value={method} onChange={v => set({ extractMethod: v })} emptyLabel="Pick a method"
+          options={[
+            { id: "agent", title: "Agent", desc: "An LLM agent reads each document and extracts the schema below.", icon: SRC_METHOD_ICONS.agent },
+            { id: "automation", title: "Automation", desc: "A deterministic automation / parser extracts the schema below.", icon: SRC_METHOD_ICONS.automation },
+          ]} />
+        {method && (
+          <div style={{ marginTop: 12 }}>
+            <div style={SRC_SUBLBL}>{method === "agent" ? "Agent" : "Automation"}</div>
+            {method === "agent"
+              ? <CustomSelect value={s.extractAgent} placeholder="Select an agent…" onChange={v => set({ extractAgent: v })} options={EXTRACT_AGENTS.map(x => ({ id: x, label: x }))} />
+              : <CustomSelect value={s.extractAutomation} placeholder="Select an automation…" onChange={v => set({ extractAutomation: v })} options={EXTRACT_AUTOMATIONS.map(x => ({ id: x, label: x }))} />}
+          </div>
+        )}
       </FormRow>
 
+      {method && (
       <FormRow label="Output schema" optional hint="The fields to extract from each document. The name + description tell the agent what to pull." last>
         <div style={{ border: "1px solid var(--line)", borderRadius: 11, overflow: "hidden", background: "var(--panel)" }}>
           <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 10, padding: "9px 14px", background: "var(--panel-2)", borderBottom: "1px solid var(--line-2)", fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", color: "var(--ink-3)", textTransform: "uppercase" }}>
@@ -1622,6 +1664,7 @@ function SrcExtract({ s, set, node }) {
         </div>
         <button onClick={addField} style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "11px", borderRadius: 9, border: "1px dashed var(--line)", background: "var(--panel)", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--ink-2)" }}><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-3)" }}>+</span> Add field</button>
       </FormRow>
+      )}
     </StepWrap>
   );
 }
@@ -1945,7 +1988,7 @@ source:
   read:
     scope: ${s.readScope || "all"}
 ${readLocs.length ? "    locations:\n" + readLocs.map(l => "      - " + l.label).join("\n") + "\n" : ""}${activeFilters.length ? "    filters:\n" + activeFilters.map(k => "      " + k + ": " + (Array.isArray(readFilters[k]) ? "[" + readFilters[k].join(", ") + "]" : readFilters[k])).join("\n") + "\n" : ""}${(s.readStarts || []).length ? "    starting_points: [" + s.readStarts.join(", ") + "]\n" : ""}extract:
-  method: ${s.extractMethod || "agent"}
+  method: ${s.extractMethod || "(skipped)"}
   ${s.extractMethod === "automation" ? "automation: " + (s.extractAutomation || "(none)") : "agent: " + (s.extractAgent || "(none)")}
   output_schema:
 ${extractFields.length ? extractFields.map(f => "    - name: " + (f.name || "untitled") + "\n      type: " + (f.type || "string") + "\n      description: " + (f.description || "")).join("\n") : "    # (no fields defined)"}
@@ -1985,7 +2028,7 @@ owner: ${s.owner}`;
               ["Source",     sel?.name || s.customName],
               ["Read",       readScopeLabel],
               ["Filters",    activeFilters.length ? activeFilters.length + " active" : "none"],
-              ["Extract",    (s.extractMethod === "automation" ? "Automation" : "Agent") + (s.extractMethod === "automation" ? (s.extractAutomation ? " · " + s.extractAutomation : "") : (s.extractAgent ? " · " + s.extractAgent : ""))],
+              ["Extract",    !s.extractMethod ? "skipped" : (s.extractMethod === "automation" ? "Automation" : "Agent") + (s.extractMethod === "automation" ? (s.extractAutomation ? " · " + s.extractAutomation : "") : (s.extractAgent ? " · " + s.extractAgent : ""))],
               ["Schema",     extractFields.length + " field" + (extractFields.length === 1 ? "" : "s")],
               ["Settings",   (s.pipelineType === "scheduled" ? "Scheduled" : "Real Time") + " · " + (s.resourceTier || "Small")],
               ["Owner",      s.owner],
