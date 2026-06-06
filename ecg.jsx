@@ -6947,7 +6947,7 @@ function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, seedP
   let onBack = null;
   if (mode === "manual") {
     var totalManualSteps = MANUAL_STEPS.length;
-    footerLeftText = "Step " + step + " of " + totalManualSteps + " · " + MANUAL_STEPS[step-1];
+    footerLeftText = ""; // step indicator removed from the manual flow per request
     if (step === 1) primaryDisabled = !canSave;
     if (step < totalManualSteps) { primaryLabel = "Continue →"; onPrimary = function(){ setStep(step + 1); }; }
     else                          primaryLabel = "Add property ↵";
@@ -7269,11 +7269,8 @@ function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, seedP
               <label style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"13px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
                 <input type="checkbox" checked={pInGraph} onChange={function(e){ setPInGraph(e.target.checked); }} style={{ accentColor:"var(--ink)", width:15, height:15, marginTop:2, flexShrink:0 }} />
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>Use in relationship queries</span>
-                    <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)", fontWeight:700, letterSpacing:"0.4px" }}>GRAPH</span>
-                  </div>
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:4, lineHeight:1.45 }}>Turn this on for properties you'll <b style={{ color:"var(--ink-2)" }}>filter, group, or connect {node.label} records by</b> when exploring relationships — these are added to the graph so those queries stay fast. Leave it off for plain details you only read on the record (notes, descriptions, timestamps). Those are still stored and fully searchable — keeping them out of the graph keeps it lean and quick to traverse.</div>
+                  <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>Graph queryable</div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:4, lineHeight:1.45 }}>Turn on if you'll filter or connect {node.label} records by this. Otherwise it stays on the record only.</div>
                 </div>
               </label>
             </div>
