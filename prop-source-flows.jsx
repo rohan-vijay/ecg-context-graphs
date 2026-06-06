@@ -635,8 +635,8 @@ function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage
                       }
                       return (
                         <button key={si.id} onClick={() => s.onSub && s.onSub(si.id)}
-                          style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "8px 10px", borderRadius: 8, border: "none", background: on ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "background 100ms" }}
-                          onMouseEnter={e => { if (!on) e.currentTarget.style.background = "var(--panel)"; }}
+                          style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "8px 10px", borderRadius: 8, border: "none", background: on ? "var(--chip)" : "transparent", boxShadow: on ? "inset 2px 0 0 var(--ink)" : "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "background 100ms" }}
+                          onMouseEnter={e => { if (!on) e.currentTarget.style.background = "var(--panel-2)"; }}
                           onMouseLeave={e => { if (!on) e.currentTarget.style.background = "transparent"; }}>
                           {/* progress ring + monogram */}
                           <span style={{ position: "relative", width: 26, height: 26, flexShrink: 0 }}>
