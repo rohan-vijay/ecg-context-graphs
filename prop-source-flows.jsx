@@ -602,13 +602,32 @@ function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage
         <div className="flow-body" style={!rightPane ? { gridTemplateColumns: "240px minmax(0, 1fr)" } : undefined}>
           <aside className="flow-steps">
             {steps.map((s, i) => (
-              <button key={i} className={"flow-step" + (i === step ? " on" : "") + (i < step ? " done" : "")} onClick={() => setStep(i)}>
-                <span className="flow-step-n">{i < step ? <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg> : i + 1}</span>
-                <div className="flow-step-text">
-                  <div className="flow-step-label">{s.label}</div>
-                  <div className="flow-step-hint">{s.hint}</div>
-                </div>
-              </button>
+              <React.Fragment key={i}>
+                <button className={"flow-step" + (i === step ? " on" : "") + (i < step ? " done" : "")} onClick={() => setStep(i)}>
+                  <span className="flow-step-n">{i < step ? <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg> : i + 1}</span>
+                  <div className="flow-step-text">
+                    <div className="flow-step-label">{s.label}</div>
+                    <div className="flow-step-hint">{s.hint}</div>
+                  </div>
+                </button>
+                {i === step && s.subItems && s.subItems.length > 0 && (
+                  <div style={{ margin: "2px 0 4px 26px", display: "flex", flexDirection: "column", gap: 1, borderLeft: "1px solid var(--line)", paddingLeft: 10 }}>
+                    {s.subItems.map(si => {
+                      const on = si.id === s.activeSub;
+                      return (
+                        <button key={si.id} onClick={() => s.onSub && s.onSub(si.id)}
+                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 10px", borderRadius: 7, border: "none", background: on ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
+                          onMouseEnter={e => { if (!on) e.currentTarget.style.background = "var(--panel)"; }}
+                          onMouseLeave={e => { if (!on) e.currentTarget.style.background = "transparent"; }}>
+                          <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: on ? "var(--ink)" : (si.done ? "var(--green)" : "var(--line)") }} />
+                          <span style={{ flex: 1, minWidth: 0, fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: on ? 600 : 500, color: on ? "var(--ink)" : "var(--ink-2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{si.label}</span>
+                          {si.meta && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, color: si.metaOn ? "var(--green)" : "var(--ink-4)", flexShrink: 0 }}>{si.meta}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </React.Fragment>
             ))}
             {!hideKeymap && (
               <div className="flow-steps-foot">
@@ -1262,6 +1281,7 @@ const UNSTRUCTURED_META_COLS = [
 function LinkSourceFlow({ node, existingSources, onClose }) {
   const [step, setStep] = useState(0);
   const [mapOpenCol, setMapOpenCol] = useState("");
+  const [mapActiveObj, setMapActiveObj] = useState("");
   const [s, setS] = useState({
     system: "", customName: "", connection: "", newConnName: "", newConnHost: "", newConnAuth: "OAuth2",
     table: "", tables: [], query: "", inputMode: "table",
@@ -1301,6 +1321,12 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const mapKeys = mapGroups.reduce((acc, g) => acc.concat(g.cols.map(c => g.name + "::" + c.col)), []);
   const mappedCount = mapKeys.filter(k => (s.mapping || {})[k]).length;
   const totalMapCols = mapKeys.length;
+  // Active object for the per-object mapping sub-navigation.
+  const activeMapObj = (mapActiveObj && mapGroups.some(g => g.name === mapActiveObj)) ? mapActiveObj : (mapGroups[0] ? mapGroups[0].name : "");
+  const mapSubItems = mapGroups.length > 1 ? mapGroups.map(g => {
+    const gm = g.cols.filter(c => (s.mapping || {})[g.name + "::" + c.col]).length;
+    return { id: g.name, label: g.name, meta: gm + "/" + g.cols.length, metaOn: gm > 0 && gm === g.cols.length, done: gm > 0 };
+  }) : null;
   const settingsHint = (s.pipelineType === "scheduled" ? "Scheduled" : "Real Time") + " · " + (s.resourceTier || "Small");
   const canNext = step === 0 ? !!s.system
     : step === 1 ? !!s.connection
@@ -1332,7 +1358,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     { label: "Source system",  hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",     hint: connLabel },
     { label: "Objects",        hint: objectHint },
-    { label: "Column mapping", hint: colMapHint },
+    { label: "Column mapping", hint: colMapHint, subItems: mapSubItems, activeSub: activeMapObj, onSub: setMapActiveObj },
     { label: "Settings", hint: settingsHint },
     { label: "Review",         hint: "Config & publish" },
   ];
@@ -1385,7 +1411,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
       ) : (
         <>
           {step === 2 && <SrcObject s={s} set={set} sel={sel} />}
-          {step === 3 && <SrcMapping s={s} set={set} groups={mapGroups} nodeProps={nodeProps} node={node} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} />}
+          {step === 3 && <SrcMapping s={s} set={set} groups={mapGroups} activeObj={activeMapObj} nodeProps={nodeProps} node={node} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} />}
           {step === 4 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
           {step === 5 && <SrcReview s={s} set={set} node={node} sel={sel} mapGroups={mapGroups} mappedCount={mappedCount} totalMapCols={totalMapCols} unstructured={unstructured} readCfg={readCfg} onClose={onClose} />}
         </>
@@ -1923,10 +1949,9 @@ function SrcTransformDrawer({ col, type, sel, list, onChange, onClose }) {
   );
 }
 
-function SrcMapping({ s, set, groups, nodeProps, node, sel, openCol, setOpenCol, eyebrow, title, desc, singleGroup }) {
+function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, setOpenCol, eyebrow, title, desc, singleGroup }) {
   const [q, setQ] = useState("");
   const [tab, setTab] = useState("all");
-  const [collapsed, setCollapsed] = useState({});
   const mapping = s.mapping || {};
   const transforms = s.transforms || {};
   const groupList = groups || [];
@@ -1934,11 +1959,14 @@ function SrcMapping({ s, set, groups, nodeProps, node, sel, openCol, setOpenCol,
   const updateMap = (key, propId) => set({ mapping: Object.assign({}, mapping, (function () { var o = {}; o[key] = propId; return o; })()) });
   const GRID = "minmax(180px,1.3fr) minmax(190px,1.2fr) 34px minmax(190px,1.3fr)";
 
-  const allKeys = groupList.reduce((a, g) => a.concat(g.cols.map(c => mk(g.name, c.col))), []);
-  const total = allKeys.length;
-  const mappedCount = allKeys.filter(k => mapping[k]).length;
-  const colVisible = (g, c) => {
-    const key = mk(g.name, c.col);
+  // Map ONE object at a time — the active object is driven by the sidebar sub-nav.
+  const current = (activeObj && groupList.find(g => g.name === activeObj)) || groupList[0] || null;
+  const curCols = current ? current.cols : [];
+  const curKeys = curCols.map(c => mk(current.name, c.col));
+  const total = curKeys.length;
+  const mappedCount = curKeys.filter(k => mapping[k]).length;
+  const colVisible = (c) => {
+    const key = mk(current.name, c.col);
     if (q && c.col.toLowerCase().indexOf(q.toLowerCase()) < 0) return false;
     if (tab === "mapped") return !!mapping[key];
     if (tab === "unmapped") return !mapping[key];
@@ -2000,7 +2028,6 @@ function SrcMapping({ s, set, groups, nodeProps, node, sel, openCol, setOpenCol,
             </button>;
           })}
         </div>
-        {!singleGroup && groupList.length > 0 && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-3)" }}>{groupList.length + " object" + (groupList.length === 1 ? "" : "s")}</span>}
         <div style={{ position: "relative", marginLeft: "auto", width: 240 }}>
           <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--ink-3)", display: "flex" }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
@@ -2009,37 +2036,27 @@ function SrcMapping({ s, set, groups, nodeProps, node, sel, openCol, setOpenCol,
         </div>
       </div>
 
-      {groupList.length === 0 && (
+      {!current && (
         <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)", padding: "40px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No objects selected — go back to the Objects step and pick at least one.</div>
       )}
 
-      {groupList.map(g => {
-        const gKeys = g.cols.map(c => mk(g.name, c.col));
-        const gMapped = gKeys.filter(k => mapping[k]).length;
-        const visible = g.cols.filter(c => colVisible(g, c));
-        const isCollapsed = !!collapsed[g.name];
+      {current && (function () {
+        const visible = curCols.filter(colVisible);
         return (
-          <div key={g.name} style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)", marginBottom: singleGroup ? 0 : 14, overflow: "hidden" }}>
-            {!singleGroup && (
-              <button onClick={() => setCollapsed(prev => Object.assign({}, prev, (function () { var o = {}; o[g.name] = !prev[g.name]; return o; })()))}
-                style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "12px 16px", border: "none", borderBottom: isCollapsed ? "none" : "1px solid var(--line)", background: "var(--panel-2)", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isCollapsed ? "none" : "rotate(90deg)", transition: "transform 120ms", flexShrink: 0 }}><polyline points="9 6 15 12 9 18" /></svg>
-                {sel && <SrcConnectorLogo c={sel} size={18} />}
-                <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{g.name}</code>
-                <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{(g.type || "Object") + " · " + g.cols.length + " columns"}</span>
-                <span style={{ marginLeft: "auto", fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 600, color: gMapped ? "var(--green)" : "var(--ink-3)" }}>{gMapped + "/" + g.cols.length + " mapped"}</span>
-              </button>
-            )}
-            {!isCollapsed && (
-              <>
-                {tableHeader(singleGroup)}
-                {visible.map((col, i) => renderRow(g, col, i, i === visible.length - 1))}
-                {visible.length === 0 && <div style={{ padding: "26px", textAlign: "center", color: "var(--ink-3)", fontSize: 12.5 }}>No fields match the current filter.</div>}
-              </>
-            )}
+          <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)", overflow: "hidden" }}>
+            {/* active object caption */}
+            <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 16px", borderBottom: "1px solid var(--line)", background: "var(--panel-2)" }}>
+              {!singleGroup && sel && <SrcConnectorLogo c={sel} size={18} />}
+              <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{current.name}</code>
+              <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{(current.type || "Object") + " · " + current.cols.length + " columns"}</span>
+              <span style={{ marginLeft: "auto", fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 600, color: mappedCount ? "var(--green)" : "var(--ink-3)" }}>{mappedCount + "/" + total + " mapped"}</span>
+            </div>
+            {tableHeader(false)}
+            {visible.map((col, i) => renderRow(current, col, i, i === visible.length - 1))}
+            {visible.length === 0 && <div style={{ padding: "30px", textAlign: "center", color: "var(--ink-3)", fontSize: 12.5 }}>No fields match the current filter.</div>}
           </div>
         );
-      })}
+      })()}
     </StepWrap>
   );
 }
