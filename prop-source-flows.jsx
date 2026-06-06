@@ -1325,7 +1325,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     system: "", customName: "", connection: "", newConnName: "", newConnHost: "", newConnAuth: "OAuth2",
     table: "", tables: [], query: "", inputMode: "table",
     pkCol: "", joinCol: "", incrementalCol: "updated_at",
-    loadStrategy: "incremental", mapping: {}, transforms: {}, recordFilters: {}, unmappedPolicy: "ignore",
+    loadStrategy: "incremental", mapping: {}, transforms: {}, recordFilters: {}, transformedFields: {}, unmappedPolicy: "ignore",
     cadence: "5min", freshnessSLO: "30m", batchWindow: "15m",
     retryCount: 3, retryDelay: "5m", onError: "alert",
     alertChannel: "#schema-alerts", owner: "data-platform",
@@ -1426,7 +1426,15 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
       rightPane={null}
       overlay={mapOpenCol ? (function(){
         const ix = mapOpenCol.indexOf("::");
+        const objName = ix >= 0 ? mapOpenCol.slice(0, ix) : "";
         const colName = ix >= 0 ? mapOpenCol.slice(ix + 2) : mapOpenCol;
+        // "+ Transformed field" opens the same drawer in new-field mode.
+        if (colName === "__newtf__") {
+          const grp = mapGroups.find(g => g.name === objName);
+          return <SrcTransformDrawer newField cols={grp ? grp.cols : []} objName={objName} sel={sel}
+            onSave={tf => { const cur = s.transformedFields || {}; const arr = (cur[objName] || []).concat([Object.assign({ id: "tf-" + Date.now() }, tf)]); set({ transformedFields: Object.assign({}, cur, (function(){ var o = {}; o[objName] = arr; return o; })()) }); setMapOpenCol(""); }}
+            onClose={() => setMapOpenCol("")} />;
+        }
         let colType = "string";
         for (let gi = 0; gi < mapGroups.length; gi++) { const c = mapGroups[gi].cols.find(x => x.col === colName); if (c) { colType = c.type; break; } }
         return <SrcTransformDrawer col={colName} type={colType} sel={sel} list={(s.transforms || {})[mapOpenCol] || []} onChange={arr => set({ transforms: Object.assign({}, s.transforms, (function(){ var o = {}; o[mapOpenCol] = arr; return o; })()) })} onClose={() => setMapOpenCol("")} />;
@@ -1896,7 +1904,16 @@ function MapBadge({ children, tone }) {
 
 // Per-field transformation chain editor — a focused right-side drawer.
 // Add one or many functions, applied top to bottom, before the value is written.
-function SrcTransformDrawer({ col, type, sel, list, onChange, onClose }) {
+function SrcTransformDrawer({ col, type, sel, list: propList, onChange: propOnChange, onClose, newField, cols, objName, onSave }) {
+  const isNew = !!newField;
+  const [draftList, setDraftList] = useState([]);
+  const [nfName, setNfName] = useState("");
+  const [nfSource, setNfSource] = useState("");
+  const list = isNew ? draftList : (propList || []);
+  const onChange = isNew ? setDraftList : propOnChange;
+  const srcCol = isNew ? (cols || []).find(c => c.col === nfSource) : null;
+  const effType = isNew ? (srcCol ? srcCol.type : "string") : type;
+  const canSaveNew = isNew && nfName.trim() && nfSource;
   const add = () => onChange(list.concat([{ fn: "", cfg: {}, saveNew: false, newField: "" }]));
   const setFn = (i, fn) => onChange(list.map((t, j) => j === i ? { fn: fn, cfg: {}, saveNew: !!(tfDef(fn) || {}).alwaysSaveNew, newField: t.newField || "" } : t));
   const setCfg = (i, key, val) => onChange(list.map((t, j) => j === i ? { ...t, cfg: { ...(t.cfg || {}), [key]: val } } : t));
@@ -1912,16 +1929,33 @@ function SrcTransformDrawer({ col, type, sel, list, onChange, onClose }) {
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 7h11M4 7l3-3M4 7l3 3M20 17H9M20 17l-3-3M20 17l-3 3" /></svg>
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: "'Instrument Serif', serif", fontSize: 21, color: "var(--ink)", lineHeight: 1.1 }}>Transformations</div>
+            <div style={{ fontFamily: "'Instrument Serif', serif", fontSize: 21, color: "var(--ink)", lineHeight: 1.1 }}>{isNew ? "New transformed field" : "Transformations"}</div>
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--ink-3)", marginTop: 3, display: "flex", alignItems: "center", gap: 6 }}>
-              <MapTypeGlyph type={type} size={18} /> <code>{col}</code> {sel ? "· " + sel.name : ""}
+              {isNew
+                ? (nfSource ? <><MapTypeGlyph type={effType} size={18} /> <code>{nfName || "new_field"}</code> <span style={{ color: "var(--ink-4)" }}>· from {nfSource}</span></> : <span style={{ color: "var(--ink-4)" }}>Derive a new field from a source column</span>)
+                : <><MapTypeGlyph type={type} size={18} /> <code>{col}</code> {sel ? "· " + sel.name : ""}</>}
             </div>
           </div>
           <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid var(--line)", background: "none", cursor: "pointer", color: "var(--ink-3)", flexShrink: 0, fontSize: 13 }}>✕</button>
         </div>
         {/* body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "18px 20px" }}>
-          <div style={{ fontSize: 12.5, color: "var(--ink-3)", lineHeight: 1.55, marginBottom: 16 }}>Functions run top to bottom on the source value before it's written to the destination field. Drag-free reorder by removing and re-adding.</div>
+          {isNew && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 13, marginBottom: 18, paddingBottom: 18, borderBottom: "1px solid var(--line-2)" }}>
+              <div>
+                <label style={{ display: "block", fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 6 }}>Field name</label>
+                <input className="winput winput-mono" placeholder="e.g. full_name" value={nfName} onChange={e => setNfName(e.target.value)} autoFocus />
+              </div>
+              <div>
+                <label style={{ display: "block", fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 6 }}>Source field</label>
+                <CustomSelect value={nfSource} onChange={setNfSource} placeholder="Pick a source field"
+                  options={(cols || []).map(c => ({ id: c.col, label: c.col, type: c.type }))}
+                  renderTrigger={o => o.id ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={20} /><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{o.label}</span></span> : <span style={{ color: "var(--ink-4)" }}>Pick a source field</span>}
+                  renderOption={o => <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={18} />{o.label}</span>} />
+              </div>
+            </div>
+          )}
+          <div style={{ fontSize: 12.5, color: "var(--ink-3)", lineHeight: 1.55, marginBottom: 16 }}>{isNew ? "Chain functions to compute the new field's value from the source. They run top to bottom." : "Functions run top to bottom on the source value before it's written to the destination field. Drag-free reorder by removing and re-adding."}</div>
           {list.map((t, i) => {
             const def = tfDef(t.fn);
             const cfg = t.cfg || {};
@@ -1976,8 +2010,17 @@ function SrcTransformDrawer({ col, type, sel, list, onChange, onClose }) {
         </div>
         {/* footer */}
         <div style={{ flexShrink: 0, padding: "14px 20px", borderTop: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--panel-2)" }}>
-          <button onClick={() => onChange([])} disabled={!list.length} className="btn-ghost" style={{ opacity: list.length ? 1 : 0.4 }}>Clear all</button>
-          <button onClick={onClose} className="btn-dark">Done</button>
+          {isNew ? (
+            <>
+              <button onClick={onClose} className="btn-ghost">Cancel</button>
+              <button onClick={() => onSave && onSave({ name: nfName.trim(), source: nfSource, chain: list })} className="btn-dark" disabled={!canSaveNew} style={{ opacity: canSaveNew ? 1 : 0.45 }}>Add field</button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => onChange([])} disabled={!list.length} className="btn-ghost" style={{ opacity: list.length ? 1 : 0.4 }}>Clear all</button>
+              <button onClick={onClose} className="btn-dark">Done</button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -2072,6 +2115,8 @@ function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, 
   const mappedCount = curKeys.filter(k => mapping[k]).length;
   const recordFilters = s.recordFilters || {};
   const activeFilters = current ? (recordFilters[current.name] || []) : [];
+  const tfields = current ? ((s.transformedFields || {})[current.name] || []) : [];
+  const removeTf = id => { const cur = s.transformedFields || {}; const arr = (cur[current.name] || []).filter(t => t.id !== id); set({ transformedFields: Object.assign({}, cur, (function () { var o = {}; o[current.name] = arr; return o; })()) }); };
   const colVisible = (c) => {
     const key = mk(current.name, c.col);
     if (q && c.col.toLowerCase().indexOf(q.toLowerCase()) < 0) return false;
@@ -2122,6 +2167,39 @@ function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, 
     );
   }
 
+  // Derived "transformed fields" created via the toolbar render as extra mappable rows.
+  function renderTfRow(tf) {
+    const key = mk(current.name, tf.name);
+    const mapped = mapping[key];
+    const srcCol = curCols.find(c => c.col === tf.source);
+    const tfType = srcCol ? srcCol.type : "string";
+    const chain = (tf.chain || []).filter(t => t.fn);
+    return (
+      <div key={tf.id} style={{ borderTop: "1px solid var(--line-2)", background: "color-mix(in oklab, var(--purple) 4%, transparent)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "12px 16px", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <MapTypeGlyph type={tfType} />
+            <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tf.name}</code>
+            <MapBadge tone="var(--purple)">FX</MapBadge>
+            <button onClick={() => removeTf(tf.id)} title="Remove field" style={{ marginLeft: 2, width: 22, height: 22, borderRadius: 5, border: "none", background: "transparent", cursor: "pointer", color: "var(--ink-4)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </div>
+          <button onClick={() => setOpenCol(current.name + "::__newtf__")} title="Transformed via" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", width: "100%", padding: "7px 10px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", minHeight: 34 }}>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-4)" }}>from {tf.source}</span>
+            {chain.map((t, j) => <span key={j} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, padding: "2px 7px", borderRadius: 5, background: "var(--chip)", border: "1px solid var(--line)", color: "var(--ink-2)" }}>{tfLabel(t.fn)}</span>)}
+            {chain.length === 0 && <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>passthrough</span>}
+          </button>
+          <div style={{ textAlign: "center", color: mapped ? "var(--green)" : "var(--ink-4)", fontSize: 15 }}>→</div>
+          <CustomSelect value={mapped || ""} onChange={v => updateMap(key, v)} placeholder="Select field"
+            options={nodeProps.map(p => ({ id: p.id, label: p.id, type: p.type })).concat([{ id: "__new__", label: "+ New property…" }])}
+            renderTrigger={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={22} /><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{o.label}</span></span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-4)" }}>{o.label || "Select field"}</span>}
+            renderOption={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={20} />{o.label}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-3)" }}>{o.label}</span>} />
+        </div>
+      </div>
+    );
+  }
+
   const multiObj = groupList.length > 1;
   const objName = current ? current.name : "";
   const stepTitle = title || (multiObj && objName
@@ -2164,6 +2242,13 @@ function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, 
           )}
         </div>
 
+        {/* add a derived field via the transformation panel */}
+        <button onClick={() => current && setOpenCol(current.name + "::__newtf__")}
+          style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 13px", height: 40, borderRadius: 9, border: "1px solid var(--line)", background: "var(--panel)", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--ink)", fontWeight: 500 }}>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 400, color: "var(--ink-3)", lineHeight: 1 }}>+</span>
+          Transformed field
+        </button>
+
         <div style={{ position: "relative", marginLeft: "auto", width: 240 }}>
           <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--ink-3)", display: "flex" }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
@@ -2205,7 +2290,8 @@ function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, 
             </div>
             {tableHeader(false)}
             {visible.map((col, i) => renderRow(current, col, i, i === visible.length - 1))}
-            {visible.length === 0 && <div style={{ padding: "30px", textAlign: "center", color: "var(--ink-3)", fontSize: 12.5 }}>No fields match the current filter.</div>}
+            {tab !== "mapped" && tfields.map(tf => renderTfRow(tf))}
+            {visible.length === 0 && tfields.length === 0 && <div style={{ padding: "30px", textAlign: "center", color: "var(--ink-3)", fontSize: 12.5 }}>No fields match the current filter.</div>}
           </div>
         );
       })()}
