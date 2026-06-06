@@ -2378,6 +2378,10 @@ function GlobalSourcesView() {
   const [sysFilter, setSysFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState({ col: "name", dir: "asc" });
+  const [srcLinkOpen, setSrcLinkOpen] = useState(false);
+  // Destination node for a source linked from the global Sources view. Defaults to a
+  // sensible core entity; the same wizard used inside a node detail opens here too.
+  const linkNode = useMemo(() => NODES.find(n => n.id === "account") || NODES.find(n => n.cat === "core" || n.state === "core") || NODES[0], []);
 
   // Aggregate all sources across all nodes — only real source systems
   // (drop "Manual / Admin UI", "Computed by agent", "Self (system of record)" etc.)
@@ -2439,6 +2443,9 @@ function GlobalSourcesView() {
   const onSort = col => setSort(s => ({ col, dir: s.col === col && s.dir === "asc" ? "desc" : "asc" }));
   const sortIcon = col => sort.col === col ? (sort.dir === "asc" ? " ↑" : " ↓") : "";
 
+  // Open the same Link Source wizard used inside a node detail.
+  if (srcLinkOpen && linkNode) return <LinkSourceFlow node={linkNode} onClose={() => setSrcLinkOpen(false)} />;
+
   return (
     <div className="nodes-view">
       <div className="nv-head">
@@ -2448,7 +2455,7 @@ function GlobalSourcesView() {
         </div>
         <div className="nv-head-right">
           <button className="btn-ghost">Bulk export</button>
-          <button className="btn-dark">+ Link source</button>
+          <button className="btn-dark" onClick={() => setSrcLinkOpen(true)}>+ Link source</button>
         </div>
       </div>
 
@@ -3073,6 +3080,7 @@ function NodeDetailView({ nodeId, onBack, onCanvas, nodes: liveNodes, edges: liv
           </div>
         </div>
 
+        {/* KPI stats row — hidden per request (kept for reference)
         <div className="detail-kpis">
           <div className="kpi">
             <div className="kpi-lbl">Records</div>
@@ -3107,6 +3115,7 @@ function NodeDetailView({ nodeId, onBack, onCanvas, nodes: liveNodes, edges: liv
             <div className="kpi-v" style={{ color: issues.filter(i=>i.sev==="warn").length ? "var(--gold)" : "var(--ink)" }}>{issues.filter(i=>i.sev==="warn").length}</div>
           </div>
         </div>
+        */}
 
         <div className="detail-tabs">
           {DETAIL_TABS.map(t => {
