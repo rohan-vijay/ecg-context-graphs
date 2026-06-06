@@ -2969,7 +2969,7 @@ function EditSchemaView({ node, properties: initProps, onClose }) {
 // ---------- NODE DETAIL VIEW ------------------------------------------------
 
 // Quality tab temporarily hidden — content lives behind tab === "Quality" but the chip is omitted from this list.
-const DETAIL_TABS = ["Overview", "Properties", "Edges", "Sources", "Rules", "Computations", "History", "Sample"];
+const DETAIL_TABS = ["Overview", "Properties", "Edges", "Sources", "Survivorship", "Data Matching", "Data Enrichment", "Computations", "History", "Sample"];
 
 function NodeDetailView({ nodeId, onBack, onCanvas, nodes: liveNodes, edges: liveEdges }) {
   // Prefer live nodes/edges from App state when provided — needed for nodes
@@ -3110,13 +3110,15 @@ function NodeDetailView({ nodeId, onBack, onCanvas, nodes: liveNodes, edges: liv
 
         <div className="detail-tabs">
           {DETAIL_TABS.map(t => {
-            const count = t === "Properties"   ? node.props
-                       : t === "Edges"         ? outgoing.length + incoming.length
-                       : t === "Sources"       ? sources.length
-                       : t === "Rules"         ? rules.quality.length + rules.match.length + rules.survivorship.length
-                       : t === "Computations"  ? buildComputationsForNode(node, properties, rules).length
-                       : t === "Quality"       ? properties.filter(p=>p.fill<92||p.conf<92).length || null
-                       : t === "Governance"    ? properties.filter(p=>p.pii).length || null
+            const count = t === "Properties"     ? node.props
+                       : t === "Edges"           ? outgoing.length + incoming.length
+                       : t === "Sources"         ? sources.length
+                       : t === "Survivorship"    ? rules.survivorship.length
+                       : t === "Data Matching"   ? rules.match.length
+                       : t === "Data Enrichment" ? rules.quality.length
+                       : t === "Computations"    ? buildComputationsForNode(node, properties, rules).length
+                       : t === "Quality"         ? properties.filter(p=>p.fill<92||p.conf<92).length || null
+                       : t === "Governance"      ? properties.filter(p=>p.pii).length || null
                        : null;
             return (
               <button key={t} className={"detail-tab" + (tab === t ? " on" : "")} onClick={() => setTab(t)}>
@@ -3132,7 +3134,9 @@ function NodeDetailView({ nodeId, onBack, onCanvas, nodes: liveNodes, edges: liv
         {tab === "Properties" && <PropertiesPane node={node} properties={properties} />}
         {tab === "Edges"      && <EdgesPane node={node} outgoing={outgoing} incoming={incoming} />}
         {tab === "Sources"    && <SourcesPane sources={sources} node={node} onLinkSource={() => setSrcLinkOpen(true)} />}
-        {tab === "Rules"      && <RulesPane rules={rules} node={node} onViolationClick={setViolationRule} onMatchClick={setMatchRule} onSurvClick={setSurvConflict} onNewRule={() => setNewRuleOpen(true)} onEditRule={setEditRule} />}
+        {tab === "Survivorship"    && <RulesPane bucket="surv" rules={rules} node={node} onViolationClick={setViolationRule} onMatchClick={setMatchRule} onSurvClick={setSurvConflict} onNewRule={() => setNewRuleOpen(true)} onEditRule={setEditRule} />}
+        {tab === "Data Matching"   && <RulesPane bucket="match" rules={rules} node={node} onViolationClick={setViolationRule} onMatchClick={setMatchRule} onSurvClick={setSurvConflict} onNewRule={() => setNewRuleOpen(true)} onEditRule={setEditRule} />}
+        {tab === "Data Enrichment" && <RulesPane bucket="quality" rules={rules} node={node} onViolationClick={setViolationRule} onMatchClick={setMatchRule} onSurvClick={setSurvConflict} onNewRule={() => setNewRuleOpen(true)} onEditRule={setEditRule} />}
         {tab === "Computations" && <ComputationsPane node={node} properties={properties} rules={rules} />}
         {tab === "Quality"    && <QualityPane node={node} properties={properties} />}
         {tab === "History"    && <HistoryPane node={node} />}
@@ -11482,14 +11486,19 @@ function NewRuleFlow({ node, onClose, initialRule }) {
 // RULES PANE — unified table with filter chips, inline expand, search
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function RulesPane({ rules, node, onViolationClick, onMatchClick, onSurvClick, onNewRule, onEditRule }) {
+function RulesPane({ rules, node, bucket, onViolationClick, onMatchClick, onSurvClick, onNewRule, onEditRule }) {
   const [filter, setFilter]   = useState("all");
   const [search, setSearch]   = useState("");
 
   const qRules = (rules.quality || []).map(function(r){ return Object.assign({}, r, { _bucket:"quality" }); });
   const mRules = (rules.match || []).map(function(r){ return Object.assign({}, r, { _bucket:"match", kind:"MATCH" }); });
   const sRules = (rules.survivorship || []).map(function(r){ return Object.assign({}, r, { _bucket:"surv", kind:"SURV" }); });
-  const allRules = qRules.concat(mRules).concat(sRules);
+  // When rendered inside a dedicated tab (Survivorship / Data Matching / Data
+  // Enrichment) only that bucket's rules are shown.
+  const allRules = bucket === "quality" ? qRules
+                 : bucket === "match"   ? mRules
+                 : bucket === "surv"    ? sRules
+                 : qRules.concat(mRules).concat(sRules);
 
   function meta(kind) {
     var k = (kind || "").toUpperCase();
@@ -11509,7 +11518,15 @@ function RulesPane({ rules, node, onViolationClick, onMatchClick, onSurvClick, o
          :                 { bg:"var(--chip)",       color:"var(--ink-3)" };
   }
 
-  const FILTERS = [
+  const FILTERS = bucket === "quality" ? [
+    { id:"all", label:"All",      count: qRules.length },
+    { id:"VAL", label:"Validate", count: qRules.filter(function(r){ return r.kind === "VALIDATE"; }).length },
+    { id:"CMP", label:"Compute",  count: qRules.filter(function(r){ return r.kind === "COMPUTE" || r.kind === "INFER"; }).length },
+    { id:"SLO", label:"SLO",      count: qRules.filter(function(r){ return r.kind === "SLO"; }).length },
+    { id:"ACC", label:"Access",   count: qRules.filter(function(r){ return r.kind === "ACCESS"; }).length }
+  ] : (bucket === "match" || bucket === "surv") ? [
+    { id:"all", label:"All",      count: allRules.length }
+  ] : [
     { id:"all", label:"All",      count: allRules.length },
     { id:"VAL", label:"Validate", count: qRules.filter(function(r){ return r.kind === "VALIDATE"; }).length },
     { id:"MTC", label:"Match",    count: mRules.length },
@@ -11553,15 +11570,17 @@ function RulesPane({ rules, node, onViolationClick, onMatchClick, onSurvClick, o
   return (
     <div className="card">
       <div className="card-head card-head-row" style={{ flexWrap:"wrap", gap:12 }}>
-        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-          {FILTERS.map(function(f){
+        <div style={{ display:"flex", gap:4, flexWrap:"wrap", alignItems:"center" }}>
+          {FILTERS.length > 1 ? FILTERS.map(function(f){
             var isOn = filter === f.id;
             return (
               <button key={f.id} onClick={function(){ setFilter(f.id); }} className={"chip" + (isOn ? " on" : "")}>
                 {f.label} <span className="chip-n">{f.count}</span>
               </button>
             );
-          })}
+          }) : (
+            <span style={{ fontFamily:"JetBrains Mono", fontSize:11, color:"var(--ink-3)" }}>{allRules.length + " " + (bucket === "match" ? "match" : "survivorship") + " rule" + (allRules.length === 1 ? "" : "s")}</span>
+          )}
         </div>
         <div className="card-head-actions" style={{ alignItems:"center" }}>
           <span style={{ fontFamily:"JetBrains Mono", fontSize:10.5, color:"var(--ink-3)", marginRight:6 }}>
