@@ -653,7 +653,7 @@ function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage
                           {/* name + sub */}
                           <span style={{ flex: 1, minWidth: 0 }}>
                             <span style={{ display: "block", fontSize: 12.5, fontWeight: on ? 600 : 500, color: on ? "var(--ink)" : "var(--ink-2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.2 }}>{si.label}</span>
-                            <span style={{ display: "block", fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, color: complete ? "var(--green)" : (mapped > 0 ? "var(--ink-3)" : "var(--ink-4)"), marginTop: 2 }}>{complete ? "fully mapped" : mapped + " / " + total + " mapped"}</span>
+                            <span style={{ display: "block", fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, color: complete ? "var(--green)" : (mapped > 0 ? "var(--ink-3)" : "var(--ink-4)"), marginTop: 2 }}>{mapped + " / " + total}</span>
                           </span>
                         </button>
                       );
