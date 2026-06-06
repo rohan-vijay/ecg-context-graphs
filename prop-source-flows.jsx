@@ -1811,7 +1811,7 @@ function SrcExtract({ s, set, node }) {
   const GRID = "minmax(150px,1fr) 116px minmax(200px,1.7fr) 30px";
   return (
     <StepWrap wide title="Extract fields from file contents">
-      <FormRow label="Extraction method" hint="How values are read from inside each document." last={!method}>
+      <FormRow label="Extraction method" hint="How values are read from inside each document." last>
         <SrcRichSelect value={method} onChange={v => set({ extractMethod: v })} emptyLabel="Pick a method"
           options={[
             { id: "agent", title: "Agent", desc: "An LLM agent reads each document and extracts the schema below.", icon: SRC_METHOD_ICONS.agent },
@@ -1827,6 +1827,7 @@ function SrcExtract({ s, set, node }) {
         )}
       </FormRow>
 
+      {/* Output schema — hidden for now per request (kept for reference)
       {method && (
       <FormRow label="Output schema" optional hint="The fields to extract from each document. The name + description tell the agent what to pull." last>
         <div style={{ border: "1px solid var(--line)", borderRadius: 11, overflow: "hidden", background: "var(--panel)" }}>
@@ -1848,6 +1849,7 @@ function SrcExtract({ s, set, node }) {
         <button onClick={addField} style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "11px", borderRadius: 9, border: "1px dashed var(--line)", background: "var(--panel)", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--ink-2)" }}><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-3)" }}>+</span> Add field</button>
       </FormRow>
       )}
+      */}
     </StepWrap>
   );
 }
