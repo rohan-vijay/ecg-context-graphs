@@ -578,9 +578,9 @@ function BackfillBanner({ backfill, onChange, estimate }) {
 
 // ─── FLOW SHELL (shared wrapper) ──────────────────────────────────────────────
 
-function WizardShell({ eyebrow, plainTitle, titleFrom, titleTo, titleLabel, titleType, stage, steps, step, setStep, onClose, rightPane, children, canNext, onNext, onPublish, hideKeymap, hideFootHelp, hideStage, overlay }) {
+function WizardShell({ eyebrow, plainTitle, titleFrom, titleTo, titleLabel, titleType, stage, steps, step, setStep, onClose, rightPane, children, canNext, onNext, onPublish, hideKeymap, hideFootHelp, hideStage, overlay, fullScreen }) {
   return (
-    <div className="flow-overlay" onClick={onClose}>
+    <div className={"flow-overlay" + (fullScreen ? " flow-overlay-full" : "")} onClick={onClose}>
       <div className="flow-shell" onClick={e => e.stopPropagation()}>
         <div className="flow-head">
           <div className="flow-head-left">
@@ -1416,7 +1416,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
 
   return (
     <WizardShell
-      plainTitle="Add Data Sources"
+      plainTitle="Add Data Sources" fullScreen
       stage={s.stage} hideStage hideKeymap hideFootHelp
       steps={srcSteps} step={step} setStep={setStep}
       canNext={canNext}
