@@ -6743,6 +6743,8 @@ function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, seedP
   const [pAdvSearch, setPAdvSearch]             = useState(false);
   const [pAdvSort, setPAdvSort]                 = useState(false);
   const [pAdvFilter, setPAdvFilter]             = useState(false);
+  // Whether this property is materialised into the graph (vs. only the backing record store).
+  const [pInGraph, setPInGraph]                 = useState(isEditProp ? (initialProperty.inGraph !== false ? !!initialProperty.inGraph : false) : false);
   // Rules step state — replaces Governance.
   // Three slices: data quality (validate/cleanse/enrich), match (this prop as a match signal), survivorship.
   const [pDqRules, setPDqRules]           = useState([]); // [{ id, kind, template, severity }]
@@ -7257,6 +7259,21 @@ function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, seedP
                     <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)", fontWeight:700, letterSpacing:"0.4px" }}>PK</span>
                   </div>
                   <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:4, lineHeight:1.45 }}>This property uniquely identifies a {node.label} record. Marking it PK automatically enables <b style={{ color:"var(--ink-2)" }}>Required</b>, <b style={{ color:"var(--ink-2)" }}>Unique</b>, and <b style={{ color:"var(--ink-2)" }}>Indexed</b> below.</div>
+                </div>
+              </label>
+            </div>
+
+            {/* GRAPH — full-width card deciding whether the property is materialised into the graph. */}
+            <div>
+              <label style={lbl}>GRAPH</label>
+              <label style={{ display:"flex", alignItems:"flex-start", gap:11, padding:"13px 14px", border:"1px solid var(--line)", borderRadius:9, background:"var(--panel)", cursor:"pointer", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.6)" }}>
+                <input type="checkbox" checked={pInGraph} onChange={function(e){ setPInGraph(e.target.checked); }} style={{ accentColor:"var(--ink)", width:15, height:15, marginTop:2, flexShrink:0 }} />
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>Use in relationship queries</span>
+                    <span style={{ fontFamily:"JetBrains Mono", fontSize:9, padding:"2px 6px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)", fontWeight:700, letterSpacing:"0.4px" }}>GRAPH</span>
+                  </div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:4, lineHeight:1.45 }}>Turn this on for properties you'll <b style={{ color:"var(--ink-2)" }}>filter, group, or connect {node.label} records by</b> when exploring relationships — these are added to the graph so those queries stay fast. Leave it off for plain details you only read on the record (notes, descriptions, timestamps). Those are still stored and fully searchable — keeping them out of the graph keeps it lean and quick to traverse.</div>
                 </div>
               </label>
             </div>
@@ -8209,6 +8226,9 @@ function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, seedP
               pAdvFilter        && "Filter"
             ].filter(Boolean);
             summaryRows.push({ k:"ADVANCED", v: advChips.length === 0 ? <span style={{ color:"var(--ink-4)" }}>none</span> : <span style={{ display:"inline-flex", flexWrap:"wrap", gap:4, justifyContent:"flex-end" }}>{advChips.map(function(a){ return <span key={a} style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 7px", borderRadius:4, background:"var(--chip)", color:"var(--ink-2)", fontWeight:600 }}>{a}</span>; })}</span> });
+            summaryRows.push({ k:"STORAGE", v: pInGraph
+              ? <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}><span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 6px", borderRadius:4, background:"var(--ink)", color:"var(--panel)", fontWeight:700, letterSpacing:"0.4px" }}>GRAPH</span><span style={{ color:"var(--ink-3)" }}>+ record store</span></span>
+              : <span style={{ color:"var(--ink-3)" }}>Record store only</span> });
             summaryRows.push({ k:"SOURCE", v: pComputed ? <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}><span style={{ fontFamily:"JetBrains Mono", fontSize:10, padding:"2px 6px", borderRadius:4, background:"var(--green-fill)", color:"var(--green)", fontWeight:700, letterSpacing:"0.4px" }}>FX</span>{COMPUTE_KIND_LABEL[pComputeKind] || "(not configured)"}</span> : pSource });
 
             // Build the Computation card rows when computed
