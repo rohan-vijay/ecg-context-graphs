@@ -1378,7 +1378,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const extractHint = extractFields.length ? extractFields.length + " field" + (extractFields.length === 1 ? "" : "s") : "Optional";
   const mapHint = mappedCount ? `${mappedCount} mapped` : "Map fields → node props";
   const objectHint = selectedTables.length ? selectedTables.length + " object" + (selectedTables.length === 1 ? "" : "s") : (s.query ? "Custom SQL" : "Choose what to read");
-  const colMapHint = mappedCount ? `${mappedCount}/${totalMapCols} mapped` : "Map source → node props";
+  const colMapHint = totalMapCols ? `${mappedCount}/${totalMapCols} fields mapped` : "Map source → node props";
   const srcSteps = unstructured ? [
     { label: "Source system", hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",    hint: connLabel },
