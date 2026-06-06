@@ -644,9 +644,11 @@ function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage
                               <circle cx="13" cy="13" r={R} fill="none" stroke="var(--line)" strokeWidth="2.4" />
                               {mapped > 0 && <circle cx="13" cy="13" r={R} fill="none" stroke={ringColor} strokeWidth="2.4" strokeLinecap="round" strokeDasharray={`${frac * C} ${C}`} />}
                             </svg>
-                            <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 8.5, fontWeight: 700, letterSpacing: "0.3px", color: complete ? "var(--green)" : (on ? "var(--ink)" : "var(--ink-3)") }}>
-                              {complete ? <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="var(--green)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg> : initials}
-                            </span>
+                            {complete && (
+                              <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="var(--green)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg>
+                              </span>
+                            )}
                           </span>
                           {/* name + sub */}
                           <span style={{ flex: 1, minWidth: 0 }}>
