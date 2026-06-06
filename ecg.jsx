@@ -3026,18 +3026,7 @@ function NodeDetailView({ nodeId, onBack, onCanvas, nodes: liveNodes, edges: liv
   return (
     <div className="detail-view">
       <div className="detail-head">
-        <div className="detail-crumb">
-          <button className="crumb-back" onClick={onBack}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
-            Node catalog
-          </button>
-          <span className="crumb-sep">/</span>
-          <span className="crumb-here">{node.label}</span>
-          <span className="crumb-tail">
-            <span className="dot-live" /> LIVE
-            <span className="crumb-dot">·</span> v3.2
-          </span>
-        </div>
+        {/* Breadcrumb header removed per request — use the top nav to return to the catalog. */}
 
         <div className="detail-title-row">
           <div className="detail-title-left">
@@ -7270,7 +7259,7 @@ function AddPropertyFlowModal({ node, mode, initialProperty, seedComputed, seedP
                 <input type="checkbox" checked={pInGraph} onChange={function(e){ setPInGraph(e.target.checked); }} style={{ accentColor:"var(--ink)", width:15, height:15, marginTop:2, flexShrink:0 }} />
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:13.5, fontWeight:600, color:"var(--ink)" }}>Graph queryable</div>
-                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:4, lineHeight:1.45 }}>Turn on if you'll filter or connect {node.label} records by this. Otherwise it stays on the record only.</div>
+                  <div style={{ fontFamily:"JetBrains Mono", fontSize:10, color:"var(--ink-3)", marginTop:4, lineHeight:1.5 }}><b style={{ color:"var(--ink-2)" }}>Turn this on</b> if you'll look up or connect {node.label}s <i>by</i> this field — e.g. "find every {node.label} where this equals X". It's added to the graph so those queries stay fast.<br/><b style={{ color:"var(--ink-2)" }}>Leave it off</b> for details you only read (notes, descriptions). They're still saved on the {node.label} — just kept out of the graph.</div>
                 </div>
               </label>
             </div>
