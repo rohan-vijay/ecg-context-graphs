@@ -578,19 +578,25 @@ function BackfillBanner({ backfill, onChange, estimate }) {
 
 // ─── FLOW SHELL (shared wrapper) ──────────────────────────────────────────────
 
-function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage, steps, step, setStep, onClose, rightPane, children, canNext, onNext, onPublish, hideKeymap, hideFootHelp, hideStage, overlay }) {
+function WizardShell({ eyebrow, plainTitle, titleFrom, titleTo, titleLabel, titleType, stage, steps, step, setStep, onClose, rightPane, children, canNext, onNext, onPublish, hideKeymap, hideFootHelp, hideStage, overlay }) {
   return (
     <div className="flow-overlay" onClick={onClose}>
       <div className="flow-shell" onClick={e => e.stopPropagation()}>
         <div className="flow-head">
           <div className="flow-head-left">
-            <div className="flow-eyebrow">{eyebrow}</div>
-            <div className="flow-title">
-              {titleFrom}
-              {titleLabel && <><span className="flow-title-arrow">·</span><span className="flow-title-label">{titleLabel}</span></>}
-              {titleType && <span className="flow-title-type">{titleType}</span>}
-              {titleTo && <><span className="flow-title-arrow">→</span>{titleTo}</>}
-            </div>
+            {plainTitle ? (
+              <div className="flow-title">{plainTitle}</div>
+            ) : (
+              <>
+                <div className="flow-eyebrow">{eyebrow}</div>
+                <div className="flow-title">
+                  {titleFrom}
+                  {titleLabel && <><span className="flow-title-arrow">·</span><span className="flow-title-label">{titleLabel}</span></>}
+                  {titleType && <span className="flow-title-type">{titleType}</span>}
+                  {titleTo && <><span className="flow-title-arrow">→</span>{titleTo}</>}
+                </div>
+              </>
+            )}
           </div>
           <div className="flow-head-right">
             {!hideStage && <span className="flow-stage-pill">target · <b>{stage}</b></span>}
@@ -698,7 +704,7 @@ function StepWrap({ eyebrow, title, desc, children, wide }) {
   return (
     <div className={"wstep" + (wide ? " wstep-wide" : "")}>
       <div className="wstep-head">
-        <div className="step-eyebrow">{eyebrow}</div>
+        {eyebrow && <div className="step-eyebrow">{eyebrow}</div>}
         <div className="wstep-title">{title}</div>
         {desc && <div className="wstep-desc">{desc}</div>}
       </div>
@@ -1386,14 +1392,12 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     { label: "Extract",       hint: extractHint },
     { label: "Map",           hint: mapHint },
     { label: "Settings",      hint: settingsHint },
-    { label: "Review",        hint: "Config & publish" },
   ] : [
     { label: "Source system",  hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",     hint: connLabel },
     { label: "Objects",        hint: objectHint },
     { label: "Column mapping", hint: colMapHint, subItems: mapSubItems, activeSub: activeMapObj, onSub: setMapActiveObj },
     { label: "Settings", hint: settingsHint },
-    { label: "Review",         hint: "Config & publish" },
   ];
 
   const titleFrom = sel ? (
@@ -1412,8 +1416,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
 
   return (
     <WizardShell
-      eyebrow={`SCHEMA · ${node?.label?.toUpperCase()} · LINK SOURCE`}
-      titleFrom={titleFrom} titleTo={titleTo}
+      plainTitle="Add Data Sources"
       stage={s.stage} hideStage hideKeymap hideFootHelp
       steps={srcSteps} step={step} setStep={setStep}
       canNext={canNext}
@@ -1436,17 +1439,14 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
           {step === 2 && <SrcRead s={s} set={set} sel={sel} />}
           {step === 3 && <SrcExtract s={s} set={set} node={node} />}
           {step === 4 && <SrcMapping s={s} set={set} groups={mapGroups} nodeProps={nodeProps} node={node} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} singleGroup
-            eyebrow="STEP 5 · MAP" title={`Map ${sel ? sel.name : "source"} fields to ${node?.label || "the node"}`}
-            desc="Map the captured file metadata and your extracted fields to destination properties. Chain transformations in between. Unmapped fields are ignored." />}
-          {step === 5 && <SrcSchedule s={s} set={set} srcCols={srcCols} eyebrow="STEP 6 · SETTINGS" />}
-          {step === 6 && <SrcReview s={s} set={set} node={node} sel={sel} mapGroups={mapGroups} mappedCount={mappedCount} totalMapCols={totalMapCols} unstructured={unstructured} readCfg={readCfg} eyebrow="STEP 7 · REVIEW & PUBLISH" onClose={onClose} />}
+            title={`Map ${sel ? sel.name : "source"} fields to ${node?.label || "the node"}`} />}
+          {step === 5 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
         </>
       ) : (
         <>
           {step === 2 && <SrcObject s={s} set={set} sel={sel} />}
           {step === 3 && <SrcMapping s={s} set={set} groups={mapGroups} activeObj={activeMapObj} nodeProps={nodeProps} node={node} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} />}
           {step === 4 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
-          {step === 5 && <SrcReview s={s} set={set} node={node} sel={sel} mapGroups={mapGroups} mappedCount={mappedCount} totalMapCols={totalMapCols} unstructured={unstructured} readCfg={readCfg} onClose={onClose} />}
         </>
       )}
     </WizardShell>
@@ -1514,7 +1514,7 @@ function SrcSystem({ s, set }) {
     return true;
   });
   return (
-    <StepWrap wide eyebrow="STEP 1 · SOURCE SYSTEM" title="Pick a source connector" desc="Search the catalog or filter by category, then choose the system that owns this data.">
+    <StepWrap wide title="Pick a source connector">
       {/* search + category dropdown */}
       <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
         <div style={{ position: "relative", flex: 1 }}>
@@ -1573,7 +1573,7 @@ function SrcConnection({ s, set, sel }) {
     : sel?.cat === "Files & Storage" ? "Bucket / site"
     : "Endpoint";
   return (
-    <StepWrap wide eyebrow="STEP 2 · CONNECTION" title={sel ? `Connect to ${sel.name}` : "Pick a connection"} desc="Pick one of your existing connections, or add a new one. A connection stores the host and credentials for this source.">
+    <StepWrap wide title={sel ? `Connect to ${sel.name}` : "Pick a connection"}>
       {conns.length > 0 && (
         <>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.5px", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 8 }}>Your connections</div>
@@ -1641,7 +1641,7 @@ function SrcObject({ s, set, sel }) {
   const allListed = list.length > 0 && list.every(o => selected.indexOf(o.name) >= 0);
   const toggleAll = () => set({ tables: allListed ? selected.filter(n => list.every(o => o.name !== n)) : Array.from(new Set(selected.concat(list.map(o => o.name)))), query: "" });
   return (
-    <StepWrap wide eyebrow="STEP 3 · OBJECTS" title="Select the objects to read" desc={`Search the objects available on ${sel ? sel.name : "the source"} and pick one or more to fetch data from. You'll map each one to ${"the node"} in the next step.`}>
+    <StepWrap wide title="Select the objects to read">
       <div style={{ position: "relative", marginBottom: 12 }}>
         <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--ink-3)", display: "flex" }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
@@ -1750,7 +1750,7 @@ function SrcRead({ s, set, sel }) {
   const fileIcon = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><polyline points="14 3 14 8 19 8" /></svg>;
 
   return (
-    <StepWrap wide eyebrow="STEP 3 · SCOPE" title={`What to read from ${sel.name}`} desc={`Choose the scope to index, then narrow it with the metadata ${sel.name} provides. Source-level metadata — owner, dates, file type — is captured automatically.`}>
+    <StepWrap wide title={`What to read from ${sel.name}`}>
       <FormRow label="Scope" hint="How much of the connection should we index?" last={!scope}>
         <SrcRichSelect value={scope} onChange={v => set({ readScope: v })} emptyLabel="Pick a scope"
           options={[
@@ -1810,7 +1810,7 @@ function SrcExtract({ s, set, node }) {
   const addField = () => set({ extractFields: fields.concat([{ id: "f-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6), name: "", type: "string", description: "" }]) });
   const GRID = "minmax(150px,1fr) 116px minmax(200px,1.7fr) 30px";
   return (
-    <StepWrap wide eyebrow="STEP 4 · EXTRACT" title="Extract fields from file contents" desc={"Source metadata is captured automatically — but the values inside each document aren't. Define the fields to pull out" + (node && node.label ? " for " + node.label : "") + ". This is the output schema your agent or automation fills."}>
+    <StepWrap wide title="Extract fields from file contents">
       <FormRow label="Extraction method" hint="How values are read from inside each document." last={!method}>
         <SrcRichSelect value={method} onChange={v => set({ extractMethod: v })} emptyLabel="Pick a method"
           options={[
@@ -2050,16 +2050,12 @@ function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, 
 
   const multiObj = groupList.length > 1;
   const objName = current ? current.name : "";
-  const stepEyebrow = (eyebrow || "STEP 4 · COLUMN MAPPING") + (multiObj && objName ? " · " + objName.toUpperCase() : "");
   const stepTitle = title || (multiObj && objName
     ? `Map ${objName} fields to ${node?.label || "the node"}`
     : `Map ${sel ? sel.name : "source"} fields to ${node?.label || "the node"}`);
-  const stepDesc = desc || (multiObj
-    ? `You're mapping the ${objName} object from ${sel ? sel.name : "the source"}. Switch objects from the left to map each one — unmapped fields are ignored.`
-    : "Map each source field to a destination property and chain transformations in between. Unmapped fields are ignored.");
 
   return (
-    <StepWrap wide eyebrow={stepEyebrow} title={stepTitle} desc={stepDesc}>
+    <StepWrap wide title={stepTitle}>
       {/* toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 2, padding: 3, borderRadius: 9, border: "1px solid var(--line)", background: "var(--bg-canvas)" }}>
@@ -2136,7 +2132,7 @@ function SrcSchedule({ s, set, srcCols, eyebrow }) {
   const schemaMethod = v("schemaMethod", "manual");
   const lbl2 = { display: "block", fontSize: 12.5, fontWeight: 600, color: "var(--ink)", marginBottom: 7 };
   return (
-    <StepWrap wide eyebrow={eyebrow || "STEP 5 · SETTINGS"} title="Pipeline settings" desc="Configure how this pipeline runs, ingests, maps, and scales.">
+    <StepWrap wide title="Pipeline settings">
       <FormRow label="Pipeline Type" hint="Select the type of pipeline">
         <SrcRichSelect value={pType} onChange={x => set({ pipelineType: x })}
           options={[
