@@ -2132,23 +2132,21 @@ function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, 
     <StepWrap wide title={stepTitle}>
       {/* toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        {/* field-view dropdown (defaults to All fields) */}
-        <div style={{ width: 190 }}>
-          <CustomSelect value={tab} onChange={setTab}
-            options={[
-              { id: "all",      label: "All fields", count: total },
-              { id: "mapped",   label: "Mapped",     count: mappedCount },
-              { id: "unmapped", label: "Unmapped",   count: total - mappedCount },
-            ]}
-            renderTrigger={o => <span style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
-              <span style={{ fontSize: 13, color: "var(--ink)", fontWeight: 500 }}>{o.label}</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 600, padding: "1px 6px", borderRadius: 10, background: "var(--chip)", color: "var(--ink-3)" }}>{o.count}</span>
-            </span>}
-            renderOption={o => <span style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
-              <span style={{ flex: 1 }}>{o.label}</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 600, padding: "1px 6px", borderRadius: 10, background: "var(--chip)", color: "var(--ink-3)" }}>{o.count}</span>
-            </span>} />
-        </div>
+        {/* field-view dropdown (defaults to All fields; width hugs its text) */}
+        <CustomSelect className="csel-auto" value={tab} onChange={setTab}
+          options={[
+            { id: "all",      label: "All fields", count: total },
+            { id: "mapped",   label: "Mapped",     count: mappedCount },
+            { id: "unmapped", label: "Unmapped",   count: total - mappedCount },
+          ]}
+          renderTrigger={o => <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 13, color: "var(--ink)", fontWeight: 500 }}>{o.label}</span>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 600, padding: "1px 6px", borderRadius: 10, background: "var(--chip)", color: "var(--ink-3)" }}>{o.count}</span>
+          </span>}
+          renderOption={o => <span style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+            <span style={{ flex: 1 }}>{o.label}</span>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 600, padding: "1px 6px", borderRadius: 10, background: "var(--chip)", color: "var(--ink-3)" }}>{o.count}</span>
+          </span>} />
 
         {/* filter records */}
         <div style={{ position: "relative" }}>
