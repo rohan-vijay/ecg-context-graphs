@@ -611,17 +611,48 @@ function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage
                   </div>
                 </button>
                 {i === step && s.subItems && s.subItems.length > 0 && (
-                  <div style={{ margin: "2px 0 4px 26px", display: "flex", flexDirection: "column", gap: 1, borderLeft: "1px solid var(--line)", paddingLeft: 10 }}>
+                  <div style={{ margin: "4px 0 6px 26px", display: "flex", flexDirection: "column", gap: 3, borderLeft: "1px solid var(--line)", paddingLeft: 10 }}>
                     {s.subItems.map(si => {
                       const on = si.id === s.activeSub;
+                      const total = si.total != null ? si.total : 0;
+                      const mapped = si.mapped != null ? si.mapped : 0;
+                      const rich = si.total != null;
+                      const complete = total > 0 && mapped >= total;
+                      const frac = total > 0 ? Math.min(1, mapped / total) : 0;
+                      const R = 9, C = 2 * Math.PI * R;
+                      const ringColor = complete ? "var(--green)" : "var(--ink)";
+                      const initials = (si.label || "").replace(/^.*[.]/, "").slice(0, 2).toUpperCase();
+                      if (!rich) {
+                        return (
+                          <button key={si.id} onClick={() => s.onSub && s.onSub(si.id)}
+                            style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 10px", borderRadius: 7, border: "none", background: on ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
+                            onMouseEnter={e => { if (!on) e.currentTarget.style.background = "var(--panel)"; }}
+                            onMouseLeave={e => { if (!on) e.currentTarget.style.background = "transparent"; }}>
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: on ? "var(--ink)" : (si.done ? "var(--green)" : "var(--line)") }} />
+                            <span style={{ flex: 1, minWidth: 0, fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: on ? 600 : 500, color: on ? "var(--ink)" : "var(--ink-2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{si.label}</span>
+                          </button>
+                        );
+                      }
                       return (
                         <button key={si.id} onClick={() => s.onSub && s.onSub(si.id)}
-                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 10px", borderRadius: 7, border: "none", background: on ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
+                          style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "8px 10px", borderRadius: 9, borderWidth: 1, borderStyle: "solid", borderColor: on ? "var(--line)" : "transparent", background: on ? "var(--bg-canvas)" : "transparent", boxShadow: on ? "0 1px 2px rgba(40,40,20,0.05)" : "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "background 100ms" }}
                           onMouseEnter={e => { if (!on) e.currentTarget.style.background = "var(--panel)"; }}
                           onMouseLeave={e => { if (!on) e.currentTarget.style.background = "transparent"; }}>
-                          <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: on ? "var(--ink)" : (si.done ? "var(--green)" : "var(--line)") }} />
-                          <span style={{ flex: 1, minWidth: 0, fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: on ? 600 : 500, color: on ? "var(--ink)" : "var(--ink-2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{si.label}</span>
-                          {si.meta && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, color: si.metaOn ? "var(--green)" : "var(--ink-4)", flexShrink: 0 }}>{si.meta}</span>}
+                          {/* progress ring + monogram */}
+                          <span style={{ position: "relative", width: 26, height: 26, flexShrink: 0 }}>
+                            <svg width="26" height="26" viewBox="0 0 26 26" style={{ transform: "rotate(-90deg)", display: "block" }}>
+                              <circle cx="13" cy="13" r={R} fill="none" stroke="var(--line)" strokeWidth="2.4" />
+                              {mapped > 0 && <circle cx="13" cy="13" r={R} fill="none" stroke={ringColor} strokeWidth="2.4" strokeLinecap="round" strokeDasharray={`${frac * C} ${C}`} />}
+                            </svg>
+                            <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 8.5, fontWeight: 700, letterSpacing: "0.3px", color: complete ? "var(--green)" : (on ? "var(--ink)" : "var(--ink-3)") }}>
+                              {complete ? <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="var(--green)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg> : initials}
+                            </span>
+                          </span>
+                          {/* name + sub */}
+                          <span style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ display: "block", fontSize: 12.5, fontWeight: on ? 600 : 500, color: on ? "var(--ink)" : "var(--ink-2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.2 }}>{si.label}</span>
+                            <span style={{ display: "block", fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, color: complete ? "var(--green)" : (mapped > 0 ? "var(--ink-3)" : "var(--ink-4)"), marginTop: 2 }}>{complete ? "fully mapped" : mapped + " / " + total + " mapped"}</span>
+                          </span>
                         </button>
                       );
                     })}
@@ -1325,7 +1356,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const activeMapObj = (mapActiveObj && mapGroups.some(g => g.name === mapActiveObj)) ? mapActiveObj : (mapGroups[0] ? mapGroups[0].name : "");
   const mapSubItems = mapGroups.length > 1 ? mapGroups.map(g => {
     const gm = g.cols.filter(c => (s.mapping || {})[g.name + "::" + c.col]).length;
-    return { id: g.name, label: g.name, meta: gm + "/" + g.cols.length, metaOn: gm > 0 && gm === g.cols.length, done: gm > 0 };
+    return { id: g.name, label: g.name, mapped: gm, total: g.cols.length, type: g.type, done: gm > 0 };
   }) : null;
   const settingsHint = (s.pipelineType === "scheduled" ? "Scheduled" : "Real Time") + " · " + (s.resourceTier || "Small");
   const canNext = step === 0 ? !!s.system
