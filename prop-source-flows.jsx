@@ -635,7 +635,7 @@ function WizardShell({ eyebrow, titleFrom, titleTo, titleLabel, titleType, stage
                       }
                       return (
                         <button key={si.id} onClick={() => s.onSub && s.onSub(si.id)}
-                          style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "8px 10px", borderRadius: 9, borderWidth: 1, borderStyle: "solid", borderColor: on ? "var(--line)" : "transparent", background: on ? "var(--bg-canvas)" : "transparent", boxShadow: on ? "0 1px 2px rgba(40,40,20,0.05)" : "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "background 100ms" }}
+                          style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "8px 10px", borderRadius: 8, border: "none", background: on ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "background 100ms" }}
                           onMouseEnter={e => { if (!on) e.currentTarget.style.background = "var(--panel)"; }}
                           onMouseLeave={e => { if (!on) e.currentTarget.style.background = "transparent"; }}>
                           {/* progress ring + monogram */}
@@ -2048,8 +2048,18 @@ function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, 
     );
   }
 
+  const multiObj = groupList.length > 1;
+  const objName = current ? current.name : "";
+  const stepEyebrow = (eyebrow || "STEP 4 · COLUMN MAPPING") + (multiObj && objName ? " · " + objName.toUpperCase() : "");
+  const stepTitle = title || (multiObj && objName
+    ? `Map ${objName} fields to ${node?.label || "the node"}`
+    : `Map ${sel ? sel.name : "source"} fields to ${node?.label || "the node"}`);
+  const stepDesc = desc || (multiObj
+    ? `You're mapping the ${objName} object from ${sel ? sel.name : "the source"}. Switch objects from the left to map each one — unmapped fields are ignored.`
+    : "Map each source field to a destination property and chain transformations in between. Unmapped fields are ignored.");
+
   return (
-    <StepWrap wide eyebrow={eyebrow || "STEP 4 · COLUMN MAPPING"} title={title || `Map ${sel ? sel.name : "source"} fields to ${node?.label || "the node"}`} desc={desc || "Map each source field — across every selected object — to a destination property and chain transformations in between. Unmapped fields are ignored."}>
+    <StepWrap wide eyebrow={stepEyebrow} title={stepTitle} desc={stepDesc}>
       {/* toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 2, padding: 3, borderRadius: 9, border: "1px solid var(--line)", background: "var(--bg-canvas)" }}>
