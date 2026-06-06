@@ -1325,7 +1325,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     system: "", customName: "", connection: "", newConnName: "", newConnHost: "", newConnAuth: "OAuth2",
     table: "", tables: [], query: "", inputMode: "table",
     pkCol: "", joinCol: "", incrementalCol: "updated_at",
-    loadStrategy: "incremental", mapping: {}, transforms: {}, unmappedPolicy: "ignore",
+    loadStrategy: "incremental", mapping: {}, transforms: {}, recordFilters: {}, unmappedPolicy: "ignore",
     cadence: "5min", freshnessSLO: "30m", batchWindow: "15m",
     retryCount: 3, retryDelay: "5m", onError: "alert",
     alertChannel: "#schema-alerts", owner: "data-platform",
@@ -1984,9 +1984,79 @@ function SrcTransformDrawer({ col, type, sel, list, onChange, onClose }) {
   );
 }
 
+// Record-level ingest filter — conditions evaluated against source rows so only
+// matching records are pulled into the node. Distinct from the field-view filter.
+const RECORD_FILTER_OPS = [
+  { id: "contains",     label: "Contains" },
+  { id: "not_contains", label: "Does not contain" },
+  { id: "equals",       label: "Equals" },
+  { id: "not_equals",   label: "Does not equal" },
+  { id: "starts_with",  label: "Starts with" },
+  { id: "gt",           label: "Greater than" },
+  { id: "lt",           label: "Less than" },
+  { id: "is_empty",     label: "Is empty" },
+  { id: "is_not_empty", label: "Is not empty" },
+];
+function opNeedsValue(op) { return op !== "is_empty" && op !== "is_not_empty"; }
+function opLabel(op) { const o = RECORD_FILTER_OPS.find(x => x.id === op); return o ? o.label : op; }
+
+// Popover condition-builder for the record ingest filter.
+function FilterRecordsPopover({ cols, initial, objName, onApply, onClear, onClose }) {
+  const blank = () => ({ field: "", op: "contains", value: "" });
+  const [rows, setRows] = useState((initial && initial.length) ? initial.map(r => Object.assign({}, r)) : [blank()]);
+  const setRow = (i, patch) => setRows(rs => rs.map((r, j) => j === i ? Object.assign({}, r, patch) : r));
+  const addRow = () => setRows(rs => rs.concat([blank()]));
+  const removeRow = i => setRows(rs => (rs.length <= 1 ? [blank()] : rs.filter((_, j) => j !== i)));
+  const valid = rows.filter(r => r.field && (opNeedsValue(r.op) ? String(r.value || "").length > 0 : true));
+  const fieldOpts = cols.map(c => ({ id: c.col, label: c.col, type: c.type }));
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+      <div onClick={e => e.stopPropagation()} style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 41, width: 600, maxWidth: "82vw", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, boxShadow: "0 18px 50px rgba(0,0,0,0.2)", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--line-2)" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>Filter records</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-3)", marginTop: 3, lineHeight: 1.4 }}>Only ingest {objName} records that match <b style={{ color: "var(--ink-2)" }}>all</b> of these conditions.</div>
+          </div>
+          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid var(--line)", background: "none", cursor: "pointer", color: "var(--ink-3)", flexShrink: 0, fontSize: 12 }}>✕</button>
+        </div>
+        <div style={{ padding: "13px 16px", display: "flex", flexDirection: "column", gap: 9, maxHeight: 320, overflowY: "auto" }}>
+          {rows.map((r, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 42, flexShrink: 0, fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.4px" }}>{i === 0 ? "Where" : "And"}</span>
+              <div style={{ width: 168, flexShrink: 0 }}>
+                <CustomSelect value={r.field} onChange={v => setRow(i, { field: v })} placeholder="Field" options={fieldOpts}
+                  renderTrigger={o => o.id ? <span style={{ display: "flex", alignItems: "center", gap: 8 }}><MapTypeGlyph type={o.type} size={20} /><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.label}</span></span> : <span style={{ color: "var(--ink-4)" }}>Field</span>}
+                  renderOption={o => <span style={{ display: "flex", alignItems: "center", gap: 8 }}><MapTypeGlyph type={o.type} size={18} />{o.label}</span>} />
+              </div>
+              <div style={{ width: 156, flexShrink: 0 }}>
+                <CustomSelect value={r.op} onChange={v => setRow(i, { op: v })} options={RECORD_FILTER_OPS} />
+              </div>
+              {opNeedsValue(r.op)
+                ? <input className="winput" style={{ flex: 1, minWidth: 0 }} placeholder="Value" value={r.value || ""} onChange={e => setRow(i, { value: e.target.value })} />
+                : <div style={{ flex: 1 }} />}
+              <button onClick={() => removeRow(i)} title="Remove" style={{ width: 34, height: 36, borderRadius: 8, border: "1px solid var(--line)", background: "var(--panel)", cursor: "pointer", color: "var(--ink-3)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" /></svg>
+              </button>
+            </div>
+          ))}
+          <button onClick={addRow} style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 7, padding: "7px 11px", border: "1px dashed var(--line)", borderRadius: 8, background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, color: "var(--ink-2)", marginTop: 2 }}>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-3)" }}>+</span> Add condition
+          </button>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderTop: "1px solid var(--line-2)", background: "var(--panel-2)" }}>
+          <button onClick={() => { setRows([blank()]); onClear(); }} className="btn-ghost">Clear all</button>
+          <button onClick={() => onApply(valid)} className="btn-dark" disabled={valid.length === 0} style={{ opacity: valid.length ? 1 : 0.45 }}>Apply{valid.length ? " · " + valid.length : ""}</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, setOpenCol, eyebrow, title, desc, singleGroup }) {
   const [q, setQ] = useState("");
   const [tab, setTab] = useState("all");
+  const [filterOpen, setFilterOpen] = useState(false);
   const mapping = s.mapping || {};
   const transforms = s.transforms || {};
   const groupList = groups || [];
@@ -2000,6 +2070,8 @@ function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, 
   const curKeys = curCols.map(c => mk(current.name, c.col));
   const total = curKeys.length;
   const mappedCount = curKeys.filter(k => mapping[k]).length;
+  const recordFilters = s.recordFilters || {};
+  const activeFilters = current ? (recordFilters[current.name] || []) : [];
   const colVisible = (c) => {
     const key = mk(current.name, c.col);
     if (q && c.col.toLowerCase().indexOf(q.toLowerCase()) < 0) return false;
@@ -2059,16 +2131,41 @@ function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, 
   return (
     <StepWrap wide title={stepTitle}>
       {/* toolbar */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-        <div style={{ display: "flex", gap: 2, padding: 3, borderRadius: 9, border: "1px solid var(--line)", background: "var(--bg-canvas)" }}>
-          {[["all", "All fields", total], ["mapped", "Mapped", mappedCount], ["unmapped", "Unmapped", total - mappedCount]].map(t => {
-            const on = tab === t[0];
-            return <button key={t[0]} onClick={() => setTab(t[0])} style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 11px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: on ? 600 : 500, background: on ? "var(--chip)" : "transparent", color: on ? "var(--ink)" : "var(--ink-3)" }}>
-              {t[1]}
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 600, minWidth: 18, textAlign: "center", padding: "1px 6px", borderRadius: 10, background: on ? "var(--panel)" : "var(--chip)", color: "var(--ink-3)" }}>{t[2]}</span>
-            </button>;
-          })}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        {/* field-view dropdown (defaults to All fields) */}
+        <div style={{ width: 190 }}>
+          <CustomSelect value={tab} onChange={setTab}
+            options={[
+              { id: "all",      label: "All fields", count: total },
+              { id: "mapped",   label: "Mapped",     count: mappedCount },
+              { id: "unmapped", label: "Unmapped",   count: total - mappedCount },
+            ]}
+            renderTrigger={o => <span style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+              <span style={{ fontSize: 13, color: "var(--ink)", fontWeight: 500 }}>{o.label}</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 600, padding: "1px 6px", borderRadius: 10, background: "var(--chip)", color: "var(--ink-3)" }}>{o.count}</span>
+            </span>}
+            renderOption={o => <span style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+              <span style={{ flex: 1 }}>{o.label}</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 600, padding: "1px 6px", borderRadius: 10, background: "var(--chip)", color: "var(--ink-3)" }}>{o.count}</span>
+            </span>} />
         </div>
+
+        {/* filter records */}
+        <div style={{ position: "relative" }}>
+          <button onClick={() => setFilterOpen(o => !o)}
+            style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 13px", height: 40, borderRadius: 9, border: "1px solid " + (filterOpen || activeFilters.length ? "var(--ink)" : "var(--line)"), background: filterOpen ? "var(--bg-canvas)" : "var(--panel)", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--ink)", fontWeight: 500 }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 5h18M6 12h12M10 19h4" /></svg>
+            Filter records
+            {activeFilters.length > 0 && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, minWidth: 18, textAlign: "center", padding: "1px 6px", borderRadius: 10, background: "var(--ink)", color: "var(--panel)" }}>{activeFilters.length}</span>}
+          </button>
+          {filterOpen && current && (
+            <FilterRecordsPopover key={current.name} cols={curCols} initial={activeFilters} objName={current.name}
+              onApply={rows => { set({ recordFilters: Object.assign({}, recordFilters, (function () { var o = {}; o[current.name] = rows; return o; })()) }); setFilterOpen(false); }}
+              onClear={() => { set({ recordFilters: Object.assign({}, recordFilters, (function () { var o = {}; o[current.name] = []; return o; })()) }); setFilterOpen(false); }}
+              onClose={() => setFilterOpen(false)} />
+          )}
+        </div>
+
         <div style={{ position: "relative", marginLeft: "auto", width: 240 }}>
           <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--ink-3)", display: "flex" }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
@@ -2076,6 +2173,22 @@ function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, 
           <input className="winput" style={{ paddingLeft: 34 }} placeholder="Search fields…" value={q} onChange={e => setQ(e.target.value)} />
         </div>
       </div>
+
+      {/* active record-filter summary */}
+      {activeFilters.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12, padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 9, background: "var(--bg-canvas)" }}>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", flexShrink: 0 }}>Ingesting only where</span>
+          {activeFilters.map((f, i) => (
+            <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink-2)" }}>
+              {i > 0 && <span style={{ color: "var(--ink-4)" }}>and</span>}
+              <b style={{ color: "var(--ink)", fontWeight: 600 }}>{f.field}</b>
+              <span style={{ color: "var(--ink-3)" }}>{opLabel(f.op).toLowerCase()}</span>
+              {opNeedsValue(f.op) && <b style={{ color: "var(--ink)", fontWeight: 600 }}>{f.value}</b>}
+            </span>
+          ))}
+          <button onClick={() => setFilterOpen(true)} className="btn-ghost" style={{ marginLeft: "auto", padding: "4px 10px", fontSize: 12 }}>Edit</button>
+        </div>
+      )}
 
       {!current && (
         <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)", padding: "40px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No objects selected — go back to the Objects step and pick at least one.</div>
