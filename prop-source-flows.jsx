@@ -223,6 +223,74 @@ function getSourceCols(id) {
   ];
 }
 
+// Per-object columns — used by the multi-object column-mapping step so each
+// selected object can be mapped independently.
+const OBJECT_COLS_BY_NAME = {
+  accounts: [
+    { col: "id",             type: "string",    sample: "acc_8f3" },
+    { col: "name",           type: "string",    sample: "Acme Corp" },
+    { col: "domain",         type: "string",    sample: "acme.com" },
+    { col: "industry",       type: "string",    sample: "Technology" },
+    { col: "annual_revenue", type: "decimal",   sample: "24500000.00" },
+    { col: "country",        type: "string",    sample: "US" },
+    { col: "owner_id",       type: "string",    sample: "usr_55x" },
+    { col: "created_at",     type: "timestamp", sample: "2024-01-12T09:14:00Z" },
+    { col: "updated_at",     type: "timestamp", sample: "2026-04-02T14:22:11Z" },
+  ],
+  contacts: [
+    { col: "id",         type: "string",    sample: "ctc_1a2" },
+    { col: "first_name", type: "string",    sample: "Jane" },
+    { col: "last_name",  type: "string",    sample: "Doe" },
+    { col: "email",      type: "string",    sample: "jane@acme.com" },
+    { col: "phone",      type: "string",    sample: "+14155550100" },
+    { col: "account_id", type: "string",    sample: "acc_8f3" },
+    { col: "title",      type: "string",    sample: "VP Eng" },
+    { col: "created_at", type: "timestamp", sample: "2024-02-01T00:00:00Z" },
+  ],
+  orders: [
+    { col: "id",         type: "string",    sample: "ord_77c" },
+    { col: "account_id", type: "string",    sample: "acc_8f3" },
+    { col: "amount_usd", type: "decimal",   sample: "1299.00" },
+    { col: "currency",   type: "string",    sample: "USD" },
+    { col: "status",     type: "string",    sample: "paid" },
+    { col: "placed_at",  type: "timestamp", sample: "2026-03-10T12:00:00Z" },
+  ],
+  events: [
+    { col: "id",          type: "string",    sample: "evt_9z" },
+    { col: "event_type",  type: "string",    sample: "login" },
+    { col: "account_id",  type: "string",    sample: "acc_8f3" },
+    { col: "user_id",     type: "string",    sample: "usr_3k" },
+    { col: "occurred_at", type: "timestamp", sample: "2026-05-21T11:04:22Z" },
+  ],
+  users: [
+    { col: "id",            type: "string",    sample: "usr_3k" },
+    { col: "name",          type: "string",    sample: "Sam Lee" },
+    { col: "email",         type: "string",    sample: "sam@acme.com" },
+    { col: "role",          type: "string",    sample: "admin" },
+    { col: "last_login_at", type: "timestamp", sample: "2026-05-20T08:00:00Z" },
+  ],
+};
+function getObjectCols(obj) {
+  if (!obj) return [];
+  const key = String(obj.name || "").toLowerCase().replace(/^.*[.]/, "");
+  const hit = OBJECT_COLS_BY_NAME[key] || OBJECT_COLS_BY_NAME[key + "s"] || OBJECT_COLS_BY_NAME[key.replace(/s$/, "")];
+  if (hit) return hit;
+  // Generic fallback sized to the object's declared column count.
+  const n = Math.max(4, Math.min(obj.cols || 6, 12));
+  const base = [
+    { col: "id",         type: "string",    sample: "id_001" },
+    { col: "name",       type: "string",    sample: "—" },
+    { col: "status",     type: "string",    sample: "active" },
+    { col: "amount",     type: "decimal",   sample: "0.00" },
+    { col: "owner_id",   type: "string",    sample: "usr_1" },
+    { col: "created_at", type: "timestamp", sample: "2026-01-01T00:00:00Z" },
+    { col: "updated_at", type: "timestamp", sample: "2026-06-01T00:00:00Z" },
+  ];
+  const out = base.slice(0, n);
+  for (let i = out.length; i < n; i++) out.push({ col: "field_" + (i + 1), type: "string", sample: "—" });
+  return out;
+}
+
 // ─── PRIMITIVE COMPONENTS ─────────────────────────────────────────────────────
 
 function useOutsideClick(ref, open, onClose) {
@@ -1196,7 +1264,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const [mapOpenCol, setMapOpenCol] = useState("");
   const [s, setS] = useState({
     system: "", customName: "", connection: "", newConnName: "", newConnHost: "", newConnAuth: "OAuth2",
-    table: "", query: "", inputMode: "table",
+    table: "", tables: [], query: "", inputMode: "table",
     pkCol: "", joinCol: "", incrementalCol: "updated_at",
     loadStrategy: "incremental", mapping: {}, transforms: {}, unmappedPolicy: "ignore",
     cadence: "5min", freshnessSLO: "30m", batchWindow: "15m",
@@ -1213,7 +1281,6 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const srcCols = s.system ? getSourceCols(s.system) : [];
   const rawNodeProps = node ? (window.generateProps ? window.generateProps(node) : (window.PROPS_BY_NODE?.[node.id] || [])) : [];
   const nodeProps = rawNodeProps.map(p => ({ id: p.name, label: p.name, type: p.type }));
-  const mappedCount = Object.values(s.mapping).filter(Boolean).length;
   const unstructured = !!(sel && sel.kind === "unstructured");
   const readCfg = getReadConfig(sel);
   const readLocs = s.readLocations || [];
@@ -1223,11 +1290,21 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const unstructuredCols = unstructured ? UNSTRUCTURED_META_COLS.concat(
     extractFields.filter(f => f.name).map(f => ({ col: f.name, type: f.type || "string", sample: f.description || "extracted", extracted: true }))
   ) : [];
-  const mapCols = unstructured ? unstructuredCols : srcCols;
+  // Mapping groups — one per selected object (structured) or a single captured-fields
+  // group (unstructured). Each group's columns are mapped independently; mapping keys
+  // are namespaced as "<object>::<col>" so identically-named columns don't collide.
+  const allObjects = sel && !unstructured ? getSourceObjects(sel.id, sel) : [];
+  const selectedTables = s.tables || [];
+  const mapGroups = unstructured
+    ? [{ name: (node && node.label) || "Document", type: "Extracted fields", rows: "", cols: unstructuredCols }]
+    : selectedTables.map(nm => { const o = allObjects.find(x => x.name === nm) || { name: nm }; return { name: nm, type: o.type, rows: o.rows, cols: getObjectCols(o) }; });
+  const mapKeys = mapGroups.reduce((acc, g) => acc.concat(g.cols.map(c => g.name + "::" + c.col)), []);
+  const mappedCount = mapKeys.filter(k => (s.mapping || {})[k]).length;
+  const totalMapCols = mapKeys.length;
   const settingsHint = (s.pipelineType === "scheduled" ? "Scheduled" : "Real Time") + " · " + (s.resourceTier || "Small");
   const canNext = step === 0 ? !!s.system
     : step === 1 ? !!s.connection
-    : step === 2 ? (unstructured ? (s.readScope === "all" || ((s.readScope === "folders" || s.readScope === "files") && readLocs.length > 0)) : !!(s.table || s.query))
+    : step === 2 ? (unstructured ? (s.readScope === "all" || ((s.readScope === "folders" || s.readScope === "files") && readLocs.length > 0)) : (selectedTables.length > 0 || !!s.query))
     : true;
 
   // Sidebar hints reflect the live selections, not static copy.
@@ -1241,6 +1318,8 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     : "Pick " + readCfg.container;
   const extractHint = extractFields.length ? extractFields.length + " field" + (extractFields.length === 1 ? "" : "s") : "Optional";
   const mapHint = mappedCount ? `${mappedCount} mapped` : "Map fields → node props";
+  const objectHint = selectedTables.length ? selectedTables.length + " object" + (selectedTables.length === 1 ? "" : "s") : (s.query ? "Custom SQL" : "Choose what to read");
+  const colMapHint = mappedCount ? `${mappedCount}/${totalMapCols} mapped` : "Map source → node props";
   const srcSteps = unstructured ? [
     { label: "Source system", hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",    hint: connLabel },
@@ -1252,8 +1331,8 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   ] : [
     { label: "Source system",  hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",     hint: connLabel },
-    { label: "Object",         hint: s.table || (s.query ? "Custom SQL" : "Choose what to read") },
-    { label: "Column mapping", hint: mappedCount ? `${mappedCount} columns mapped` : "Map source → node props" },
+    { label: "Objects",        hint: objectHint },
+    { label: "Column mapping", hint: colMapHint },
     { label: "Settings", hint: settingsHint },
     { label: "Review",         hint: "Config & publish" },
   ];
@@ -1284,8 +1363,11 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
       onClose={onClose}
       rightPane={null}
       overlay={mapOpenCol ? (function(){
-        const c = mapCols.find(x => x.col === mapOpenCol);
-        return <SrcTransformDrawer col={mapOpenCol} type={c ? c.type : "string"} sel={sel} list={(s.transforms || {})[mapOpenCol] || []} onChange={arr => set({ transforms: Object.assign({}, s.transforms, (function(){ var o = {}; o[mapOpenCol] = arr; return o; })()) })} onClose={() => setMapOpenCol("")} />;
+        const ix = mapOpenCol.indexOf("::");
+        const colName = ix >= 0 ? mapOpenCol.slice(ix + 2) : mapOpenCol;
+        let colType = "string";
+        for (let gi = 0; gi < mapGroups.length; gi++) { const c = mapGroups[gi].cols.find(x => x.col === colName); if (c) { colType = c.type; break; } }
+        return <SrcTransformDrawer col={colName} type={colType} sel={sel} list={(s.transforms || {})[mapOpenCol] || []} onChange={arr => set({ transforms: Object.assign({}, s.transforms, (function(){ var o = {}; o[mapOpenCol] = arr; return o; })()) })} onClose={() => setMapOpenCol("")} />;
       })() : null}
     >
       {step === 0 && <SrcSystem s={s} set={set} />}
@@ -1294,18 +1376,18 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
         <>
           {step === 2 && <SrcRead s={s} set={set} sel={sel} />}
           {step === 3 && <SrcExtract s={s} set={set} node={node} />}
-          {step === 4 && <SrcMapping s={s} set={set} srcCols={mapCols} nodeProps={nodeProps} node={node} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol}
+          {step === 4 && <SrcMapping s={s} set={set} groups={mapGroups} nodeProps={nodeProps} node={node} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} singleGroup
             eyebrow="STEP 5 · MAP" title={`Map ${sel ? sel.name : "source"} fields to ${node?.label || "the node"}`}
             desc="Map the captured file metadata and your extracted fields to destination properties. Chain transformations in between. Unmapped fields are ignored." />}
           {step === 5 && <SrcSchedule s={s} set={set} srcCols={srcCols} eyebrow="STEP 6 · SETTINGS" />}
-          {step === 6 && <SrcReview s={s} set={set} node={node} sel={sel} srcCols={mapCols} mappedCount={mappedCount} unstructured={unstructured} readCfg={readCfg} eyebrow="STEP 7 · REVIEW & PUBLISH" onClose={onClose} />}
+          {step === 6 && <SrcReview s={s} set={set} node={node} sel={sel} mapGroups={mapGroups} mappedCount={mappedCount} totalMapCols={totalMapCols} unstructured={unstructured} readCfg={readCfg} eyebrow="STEP 7 · REVIEW & PUBLISH" onClose={onClose} />}
         </>
       ) : (
         <>
-          {step === 2 && <SrcObject s={s} set={set} sel={sel} srcCols={srcCols} />}
-          {step === 3 && <SrcMapping s={s} set={set} srcCols={srcCols} nodeProps={nodeProps} node={node} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} />}
+          {step === 2 && <SrcObject s={s} set={set} sel={sel} />}
+          {step === 3 && <SrcMapping s={s} set={set} groups={mapGroups} nodeProps={nodeProps} node={node} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} />}
           {step === 4 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
-          {step === 5 && <SrcReview s={s} set={set} node={node} sel={sel} srcCols={srcCols} mappedCount={mappedCount} unstructured={unstructured} readCfg={readCfg} onClose={onClose} />}
+          {step === 5 && <SrcReview s={s} set={set} node={node} sel={sel} mapGroups={mapGroups} mappedCount={mappedCount} totalMapCols={totalMapCols} unstructured={unstructured} readCfg={readCfg} onClose={onClose} />}
         </>
       )}
     </WizardShell>
@@ -1491,37 +1573,45 @@ function SrcConnection({ s, set, sel }) {
 
 // ── Src Step 3: Object ────────────────────────────────────────────────────────
 
-function SrcObject({ s, set, sel, srcCols }) {
+function SrcObject({ s, set, sel }) {
   const [q, setQ] = useState("");
   const objects = sel ? getSourceObjects(sel.id, sel) : [];
   const list = objects.filter(o => !q || o.name.toLowerCase().indexOf(q.toLowerCase()) >= 0);
-  const selObj = objects.find(o => o.name === s.table);
+  const selected = s.tables || [];
+  const toggle = name => set({ tables: selected.indexOf(name) >= 0 ? selected.filter(x => x !== name) : selected.concat([name]), query: "" });
+  const allListed = list.length > 0 && list.every(o => selected.indexOf(o.name) >= 0);
+  const toggleAll = () => set({ tables: allListed ? selected.filter(n => list.every(o => o.name !== n)) : Array.from(new Set(selected.concat(list.map(o => o.name)))), query: "" });
   return (
-    <StepWrap wide eyebrow="STEP 3 · OBJECT" title="Select the object to read" desc={`Search the objects available on ${sel ? sel.name : "the source"} and pick the one to fetch data from.`}>
+    <StepWrap wide eyebrow="STEP 3 · OBJECTS" title="Select the objects to read" desc={`Search the objects available on ${sel ? sel.name : "the source"} and pick one or more to fetch data from. You'll map each one to ${"the node"} in the next step.`}>
       <div style={{ position: "relative", marginBottom: 12 }}>
         <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--ink-3)", display: "flex" }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
         </span>
         <input className="winput" style={{ paddingLeft: 40, height: 44 }} placeholder="Search objects…" value={q} onChange={e => setQ(e.target.value)} autoFocus />
       </div>
-      <SrcListMeta count={list.length} noun="objects" chip={s.table ? <SrcSelectedChip c={sel} name={s.table} sub={selObj ? selObj.type + " · " + selObj.cols + " cols" : ""} /> : null} />
+      <SrcListMeta count={list.length} noun="objects" chip={
+        <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {selected.length > 0 && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-2)", fontWeight: 600 }}>{selected.length} selected</span>}
+          <button onClick={toggleAll} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-3)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}>{allListed ? "Clear all" : "Select all"}</button>
+        </span>
+      } />
       <div style={{ border: "1px solid var(--line)", borderRadius: 11, overflow: "hidden", background: "var(--panel)" }}>
         {list.map((o, i) => {
-          const on = s.table === o.name;
+          const on = selected.indexOf(o.name) >= 0;
           return (
-            <button key={o.name} onClick={() => set({ table: o.name, query: "" })}
+            <button key={o.name} onClick={() => toggle(o.name)}
               style={{ display: "flex", alignItems: "center", gap: 14, width: "100%", padding: "14px 16px", border: "none", borderTop: i ? "1px solid var(--line-2)" : "none", background: on ? "var(--bg-canvas)" : "transparent", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}
               onMouseEnter={e => { if (!on) e.currentTarget.style.background = "var(--panel-2)"; }}
               onMouseLeave={e => { if (!on) e.currentTarget.style.background = "transparent"; }}>
+              <span style={{ width: 20, height: 20, borderRadius: 5, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderStyle: "solid", borderColor: on ? "var(--ink)" : "var(--line)", background: on ? "var(--ink)" : "transparent", color: "var(--bg-canvas)" }}>
+                {on && <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3.5,8.5 6.5,11.5 12.5,5" /></svg>}
+              </span>
               {sel ? <SrcConnectorLogo c={sel} size={20} /> : <span style={{ width: 32, height: 32, borderRadius: 8, background: "var(--chip)", border: "1px solid var(--line)", flexShrink: 0 }} />}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{o.name}</code>
                 <div style={{ fontSize: 11.5, color: "var(--ink-4)", marginTop: 3 }}>{o.type} · {o.cols} columns</div>
               </div>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, color: "var(--ink-3)", flexShrink: 0 }}>{o.rows} rows</span>
-              {on
-                ? <span style={{ flexShrink: 0, width: 24, height: 24, borderRadius: "50%", background: "var(--ink)", color: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700 }}>✓</span>
-                : <span style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, color: "var(--ink-3)", padding: "6px 14px", borderRadius: 7, border: "1px solid var(--line)" }}>Select</span>}
             </button>
           );
         })}
@@ -1833,22 +1923,76 @@ function SrcTransformDrawer({ col, type, sel, list, onChange, onClose }) {
   );
 }
 
-function SrcMapping({ s, set, srcCols, nodeProps, node, sel, openCol, setOpenCol, eyebrow, title, desc }) {
+function SrcMapping({ s, set, groups, nodeProps, node, sel, openCol, setOpenCol, eyebrow, title, desc, singleGroup }) {
   const [q, setQ] = useState("");
   const [tab, setTab] = useState("all");
+  const [collapsed, setCollapsed] = useState({});
+  const mapping = s.mapping || {};
   const transforms = s.transforms || {};
-  const updateMap = (col, propId) => set({ mapping: { ...s.mapping, [col]: propId } });
-  const setTransforms = (col, arr) => set({ transforms: { ...transforms, [col]: arr } });
-  const mappedCount = Object.values(s.mapping).filter(Boolean).length;
-  const rows = srcCols.filter(c => !q || c.col.toLowerCase().indexOf(q.toLowerCase()) >= 0);
+  const groupList = groups || [];
+  const mk = (g, c) => g + "::" + c;
+  const updateMap = (key, propId) => set({ mapping: Object.assign({}, mapping, (function () { var o = {}; o[key] = propId; return o; })()) });
   const GRID = "minmax(180px,1.3fr) minmax(190px,1.2fr) 34px minmax(190px,1.3fr)";
 
+  const allKeys = groupList.reduce((a, g) => a.concat(g.cols.map(c => mk(g.name, c.col))), []);
+  const total = allKeys.length;
+  const mappedCount = allKeys.filter(k => mapping[k]).length;
+  const colVisible = (g, c) => {
+    const key = mk(g.name, c.col);
+    if (q && c.col.toLowerCase().indexOf(q.toLowerCase()) < 0) return false;
+    if (tab === "mapped") return !!mapping[key];
+    if (tab === "unmapped") return !mapping[key];
+    return true;
+  };
+
+  function renderRow(g, col, i, last) {
+    const key = mk(g.name, col.col);
+    const mapped = mapping[key];
+    const tlist = transforms[key] || [];
+    const isOpen = openCol === key;
+    return (
+      <div key={key} style={{ borderTop: i ? "1px solid var(--line-2)" : "none" }}>
+        <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "12px 16px", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <MapTypeGlyph type={col.type} />
+            <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{col.col}</code>
+            {col.col === "id" && <MapBadge tone="var(--green)">PK</MapBadge>}
+          </div>
+          <button onClick={() => setOpenCol(key)}
+            style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", width: "100%", padding: "7px 10px", borderRadius: 8, borderWidth: 1, borderStyle: tlist.length || isOpen ? "solid" : "dashed", borderColor: isOpen ? "var(--ink)" : tlist.length ? "var(--line)" : "transparent", background: isOpen ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", minHeight: 34 }}
+            onMouseEnter={e => { e.currentTarget.style.background = "var(--panel-2)"; if (!tlist.length && !isOpen) e.currentTarget.style.borderColor = "var(--line)"; }}
+            onMouseLeave={e => { if (!isOpen) e.currentTarget.style.background = "transparent"; if (!tlist.length && !isOpen) e.currentTarget.style.borderColor = "transparent"; }}>
+            {tlist.length === 0
+              ? <span style={{ fontSize: 12, color: "var(--ink-4)" }}>+ Add transformation</span>
+              : tlist.map((t, j) => <span key={j} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, padding: "2px 7px", borderRadius: 5, background: "var(--chip)", border: "1px solid var(--line)", color: "var(--ink-2)" }}>{t.fn ? tfLabel(t.fn) : "function…"}</span>)}
+            <span style={{ marginLeft: "auto", color: "var(--ink-3)", flexShrink: 0, display: "flex" }} title="Edit transformations">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z" /></svg>
+            </span>
+          </button>
+          <div style={{ textAlign: "center", color: mapped ? "var(--green)" : "var(--ink-4)", fontSize: 15 }}>→</div>
+          <CustomSelect value={mapped || ""} onChange={v => updateMap(key, v)} placeholder="Select field"
+            options={nodeProps.map(p => ({ id: p.id, label: p.id, type: p.type })).concat([{ id: "__new__", label: "+ New property…" }])}
+            renderTrigger={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={22} /><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{o.label}</span>{o.id === "id" && <><MapBadge tone="var(--green)">PK</MapBadge><MapBadge>UK</MapBadge></>}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-4)" }}>{o.label || "Select field"}</span>}
+            renderOption={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={20} />{o.label}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-3)" }}>{o.label}</span>} />
+        </div>
+      </div>
+    );
+  }
+
+  function tableHeader(round) {
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "10px 16px", background: "var(--panel-2)", borderBottom: "1px solid var(--line-2)", borderRadius: round ? "11px 11px 0 0" : "0", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)" }}>
+        <div>Source fields</div><div>Transformations</div><div></div><div>Destination fields</div>
+      </div>
+    );
+  }
+
   return (
-    <StepWrap wide eyebrow={eyebrow || "STEP 4 · COLUMN MAPPING"} title={title || `Map ${sel ? sel.name : "source"} fields to ${node?.label || "the node"}`} desc={desc || "Map each source field to a destination property and chain transformations in between. Unmapped fields are ignored."}>
+    <StepWrap wide eyebrow={eyebrow || "STEP 4 · COLUMN MAPPING"} title={title || `Map ${sel ? sel.name : "source"} fields to ${node?.label || "the node"}`} desc={desc || "Map each source field — across every selected object — to a destination property and chain transformations in between. Unmapped fields are ignored."}>
       {/* toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 2, padding: 3, borderRadius: 9, border: "1px solid var(--line)", background: "var(--bg-canvas)" }}>
-          {[["all", "All fields", srcCols.length], ["mapped", "Mapped", mappedCount], ["unmapped", "Unmapped", srcCols.length - mappedCount]].map(t => {
+          {[["all", "All fields", total], ["mapped", "Mapped", mappedCount], ["unmapped", "Unmapped", total - mappedCount]].map(t => {
             const on = tab === t[0];
             return <button key={t[0]} onClick={() => setTab(t[0])} style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 11px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: on ? 600 : 500, background: on ? "var(--chip)" : "transparent", color: on ? "var(--ink)" : "var(--ink-3)" }}>
               {t[1]}
@@ -1856,6 +2000,7 @@ function SrcMapping({ s, set, srcCols, nodeProps, node, sel, openCol, setOpenCol
             </button>;
           })}
         </div>
+        {!singleGroup && groupList.length > 0 && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-3)" }}>{groupList.length + " object" + (groupList.length === 1 ? "" : "s")}</span>}
         <div style={{ position: "relative", marginLeft: "auto", width: 240 }}>
           <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--ink-3)", display: "flex" }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
@@ -1864,50 +2009,37 @@ function SrcMapping({ s, set, srcCols, nodeProps, node, sel, openCol, setOpenCol
         </div>
       </div>
 
-      {/* table */}
-      <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)" }}>
-        <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "10px 16px", background: "var(--panel-2)", borderBottom: "1px solid var(--line)", borderRadius: "11px 11px 0 0", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)" }}>
-          <div>Source fields</div><div>Transformations</div><div></div><div>Destination fields</div>
-        </div>
-        {rows.filter(col => tab === "all" || (tab === "mapped" ? !!s.mapping[col.col] : !s.mapping[col.col])).map((col, i) => {
-          const mapped = s.mapping[col.col];
-          const tlist = transforms[col.col] || [];
-          const isOpen = openCol === col.col;
-          const isPK = col.col === s.pkCol;
-          return (
-            <div key={col.col} style={{ borderTop: i ? "1px solid var(--line-2)" : "none" }}>
-              <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "12px 16px", alignItems: "center" }}>
-                {/* source */}
-                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                  <MapTypeGlyph type={col.type} />
-                  <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{col.col}</code>
-                  {isPK && <MapBadge tone="var(--green)">PK</MapBadge>}
-                </div>
-                {/* transformations */}
-                <button onClick={() => setOpenCol(col.col)}
-                  style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", width: "100%", padding: "7px 10px", borderRadius: 8, borderWidth: 1, borderStyle: tlist.length || isOpen ? "solid" : "dashed", borderColor: isOpen ? "var(--ink)" : tlist.length ? "var(--line)" : "transparent", background: isOpen ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", minHeight: 34 }}
-                  onMouseEnter={e => { e.currentTarget.style.background = "var(--panel-2)"; if (!tlist.length && !isOpen) e.currentTarget.style.borderColor = "var(--line)"; }}
-                  onMouseLeave={e => { if (!isOpen) e.currentTarget.style.background = "transparent"; if (!tlist.length && !isOpen) e.currentTarget.style.borderColor = "transparent"; }}>
-                  {tlist.length === 0
-                    ? <span style={{ fontSize: 12, color: "var(--ink-4)" }}>+ Add transformation</span>
-                    : tlist.map((t, j) => <span key={j} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, padding: "2px 7px", borderRadius: 5, background: "var(--chip)", border: "1px solid var(--line)", color: "var(--ink-2)" }}>{t.fn ? tfLabel(t.fn) : "function…"}</span>)}
-                  <span style={{ marginLeft: "auto", color: "var(--ink-3)", flexShrink: 0, display: "flex" }} title="Edit transformations">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z" /></svg>
-                  </span>
-                </button>
-                {/* arrow */}
-                <div style={{ textAlign: "center", color: mapped ? "var(--green)" : "var(--ink-4)", fontSize: 15 }}>→</div>
-                {/* destination */}
-                <CustomSelect value={mapped || ""} onChange={v => updateMap(col.col, v)} placeholder="Select field"
-                  options={nodeProps.map(p => ({ id: p.id, label: p.id, type: p.type })).concat([{ id: "__new__", label: "+ New property…" }])}
-                  renderTrigger={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={22} /><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{o.label}</span>{o.id === "id" && <><MapBadge tone="var(--green)">PK</MapBadge><MapBadge>UK</MapBadge></>}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-4)" }}>{o.label || "Select field"}</span>}
-                  renderOption={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={20} />{o.label}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-3)" }}>{o.label}</span>} />
-              </div>
-            </div>
-          );
-        })}
-        {rows.length === 0 && <div style={{ padding: "32px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No fields match “{q}”.</div>}
-      </div>
+      {groupList.length === 0 && (
+        <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)", padding: "40px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No objects selected — go back to the Objects step and pick at least one.</div>
+      )}
+
+      {groupList.map(g => {
+        const gKeys = g.cols.map(c => mk(g.name, c.col));
+        const gMapped = gKeys.filter(k => mapping[k]).length;
+        const visible = g.cols.filter(c => colVisible(g, c));
+        const isCollapsed = !!collapsed[g.name];
+        return (
+          <div key={g.name} style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)", marginBottom: singleGroup ? 0 : 14, overflow: "hidden" }}>
+            {!singleGroup && (
+              <button onClick={() => setCollapsed(prev => Object.assign({}, prev, (function () { var o = {}; o[g.name] = !prev[g.name]; return o; })()))}
+                style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "12px 16px", border: "none", borderBottom: isCollapsed ? "none" : "1px solid var(--line)", background: "var(--panel-2)", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isCollapsed ? "none" : "rotate(90deg)", transition: "transform 120ms", flexShrink: 0 }}><polyline points="9 6 15 12 9 18" /></svg>
+                {sel && <SrcConnectorLogo c={sel} size={18} />}
+                <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{g.name}</code>
+                <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{(g.type || "Object") + " · " + g.cols.length + " columns"}</span>
+                <span style={{ marginLeft: "auto", fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 600, color: gMapped ? "var(--green)" : "var(--ink-3)" }}>{gMapped + "/" + g.cols.length + " mapped"}</span>
+              </button>
+            )}
+            {!isCollapsed && (
+              <>
+                {tableHeader(singleGroup)}
+                {visible.map((col, i) => renderRow(g, col, i, i === visible.length - 1))}
+                {visible.length === 0 && <div style={{ padding: "26px", textAlign: "center", color: "var(--ink-3)", fontSize: 12.5 }}>No fields match the current filter.</div>}
+              </>
+            )}
+          </div>
+        );
+      })}
     </StepWrap>
   );
 }
@@ -2027,7 +2159,10 @@ function SrcSchedule({ s, set, srcCols, eyebrow }) {
 
 // ── Src Step 5: Review ────────────────────────────────────────────────────────
 
-function SrcReview({ s, set, node, sel, srcCols, mappedCount, unstructured, readCfg, eyebrow, onClose }) {
+function SrcReview({ s, set, node, sel, mapGroups, mappedCount, totalMapCols, unstructured, readCfg, eyebrow, onClose }) {
+  mapGroups = mapGroups || [];
+  totalMapCols = totalMapCols != null ? totalMapCols : mapGroups.reduce((a, g) => a + g.cols.length, 0);
+  const selectedTables = s.tables || [];
   const readLocs = s.readLocations || [];
   const readFilters = s.readFilters || {};
   const activeFilters = Object.keys(readFilters).filter(k => { const v = readFilters[k]; return Array.isArray(v) ? v.length : (!!v && v !== "all"); });
@@ -2050,14 +2185,12 @@ schedule:`;
   const structuredYaml = `name: ${node?.id || "node"}_from_${s.system || "source"}
 source:
   connector: ${s.system || "?"}
-  object: ${s.table || "(custom query)"}
+  objects: [${selectedTables.join(", ") || "(custom query)"}]
   load_strategy: ${s.loadStrategy}${s.loadStrategy === "incremental" ? "\n  watermark_column: " + s.incrementalCol : ""}
-  primary_key: ${s.pkCol || "id"}
 target:
   node_type: ${node?.label?.replace(/\s/g,"") || "Node"}
-  join_on: ${s.joinCol || "id"}
 mapping:
-${Object.entries(s.mapping).filter(([,v])=>v).map(([k,v]) => `  ${k}: ${v}`).join("\n") || "  # (no mappings defined)"}
+${mapGroups.map(g => "  " + g.name + ":\n" + (g.cols.filter(c => s.mapping[g.name + "::" + c.col]).map(c => "    " + c.col + ": " + s.mapping[g.name + "::" + c.col]).join("\n") || "    # (none mapped)")).join("\n") || "  # (no objects selected)"}
   unmapped_columns: ${s.unmappedPolicy}
 schedule:`;
   const yamlHead = unstructured ? unstructuredYaml : structuredYaml;
@@ -2082,14 +2215,14 @@ owner: ${s.owner}`;
               ["Filters",    activeFilters.length ? activeFilters.length + " active" : "none"],
               ["Extract",    !s.extractMethod ? "skipped" : (s.extractMethod === "automation" ? "Automation" : "Agent") + (s.extractMethod === "automation" ? (s.extractAutomation ? " · " + s.extractAutomation : "") : (s.extractAgent ? " · " + s.extractAgent : ""))],
               ["Schema",     extractFields.length + " field" + (extractFields.length === 1 ? "" : "s")],
-              ["Mapped",     mappedCount + " of " + srcCols.length + " fields"],
+              ["Mapped",     mappedCount + " of " + totalMapCols + " fields"],
               ["Settings",   (s.pipelineType === "scheduled" ? "Scheduled" : "Real Time") + " · " + (s.resourceTier || "Small")],
               ["Owner",      s.owner],
             ] : [
               ["Source",    sel?.name || s.customName],
-              ["Object",    <code>{s.table || "(query)"}</code>],
+              ["Objects",   selectedTables.length ? selectedTables.length + " · " + selectedTables.join(", ") : "(query)"],
               ["Strategy",  s.loadStrategy + (s.loadStrategy === "incremental" ? " · " + s.incrementalCol : "")],
-              ["Columns",   mappedCount + " mapped · " + (srcCols.length - mappedCount) + " ignored"],
+              ["Mapped",    mappedCount + " of " + totalMapCols + " columns"],
               ["Cadence",   s.cadence],
               ["SLO",       s.freshnessSLO],
               ["On error",  s.onError],
