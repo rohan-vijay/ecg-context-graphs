@@ -2194,7 +2194,7 @@ function SrcObjectAgents({ s, set, groups, sel }) {
                   {/* controls — preview (left) + run another agent (right, matching the zero-state position) */}
                   <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12 }}>
                     <button onClick={() => setPreviewFor(g.name)} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: "var(--ink-2)", padding: 0 }}>
-                      Preview agent output <span style={{ fontSize: 13 }}>→</span>
+                      Preview output <span style={{ fontSize: 13 }}>→</span>
                     </button>
                     {available.length > 0 && <div style={{ marginLeft: "auto", flexShrink: 0 }}>{runAgentPicker(g, available, "+ Run another agent", true)}</div>}
                   </div>
