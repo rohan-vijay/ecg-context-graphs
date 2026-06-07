@@ -2945,10 +2945,50 @@ function buildEditState(es, node, base) {
   st.uSettings = Object.assign({}, es.settings || { refresh: true });
   const allNodes = (typeof window !== "undefined" && window.NODES) || [];
   const propsFor = nid => { const n = allNodes.find(x => x.id === nid); return (n && window.generateProps) ? window.generateProps(n).map(p => p.name) : []; };
-  const autoMap = (group, cols, destId) => {
-    if (!destId || destId === "__new__") return;
-    const dp = propsFor(destId);
-    (cols || []).forEach(c => { const hit = dp.find(p => p.toLowerCase() === String(c.col).toLowerCase()); if (hit) st.mapping[group + "::" + c.col] = hit; });
+  // Pick the most sensible destination property for a source column. Falls back so
+  // that every column lands on *some* real property — the map reads fully configured.
+  const pickProp = (col, pn) => {
+    const c = String(col).toLowerCase();
+    const idProp = pn.find(p => /_id$/.test(p) && !/owner|parent|csm/.test(p));
+    const cand = [];
+    const exact = pn.find(p => p.toLowerCase() === c); if (exact) cand.push(exact);
+    if (/name|title|subject|policy_name|full_name/.test(c)) cand.push("name");
+    if (/owner|author|sender|organizer|shared_by|created_by|vendor|participant|attendee|recipient|assignee|party|parties|attendees/.test(c)) cand.push("owner_id", "csm_id");
+    if (/email/.test(c)) cand.push("primary_contact_email");
+    if (/(^id$|^file_id$|^message_id$|^thread_id$|^[a-z]+_id$|number$|_no$)/.test(c) && !/owner|parent|csm|account_id/.test(c)) cand.push(idProp);
+    if (/domain/.test(c)) cand.push("domain");
+    if (/industry/.test(c)) cand.push("industry");
+    if (/country|region|location|jurisdiction/.test(c)) cand.push("region");
+    if (/tax/.test(c)) cand.push("tax_id");
+    if (/tier/.test(c)) cand.push("tier");
+    if (/revenue|arr|annual/.test(c)) cand.push("arr_usd", "amount");
+    if (/amount|total|value|due|price|cost/.test(c)) cand.push("amount", "arr_usd");
+    if (/created|started|sent|posted|placed|effective|published|modified|updated|order_date|_at$|_date$|^date$|^last_/.test(c)) cand.push("created_at", "fiscal_year_end");
+    if (/file_type|^type$|severity|kind|category|currency/.test(c)) cand.push("type");
+    if (/status|resolved\b|state|approved/.test(c)) cand.push("status");
+    if (/priority/.test(c)) cand.push("priority");
+    if (/resolved_at/.test(c)) cand.push("resolved_at");
+    if (/url|source_url|ref|link|external|governing/.test(c)) cand.push("external_ref");
+    if (/tag|skill|label/.test(c)) cand.push("tags");
+    if (/summary|recap|rationale|decision|note|action|body|text|description|metadata|content|term/.test(c)) cand.push("metadata");
+    cand.push("metadata", "name", idProp, pn[1], pn[0]); // last-resort fallbacks
+    for (const p of cand) { if (p && pn.indexOf(p) >= 0) return p; }
+    return null;
+  };
+  const richMap = (group, cols, destId) => {
+    if (!destId) return;
+    if (destId === "__new__") { (cols || []).forEach(c => { st.mapping[group + "::" + c.col] = "new:" + (c.name || c.col); }); return; }
+    const pn = propsFor(destId); if (!pn.length) return;
+    (cols || []).forEach(c => { const p = pickProp(c.name || c.col, pn); if (p) st.mapping[group + "::" + c.col] = p; });
+  };
+  // Full mappable column set for an unstructured entity = file metadata + the fields
+  // its extraction agent pulls out of the document body. Agent fields use the same
+  // "fx::<agentId>::<col>" mapping key the Map step renders under.
+  const entityCols = eid => {
+    const a = extractionAgentFor(eid);
+    const meta = UNSTRUCTURED_META_COLS.map(c => ({ col: c.col, name: c.col }));
+    const af = (a && a.outputs) ? a.outputs.map(o => ({ col: "fx::" + a.id + "::" + o.col, name: o.col })) : [];
+    return meta.concat(af);
   };
   const fallbackNode = es.node || (node && node.id) || "";
 
@@ -2965,17 +3005,21 @@ function buildEditState(es, node, base) {
       st.extractRan = true;
       const destId = (es.entityNode && es.entityNode[ke.id]) || fallbackNode;
       if (destId) st.entityNode[ke.id] = destId;
-      const a = extractionAgentFor(ke.id); if (a) st.objectAgents[ke.id] = [a.id];
-      autoMap(ke.id, UNSTRUCTURED_META_COLS, destId);
+      const a = extractionAgentFor(ke.id); if (a) st.objectAgents[ke.id] = [a.id]; else st.objectAgents[ke.id] = [DOC_ENRICH_AGENTS[0].id];
+      richMap(ke.id, entityCols(ke.id), destId);
     } else {
+      // Mixed: discovery already ran via an agent — that's what reveals the file types.
+      st.discoveryKind = "agent";
+      st.entityAgent = (typeof ENTITY_AGENTS !== "undefined" && ENTITY_AGENTS[0]) ? ENTITY_AGENTS[0].id : "entity_extractor";
       st.extractRan = true;
       const includeOnly = es.includeOnly;
       all.forEach(e => {
         if (includeOnly && includeOnly.indexOf(e.id) < 0) { st.entityInclude[e.id] = false; return; }
+        st.entityInclude[e.id] = true;
         const destId = (es.entityNode && es.entityNode[e.id]) || fallbackNode;
         if (destId) st.entityNode[e.id] = destId;
         const a = extractionAgentFor(e.id); if (a) st.objectAgents[e.id] = [a.id];
-        autoMap(e.id, UNSTRUCTURED_META_COLS, destId);
+        richMap(e.id, entityCols(e.id), destId);
       });
     }
   } else {
@@ -2985,7 +3029,7 @@ function buildEditState(es, node, base) {
     names.forEach(nm => {
       const o = objs.find(x => x.name === nm) || { name: nm };
       if (es.agent) st.objectAgents[nm] = Array.isArray(es.agent) ? es.agent : [es.agent];
-      autoMap(nm, getObjectCols(o), fallbackNode);
+      richMap(nm, getObjectCols(o), es.tableNode && es.tableNode[nm] ? es.tableNode[nm] : fallbackNode);
     });
   }
   return st;
@@ -3008,7 +3052,7 @@ const DEMO_PIPELINES = [
     edit: { system: "hubspot", node: "account", tables: ["accounts"], settings: { refresh: true } } },
   { id: "pl-gdrive", name: "Google Drive — Legal & Finance", system: "Google Drive", sysId: "googledrive", nodeId: "agreement", nodeLabel: "Agreement +3", type: "Documents", freq: "Every 6h", last: "2h ago", rows: "6,930", rowsN: 6930, errors: 0, status: "healthy",
     edit: { system: "googledrive", node: "agreement", scope: "folders", locations: ["Legal / Contracts", "Finance / Invoices", "Legal / NDAs", "Strategy / Reports"], contentMode: "mixed",
-      includeOnly: ["contract", "invoice", "nda", "report"], entityNode: { contract: "agreement", invoice: "invoice", nda: "agreement", report: "resource" }, settings: { refresh: true, retention: true } } },
+      includeOnly: ["contract", "invoice", "nda", "report"], entityNode: { contract: "agreement", invoice: "invoice", nda: "agreement", report: "__new__" }, settings: { refresh: true, retention: true } } },
   { id: "pl-outlook", name: "Outlook — Order Confirmations", system: "Outlook", sysId: "outlook", nodeId: "interaction", nodeLabel: "Interaction", type: "Email", freq: "Every 1h", last: "22m ago", rows: "184K", rowsN: 184500, errors: 0, status: "healthy",
     edit: { system: "outlook", node: "interaction", scope: "folders", locations: ["Inbox / Orders", "Sales / Confirmations"], contentMode: "single", knownType: "Order confirmations", settings: { refresh: true } } },
   { id: "pl-slack", name: "Slack — Sales & Ops", system: "Slack", sysId: "slack", nodeId: "interaction", nodeLabel: "Interaction +2", type: "Messaging", freq: "Streaming", last: "1m ago", rows: "44K", rowsN: 44250, errors: 3, status: "degraded",
@@ -3019,10 +3063,10 @@ const DEMO_PIPELINES = [
       includeOnly: ["tm_message", "tm_meeting"], entityNode: { tm_message: "interaction", tm_meeting: "interaction" }, settings: { refresh: true } } },
   { id: "pl-sharepoint", name: "SharePoint — Legal Library", system: "SharePoint", sysId: "sharepoint", nodeId: "agreement", nodeLabel: "Agreement +2", type: "Documents", freq: "Every 12h", last: "4h ago", rows: "28K", rowsN: 28050, errors: 0, status: "healthy",
     edit: { system: "sharepoint", node: "agreement", scope: "folders", locations: ["Legal Library", "Policies"], contentMode: "mixed",
-      includeOnly: ["sp_contract", "sp_policy", "sp_document"], entityNode: { sp_contract: "agreement", sp_policy: "resource", sp_document: "resource" }, settings: { refresh: true, retention: true } } },
-  { id: "pl-onedrive", name: "OneDrive — Shared Workspace", system: "OneDrive", sysId: "onedrive", nodeId: "resource", nodeLabel: "Resource", type: "Documents", freq: "Daily", last: "9h ago", rows: "13K", rowsN: 13130, errors: 0, status: "healthy",
-    edit: { system: "onedrive", node: "resource", scope: "folders", locations: ["Shared / Proposals", "Shared / Models"], contentMode: "mixed",
-      includeOnly: ["od_document", "od_spreadsheet", "od_pdf"], entityNode: { od_document: "resource", od_spreadsheet: "resource", od_pdf: "resource" }, settings: { refresh: true } } },
+      includeOnly: ["sp_contract", "sp_policy", "sp_document"], entityNode: { sp_contract: "agreement", sp_policy: "__new__", sp_document: "__new__" }, settings: { refresh: true, retention: true } } },
+  { id: "pl-onedrive", name: "OneDrive — Shared Workspace", system: "OneDrive", sysId: "onedrive", nodeId: "agreement", nodeLabel: "Document +2", type: "Documents", freq: "Daily", last: "9h ago", rows: "13K", rowsN: 13130, errors: 0, status: "healthy",
+    edit: { system: "onedrive", node: "agreement", scope: "folders", locations: ["Shared / Proposals", "Shared / Models"], contentMode: "mixed",
+      includeOnly: ["od_document", "od_spreadsheet", "od_pdf"], entityNode: { od_document: "__new__", od_spreadsheet: "__new__", od_pdf: "__new__" }, settings: { refresh: true } } },
 ];
 if (typeof window !== "undefined") { window.DEMO_PIPELINES = DEMO_PIPELINES; window.buildEditState = buildEditState; }
 function SrcToggle({ on, onClick }) {
