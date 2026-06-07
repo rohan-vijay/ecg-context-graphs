@@ -1399,7 +1399,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     { label: "Source system",  hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",     hint: connLabel },
     { label: "Objects",        hint: objectHint },
-    { label: "Agents",         hint: agentsHint },
+    { label: "Extract",        hint: agentsHint },
     { label: "Column mapping", hint: colMapHint, subItems: mapSubItems, activeSub: activeMapObj, onSub: setMapActiveObj },
     { label: "Settings", hint: settingsHint },
   ];
@@ -2102,57 +2102,92 @@ function FilterRecordsPopover({ cols, initial, objName, onApply, onClear, onClos
 }
 
 // ── Src Step (structured): Per-object agents ─────────────────────────────────
-// For each object selected in the Objects step, optionally run an agent that
-// reads every record and emits additional fields (available in Column mapping).
+// For each object selected in the Objects step, optionally run one or more
+// agents (in sequence) that read every record and emit additional fields. The
+// final output (source columns + agent fields) is previewable one step away.
 const OBJECT_AGENTS = [
-  { id: "enrich_company", name: "Company Enricher",    desc: "Appends firmographics from external data providers.", outputs: ["industry", "employee_count", "annual_revenue", "hq_country"] },
-  { id: "lead_score",     name: "Lead Scorer",         desc: "Scores each record on fit and intent signals.",       outputs: ["fit_score", "intent_score", "priority_tier"] },
-  { id: "dedupe",         name: "Duplicate Detector",  desc: "Flags likely duplicates and proposes a survivor.",     outputs: ["dup_cluster_id", "is_survivor", "match_confidence"] },
-  { id: "sentiment",      name: "Sentiment Classifier",desc: "Reads notes & activity to gauge health.",              outputs: ["sentiment", "health_score"] },
-  { id: "summarize",      name: "Record Summarizer",   desc: "Generates a one-line summary per record.",             outputs: ["summary"] },
-  { id: "geocode",        name: "Address Geocoder",    desc: "Normalizes addresses and adds lat/long.",              outputs: ["lat", "lng", "normalized_address", "timezone"] },
+  { id: "enrich_company", name: "Company Enricher",     desc: "Appends firmographics from external data providers.", outputs: [{ col: "industry", type: "string", sample: "SaaS" }, { col: "employee_count", type: "int", sample: "540" }, { col: "annual_revenue", type: "decimal", sample: "24500000.00" }, { col: "hq_country", type: "string", sample: "US" }] },
+  { id: "lead_score",     name: "Lead Scorer",          desc: "Scores each record on fit and intent signals.",       outputs: [{ col: "fit_score", type: "int", sample: "82" }, { col: "intent_score", type: "int", sample: "67" }, { col: "priority_tier", type: "string", sample: "A" }] },
+  { id: "dedupe",         name: "Duplicate Detector",   desc: "Flags likely duplicates and proposes a survivor.",     outputs: [{ col: "dup_cluster_id", type: "string", sample: "clu_4f" }, { col: "is_survivor", type: "bool", sample: "true" }, { col: "match_confidence", type: "decimal", sample: "0.94" }] },
+  { id: "sentiment",      name: "Sentiment Classifier", desc: "Reads notes & activity to gauge health.",              outputs: [{ col: "sentiment", type: "string", sample: "positive" }, { col: "health_score", type: "int", sample: "78" }] },
+  { id: "summarize",      name: "Record Summarizer",    desc: "Generates a one-line summary per record.",             outputs: [{ col: "summary", type: "string", sample: "Enterprise SaaS account, expanding." }] },
+  { id: "geocode",        name: "Address Geocoder",     desc: "Normalizes addresses and adds lat/long.",              outputs: [{ col: "lat", type: "decimal", sample: "37.7749" }, { col: "lng", type: "decimal", sample: "-122.4194" }, { col: "normalized_address", type: "string", sample: "548 Market St, SF" }, { col: "timezone", type: "string", sample: "America/Los_Angeles" }] },
 ];
+function agentDef(id) { return OBJECT_AGENTS.find(a => a.id === id) || null; }
 
 function SrcObjectAgents({ s, set, groups, sel }) {
   const assigned = s.objectAgents || {};
-  const setAgent = (obj, id) => set({ objectAgents: Object.assign({}, assigned, (function () { var o = {}; o[obj] = id; return o; })()) });
-  const agentOpts = [{ id: "", label: "No agent", desc: "Skip enrichment for this object." }].concat(OBJECT_AGENTS.map(a => ({ id: a.id, label: a.name, desc: a.desc })));
+  const [addingFor, setAddingFor] = useState("");
+  const [previewFor, setPreviewFor] = useState("");
+  // Back-compat: a value may be a single id (old) or an array (chain).
+  const chainOf = obj => Array.isArray(assigned[obj]) ? assigned[obj] : (assigned[obj] ? [assigned[obj]] : []);
+  const setChain = (obj, arr) => set({ objectAgents: Object.assign({}, assigned, (function () { var o = {}; o[obj] = arr; return o; })()) });
+  const addAgent = (obj, id) => { if (!id) { setAddingFor(""); return; } const c = chainOf(obj); if (c.indexOf(id) < 0) setChain(obj, c.concat([id])); setAddingFor(""); };
+  const removeAgent = (obj, id) => setChain(obj, chainOf(obj).filter(x => x !== id));
+  const outFieldCount = obj => chainOf(obj).reduce((n, id) => n + ((agentDef(id) || { outputs: [] }).outputs.length), 0);
+  const previewGroup = previewFor ? groups.find(g => g.name === previewFor) : null;
   return (
     <StepWrap wide title="Run agents on each object">
-      <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 760 }}>Optionally assign an agent to each object you selected. The agent reads every record and produces additional fields — these become available to map in the next step.</div>
+      <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 760 }}>Optionally run an agent on each object you selected. The agent reads every record and produces additional fields — these become available to map in the next step.</div>
       {groups.length === 0 && (
         <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)", padding: "40px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No objects selected — go back to the Objects step and pick at least one.</div>
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {groups.map(g => {
-          const agId = assigned[g.name] || "";
-          const ag = OBJECT_AGENTS.find(a => a.id === agId);
+          const chain = chainOf(g.name);
+          const total = outFieldCount(g.name);
+          const available = OBJECT_AGENTS.filter(a => chain.indexOf(a.id) < 0).map(a => ({ id: a.id, label: a.name, desc: a.desc }));
+          const showPicker = chain.length === 0 || addingFor === g.name;
           return (
-            <div key={g.name} style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)", overflow: "hidden" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 16px", borderBottom: "1px solid var(--line-2)", background: "var(--panel-2)" }}>
+            <div key={g.name} style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 16px", borderBottom: "1px solid var(--line-2)", background: "var(--panel-2)", borderRadius: "12px 12px 0 0" }}>
                 {sel && <SrcConnectorLogo c={sel} size={18} />}
                 <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{g.name}</code>
                 <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{(g.type || "Object") + " · " + g.cols.length + " columns"}</span>
-                {ag && <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.4px", color: "var(--purple)", background: "color-mix(in oklab, var(--purple) 12%, transparent)", padding: "3px 8px", borderRadius: 5 }}>＋{ag.outputs.length} FIELDS</span>}
+                {total > 0 && <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.4px", color: "var(--purple)", background: "color-mix(in oklab, var(--purple) 12%, transparent)", padding: "3px 8px", borderRadius: 5 }}>＋{total} FIELDS</span>}
               </div>
               <div style={{ padding: "13px 16px" }}>
-                <div style={{ maxWidth: 420 }}>
-                  <CustomSelect value={agId} onChange={v => setAgent(g.name, v)} placeholder="Select an agent…" options={agentOpts}
-                    renderTrigger={o => o.id
-                      ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><AgentGlyph /><span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{o.label}</span></span>
-                      : <span style={{ color: "var(--ink-4)" }}>No agent — skip enrichment</span>} />
-                </div>
-                {ag && (
-                  <div style={{ marginTop: 13 }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 8 }}>Outputs added to {g.name}</div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {ag.outputs.map(f => (
-                        <span key={f} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "var(--chip)", border: "1px solid var(--line)", color: "var(--ink-2)" }}>
-                          <span style={{ width: 14, height: 14, borderRadius: 3, background: "color-mix(in oklab, var(--purple) 14%, transparent)", color: "var(--purple)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 700 }}>FX</span>
-                          {f}
-                        </span>
-                      ))}
-                    </div>
+                {/* assigned agents — run top to bottom */}
+                {chain.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: chain.length ? 12 : 0 }}>
+                    {chain.map((id, i) => {
+                      const a = agentDef(id); if (!a) return null;
+                      return (
+                        <div key={id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 9, background: "var(--bg-canvas)" }}>
+                          {chain.length > 1 && <span style={{ width: 18, height: 18, borderRadius: "50%", flexShrink: 0, background: "var(--ink)", color: "var(--panel)", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</span>}
+                          <AgentGlyph />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{a.name}</div>
+                            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--ink-3)", marginTop: 2 }}>＋{a.outputs.length} field{a.outputs.length === 1 ? "" : "s"} · {a.desc}</div>
+                          </div>
+                          <button onClick={() => removeAgent(g.name, id)} title="Remove agent" style={{ border: "none", background: "none", cursor: "pointer", padding: 4, color: "var(--ink-4)", flexShrink: 0 }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* picker (primary when no agent yet; on demand for chaining) */}
+                {showPicker && available.length > 0 && (
+                  <div style={{ maxWidth: 460 }}>
+                    <CustomSelect value="" onChange={v => addAgent(g.name, v)} placeholder={chain.length ? "Select another agent…" : "Select an agent…"} options={available}
+                      renderTrigger={() => <span style={{ color: "var(--ink-4)" }}>{chain.length ? "Select another agent…" : "Select an agent…"}</span>} />
+                  </div>
+                )}
+
+                {/* subtle controls when at least one agent is assigned */}
+                {chain.length > 0 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12 }}>
+                    {!showPicker && available.length > 0 && (
+                      <button onClick={() => setAddingFor(g.name)} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: "var(--ink-3)", padding: 0 }}>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>+</span> Run another agent
+                      </button>
+                    )}
+                    <button onClick={() => setPreviewFor(g.name)} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: "var(--ink-2)", padding: 0 }}>
+                      Preview output <span style={{ fontSize: 13 }}>→</span>
+                    </button>
                   </div>
                 )}
               </div>
@@ -2160,7 +2195,53 @@ function SrcObjectAgents({ s, set, groups, sel }) {
           );
         })}
       </div>
+      {previewGroup && <SrcAgentOutputDrawer obj={previewGroup} agents={chainOf(previewGroup.name).map(agentDef).filter(Boolean)} onClose={() => setPreviewFor("")} />}
     </StepWrap>
+  );
+}
+
+// Right-side drawer: the final record shape after agents run — source columns
+// plus every field the assigned agents add, with sample values.
+function SrcAgentOutputDrawer({ obj, agents, onClose }) {
+  const srcCols = obj ? obj.cols : [];
+  const agentFields = agents.flatMap(a => a.outputs.map(o => Object.assign({}, o, { agent: a.name })));
+  const total = srcCols.length + agentFields.length;
+  const row = (c, tag, tagColor) => (
+    <div key={(tag || "") + c.col} style={{ display: "grid", gridTemplateColumns: "26px minmax(0,1fr) auto", gap: 11, alignItems: "center", padding: "9px 20px", borderTop: "1px solid var(--line-2)" }}>
+      <MapTypeGlyph type={c.type} size={24} />
+      <div style={{ minWidth: 0 }}>
+        <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{c.col}</code>
+        {tag && <span style={{ marginLeft: 8, fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, letterSpacing: "0.3px", padding: "1px 6px", borderRadius: 4, color: tagColor, background: "color-mix(in oklab, " + tagColor + " 13%, transparent)" }}>{tag}</span>}
+      </div>
+      <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, color: "var(--ink-3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180, textAlign: "right" }}>{c.sample != null ? c.sample : "—"}</code>
+    </div>
+  );
+  const sectionLabel = t => <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", padding: "14px 20px 6px" }}>{t}</div>;
+  return (
+    <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.28)", zIndex: 60, display: "flex", justifyContent: "flex-end", animation: "flow-fade-in 140ms ease-out" }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 470, maxWidth: "82%", height: "100%", background: "var(--panel)", borderLeft: "1px solid var(--line)", boxShadow: "-24px 0 60px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "18px 20px", borderBottom: "1px solid var(--line-2)", display: "flex", alignItems: "flex-start", gap: 12, flexShrink: 0 }}>
+          <span style={{ width: 34, height: 34, borderRadius: 8, background: "var(--bg-canvas)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-2)", flexShrink: 0 }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M4 12h16M4 17h10" /></svg>
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: "'Instrument Serif', serif", fontSize: 21, color: "var(--ink)", lineHeight: 1.1 }}>Final output</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--ink-3)", marginTop: 3 }}><code>{obj ? obj.name : ""}</code> · {total} fields{agents.length ? " · " + agents.length + " agent" + (agents.length > 1 ? "s" : "") : ""}</div>
+          </div>
+          <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid var(--line)", background: "none", cursor: "pointer", color: "var(--ink-3)", flexShrink: 0, fontSize: 13 }}>✕</button>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
+          {sectionLabel("From source · " + srcCols.length)}
+          {srcCols.map(c => row(c, "SOURCE", "var(--ink-3)"))}
+          {agentFields.length > 0 && sectionLabel("Added by agents · " + agentFields.length)}
+          {agentFields.map(f => row(f, f.agent, "var(--purple)"))}
+        </div>
+        <div style={{ flexShrink: 0, padding: "14px 20px", borderTop: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--panel-2)" }}>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-3)" }}>Sample values · one record</span>
+          <button onClick={onClose} className="btn-dark">Done</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
