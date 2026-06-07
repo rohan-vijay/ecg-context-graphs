@@ -948,9 +948,14 @@
   /* dropdown styled as a compact button (e.g. "+ Run an agent") */
   .csel-menu-right .csel-menu { left: auto; right: 0; }
   .csel-compact .csel-trigger { height: 32px; padding: 0 12px; font-size: 12.5px; }
-  .csel-compact .csel-menu { min-width: 256px; }
+  .csel-btnlabel .csel-menu { min-width: 256px; }
   .csel-btnlabel .csel-ph { color: var(--ink-2); font-size: 12.5px; }
   .csel-btnlabel .csel-chevron { display: none; }
+  /* text-link variant: a clickable label (no button chrome) that still opens the menu */
+  .csel-textlink .csel-trigger { border: none; background: none; padding: 0; height: auto; gap: 4px; }
+  .csel-textlink .csel-trigger:hover, .csel-textlink .csel-trigger.open { border: none; background: none; }
+  .csel-textlink .csel-ph { color: var(--ink-2); font-size: 12px; }
+  .csel-textlink .csel-trigger:hover .csel-ph { color: var(--ink); }
   /* search box inside a searchable dropdown */
   .csel-search { display: flex; align-items: center; gap: 8px; padding: 7px 10px; margin-bottom: 4px; border-bottom: 1px solid var(--line-2); color: var(--ink-3); }
   .csel-search input { flex: 1; min-width: 0; border: none; outline: none; background: none; font-family: inherit; font-size: 13px; color: var(--ink); }
@@ -1227,7 +1232,7 @@
 <body>
 <div id="root"></div>
 <script type="text/babel" src="ecg.jsx?v=knowledge-discovery-v25"></script>
-<script type="text/babel" src="prop-source-flows.jsx?v=link-source-v45"></script>
+<script type="text/babel" src="prop-source-flows.jsx?v=link-source-v46"></script>
 <script type="text/babel" src="edge-flow.jsx"></script>
 </body>
 </html>

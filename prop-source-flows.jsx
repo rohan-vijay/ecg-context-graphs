@@ -2143,8 +2143,8 @@ function SrcObjectAgents({ s, set, groups, sel }) {
   const previewGroup = previewFor ? groups.find(g => g.name === previewFor) : null;
   // "Run an agent" rendered as a compact dropdown-button — clicking opens the
   // agent menu right there (no extra picker line).
-  const runAgentPicker = (g, available, label, alignRight) => (
-    <CustomSelect className={"csel-auto csel-compact csel-btnlabel" + (alignRight ? " csel-menu-right" : "")}
+  const runAgentPicker = (g, available, label, alignRight, asText) => (
+    <CustomSelect className={"csel-auto csel-btnlabel" + (asText ? " csel-textlink" : " csel-compact") + (alignRight ? " csel-menu-right" : "")}
       value="" placeholder={label} options={available} onChange={v => addAgent(g.name, v)}
       searchable searchPlaceholder="Search agents…" />
   );
@@ -2196,7 +2196,7 @@ function SrcObjectAgents({ s, set, groups, sel }) {
                     <button onClick={() => setPreviewFor(g.name)} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: "var(--ink-2)", padding: 0 }}>
                       Preview output <span style={{ fontSize: 13 }}>→</span>
                     </button>
-                    {available.length > 0 && <div style={{ marginLeft: "auto", flexShrink: 0 }}>{runAgentPicker(g, available, "+ Run another agent", true)}</div>}
+                    {available.length > 0 && <div style={{ marginLeft: "auto", flexShrink: 0 }}>{runAgentPicker(g, available, "+ Run another agent", true, true)}</div>}
                   </div>
                 </div>
               )}
