@@ -1298,7 +1298,7 @@ const READ_CONFIGS = {
       { key: "hasAttach", label: "Has attachment",   type: "chips", options: ["Any", "With attachments"] },
       { key: "fileTypes", label: "Attachment types", type: "chips", options: ["PDF", "DOCX", "XLSX", "CSV"] },
     ],
-    starts: ["Invoices", "Contracts", "Receipts", "Statements"],
+    starts: ["Order confirmations", "Vendor invoices", "Support replies", "Renewal notices"],
   },
   outlook: {
     container: "folders", item: "emails", linkPh: "Folder name…",
@@ -1308,7 +1308,7 @@ const READ_CONFIGS = {
       { key: "after",     label: "After",            type: "date" },
       { key: "hasAttach", label: "Has attachment",   type: "chips", options: ["Any", "With attachments"] },
     ],
-    starts: ["Invoices", "Contracts", "Receipts", "Statements"],
+    starts: ["Order confirmations", "Vendor invoices", "Support replies", "Renewal notices"],
   },
   confluence: {
     container: "spaces", item: "pages", linkPh: "Space key or page link",
@@ -1903,7 +1903,7 @@ function SrcRead({ s, set, sel }) {
       </FormRow>
 
       {specific && (
-        <FormRow label={(scope === "folders" ? srcCap(cfg.container) : srcCap(cfg.item)) + " to index"} required hint={locs.length ? locs.length + " added" : "Paste a link or path, then press Add (or Enter)."}>
+        <FormRow label={(scope === "folders" ? srcCap(cfg.container) : srcCap(cfg.item)) + " to index"} required hint={locs.length ? locs.length + " added" : undefined}>
           {locs.length > 0 && (
             <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", marginBottom: 10, background: "var(--panel)" }}>
               {locs.map((l, i) => (
