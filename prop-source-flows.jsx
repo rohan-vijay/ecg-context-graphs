@@ -1407,13 +1407,13 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const allDocTypes = unstructured ? getDiscoveredEntities(sel) : [];
   // The declared type may match the catalog (reuse its fields) or be free text
   // we've never seen (synthesize an entity — fields get filled by extraction).
-  const knownEntity = knownTypeMode
+  const knownEntity = wantsSingle
     ? (allDocTypes.find(e => e.name.toLowerCase() === knownTypeText.toLowerCase())
-       || { id: "custom_" + knownTypeText.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, ""), name: knownTypeText, records: "—", conf: 100, fields: [] })
+       || { id: "custom_" + (knownTypeText.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "type"), name: knownTypeText || "Selected type", records: "—", conf: 100, fields: [] })
     : null;
   // Unstructured: entities are discovered at runtime (mixed), or the one declared type.
   const discoveredEntities = unstructured && s.extractRan ? allDocTypes : [];
-  const includedEntities = knownTypeMode
+  const includedEntities = wantsSingle
     ? [knownEntity]
     : discoveredEntities.filter(e => (s.entityInclude || {})[e.id] !== false);
   // Mapping groups — one per selected object (structured) or per discovered entity
@@ -1444,10 +1444,10 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const uSettingsHint = uOnCount ? uOnCount + " of " + uToggles.length + " on" : "Configure source";
   // Discover Files only exists in the unstructured "mixed" path. Its absence
   // shifts the later steps up by one.
-  const idxDiscover = (unstructured && !knownTypeMode) ? 3 : -1;
-  const idxExtract = unstructured ? (knownTypeMode ? 3 : 4) : 3;
-  const idxMap = unstructured ? (knownTypeMode ? 4 : 5) : 4;
-  const idxSettings = unstructured ? (knownTypeMode ? 5 : 6) : 5;
+  const idxDiscover = (unstructured && !wantsSingle) ? 3 : -1;
+  const idxExtract = unstructured ? (wantsSingle ? 3 : 4) : 3;
+  const idxMap = unstructured ? (wantsSingle ? 4 : 5) : 4;
+  const idxSettings = unstructured ? (wantsSingle ? 5 : 6) : 5;
   const scopeOk = s.readScope === "all" || (scopeSpecific && readLocs.length > 0);
   const contentOk = !wantsSingle || !!knownTypeText; // single mode must declare a type
   const canNext = step === 0 ? !!s.system
@@ -1479,7 +1479,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     { label: "Source system", hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",    hint: connLabel },
     { label: "Scope",         hint: knownTypeMode ? readHint + " · " + knownTypeLabel : readHint },
-  ].concat(knownTypeMode ? [] : [
+  ].concat(wantsSingle ? [] : [
     { label: "Discover Files", hint: objectsHint },
   ]).concat([
     { label: "Extract fields", hint: uExtractHint },
