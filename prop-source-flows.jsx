@@ -1370,7 +1370,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const allObjects = sel && !unstructured ? getSourceObjects(sel.id, sel) : [];
   const selectedTables = s.tables || [];
   const mapGroups = unstructured
-    ? includedEntities.map(e => ({ name: e.id, label: e.name, type: "Entity", rows: e.records, cols: e.fields }))
+    ? includedEntities.map(e => ({ name: e.id, label: e.name, type: "Entity", rows: e.records, cols: UNSTRUCTURED_META_COLS }))
     : selectedTables.map(nm => { const o = allObjects.find(x => x.name === nm) || { name: nm }; return { name: nm, type: o.type, rows: o.rows, cols: getObjectCols(o) }; });
   // A group's mappable fields = its source columns + any agent-extracted fields.
   const mapColsOf = g => g.cols.concat(agentFieldsFor(s, g.name));
@@ -1473,7 +1473,8 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
         <>
           {step === 2 && <SrcRead s={s} set={set} sel={sel} />}
           {step === 3 && <SrcDiscover s={s} set={set} sel={sel} />}
-          {step === 4 && <SrcObjectAgents s={s} set={set} groups={mapGroups} sel={sel} />}
+          {step === 4 && <SrcObjectAgents s={s} set={set} groups={mapGroups} sel={sel}
+            agentPoolFor={g => [extractionAgentFor(g.name)].filter(Boolean).concat(DOC_ENRICH_AGENTS)} />}
           {step === 5 && <SrcEntityMap s={s} set={set} groups={mapGroups} activeObj={activeMapObj} sel={sel} />}
           {step === 6 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
         </>
@@ -1886,6 +1887,23 @@ const ENTITY_SETS = {
 };
 function getDiscoveredEntities(sel) { return (sel && sel.id === "slack") ? ENTITY_SETS.slack : ENTITY_SETS.default; }
 
+// Per-entity extraction agents — these are what actually read the document body and
+// pull out the entity's domain fields (the source itself only yields file metadata).
+const EXTRACTION_AGENTS = [];
+Object.keys(ENTITY_SETS).forEach(k => ENTITY_SETS[k].forEach(e => {
+  if (!EXTRACTION_AGENTS.some(a => a.id === "extract_" + e.id))
+    EXTRACTION_AGENTS.push({ id: "extract_" + e.id, name: e.name + " Extraction Agent", desc: "Reads each " + e.name.toLowerCase() + " document and extracts its fields.", outputs: e.fields, entityId: e.id, extractor: true });
+}));
+// Document-level enrichment agents — optional, on top of extraction.
+const DOC_ENRICH_AGENTS = [
+  { id: "doc_summary",   name: "Summarizer Agent",     desc: "Generates a one-line summary of each document.",            outputs: [{ col: "summary", type: "string", sample: "Enterprise MSA, 24-month term." }] },
+  { id: "doc_sentiment", name: "Sentiment Agent",      desc: "Classifies the tone of the document.",                      outputs: [{ col: "sentiment", type: "string", sample: "neutral" }] },
+  { id: "doc_pii",       name: "PII Redactor Agent",   desc: "Detects and flags sensitive fields for masking.",           outputs: [{ col: "pii_flags", type: "string[]", sample: "email, tax_id" }] },
+  { id: "doc_language",  name: "Language Agent",        desc: "Detects language and adds a normalized translation.",       outputs: [{ col: "language", type: "string", sample: "en" }, { col: "translated_text", type: "string", sample: "…" }] },
+  { id: "doc_linker",    name: "Entity Linker Agent",  desc: "Links entities mentioned in the document to graph nodes.",  outputs: [{ col: "linked_nodes", type: "string[]", sample: "Acme, Globex" }] },
+];
+function extractionAgentFor(eid) { return EXTRACTION_AGENTS.find(a => a.id === "extract_" + eid) || null; }
+
 function SrcDiscover({ s, set, sel }) {
   const agent = s.entityAgent || "";
   const ran = !!s.extractRan;
@@ -1897,7 +1915,9 @@ function SrcDiscover({ s, set, sel }) {
   const scan = () => {
     if (!agent || scanning) return;
     setScanning(true);
-    setTimeout(() => { const inc = {}; entities.forEach(e => { inc[e.id] = true; }); set({ extractRan: true, entityInclude: inc }); setScanning(false); }, 950);
+    // Each entity gets its own extraction agent assigned by default — that's what
+    // pulls the document's fields out (the source only yields file metadata).
+    setTimeout(() => { const inc = {}, agents = {}; entities.forEach(e => { inc[e.id] = true; agents[e.id] = ["extract_" + e.id]; }); set({ extractRan: true, entityInclude: inc, objectAgents: agents }); setScanning(false); }, 950);
   };
   const toggle = id => set({ entityInclude: Object.assign({}, include, (function () { var o = {}; o[id] = !(include[id] !== false); return o; })()) });
   return (
@@ -2308,7 +2328,7 @@ const OBJECT_AGENTS = [
   { id: "summarize",      name: "Record Summarizer Agent",    desc: "Generates a one-line summary per record.",             outputs: [{ col: "summary", type: "string", sample: "Enterprise SaaS account, expanding." }] },
   { id: "geocode",        name: "Address Geocoder Agent",     desc: "Normalizes addresses and adds lat/long.",              outputs: [{ col: "lat", type: "decimal", sample: "37.7749" }, { col: "lng", type: "decimal", sample: "-122.4194" }, { col: "normalized_address", type: "string", sample: "548 Market St, SF" }, { col: "timezone", type: "string", sample: "America/Los_Angeles" }] },
 ];
-function agentDef(id) { return OBJECT_AGENTS.find(a => a.id === id) || null; }
+function agentDef(id) { return OBJECT_AGENTS.find(a => a.id === id) || (typeof DOC_ENRICH_AGENTS !== "undefined" && DOC_ENRICH_AGENTS.find(a => a.id === id)) || (typeof EXTRACTION_AGENTS !== "undefined" && EXTRACTION_AGENTS.find(a => a.id === id)) || null; }
 // Agent-extracted fields for an object, as mappable columns. Namespaced col keys
 // ("fx::<agent>::<field>") so they never collide with same-named source columns.
 function agentFieldsFor(s, objName) {
@@ -2317,7 +2337,7 @@ function agentFieldsFor(s, objName) {
   return ids.reduce((acc, id) => { const ag = agentDef(id); return ag ? acc.concat(ag.outputs.map(o => ({ col: "fx::" + id + "::" + o.col, label: o.col, type: o.type, sample: o.sample, agent: ag.name }))) : acc; }, []);
 }
 
-function SrcObjectAgents({ s, set, groups, sel }) {
+function SrcObjectAgents({ s, set, groups, sel, agentPoolFor }) {
   const assigned = s.objectAgents || {};
   const [previewFor, setPreviewFor] = useState("");
   // Back-compat: a value may be a single id (old) or an array (chain).
@@ -2344,14 +2364,15 @@ function SrcObjectAgents({ s, set, groups, sel }) {
         {groups.map(g => {
           const chain = chainOf(g.name);
           const total = outFieldCount(g.name);
-          const available = OBJECT_AGENTS.filter(a => chain.indexOf(a.id) < 0).map(a => ({ id: a.id, label: a.name }));
+          const pool = agentPoolFor ? agentPoolFor(g) : OBJECT_AGENTS;
+          const available = pool.filter(a => chain.indexOf(a.id) < 0).map(a => ({ id: a.id, label: a.name }));
           const hasAgents = chain.length > 0;
           return (
             <div key={g.name} style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 16px", borderBottom: hasAgents ? "1px solid var(--line-2)" : "none", background: "var(--panel-2)", borderRadius: hasAgents ? "12px 12px 0 0" : 12 }}>
                 {sel && <SrcConnectorLogo c={sel} size={18} />}
                 <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{g.label || g.name}</code>
-                <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{(g.type || "Object") + " · " + g.cols.length + (g.type === "Entity" ? " fields" : " columns")}</span>
+                <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{g.type === "Entity" ? ("Entity" + (g.rows ? " · " + g.rows + " records" : "")) : ((g.type || "Object") + " · " + g.cols.length + " columns")}</span>
                 {hasAgents
                   ? <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.4px", color: "var(--purple)", background: "color-mix(in oklab, var(--purple) 12%, transparent)", padding: "3px 8px", borderRadius: 5 }}>＋{total} FIELDS</span>
                   : <div style={{ marginLeft: "auto", flexShrink: 0 }}>{runAgentPicker(g, available, "+ Run an agent", true)}</div>}
