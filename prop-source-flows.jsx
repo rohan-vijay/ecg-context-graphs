@@ -1325,7 +1325,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     system: "", customName: "", connection: "", newConnName: "", newConnHost: "", newConnAuth: "OAuth2",
     table: "", tables: [], query: "", inputMode: "table",
     pkCol: "", joinCol: "", incrementalCol: "updated_at",
-    loadStrategy: "incremental", mapping: {}, transforms: {}, recordFilters: {}, transformedFields: {}, unmappedPolicy: "ignore",
+    loadStrategy: "incremental", mapping: {}, transforms: {}, recordFilters: {}, transformedFields: {}, objectAgents: {}, unmappedPolicy: "ignore",
     cadence: "5min", freshnessSLO: "30m", batchWindow: "15m",
     retryCount: 3, retryDelay: "5m", onError: "alert",
     alertChannel: "#schema-alerts", owner: "data-platform",
@@ -1384,6 +1384,9 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const extractHint = extractFields.length ? extractFields.length + " field" + (extractFields.length === 1 ? "" : "s") : "Optional";
   const mapHint = mappedCount ? `${mappedCount} mapped` : "Map fields → node props";
   const objectHint = selectedTables.length ? selectedTables.length + " object" + (selectedTables.length === 1 ? "" : "s") : (s.query ? "Custom SQL" : "Choose what to read");
+  const objAgents = s.objectAgents || {};
+  const agentsAssigned = selectedTables.filter(t => objAgents[t]).length;
+  const agentsHint = agentsAssigned ? agentsAssigned + " of " + selectedTables.length + " assigned" : "Optional";
   const colMapHint = totalMapCols ? `${mappedCount}/${totalMapCols} fields mapped` : "Map source → node props";
   const srcSteps = unstructured ? [
     { label: "Source system", hint: sel ? sel.name : "Pick connector from catalog" },
@@ -1396,6 +1399,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     { label: "Source system",  hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",     hint: connLabel },
     { label: "Objects",        hint: objectHint },
+    { label: "Agents",         hint: agentsHint },
     { label: "Column mapping", hint: colMapHint, subItems: mapSubItems, activeSub: activeMapObj, onSub: setMapActiveObj },
     { label: "Settings", hint: settingsHint },
   ];
@@ -1453,8 +1457,9 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
       ) : (
         <>
           {step === 2 && <SrcObject s={s} set={set} sel={sel} />}
-          {step === 3 && <SrcMapping s={s} set={set} groups={mapGroups} activeObj={activeMapObj} nodeProps={nodeProps} node={node} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} />}
-          {step === 4 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
+          {step === 3 && <SrcObjectAgents s={s} set={set} groups={mapGroups} sel={sel} />}
+          {step === 4 && <SrcMapping s={s} set={set} groups={mapGroups} activeObj={activeMapObj} nodeProps={nodeProps} node={node} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} />}
+          {step === 5 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
         </>
       )}
     </WizardShell>
@@ -2055,7 +2060,7 @@ function FilterRecordsPopover({ cols, initial, objName, onApply, onClear, onClos
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
-      <div onClick={e => e.stopPropagation()} style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 41, width: 600, maxWidth: "82vw", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, boxShadow: "0 18px 50px rgba(0,0,0,0.2)", overflow: "hidden" }}>
+      <div onClick={e => e.stopPropagation()} style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 41, width: 600, maxWidth: "82vw", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, boxShadow: "0 18px 50px rgba(0,0,0,0.2)" }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--line-2)" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>Filter records</div>
@@ -2063,7 +2068,7 @@ function FilterRecordsPopover({ cols, initial, objName, onApply, onClear, onClos
           </div>
           <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid var(--line)", background: "none", cursor: "pointer", color: "var(--ink-3)", flexShrink: 0, fontSize: 12 }}>✕</button>
         </div>
-        <div style={{ padding: "13px 16px", display: "flex", flexDirection: "column", gap: 9, maxHeight: 320, overflowY: "auto" }}>
+        <div style={{ padding: "13px 16px", display: "flex", flexDirection: "column", gap: 9 }}>
           {rows.map((r, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ width: 42, flexShrink: 0, fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.4px" }}>{i === 0 ? "Where" : "And"}</span>
@@ -2087,13 +2092,83 @@ function FilterRecordsPopover({ cols, initial, objName, onApply, onClear, onClos
             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-3)" }}>+</span> Add condition
           </button>
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderTop: "1px solid var(--line-2)", background: "var(--panel-2)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderTop: "1px solid var(--line-2)", background: "var(--panel-2)", borderRadius: "0 0 12px 12px" }}>
           <button onClick={() => { setRows([blank()]); onClear(); }} className="btn-ghost">Clear all</button>
           <button onClick={() => onApply(valid)} className="btn-dark" disabled={valid.length === 0} style={{ opacity: valid.length ? 1 : 0.45 }}>Apply{valid.length ? " · " + valid.length : ""}</button>
         </div>
       </div>
     </>
   );
+}
+
+// ── Src Step (structured): Per-object agents ─────────────────────────────────
+// For each object selected in the Objects step, optionally run an agent that
+// reads every record and emits additional fields (available in Column mapping).
+const OBJECT_AGENTS = [
+  { id: "enrich_company", name: "Company Enricher",    desc: "Appends firmographics from external data providers.", outputs: ["industry", "employee_count", "annual_revenue", "hq_country"] },
+  { id: "lead_score",     name: "Lead Scorer",         desc: "Scores each record on fit and intent signals.",       outputs: ["fit_score", "intent_score", "priority_tier"] },
+  { id: "dedupe",         name: "Duplicate Detector",  desc: "Flags likely duplicates and proposes a survivor.",     outputs: ["dup_cluster_id", "is_survivor", "match_confidence"] },
+  { id: "sentiment",      name: "Sentiment Classifier",desc: "Reads notes & activity to gauge health.",              outputs: ["sentiment", "health_score"] },
+  { id: "summarize",      name: "Record Summarizer",   desc: "Generates a one-line summary per record.",             outputs: ["summary"] },
+  { id: "geocode",        name: "Address Geocoder",    desc: "Normalizes addresses and adds lat/long.",              outputs: ["lat", "lng", "normalized_address", "timezone"] },
+];
+
+function SrcObjectAgents({ s, set, groups, sel }) {
+  const assigned = s.objectAgents || {};
+  const setAgent = (obj, id) => set({ objectAgents: Object.assign({}, assigned, (function () { var o = {}; o[obj] = id; return o; })()) });
+  const agentOpts = [{ id: "", label: "No agent", desc: "Skip enrichment for this object." }].concat(OBJECT_AGENTS.map(a => ({ id: a.id, label: a.name, desc: a.desc })));
+  return (
+    <StepWrap wide title="Run agents on each object">
+      <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 760 }}>Optionally assign an agent to each object you selected. The agent reads every record and produces additional fields — these become available to map in the next step.</div>
+      {groups.length === 0 && (
+        <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)", padding: "40px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No objects selected — go back to the Objects step and pick at least one.</div>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {groups.map(g => {
+          const agId = assigned[g.name] || "";
+          const ag = OBJECT_AGENTS.find(a => a.id === agId);
+          return (
+            <div key={g.name} style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)", overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 16px", borderBottom: "1px solid var(--line-2)", background: "var(--panel-2)" }}>
+                {sel && <SrcConnectorLogo c={sel} size={18} />}
+                <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{g.name}</code>
+                <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{(g.type || "Object") + " · " + g.cols.length + " columns"}</span>
+                {ag && <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.4px", color: "var(--purple)", background: "color-mix(in oklab, var(--purple) 12%, transparent)", padding: "3px 8px", borderRadius: 5 }}>＋{ag.outputs.length} FIELDS</span>}
+              </div>
+              <div style={{ padding: "13px 16px" }}>
+                <div style={{ maxWidth: 420 }}>
+                  <CustomSelect value={agId} onChange={v => setAgent(g.name, v)} placeholder="Select an agent…" options={agentOpts}
+                    renderTrigger={o => o.id
+                      ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><AgentGlyph /><span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{o.label}</span></span>
+                      : <span style={{ color: "var(--ink-4)" }}>No agent — skip enrichment</span>} />
+                </div>
+                {ag && (
+                  <div style={{ marginTop: 13 }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 8 }}>Outputs added to {g.name}</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {ag.outputs.map(f => (
+                        <span key={f} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "var(--chip)", border: "1px solid var(--line)", color: "var(--ink-2)" }}>
+                          <span style={{ width: 14, height: 14, borderRadius: 3, background: "color-mix(in oklab, var(--purple) 14%, transparent)", color: "var(--purple)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 700 }}>FX</span>
+                          {f}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </StepWrap>
+  );
+}
+
+// Small agent avatar glyph reused in the per-object agent picker.
+function AgentGlyph() {
+  return <span style={{ width: 24, height: 24, borderRadius: 6, flexShrink: 0, background: "color-mix(in oklab, var(--purple) 13%, transparent)", border: "1px solid color-mix(in oklab, var(--purple) 28%, var(--line))", color: "var(--purple)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="3.4" /><path d="M5.5 20c0-3.6 2.9-5.6 6.5-5.6s6.5 2 6.5 5.6" /><path d="M12 2.2v1.2" /></svg>
+  </span>;
 }
 
 function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, setOpenCol, eyebrow, title, desc, singleGroup }) {
