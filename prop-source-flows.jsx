@@ -621,7 +621,7 @@ function WizardShell({ eyebrow, plainTitle, titleFrom, titleTo, titleLabel, titl
             </button>
           </div>
         </div>
-        <div className="flow-body" style={!rightPane ? { gridTemplateColumns: "240px minmax(0, 1fr)" } : undefined}>
+        <div className="flow-body" style={!rightPane ? { gridTemplateColumns: "320px minmax(0, 1fr)" } : undefined}>
           <aside className="flow-steps">
             {steps.map((s, i) => (
               <React.Fragment key={i}>
@@ -1955,7 +1955,7 @@ function SrcDiscover({ s, set, sel }) {
       </div>
 
       {ran && (
-        <FormRow label="File types" hint={"File types this " + (isAuto ? "automation" : "agent") + " can extract — " + includedN + " of " + entities.length + " selected. Pick which to bring into the graph."} last>
+        <FormRow label={(isAuto ? "Automation" : "Agent") + " output — File types"} hint={"The file types this " + (isAuto ? "automation" : "agent") + " classifies your documents into — " + includedN + " of " + entities.length + " selected. Pick which to bring into the graph."} last>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {entities.map(e => {
               const on = isIncluded(e);
@@ -2356,7 +2356,7 @@ function InlineRunPicker({ agents, automations, onAdd, onClose }) {
   return (
     <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--bg-canvas)", padding: "14px 16px", marginTop: 12 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", fontWeight: 600 }}>Run an agent or automation</span>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", fontWeight: 600 }}>Run extraction</span>
         <button onClick={onClose} title="Cancel" style={{ border: "none", background: "none", cursor: "pointer", padding: 2, color: "var(--ink-4)" }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
@@ -2417,7 +2417,7 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor, fileMode }) {
                 <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{g.type === "Entity" ? ("Entity" + (g.rows ? " · " + g.rows + " records" : "")) : ((g.type || "Object") + " · " + g.cols.length + " columns")}</span>
                 {hasAgents
                   ? <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.4px", color: "var(--purple)", background: "color-mix(in oklab, var(--purple) 12%, transparent)", padding: "3px 8px", borderRadius: 5 }}>＋{total} FIELDS</span>
-                  : <span style={{ marginLeft: "auto", flexShrink: 0 }}>{runBtn(g, pickerOpen ? "Cancel" : "+ Run an agent", pickerOpen)}</span>}
+                  : <span style={{ marginLeft: "auto", flexShrink: 0 }}>{runBtn(g, pickerOpen ? "Cancel" : "+ Run extraction", pickerOpen)}</span>}
               </div>
               {bodyOpen && (
                 <div style={{ padding: "13px 16px" }}>
@@ -2441,6 +2441,8 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor, fileMode }) {
                     </div>
                   )}
 
+                  {pickerOpen && <InlineRunPicker agents={availAgents} automations={availAutomations} onAdd={id => { addAgent(g.name, id); setOpenPicker(""); }} onClose={() => setOpenPicker("")} />}
+
                   {hasAgents && (
                     <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12 }}>
                       <button onClick={() => setPreviewFor(g.name)} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: "var(--ink-2)", padding: 0 }}>
@@ -2449,8 +2451,6 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor, fileMode }) {
                       {hasAvail && !pickerOpen && <button onClick={() => setOpenPicker(g.name)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: "var(--ink-2)", padding: 0 }}>+ Run another</button>}
                     </div>
                   )}
-
-                  {pickerOpen && <InlineRunPicker agents={availAgents} automations={availAutomations} onAdd={id => { addAgent(g.name, id); setOpenPicker(""); }} onClose={() => setOpenPicker("")} />}
                 </div>
               )}
             </div>
