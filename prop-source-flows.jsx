@@ -1392,12 +1392,19 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   // known document type, we skip discovery entirely — the type is already known.
   const scopeSpecific = s.readScope === "folders" || s.readScope === "files";
   const wantsSingle = unstructured && scopeSpecific && s.contentMode === "single";
-  const knownTypeMode = wantsSingle && !!s.knownType;
+  const knownTypeText = (s.knownType || "").trim();
+  const knownTypeMode = wantsSingle && !!knownTypeText;
   const allDocTypes = unstructured ? getDiscoveredEntities(sel) : [];
+  // The declared type may match the catalog (reuse its fields) or be free text
+  // we've never seen (synthesize an entity — fields get filled by extraction).
+  const knownEntity = knownTypeMode
+    ? (allDocTypes.find(e => e.name.toLowerCase() === knownTypeText.toLowerCase())
+       || { id: "custom_" + knownTypeText.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, ""), name: knownTypeText, records: "—", conf: 100, fields: [] })
+    : null;
   // Unstructured: entities are discovered at runtime (mixed), or the one declared type.
   const discoveredEntities = unstructured && s.extractRan ? allDocTypes : [];
   const includedEntities = knownTypeMode
-    ? allDocTypes.filter(e => e.id === s.knownType)
+    ? [knownEntity]
     : discoveredEntities.filter(e => (s.entityInclude || {})[e.id] !== false);
   // Mapping groups — one per selected object (structured) or per discovered entity
   // (unstructured). Each group's columns are mapped independently; mapping keys are
@@ -1421,6 +1428,9 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     return { id: g.name, label: g.label || g.name, mapped: gm, total: cols.length, type: g.type, done: gm > 0 };
   }) : null;
   const settingsHint = (s.pipelineType === "scheduled" ? "Scheduled" : "Real Time") + " · " + (s.resourceTier || "Small");
+  const uCfg = s.uSettings || {};
+  const uOnCount = U_SETTINGS.filter(o => (o.id in uCfg ? uCfg[o.id] : o.default)).length;
+  const uSettingsHint = uOnCount + " of " + U_SETTINGS.length + " on";
   // Discover Files only exists in the unstructured "mixed" path. Its absence
   // shifts the later steps up by one.
   const idxDiscover = (unstructured && !knownTypeMode) ? 3 : -1;
@@ -1428,7 +1438,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const idxMap = unstructured ? (knownTypeMode ? 4 : 5) : 4;
   const idxSettings = unstructured ? (knownTypeMode ? 5 : 6) : 5;
   const scopeOk = s.readScope === "all" || (scopeSpecific && readLocs.length > 0);
-  const contentOk = !wantsSingle || !!s.knownType; // single mode must declare a type
+  const contentOk = !wantsSingle || !!knownTypeText; // single mode must declare a type
   const canNext = step === 0 ? !!s.system
     : step === 1 ? !!s.connection
     : step === 2 ? (unstructured ? (scopeOk && contentOk) : (selectedTables.length > 0 || !!s.query))
@@ -1453,7 +1463,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const agentsAssigned = selectedTables.filter(t => objAgents[t]).length;
   const agentsHint = agentsAssigned ? agentsAssigned + " of " + selectedTables.length + " assigned" : "Optional";
   const colMapHint = totalMapCols ? `${mappedCount}/${totalMapCols} fields mapped` : "Map source → node props";
-  const knownTypeLabel = knownTypeMode ? ((allDocTypes.find(e => e.id === s.knownType) || {}).name || "1 type") : "";
+  const knownTypeLabel = knownTypeMode ? knownEntity.name : "";
   const srcSteps = unstructured ? [
     { label: "Source system", hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",    hint: connLabel },
@@ -1463,7 +1473,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   ]).concat([
     { label: "Extract fields", hint: uExtractHint },
     { label: "Map",           hint: mapHint, subItems: mapSubItems, activeSub: activeMapObj, onSub: setMapActiveObj },
-    { label: "Settings",      hint: settingsHint },
+    { label: "Settings",      hint: uSettingsHint },
   ]) : [
     { label: "Source system",  hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",     hint: connLabel },
@@ -1522,7 +1532,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
           {step === idxExtract && <SrcObjectAgents s={s} set={set} groups={mapGroups} sel={sel} fileMode
             agentPoolFor={g => ({ agents: [extractionAgentFor(g.name)].filter(Boolean).concat(DOC_ENRICH_AGENTS), automations: RUN_AUTOMATIONS })} />}
           {step === idxMap && <SrcEntityMap s={s} set={set} groups={mapGroups} activeObj={activeMapObj} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} />}
-          {step === idxSettings && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
+          {step === idxSettings && <SrcUnstructuredSettings s={s} set={set} />}
         </>
       ) : (
         <>
@@ -1859,7 +1869,6 @@ function SrcRead({ s, set, sel }) {
   const [showFilters, setShowFilters] = useState(false);
   const specific = scope === "folders" || scope === "files";
   const contentMode = s.contentMode || "mixed";
-  const docTypes = getDiscoveredEntities(sel);
   const activeFilters = Object.keys(filters).filter(k => { const v = filters[k]; return v && v.length && v !== "all"; }).length;
   const filtersOpen = showFilters || activeFilters > 0;
   const setFilter = (k, val) => set({ readFilters: Object.assign({}, filters, (function () { const o = {}; o[k] = val; return o; })()) });
@@ -1901,24 +1910,26 @@ function SrcRead({ s, set, sel }) {
       )}
 
       {specific && (
-        <FormRow label="What's in here?" hint="If every file is the same kind of document, you can skip discovery and go straight to extract.">
-          <div style={{ maxWidth: 460 }}>
-            <SrcRichSelect value={contentMode} onChange={v => set(Object.assign({ contentMode: v }, v === "mixed" ? { knownType: "" } : {}))} emptyLabel="How should we read these?"
-              options={[
-                { id: "mixed", title: "Mixed document types", desc: "A discovery agent figures out the types.", icon: SRC_SCOPE_ICONS.all },
-                { id: "single", title: "One known type", desc: "They're all the same kind of document.", icon: SRC_SCOPE_ICONS.files },
-              ]} />
+        <div className="wfr">
+          <div style={{ display: "grid", gridTemplateColumns: contentMode === "single" ? "1fr 1fr" : "1fr", gap: 16, maxWidth: contentMode === "single" ? 760 : 460, alignItems: "start" }}>
+            <div>
+              <div className="wfr-label">What's in here?</div>
+              <SrcRichSelect dense value={contentMode} onChange={v => set(Object.assign({ contentMode: v }, v === "mixed" ? { knownType: "" } : {}))} emptyLabel="How should we read these?"
+                options={[
+                  { id: "mixed", title: "Mixed document types", desc: "A discovery agent figures out the types.", icon: SRC_SCOPE_ICONS.all },
+                  { id: "single", title: "One known type", desc: "They're all the same kind of document.", icon: SRC_SCOPE_ICONS.files },
+                ]} />
+              <div className="wfr-hint">If every file is the same kind of document, skip discovery.</div>
+            </div>
+            {contentMode === "single" && (
+              <div>
+                <div className="wfr-label">Document type</div>
+                <input className="winput" style={{ height: 48 }} placeholder="e.g. Contract, SOW, Invoice…" value={s.knownType || ""} onChange={e => set({ knownType: e.target.value })} />
+                <div className="wfr-hint">Whatever these documents are — discovery is skipped, you extract &amp; map straight away.</div>
+              </div>
+            )}
           </div>
-        </FormRow>
-      )}
-
-      {specific && contentMode === "single" && (
-        <FormRow label="Document type" hint="Every file in this scope is treated as this type — discovery is skipped, you go straight to extract & map.">
-          <div style={{ maxWidth: 460 }}>
-            <CustomSelect value={s.knownType || ""} onChange={v => set({ knownType: v })} placeholder="Pick a document type…" searchable searchPlaceholder="Search document types…"
-              options={docTypes.map(e => ({ id: e.id, label: e.name }))} />
-          </div>
-        </FormRow>
+        </div>
       )}
 
       {scope && !filtersOpen && (
@@ -2890,6 +2901,46 @@ const SET_ICONS = {
   cursor: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M5 3l6 18 2-7 7-2z" /></svg>,
   copy: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>,
 };
+// Unstructured-source settings — governance/sync capabilities, each a card with a
+// name, description and an on/off toggle. (Detailed config comes later.)
+const U_SETTINGS = [
+  { id: "refresh",   name: "Refresh frequency",          desc: "Re-scan and re-index this source on a schedule — daily, weekly, monthly or a custom cron." },
+  { id: "retention", name: "Knowledge retention",        desc: "Keep extracted knowledge for a set window, then purge it automatically." },
+  { id: "skipperms", name: "Skip source permission checks", desc: "Index content without enforcing each user's source-level access. Faster, but lowers access fidelity." },
+  { id: "pii",       name: "PII masking",                desc: "Detect and mask personal data (emails, names, IDs) as documents are indexed." },
+  { id: "indexing",  name: "Indexing strategy",          desc: "Control how documents are chunked and embedded for retrieval." },
+];
+function SrcToggle({ on, onClick }) {
+  return (
+    <button onClick={onClick} role="switch" aria-checked={on} style={{ width: 40, height: 23, borderRadius: 12, border: "none", cursor: "pointer", background: on ? "var(--ink)" : "var(--line)", position: "relative", flexShrink: 0, transition: "background 130ms", padding: 0 }}>
+      <span style={{ position: "absolute", top: 2.5, left: on ? 19.5 : 2.5, width: 18, height: 18, borderRadius: "50%", background: "var(--panel)", boxShadow: "0 1px 2px rgba(0,0,0,0.2)", transition: "left 130ms" }} />
+    </button>
+  );
+}
+function SrcUnstructuredSettings({ s, set }) {
+  const cfg = s.uSettings || {};
+  const isOn = o => (o.id in cfg ? !!cfg[o.id] : !!o.default);
+  const toggle = o => set({ uSettings: Object.assign({}, U_SETTINGS.reduce((a, x) => { a[x.id] = isOn(x); return a; }, {}), (function () { var z = {}; z[o.id] = !isOn(o); return z; })()) });
+  return (
+    <StepWrap wide title="Settings">
+      <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 760 }}>Control how this source is kept in sync and governed. Turn on what you need — you can configure the details later.</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 760 }}>
+        {U_SETTINGS.map(o => {
+          const on = isOn(o);
+          return (
+            <label key={o.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 11, cursor: "pointer", border: "1px solid " + (on ? "var(--line)" : "var(--line-2)"), background: on ? "var(--panel)" : "transparent", transition: "background 120ms" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{o.name}</div>
+                <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 3, lineHeight: 1.5 }}>{o.desc}</div>
+              </div>
+              <SrcToggle on={on} onClick={() => toggle(o)} />
+            </label>
+          );
+        })}
+      </div>
+    </StepWrap>
+  );
+}
 function SrcSchedule({ s, set, srcCols, eyebrow }) {
   const v = (k, d) => (s[k] !== undefined ? s[k] : d);
   const pType = v("pipelineType", "realtime");
