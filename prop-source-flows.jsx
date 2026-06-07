@@ -1361,9 +1361,17 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const unstructured = !!(sel && sel.kind === "unstructured");
   const readCfg = getReadConfig(sel);
   const readLocs = s.readLocations || [];
-  // Unstructured: entities are discovered at runtime by the Extract agent.
-  const discoveredEntities = unstructured && s.extractRan ? getDiscoveredEntities(sel) : [];
-  const includedEntities = discoveredEntities.filter(e => (s.entityInclude || {})[e.id] !== false);
+  // When scope targets specific folders/files AND the user declares a single
+  // known document type, we skip discovery entirely — the type is already known.
+  const scopeSpecific = s.readScope === "folders" || s.readScope === "files";
+  const wantsSingle = unstructured && scopeSpecific && s.contentMode === "single";
+  const knownTypeMode = wantsSingle && !!s.knownType;
+  const allDocTypes = unstructured ? getDiscoveredEntities(sel) : [];
+  // Unstructured: entities are discovered at runtime (mixed), or the one declared type.
+  const discoveredEntities = unstructured && s.extractRan ? allDocTypes : [];
+  const includedEntities = knownTypeMode
+    ? allDocTypes.filter(e => e.id === s.knownType)
+    : discoveredEntities.filter(e => (s.entityInclude || {})[e.id] !== false);
   // Mapping groups — one per selected object (structured) or per discovered entity
   // (unstructured). Each group's columns are mapped independently; mapping keys are
   // namespaced as "<group>::<col>" so identically-named columns don't collide.
@@ -1386,10 +1394,18 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     return { id: g.name, label: g.label || g.name, mapped: gm, total: cols.length, type: g.type, done: gm > 0 };
   }) : null;
   const settingsHint = (s.pipelineType === "scheduled" ? "Scheduled" : "Real Time") + " · " + (s.resourceTier || "Small");
+  // Discover Files only exists in the unstructured "mixed" path. Its absence
+  // shifts the later steps up by one.
+  const idxDiscover = (unstructured && !knownTypeMode) ? 3 : -1;
+  const idxExtract = unstructured ? (knownTypeMode ? 3 : 4) : 3;
+  const idxMap = unstructured ? (knownTypeMode ? 4 : 5) : 4;
+  const idxSettings = unstructured ? (knownTypeMode ? 5 : 6) : 5;
+  const scopeOk = s.readScope === "all" || (scopeSpecific && readLocs.length > 0);
+  const contentOk = !wantsSingle || !!s.knownType; // single mode must declare a type
   const canNext = step === 0 ? !!s.system
     : step === 1 ? !!s.connection
-    : step === 2 ? (unstructured ? (s.readScope === "all" || ((s.readScope === "folders" || s.readScope === "files") && readLocs.length > 0)) : (selectedTables.length > 0 || !!s.query))
-    : step === 3 ? (unstructured ? (s.extractRan && includedEntities.length > 0) : true)
+    : step === 2 ? (unstructured ? (scopeOk && contentOk) : (selectedTables.length > 0 || !!s.query))
+    : step === idxDiscover ? (s.extractRan && includedEntities.length > 0)
     : true;
 
   // Sidebar hints reflect the live selections, not static copy.
@@ -1410,15 +1426,18 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const agentsAssigned = selectedTables.filter(t => objAgents[t]).length;
   const agentsHint = agentsAssigned ? agentsAssigned + " of " + selectedTables.length + " assigned" : "Optional";
   const colMapHint = totalMapCols ? `${mappedCount}/${totalMapCols} fields mapped` : "Map source → node props";
+  const knownTypeLabel = knownTypeMode ? ((allDocTypes.find(e => e.id === s.knownType) || {}).name || "1 type") : "";
   const srcSteps = unstructured ? [
     { label: "Source system", hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",    hint: connLabel },
-    { label: "Scope",         hint: readHint },
+    { label: "Scope",         hint: knownTypeMode ? readHint + " · " + knownTypeLabel : readHint },
+  ].concat(knownTypeMode ? [] : [
     { label: "Discover Files", hint: objectsHint },
+  ]).concat([
     { label: "Extract fields", hint: uExtractHint },
     { label: "Map",           hint: mapHint, subItems: mapSubItems, activeSub: activeMapObj, onSub: setMapActiveObj },
     { label: "Settings",      hint: settingsHint },
-  ] : [
+  ]) : [
     { label: "Source system",  hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",     hint: connLabel },
     { label: "Objects",        hint: objectHint },
@@ -1472,11 +1491,11 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
       {unstructured ? (
         <>
           {step === 2 && <SrcRead s={s} set={set} sel={sel} />}
-          {step === 3 && <SrcDiscover s={s} set={set} sel={sel} />}
-          {step === 4 && <SrcObjectAgents s={s} set={set} groups={mapGroups} sel={sel} fileMode
+          {step === idxDiscover && <SrcDiscover s={s} set={set} sel={sel} />}
+          {step === idxExtract && <SrcObjectAgents s={s} set={set} groups={mapGroups} sel={sel} fileMode
             agentPoolFor={g => ({ agents: [extractionAgentFor(g.name)].filter(Boolean).concat(DOC_ENRICH_AGENTS), automations: RUN_AUTOMATIONS })} />}
-          {step === 5 && <SrcEntityMap s={s} set={set} groups={mapGroups} activeObj={activeMapObj} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} />}
-          {step === 6 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
+          {step === idxMap && <SrcEntityMap s={s} set={set} groups={mapGroups} activeObj={activeMapObj} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} />}
+          {step === idxSettings && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
         </>
       ) : (
         <>
@@ -1811,6 +1830,8 @@ function SrcRead({ s, set, sel }) {
   const filters = s.readFilters || {};
   const [link, setLink] = useState("");
   const specific = scope === "folders" || scope === "files";
+  const contentMode = s.contentMode || "mixed";
+  const docTypes = getDiscoveredEntities(sel);
   const setFilter = (k, val) => set({ readFilters: Object.assign({}, filters, (function () { const o = {}; o[k] = val; return o; })()) });
   const addLink = () => { const t = link.trim(); if (!t) return; set({ readLocations: locs.concat([{ id: "loc-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6), label: t }]) }); setLink(""); };
   const removeLoc = id => set({ readLocations: locs.filter(x => x.id !== id) });
@@ -1846,6 +1867,27 @@ function SrcRead({ s, set, sel }) {
             <button onClick={addLink} style={{ flexShrink: 0, padding: "0 18px", borderRadius: 9, border: "1px solid var(--ink)", background: "var(--ink)", color: "var(--bg-canvas)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Add</button>
           </div>
           <div style={{ marginTop: 8, fontSize: 11.5, color: "var(--ink-4)" }}>Or <button style={{ background: "none", border: "none", padding: 0, color: "var(--ink-2)", textDecoration: "underline", cursor: "pointer", fontFamily: "inherit", fontSize: 11.5 }}>browse {sel.name}</button> to pick visually.</div>
+        </FormRow>
+      )}
+
+      {specific && (
+        <FormRow label="What's in here?" hint="If every file is the same kind of document, you can skip discovery and go straight to extract.">
+          <div style={{ maxWidth: 460 }}>
+            <SrcRichSelect value={contentMode} onChange={v => set(Object.assign({ contentMode: v }, v === "mixed" ? { knownType: "" } : {}))} emptyLabel="How should we read these?"
+              options={[
+                { id: "mixed", title: "Mixed document types", desc: "A discovery agent figures out the types.", icon: SRC_SCOPE_ICONS.all },
+                { id: "single", title: "One known type", desc: "They're all the same kind of document.", icon: SRC_SCOPE_ICONS.files },
+              ]} />
+          </div>
+        </FormRow>
+      )}
+
+      {specific && contentMode === "single" && (
+        <FormRow label="Document type" hint="Every file in this scope is treated as this type — discovery is skipped, you go straight to extract & map.">
+          <div style={{ maxWidth: 460 }}>
+            <CustomSelect value={s.knownType || ""} onChange={v => set({ knownType: v })} placeholder="Pick a document type…" searchable searchPlaceholder="Search document types…"
+              options={docTypes.map(e => ({ id: e.id, label: e.name }))} />
+          </div>
         </FormRow>
       )}
 
