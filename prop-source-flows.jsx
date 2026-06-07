@@ -1474,7 +1474,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
           {step === 2 && <SrcRead s={s} set={set} sel={sel} />}
           {step === 3 && <SrcDiscover s={s} set={set} sel={sel} />}
           {step === 4 && <SrcObjectAgents s={s} set={set} groups={mapGroups} sel={sel}
-            agentPoolFor={g => [extractionAgentFor(g.name)].filter(Boolean).concat(DOC_ENRICH_AGENTS)} />}
+            agentPoolFor={g => ({ agents: [extractionAgentFor(g.name)].filter(Boolean).concat(DOC_ENRICH_AGENTS), automations: RUN_AUTOMATIONS })} />}
           {step === 5 && <SrcEntityMap s={s} set={set} groups={mapGroups} activeObj={activeMapObj} sel={sel} />}
           {step === 6 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
         </>
@@ -1911,7 +1911,7 @@ function extractionAgentFor(eid) { return EXTRACTION_AGENTS.find(a => a.id === "
 
 function SrcDiscover({ s, set, sel }) {
   const agent = s.entityAgent || "";
-  const kind = s.discoveryKind || "agent";
+  const kind = s.discoveryKind || "";
   const isAuto = kind === "automation";
   const pool = isAuto ? ENTITY_AUTOMATIONS : ENTITY_AGENTS;
   const entities = getDiscoveredEntities(sel);
@@ -1922,37 +1922,34 @@ function SrcDiscover({ s, set, sel }) {
   // Switching kind resets the picked agent/automation and the revealed file types.
   const chooseKind = k => { if (k === kind) return; set({ discoveryKind: k, entityAgent: "", extractRan: false }); };
   // Picking a discovery agent/automation simply reveals the file types it knows
-  // how to extract — they're defined in the agent, nothing runs here. Each file
-  // type gets its extraction agent assigned by default (that's what pulls fields).
+  // how to extract — they're defined in the agent, nothing runs here. We don't
+  // assign extraction agents here — the user does that manually in Extract.
   const chooseAgent = v => {
     if (!v) { set({ entityAgent: "", extractRan: false }); return; }
-    const inc = {}, agents = {};
-    entities.forEach(e => { inc[e.id] = true; agents[e.id] = ["extract_" + e.id]; });
-    set({ entityAgent: v, extractRan: true, entityInclude: inc, objectAgents: agents });
+    const inc = {};
+    entities.forEach(e => { inc[e.id] = true; });
+    set({ entityAgent: v, extractRan: true, entityInclude: inc });
   };
   const toggle = id => set({ entityInclude: Object.assign({}, include, (function () { var o = {}; o[id] = !(include[id] !== false); return o; })()) });
-  const KIND_OPTS = [{ k: "agent", label: "Agent", sub: "An AI agent that reads files" }, { k: "automation", label: "Automation", sub: "A saved processing pipeline" }];
+  const KIND_OPTS = [
+    { id: "agent",      icon: SRC_METHOD_ICONS.agent,      title: "Agent",      desc: "An AI agent that reads files" },
+    { id: "automation", icon: SRC_METHOD_ICONS.automation, title: "Automation", desc: "A saved processing pipeline" },
+  ];
   return (
     <StepWrap wide title="Discover Files">
       <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 800 }}>Unstructured sources have no predefined tables. Run a discovery agent or automation — it lists the <b style={{ color: "var(--ink-2)" }}>file types it can extract</b>. Choose which to bring into the graph — you'll run extraction on each in the next step.</div>
-      <FormRow label="Discover with" hint="Use an AI agent or a saved automation to surface the file types.">
-        <div style={{ display: "flex", gap: 10 }}>
-          {KIND_OPTS.map(o => {
-            const on = kind === o.k;
-            return (
-              <button key={o.k} onClick={() => chooseKind(o.k)} style={{ flex: 1, maxWidth: 230, textAlign: "left", padding: "11px 14px", borderRadius: 10, cursor: "pointer", border: "1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--panel)" : "transparent", boxShadow: on ? "inset 0 0 0 1px var(--ink)" : "none", transition: "border-color 120ms" }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{o.label}</div>
-                <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 2 }}>{o.sub}</div>
-              </button>
-            );
-          })}
-        </div>
-      </FormRow>
-      <FormRow label={isAuto ? "Automation" : "Discovery agent"} hint={isAuto ? "Each automation extracts a known set of file types — pick one to see what it covers." : "Each agent extracts a known set of file types — pick one to see what it covers."} last={!ran}>
+      <FormRow label="Discover with" hint="Use an AI agent or a saved automation to surface the file types." last={!kind}>
         <div style={{ maxWidth: 460 }}>
-          <CustomSelect value={agent} placeholder={isAuto ? "Select an automation…" : "Select an agent…"} onChange={chooseAgent} options={pool.map(a => ({ id: a.id, label: a.name, desc: a.desc }))} searchable searchPlaceholder={isAuto ? "Search automations…" : "Search agents…"} />
+          <SrcRichSelect value={kind} onChange={chooseKind} options={KIND_OPTS} emptyLabel="Pick a method" />
         </div>
       </FormRow>
+      {kind && (
+        <FormRow label={isAuto ? "Automation" : "Discovery agent"} hint={isAuto ? "Each automation extracts a known set of file types — pick one to see what it covers." : "Each agent extracts a known set of file types — pick one to see what it covers."} last={!ran}>
+          <div style={{ maxWidth: 460 }}>
+            <CustomSelect value={agent} placeholder={isAuto ? "Select an automation…" : "Select an agent…"} onChange={chooseAgent} options={pool.map(a => ({ id: a.id, label: a.name }))} searchable searchPlaceholder={isAuto ? "Search automations…" : "Search agents…"} />
+          </div>
+        </FormRow>
+      )}
 
       {ran && (
         <FormRow label="File types" hint={"File types this " + (isAuto ? "automation" : "agent") + " can extract — " + includedN + " of " + entities.length + " selected. Pick which to bring into the graph."} last>
@@ -2330,13 +2327,78 @@ const OBJECT_AGENTS = [
   { id: "summarize",      name: "Record Summarizer Agent",    desc: "Generates a one-line summary per record.",             outputs: [{ col: "summary", type: "string", sample: "Enterprise SaaS account, expanding." }] },
   { id: "geocode",        name: "Address Geocoder Agent",     desc: "Normalizes addresses and adds lat/long.",              outputs: [{ col: "lat", type: "decimal", sample: "37.7749" }, { col: "lng", type: "decimal", sample: "-122.4194" }, { col: "normalized_address", type: "string", sample: "548 Market St, SF" }, { col: "timezone", type: "string", sample: "America/Los_Angeles" }] },
 ];
-function agentDef(id) { return OBJECT_AGENTS.find(a => a.id === id) || (typeof DOC_ENRICH_AGENTS !== "undefined" && DOC_ENRICH_AGENTS.find(a => a.id === id)) || (typeof EXTRACTION_AGENTS !== "undefined" && EXTRACTION_AGENTS.find(a => a.id === id)) || null; }
+// Saved automations (pre-built pipelines) that also add fields — the alternative
+// to an agent when running extraction/enrichment on an object.
+const RUN_AUTOMATIONS = [
+  { id: "auto_geocode",  name: "Geocode Automation",            desc: "Resolves any address fields to coordinates.",       outputs: [{ col: "latitude", type: "decimal", sample: "37.7749" }, { col: "longitude", type: "decimal", sample: "-122.4194" }] },
+  { id: "auto_currency", name: "Currency Normalizer Automation", desc: "Converts monetary amounts to a base currency.",      outputs: [{ col: "amount_base", type: "decimal", sample: "12450.00" }, { col: "base_currency", type: "string", sample: "USD" }] },
+  { id: "auto_dedupe",   name: "Dedupe Automation",             desc: "Flags duplicate records against existing nodes.",    outputs: [{ col: "dup_of", type: "string", sample: "—" }, { col: "is_duplicate", type: "bool", sample: "false" }] },
+];
+function agentDef(id) { return OBJECT_AGENTS.find(a => a.id === id) || (typeof DOC_ENRICH_AGENTS !== "undefined" && DOC_ENRICH_AGENTS.find(a => a.id === id)) || (typeof EXTRACTION_AGENTS !== "undefined" && EXTRACTION_AGENTS.find(a => a.id === id)) || RUN_AUTOMATIONS.find(a => a.id === id) || null; }
 // Agent-extracted fields for an object, as mappable columns. Namespaced col keys
 // ("fx::<agent>::<field>") so they never collide with same-named source columns.
 function agentFieldsFor(s, objName) {
   const a = (s.objectAgents || {})[objName];
   const ids = Array.isArray(a) ? a : (a ? [a] : []);
   return ids.reduce((acc, id) => { const ag = agentDef(id); return ag ? acc.concat(ag.outputs.map(o => ({ col: "fx::" + id + "::" + o.col, label: o.col, type: o.type, sample: o.sample, agent: ag.name }))) : acc; }, []);
+}
+
+// Two-step picker for the Extract step: first choose Agent vs Automation, then
+// the specific one. Styled like the inline "+ Run an agent" dropdown-button.
+function RunMethodPicker({ agents, automations, label, alignRight, asText, onPick }) {
+  const [open, setOpen] = useState(false);
+  const [stage, setStage] = useState("kind"); // "kind" | "agent" | "automation"
+  const [q, setQ] = useState("");
+  const ref = useRef(null);
+  const reset = () => { setOpen(false); setStage("kind"); setQ(""); };
+  useOutsideClick(ref, open, reset);
+  const list = stage === "automation" ? automations : agents;
+  const matches = o => !q || String(o.label).toLowerCase().indexOf(q.toLowerCase()) >= 0;
+  const kindRow = (k, icon, title, sub) => (
+    <button className="csel-opt" onClick={() => { setStage(k); setQ(""); }} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ width: 26, height: 26, borderRadius: 6, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--chip)", border: "1px solid var(--line)", color: "var(--ink-3)" }}>{icon}</span>
+      <span style={{ display: "flex", flexDirection: "column", textAlign: "left", minWidth: 0 }}>
+        <span className="csel-opt-label">{title}</span>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-4)" }}>{sub}</span>
+      </span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ marginLeft: "auto", color: "var(--ink-4)" }}><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+    </button>
+  );
+  return (
+    <div className={"csel csel-auto csel-btnlabel " + (asText ? "csel-textlink" : "csel-compact") + (alignRight ? " csel-menu-right" : "")} ref={ref}>
+      <button className={"csel-trigger" + (open ? " open" : "")} onClick={() => { if (open) { reset(); } else { setOpen(true); setStage("kind"); setQ(""); } }}>
+        <span className="csel-val"><span className="csel-ph">{label}</span></span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className={"csel-chevron" + (open ? " up" : "")}><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+      </button>
+      {open && (
+        <div className="csel-menu">
+          {stage === "kind" ? (
+            <>
+              {kindRow("agent", SRC_METHOD_ICONS.agent, "Agent", "An AI agent")}
+              {kindRow("automation", SRC_METHOD_ICONS.automation, "Automation", "A saved pipeline")}
+            </>
+          ) : (
+            <>
+              <button className="csel-opt" onClick={() => { setStage("kind"); setQ(""); }} style={{ display: "flex", alignItems: "center", gap: 7, color: "var(--ink-3)" }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+                <span className="csel-opt-label" style={{ color: "var(--ink-3)" }}>{stage === "automation" ? "Automations" : "Agents"}</span>
+              </button>
+              <div className="csel-search">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
+                <input autoFocus placeholder={stage === "automation" ? "Search automations…" : "Search agents…"} value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === "Escape") setStage("kind"); }} />
+              </div>
+              {list.filter(matches).map(o => (
+                <button key={o.id} className="csel-opt" onClick={() => { onPick(o.id); reset(); }}>
+                  <span className="csel-opt-label">{o.label}</span>
+                </button>
+              ))}
+              {!list.filter(matches).length && <div style={{ padding: "14px 12px", textAlign: "center", color: "var(--ink-4)", fontSize: 12.5 }}>{q ? "No " + stage + "s match “" + q + "”." : "None available."}</div>}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function SrcObjectAgents({ s, set, groups, sel, agentPoolFor }) {
@@ -2349,12 +2411,10 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor }) {
   const removeAgent = (obj, id) => setChain(obj, chainOf(obj).filter(x => x !== id));
   const outFieldCount = obj => chainOf(obj).reduce((n, id) => n + ((agentDef(id) || { outputs: [] }).outputs.length), 0);
   const previewGroup = previewFor ? groups.find(g => g.name === previewFor) : null;
-  // "Run an agent" rendered as a compact dropdown-button — clicking opens the
-  // agent menu right there (no extra picker line).
-  const runAgentPicker = (g, available, label, alignRight, asText) => (
-    <CustomSelect className={"csel-auto csel-btnlabel" + (asText ? " csel-textlink" : " csel-compact") + (alignRight ? " csel-menu-right" : "")}
-      value="" placeholder={label} options={available} onChange={v => addAgent(g.name, v)}
-      searchable searchPlaceholder="Search agents…" />
+  // "Run an agent/automation" — a compact dropdown-button; clicking opens a
+  // two-step menu (choose kind → choose the specific one) right there.
+  const runAgentPicker = (g, agents, automations, label, alignRight, asText) => (
+    <RunMethodPicker agents={agents} automations={automations} label={label} alignRight={alignRight} asText={asText} onPick={v => addAgent(g.name, v)} />
   );
   return (
     <StepWrap wide title="Run agents on each object">
@@ -2366,8 +2426,11 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor }) {
         {groups.map(g => {
           const chain = chainOf(g.name);
           const total = outFieldCount(g.name);
-          const pool = agentPoolFor ? agentPoolFor(g) : OBJECT_AGENTS;
-          const available = pool.filter(a => chain.indexOf(a.id) < 0).map(a => ({ id: a.id, label: a.name }));
+          const raw = agentPoolFor ? agentPoolFor(g) : { agents: OBJECT_AGENTS, automations: RUN_AUTOMATIONS };
+          const pools = Array.isArray(raw) ? { agents: raw, automations: RUN_AUTOMATIONS } : raw;
+          const availAgents = (pools.agents || []).filter(a => chain.indexOf(a.id) < 0).map(a => ({ id: a.id, label: a.name }));
+          const availAutomations = (pools.automations || []).filter(a => chain.indexOf(a.id) < 0).map(a => ({ id: a.id, label: a.name }));
+          const hasAvail = availAgents.length + availAutomations.length > 0;
           const hasAgents = chain.length > 0;
           return (
             <div key={g.name} style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)" }}>
@@ -2377,7 +2440,7 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor }) {
                 <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{g.type === "Entity" ? ("Entity" + (g.rows ? " · " + g.rows + " records" : "")) : ((g.type || "Object") + " · " + g.cols.length + " columns")}</span>
                 {hasAgents
                   ? <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.4px", color: "var(--purple)", background: "color-mix(in oklab, var(--purple) 12%, transparent)", padding: "3px 8px", borderRadius: 5 }}>＋{total} FIELDS</span>
-                  : <div style={{ marginLeft: "auto", flexShrink: 0 }}>{runAgentPicker(g, available, "+ Run an agent", true)}</div>}
+                  : <div style={{ marginLeft: "auto", flexShrink: 0 }}>{runAgentPicker(g, availAgents, availAutomations, "+ Run an agent", true)}</div>}
               </div>
               {hasAgents && (
                 <div style={{ padding: "13px 16px" }}>
@@ -2405,7 +2468,7 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor }) {
                     <button onClick={() => setPreviewFor(g.name)} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: "var(--ink-2)", padding: 0 }}>
                       Preview output <span style={{ fontSize: 13 }}>→</span>
                     </button>
-                    {available.length > 0 && <div style={{ marginLeft: "auto", flexShrink: 0 }}>{runAgentPicker(g, available, "+ Run another agent", true, true)}</div>}
+                    {hasAvail && <div style={{ marginLeft: "auto", flexShrink: 0 }}>{runAgentPicker(g, availAgents, availAutomations, "+ Run another agent", true, true)}</div>}
                   </div>
                 </div>
               )}
