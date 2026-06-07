@@ -1401,7 +1401,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     ? "All " + readCfg.item
     : readLocs.length ? readLocs.length + " " + (readLocs.length === 1 ? readCfg.container.replace(/s$/, "") : readCfg.container)
     : "Pick " + readCfg.container;
-  const objectsHint = s.extractRan ? includedEntities.length + " file type" + (includedEntities.length === 1 ? "" : "s") : "Agent or automation";
+  const objectsHint = s.extractRan ? includedEntities.length + " file type" + (includedEntities.length === 1 ? "" : "s") : "Find file types";
   const uAgentsAssigned = includedEntities.filter(e => { var a = (s.objectAgents || {})[e.id]; return Array.isArray(a) ? a.length > 0 : !!a; }).length;
   const uExtractHint = uAgentsAssigned ? uAgentsAssigned + " of " + includedEntities.length + " assigned" : "Optional";
   const mapHint = mappedCount ? `${mappedCount} mapped` : "Map objects → nodes";
@@ -1473,7 +1473,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
         <>
           {step === 2 && <SrcRead s={s} set={set} sel={sel} />}
           {step === 3 && <SrcDiscover s={s} set={set} sel={sel} />}
-          {step === 4 && <SrcObjectAgents s={s} set={set} groups={mapGroups} sel={sel}
+          {step === 4 && <SrcObjectAgents s={s} set={set} groups={mapGroups} sel={sel} fileMode
             agentPoolFor={g => ({ agents: [extractionAgentFor(g.name)].filter(Boolean).concat(DOC_ENRICH_AGENTS), automations: RUN_AUTOMATIONS })} />}
           {step === 5 && <SrcEntityMap s={s} set={set} groups={mapGroups} activeObj={activeMapObj} sel={sel} />}
           {step === 6 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
@@ -1796,6 +1796,10 @@ const SRC_METHOD_ICONS = {
   agent: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z" /><circle cx="18" cy="17" r="1.4" /><circle cx="6" cy="16" r="1.1" /></svg>,
   automation: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>,
 };
+const METHOD_KIND_OPTS = [
+  { id: "agent",      icon: SRC_METHOD_ICONS.agent,      title: "Agent",      desc: "An AI agent that reads files" },
+  { id: "automation", icon: SRC_METHOD_ICONS.automation, title: "Automation", desc: "A saved processing pipeline" },
+];
 
 // ── Src Step 3 (unstructured): Read ───────────────────────────────────────────
 function SrcRead({ s, set, sel }) {
@@ -1931,25 +1935,24 @@ function SrcDiscover({ s, set, sel }) {
     set({ entityAgent: v, extractRan: true, entityInclude: inc });
   };
   const toggle = id => set({ entityInclude: Object.assign({}, include, (function () { var o = {}; o[id] = !(include[id] !== false); return o; })()) });
-  const KIND_OPTS = [
-    { id: "agent",      icon: SRC_METHOD_ICONS.agent,      title: "Agent",      desc: "An AI agent that reads files" },
-    { id: "automation", icon: SRC_METHOD_ICONS.automation, title: "Automation", desc: "A saved processing pipeline" },
-  ];
+  const agentOpts = pool.map(a => ({ id: a.id, icon: isAuto ? SRC_METHOD_ICONS.automation : SRC_METHOD_ICONS.agent, title: a.name, desc: "" }));
   return (
     <StepWrap wide title="Discover Files">
       <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 800 }}>Unstructured sources have no predefined tables. Run a discovery agent or automation — it lists the <b style={{ color: "var(--ink-2)" }}>file types it can extract</b>. Choose which to bring into the graph — you'll run extraction on each in the next step.</div>
-      <FormRow label="Discover with" hint="Use an AI agent or a saved automation to surface the file types." last={!kind}>
-        <div style={{ maxWidth: 460 }}>
-          <SrcRichSelect value={kind} onChange={chooseKind} options={KIND_OPTS} emptyLabel="Pick a method" />
-        </div>
-      </FormRow>
-      {kind && (
-        <FormRow label={isAuto ? "Automation" : "Discovery agent"} hint={isAuto ? "Each automation extracts a known set of file types — pick one to see what it covers." : "Each agent extracts a known set of file types — pick one to see what it covers."} last={!ran}>
-          <div style={{ maxWidth: 460 }}>
-            <CustomSelect value={agent} placeholder={isAuto ? "Select an automation…" : "Select an agent…"} onChange={chooseAgent} options={pool.map(a => ({ id: a.id, label: a.name }))} searchable searchPlaceholder={isAuto ? "Search automations…" : "Search agents…"} />
+      <div className={"wfr" + (ran ? "" : " wfr-last")}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, maxWidth: 760 }}>
+          <div>
+            <div className="wfr-label">Discover with</div>
+            <SrcRichSelect value={kind} onChange={chooseKind} options={METHOD_KIND_OPTS} emptyLabel="Pick a method" />
+            <div className="wfr-hint" style={{ marginTop: 8 }}>Use an AI agent or a saved automation.</div>
           </div>
-        </FormRow>
-      )}
+          <div style={{ opacity: kind ? 1 : 0.45, pointerEvents: kind ? "auto" : "none", transition: "opacity 120ms" }}>
+            <div className="wfr-label">{isAuto ? "Automation" : "Discovery agent"}</div>
+            <SrcRichSelect value={agent} onChange={chooseAgent} options={kind ? agentOpts : []} emptyLabel={kind ? (isAuto ? "Select an automation…" : "Select an agent…") : "Pick a method first"} />
+            <div className="wfr-hint" style={{ marginTop: 8 }}>{kind ? "Extracts a known set of file types." : "Choose a method to enable."}</div>
+          </div>
+        </div>
+      </div>
 
       {ran && (
         <FormRow label="File types" hint={"File types this " + (isAuto ? "automation" : "agent") + " can extract — " + includedN + " of " + entities.length + " selected. Pick which to bring into the graph."} last>
@@ -2343,65 +2346,36 @@ function agentFieldsFor(s, objName) {
   return ids.reduce((acc, id) => { const ag = agentDef(id); return ag ? acc.concat(ag.outputs.map(o => ({ col: "fx::" + id + "::" + o.col, label: o.col, type: o.type, sample: o.sample, agent: ag.name }))) : acc; }, []);
 }
 
-// Two-step picker for the Extract step: first choose Agent vs Automation, then
-// the specific one. Styled like the inline "+ Run an agent" dropdown-button.
-function RunMethodPicker({ agents, automations, label, alignRight, asText, onPick }) {
-  const [open, setOpen] = useState(false);
-  const [stage, setStage] = useState("kind"); // "kind" | "agent" | "automation"
-  const [q, setQ] = useState("");
-  const ref = useRef(null);
-  const reset = () => { setOpen(false); setStage("kind"); setQ(""); };
-  useOutsideClick(ref, open, reset);
-  const list = stage === "automation" ? automations : agents;
-  const matches = o => !q || String(o.label).toLowerCase().indexOf(q.toLowerCase()) >= 0;
-  const kindRow = (k, icon, title, sub) => (
-    <button className="csel-opt" onClick={() => { setStage(k); setQ(""); }} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <span style={{ width: 26, height: 26, borderRadius: 6, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--chip)", border: "1px solid var(--line)", color: "var(--ink-3)" }}>{icon}</span>
-      <span style={{ display: "flex", flexDirection: "column", textAlign: "left", minWidth: 0 }}>
-        <span className="csel-opt-label">{title}</span>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-4)" }}>{sub}</span>
-      </span>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ marginLeft: "auto", color: "var(--ink-4)" }}><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
-    </button>
-  );
+// Inline picker for the Extract step: two balanced rich-selects — choose a
+// method (Agent / Automation) on the left, then the specific one on the right.
+function InlineRunPicker({ agents, automations, onAdd, onClose }) {
+  const [kind, setKind] = useState("");
+  const isAuto = kind === "automation";
+  const list = isAuto ? automations : agents;
+  const opts = list.map(o => ({ id: o.id, icon: isAuto ? SRC_METHOD_ICONS.automation : SRC_METHOD_ICONS.agent, title: o.label, desc: "" }));
   return (
-    <div className={"csel csel-auto csel-btnlabel " + (asText ? "csel-textlink" : "csel-compact") + (alignRight ? " csel-menu-right" : "")} ref={ref}>
-      <button className={"csel-trigger" + (open ? " open" : "")} onClick={() => { if (open) { reset(); } else { setOpen(true); setStage("kind"); setQ(""); } }}>
-        <span className="csel-val"><span className="csel-ph">{label}</span></span>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className={"csel-chevron" + (open ? " up" : "")}><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
-      </button>
-      {open && (
-        <div className="csel-menu">
-          {stage === "kind" ? (
-            <>
-              {kindRow("agent", SRC_METHOD_ICONS.agent, "Agent", "An AI agent")}
-              {kindRow("automation", SRC_METHOD_ICONS.automation, "Automation", "A saved pipeline")}
-            </>
-          ) : (
-            <>
-              <button className="csel-opt" onClick={() => { setStage("kind"); setQ(""); }} style={{ display: "flex", alignItems: "center", gap: 7, color: "var(--ink-3)" }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
-                <span className="csel-opt-label" style={{ color: "var(--ink-3)" }}>{stage === "automation" ? "Automations" : "Agents"}</span>
-              </button>
-              <div className="csel-search">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
-                <input autoFocus placeholder={stage === "automation" ? "Search automations…" : "Search agents…"} value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === "Escape") setStage("kind"); }} />
-              </div>
-              {list.filter(matches).map(o => (
-                <button key={o.id} className="csel-opt" onClick={() => { onPick(o.id); reset(); }}>
-                  <span className="csel-opt-label">{o.label}</span>
-                </button>
-              ))}
-              {!list.filter(matches).length && <div style={{ padding: "14px 12px", textAlign: "center", color: "var(--ink-4)", fontSize: 12.5 }}>{q ? "No " + stage + "s match “" + q + "”." : "None available."}</div>}
-            </>
-          )}
+    <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--bg-canvas)", padding: "14px 16px", marginTop: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", fontWeight: 600 }}>Run an agent or automation</span>
+        <button onClick={onClose} title="Cancel" style={{ border: "none", background: "none", cursor: "pointer", padding: 2, color: "var(--ink-4)" }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div>
+          <div className="wfr-label" style={{ marginBottom: 6 }}>Method</div>
+          <SrcRichSelect value={kind} onChange={setKind} options={METHOD_KIND_OPTS} emptyLabel="Pick a method" />
         </div>
-      )}
+        <div style={{ opacity: kind ? 1 : 0.45, pointerEvents: kind ? "auto" : "none", transition: "opacity 120ms" }}>
+          <div className="wfr-label" style={{ marginBottom: 6 }}>{isAuto ? "Automation" : "Agent"}</div>
+          <SrcRichSelect value="" onChange={id => onAdd(id)} options={kind ? opts : []} emptyLabel={kind ? (isAuto ? "Select an automation…" : "Select an agent…") : "Pick a method first"} />
+        </div>
+      </div>
     </div>
   );
 }
 
-function SrcObjectAgents({ s, set, groups, sel, agentPoolFor }) {
+function SrcObjectAgents({ s, set, groups, sel, agentPoolFor, fileMode }) {
   const assigned = s.objectAgents || {};
   const [previewFor, setPreviewFor] = useState("");
   // Back-compat: a value may be a single id (old) or an array (chain).
@@ -2411,16 +2385,17 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor }) {
   const removeAgent = (obj, id) => setChain(obj, chainOf(obj).filter(x => x !== id));
   const outFieldCount = obj => chainOf(obj).reduce((n, id) => n + ((agentDef(id) || { outputs: [] }).outputs.length), 0);
   const previewGroup = previewFor ? groups.find(g => g.name === previewFor) : null;
-  // "Run an agent/automation" — a compact dropdown-button; clicking opens a
-  // two-step menu (choose kind → choose the specific one) right there.
-  const runAgentPicker = (g, agents, automations, label, alignRight, asText) => (
-    <RunMethodPicker agents={agents} automations={automations} label={label} alignRight={alignRight} asText={asText} onPick={v => addAgent(g.name, v)} />
+  const [openPicker, setOpenPicker] = useState("");
+  const runBtn = (g, label, pressed) => (
+    <button onClick={() => setOpenPicker(openPicker === g.name ? "" : g.name)} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "inherit", fontSize: 12.5, fontWeight: 500, color: pressed ? "var(--ink)" : "var(--ink-2)", background: pressed ? "var(--chip)" : "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}>{label}</button>
   );
   return (
-    <StepWrap wide title="Run agents on each object">
-      <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 760 }}>Optionally run an agent on each object you selected. The agent reads every record and produces additional fields — these become available to map in the next step.</div>
+    <StepWrap wide title={fileMode ? "Extract data from files" : "Run agents on each object"}>
+      <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 760 }}>{fileMode
+        ? <>Run an agent or automation on each file type to pull structured fields out of the documents — these become available to map in the next step. This step is optional.</>
+        : <>Optionally run an agent on each object you selected. The agent reads every record and produces additional fields — these become available to map in the next step.</>}</div>
       {groups.length === 0 && (
-        <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)", padding: "40px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No objects selected — go back to the Objects step and pick at least one.</div>
+        <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)", padding: "40px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>{fileMode ? "No file types selected — go back to Discover Files and pick at least one." : "No objects selected — go back to the Objects step and pick at least one."}</div>
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {groups.map(g => {
@@ -2432,44 +2407,50 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor }) {
           const availAutomations = (pools.automations || []).filter(a => chain.indexOf(a.id) < 0).map(a => ({ id: a.id, label: a.name }));
           const hasAvail = availAgents.length + availAutomations.length > 0;
           const hasAgents = chain.length > 0;
+          const pickerOpen = openPicker === g.name;
+          const bodyOpen = hasAgents || pickerOpen;
           return (
             <div key={g.name} style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 16px", borderBottom: hasAgents ? "1px solid var(--line-2)" : "none", background: "var(--panel-2)", borderRadius: hasAgents ? "12px 12px 0 0" : 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 16px", borderBottom: bodyOpen ? "1px solid var(--line-2)" : "none", background: "var(--panel-2)", borderRadius: bodyOpen ? "12px 12px 0 0" : 12 }}>
                 {sel && <SrcConnectorLogo c={sel} size={18} />}
                 <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{g.label || g.name}</code>
                 <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{g.type === "Entity" ? ("Entity" + (g.rows ? " · " + g.rows + " records" : "")) : ((g.type || "Object") + " · " + g.cols.length + " columns")}</span>
                 {hasAgents
                   ? <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.4px", color: "var(--purple)", background: "color-mix(in oklab, var(--purple) 12%, transparent)", padding: "3px 8px", borderRadius: 5 }}>＋{total} FIELDS</span>
-                  : <div style={{ marginLeft: "auto", flexShrink: 0 }}>{runAgentPicker(g, availAgents, availAutomations, "+ Run an agent", true)}</div>}
+                  : <span style={{ marginLeft: "auto", flexShrink: 0 }}>{runBtn(g, pickerOpen ? "Cancel" : "+ Run an agent", pickerOpen)}</span>}
               </div>
-              {hasAgents && (
+              {bodyOpen && (
                 <div style={{ padding: "13px 16px" }}>
-                  {/* assigned agents — run top to bottom */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
-                    {chain.map((id, i) => {
-                      const a = agentDef(id); if (!a) return null;
-                      return (
-                        <div key={id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 9, background: "var(--bg-canvas)" }}>
-                          <span style={{ width: 20, height: 20, borderRadius: "50%", flexShrink: 0, background: "var(--ink)", color: "var(--panel)", fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</span>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{a.name}</div>
-                            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--ink-3)", marginTop: 2 }}>＋{a.outputs.length} field{a.outputs.length === 1 ? "" : "s"} · {a.desc}</div>
+                  {hasAgents && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {chain.map((id, i) => {
+                        const a = agentDef(id); if (!a) return null;
+                        return (
+                          <div key={id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 9, background: "var(--bg-canvas)" }}>
+                            <span style={{ width: 20, height: 20, borderRadius: "50%", flexShrink: 0, background: "var(--ink)", color: "var(--panel)", fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{a.name}</div>
+                              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--ink-3)", marginTop: 2 }}>＋{a.outputs.length} field{a.outputs.length === 1 ? "" : "s"} · {a.desc}</div>
+                            </div>
+                            <button onClick={() => removeAgent(g.name, id)} title="Remove" style={{ border: "none", background: "none", cursor: "pointer", padding: 4, color: "var(--ink-4)", flexShrink: 0 }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                            </button>
                           </div>
-                          <button onClick={() => removeAgent(g.name, id)} title="Remove agent" style={{ border: "none", background: "none", cursor: "pointer", padding: 4, color: "var(--ink-4)", flexShrink: 0 }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
-                  {/* controls — preview (left) + run another agent (right, matching the zero-state position) */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12 }}>
-                    <button onClick={() => setPreviewFor(g.name)} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: "var(--ink-2)", padding: 0 }}>
-                      Preview output <span style={{ fontSize: 13 }}>→</span>
-                    </button>
-                    {hasAvail && <div style={{ marginLeft: "auto", flexShrink: 0 }}>{runAgentPicker(g, availAgents, availAutomations, "+ Run another agent", true, true)}</div>}
-                  </div>
+                  {hasAgents && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12 }}>
+                      <button onClick={() => setPreviewFor(g.name)} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: "var(--ink-2)", padding: 0 }}>
+                        Preview output <span style={{ fontSize: 13 }}>→</span>
+                      </button>
+                      {hasAvail && !pickerOpen && <button onClick={() => setOpenPicker(g.name)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: "var(--ink-2)", padding: 0 }}>+ Run another</button>}
+                    </div>
+                  )}
+
+                  {pickerOpen && <InlineRunPicker agents={availAgents} automations={availAutomations} onAdd={id => { addAgent(g.name, id); setOpenPicker(""); }} onClose={() => setOpenPicker("")} />}
                 </div>
               )}
             </div>
