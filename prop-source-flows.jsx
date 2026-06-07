@@ -2137,60 +2137,73 @@ function SrcObjectAgents({ s, set, groups, sel }) {
           const chain = chainOf(g.name);
           const total = outFieldCount(g.name);
           const available = OBJECT_AGENTS.filter(a => chain.indexOf(a.id) < 0).map(a => ({ id: a.id, label: a.name, desc: a.desc }));
-          const showPicker = chain.length === 0 || addingFor === g.name;
+          const adding = addingFor === g.name;
+          const hasAgents = chain.length > 0;
+          const showBody = hasAgents || adding;
           return (
             <div key={g.name} style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 16px", borderBottom: "1px solid var(--line-2)", background: "var(--panel-2)", borderRadius: "12px 12px 0 0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 16px", borderBottom: showBody ? "1px solid var(--line-2)" : "none", background: "var(--panel-2)", borderRadius: showBody ? "12px 12px 0 0" : 12 }}>
                 {sel && <SrcConnectorLogo c={sel} size={18} />}
                 <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{g.name}</code>
                 <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{(g.type || "Object") + " · " + g.cols.length + " columns"}</span>
-                {total > 0 && <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.4px", color: "var(--purple)", background: "color-mix(in oklab, var(--purple) 12%, transparent)", padding: "3px 8px", borderRadius: 5 }}>＋{total} FIELDS</span>}
+                {hasAgents
+                  ? <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.4px", color: "var(--purple)", background: "color-mix(in oklab, var(--purple) 12%, transparent)", padding: "3px 8px", borderRadius: 5 }}>＋{total} FIELDS</span>
+                  : !adding && <button onClick={() => setAddingFor(g.name)}
+                      style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 7, height: 30, padding: "0 12px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--panel)", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 500, color: "var(--ink-2)", flexShrink: 0 }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--ink-3)"; e.currentTarget.style.background = "var(--bg-canvas)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--line)"; e.currentTarget.style.background = "var(--panel)"; }}>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-3)" }}>+</span> Assign an agent
+                    </button>}
               </div>
-              <div style={{ padding: "13px 16px" }}>
-                {/* assigned agents — run top to bottom */}
-                {chain.length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: chain.length ? 12 : 0 }}>
-                    {chain.map((id, i) => {
-                      const a = agentDef(id); if (!a) return null;
-                      return (
-                        <div key={id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 9, background: "var(--bg-canvas)" }}>
-                          {chain.length > 1 && <span style={{ width: 18, height: 18, borderRadius: "50%", flexShrink: 0, background: "var(--ink)", color: "var(--panel)", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</span>}
-                          <AgentGlyph />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{a.name}</div>
-                            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--ink-3)", marginTop: 2 }}>＋{a.outputs.length} field{a.outputs.length === 1 ? "" : "s"} · {a.desc}</div>
+              {showBody && (
+                <div style={{ padding: "13px 16px" }}>
+                  {/* assigned agents — run top to bottom */}
+                  {hasAgents && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                      {chain.map((id, i) => {
+                        const a = agentDef(id); if (!a) return null;
+                        return (
+                          <div key={id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 9, background: "var(--bg-canvas)" }}>
+                            <span style={{ width: 20, height: 20, borderRadius: "50%", flexShrink: 0, background: "var(--ink)", color: "var(--panel)", fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{a.name}</div>
+                              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--ink-3)", marginTop: 2 }}>＋{a.outputs.length} field{a.outputs.length === 1 ? "" : "s"} · {a.desc}</div>
+                            </div>
+                            <button onClick={() => removeAgent(g.name, id)} title="Remove agent" style={{ border: "none", background: "none", cursor: "pointer", padding: 4, color: "var(--ink-4)", flexShrink: 0 }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                            </button>
                           </div>
-                          <button onClick={() => removeAgent(g.name, id)} title="Remove agent" style={{ border: "none", background: "none", cursor: "pointer", padding: 4, color: "var(--ink-4)", flexShrink: 0 }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        );
+                      })}
+                    </div>
+                  )}
 
-                {/* picker (primary when no agent yet; on demand for chaining) */}
-                {showPicker && available.length > 0 && (
-                  <div style={{ maxWidth: 460 }}>
-                    <CustomSelect value="" onChange={v => addAgent(g.name, v)} placeholder={chain.length ? "Select another agent…" : "Select an agent…"} options={available}
-                      renderTrigger={() => <span style={{ color: "var(--ink-4)" }}>{chain.length ? "Select another agent…" : "Select an agent…"}</span>} />
-                  </div>
-                )}
+                  {/* picker — only while actively adding */}
+                  {adding && available.length > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ flex: 1, maxWidth: 460 }}>
+                        <CustomSelect value="" onChange={v => addAgent(g.name, v)} placeholder={hasAgents ? "Select another agent…" : "Select an agent…"} options={available}
+                          renderTrigger={() => <span style={{ color: "var(--ink-4)" }}>{hasAgents ? "Select another agent…" : "Select an agent…"}</span>} />
+                      </div>
+                      <button onClick={() => setAddingFor("")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: "var(--ink-3)", padding: "0 2px", flexShrink: 0 }}>Cancel</button>
+                    </div>
+                  )}
 
-                {/* subtle controls when at least one agent is assigned */}
-                {chain.length > 0 && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12 }}>
-                    {!showPicker && available.length > 0 && (
-                      <button onClick={() => setAddingFor(g.name)} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: "var(--ink-3)", padding: 0 }}>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>+</span> Run another agent
+                  {/* subtle controls when agents are assigned and not adding */}
+                  {hasAgents && !adding && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12 }}>
+                      {available.length > 0 && (
+                        <button onClick={() => setAddingFor(g.name)} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: "var(--ink-3)", padding: 0 }}>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>+</span> Run another agent
+                        </button>
+                      )}
+                      <button onClick={() => setPreviewFor(g.name)} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: "var(--ink-2)", padding: 0 }}>
+                        Preview agent output <span style={{ fontSize: 13 }}>→</span>
                       </button>
-                    )}
-                    <button onClick={() => setPreviewFor(g.name)} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: "var(--ink-2)", padding: 0 }}>
-                      Preview agent output <span style={{ fontSize: 13 }}>→</span>
-                    </button>
-                  </div>
-                )}
-              </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
