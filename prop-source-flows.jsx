@@ -1245,11 +1245,11 @@ const READ_CONFIGS = {
     ],
     starts: ["Contracts", "MSAs", "NDAs", "SOWs", "Invoices", "Policies", "Reports"],
   },
-  googledrive: { linkPh: "https://drive.google.com/drive/folders/…" },
-  sharepoint:  { container: "libraries", linkPh: "https://acme.sharepoint.com/sites/Legal/…" },
-  onedrive:    { linkPh: "https://acme-my.sharepoint.com/personal/…" },
-  dropbox:     { linkPh: "https://www.dropbox.com/home/…" },
-  box:         { linkPh: "https://app.box.com/folder/…" },
+  googledrive: { entity: "document", linkPh: "https://drive.google.com/drive/folders/…" },
+  sharepoint:  { entity: "document", container: "libraries", linkPh: "https://acme.sharepoint.com/sites/Legal/…" },
+  onedrive:    { entity: "document", linkPh: "https://acme-my.sharepoint.com/personal/…" },
+  dropbox:     { entity: "document", linkPh: "https://www.dropbox.com/home/…" },
+  box:         { entity: "document", linkPh: "https://app.box.com/folder/…" },
   s3: {
     container: "buckets / prefixes", item: "objects", linkPh: "s3://acme-legal/contracts/",
     filters: [
@@ -1278,6 +1278,16 @@ const READ_CONFIGS = {
       { key: "contains", label: "Text contains", type: "text" },
     ],
     starts: ["Incidents", "Decisions", "Announcements", "Support threads"],
+  },
+  teams: {
+    container: "channels", item: "messages", entity: "message", linkPh: "Channel name or link",
+    filters: [
+      { key: "fromUser", label: "From user",    type: "text",  ph: "name or email" },
+      { key: "after",    label: "After",        type: "date" },
+      { key: "kind",     label: "Message kind", type: "chips", options: ["Any", "With files", "Meetings", "Posts"] },
+      { key: "contains", label: "Text contains", type: "text" },
+    ],
+    starts: ["Decisions", "Incidents", "Meeting recaps", "Announcements"],
   },
   gmail: {
     container: "labels", item: "emails", linkPh: "Label name…",
@@ -1429,8 +1439,9 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   }) : null;
   const settingsHint = (s.pipelineType === "scheduled" ? "Scheduled" : "Real Time") + " · " + (s.resourceTier || "Small");
   const uCfg = s.uSettings || {};
-  const uOnCount = U_SETTINGS.filter(o => (o.id in uCfg ? uCfg[o.id] : o.default)).length;
-  const uSettingsHint = uOnCount + " of " + U_SETTINGS.length + " on";
+  const uToggles = U_SETTINGS.filter(o => o.control !== "add");
+  const uOnCount = uToggles.filter(o => (o.id in uCfg ? uCfg[o.id] : o.default)).length;
+  const uSettingsHint = uOnCount ? uOnCount + " of " + uToggles.length + " on" : "Configure source";
   // Discover Files only exists in the unstructured "mixed" path. Its absence
   // shifts the later steps up by one.
   const idxDiscover = (unstructured && !knownTypeMode) ? 3 : -1;
@@ -1866,11 +1877,14 @@ function SrcRead({ s, set, sel }) {
   const locs = s.readLocations || [];
   const filters = s.readFilters || {};
   const [link, setLink] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
   const specific = scope === "folders" || scope === "files";
   const contentMode = s.contentMode || "mixed";
-  const activeFilters = Object.keys(filters).filter(k => { const v = filters[k]; return v && v.length && v !== "all"; }).length;
-  const filtersOpen = showFilters || activeFilters > 0;
+  // Scope-specific noun — what's actually inside this source (document, message,
+  // email, page, object…), so the copy reads right for every connector.
+  const entity = cfg.entity || (cfg.item || "item").replace(/s$/, "");
+  const Entity = entity.charAt(0).toUpperCase() + entity.slice(1);
+  const typeExamples = (cfg.starts && cfg.starts.length) ? "e.g. " + cfg.starts.slice(0, 2).join(", ") + "…" : "e.g. Contract, Invoice…";
+  const [filtersOn, setFiltersOn] = useState(() => Object.keys(filters).some(k => { const v = filters[k]; return v && v.length && v !== "all"; }));
   const setFilter = (k, val) => set({ readFilters: Object.assign({}, filters, (function () { const o = {}; o[k] = val; return o; })()) });
   const addLink = () => { const t = link.trim(); if (!t) return; set({ readLocations: locs.concat([{ id: "loc-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6), label: t }]) }); setLink(""); };
   const removeLoc = id => set({ readLocations: locs.filter(x => x.id !== id) });
@@ -1916,44 +1930,45 @@ function SrcRead({ s, set, sel }) {
               <div className="wfr-label">What's in here?</div>
               <SrcRichSelect dense value={contentMode} onChange={v => set(Object.assign({ contentMode: v }, v === "mixed" ? { knownType: "" } : {}))} emptyLabel="How should we read these?"
                 options={[
-                  { id: "mixed", title: "Mixed document types", desc: "A discovery agent figures out the types.", icon: SRC_SCOPE_ICONS.all },
-                  { id: "single", title: "One known type", desc: "They're all the same kind of document.", icon: SRC_SCOPE_ICONS.files },
+                  { id: "mixed", title: "Mixed " + entity + " types", desc: "A discovery agent figures out the types.", icon: SRC_SCOPE_ICONS.all },
+                  { id: "single", title: "One known type", desc: "They're all the same kind of " + entity + ".", icon: SRC_SCOPE_ICONS.files },
                 ]} />
-              <div className="wfr-hint">If every file is the same kind of document, skip discovery.</div>
+              <div className="wfr-hint">{"If every " + entity + " is the same kind, skip discovery."}</div>
             </div>
             {contentMode === "single" && (
               <div>
-                <div className="wfr-label">Document type</div>
-                <input className="winput" style={{ height: 48 }} placeholder="e.g. Contract, SOW, Invoice…" value={s.knownType || ""} onChange={e => set({ knownType: e.target.value })} />
-                <div className="wfr-hint">Whatever these documents are — discovery is skipped, you extract &amp; map straight away.</div>
+                <div className="wfr-label">{Entity + " type"}</div>
+                <input className="winput" style={{ height: 48 }} placeholder={typeExamples} value={s.knownType || ""} onChange={e => set({ knownType: e.target.value })} />
+                <div className="wfr-hint">{"Whatever these " + entity + "s are — discovery is skipped, you extract & map straight away."}</div>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {scope && !filtersOpen && (
-        <FormRow label="Filters" optional hint="Index everything in scope, or narrow it down by type, owner, date or name." last>
-          <button onClick={() => setShowFilters(true)} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "inherit", fontSize: 13, fontWeight: 500, color: "var(--ink-2)", background: "var(--panel)", border: "1px dashed var(--line)", borderRadius: 9, padding: "9px 14px", cursor: "pointer" }}>
-            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-3)" }}>+</span> Add filters
-          </button>
-        </FormRow>
-      )}
-
-      {scope && filtersOpen && (
-        <FormRow label="Filters" optional hint={"Only index " + cfg.item + " matching the " + sel.name + " metadata below. Leave blank to include everything."} last>
-          <div style={{ display: "grid", gap: 14 }}>
-            {cfg.filters.map(f => (
-              <div key={f.key}>
-                <div style={SRC_SUBLBL}>{f.label}</div>
-                {f.key === "fileTypes" ? <CustomSelect value={filters[f.key] || "all"} onChange={v => setFilter(f.key, v)} options={[{ id: "all", label: "All file types" }].concat(f.options.map(x => ({ id: x, label: x })))} />
-                  : f.type === "chips" ? <SrcChipRow options={f.options} selected={filters[f.key] || []} onToggle={opt => setFilter(f.key, srcToggle(filters[f.key] || [], opt))} />
-                    : f.type === "select" ? <CustomSelect value={filters[f.key] || f.options[0]} onChange={v => setFilter(f.key, v)} options={f.options.map(x => ({ id: x, label: x }))} />
-                      : f.type === "date" ? <input className="winput" type="date" value={filters[f.key] || ""} onChange={e => setFilter(f.key, e.target.value)} />
-                        : <input className="winput" placeholder={f.ph || ""} value={filters[f.key] || ""} onChange={e => setFilter(f.key, e.target.value)} />}
-              </div>
-            ))}
-          </div>
+      {scope && (
+        <FormRow label="Filters" optional last>
+          <label style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 11, cursor: "pointer", border: "1px solid " + (filtersOn ? "var(--line)" : "var(--line-2)"), background: filtersOn ? "var(--panel)" : "transparent", maxWidth: 760 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>Filter what gets indexed</div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 3, lineHeight: 1.5 }}>{"Index all " + cfg.item + " in scope, or narrow down by type, owner, date or name."}</div>
+            </div>
+            <SrcToggle on={filtersOn} onClick={() => setFiltersOn(!filtersOn)} />
+          </label>
+          {filtersOn && (
+            <div style={{ display: "grid", gap: 14, marginTop: 16, maxWidth: 760 }}>
+              {cfg.filters.map(f => (
+                <div key={f.key}>
+                  <div style={SRC_SUBLBL}>{f.label}</div>
+                  {f.key === "fileTypes" ? <CustomSelect value={filters[f.key] || "all"} onChange={v => setFilter(f.key, v)} options={[{ id: "all", label: "All file types" }].concat(f.options.map(x => ({ id: x, label: x })))} />
+                    : f.type === "chips" ? <SrcChipRow options={f.options} selected={filters[f.key] || []} onToggle={opt => setFilter(f.key, srcToggle(filters[f.key] || [], opt))} />
+                      : f.type === "select" ? <CustomSelect value={filters[f.key] || f.options[0]} onChange={v => setFilter(f.key, v)} options={f.options.map(x => ({ id: x, label: x }))} />
+                        : f.type === "date" ? <input className="winput" type="date" value={filters[f.key] || ""} onChange={e => setFilter(f.key, e.target.value)} />
+                          : <input className="winput" placeholder={f.ph || ""} value={filters[f.key] || ""} onChange={e => setFilter(f.key, e.target.value)} />}
+                </div>
+              ))}
+            </div>
+          )}
         </FormRow>
       )}
     </StepWrap>
@@ -2901,14 +2916,14 @@ const SET_ICONS = {
   cursor: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M5 3l6 18 2-7 7-2z" /></svg>,
   copy: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>,
 };
-// Unstructured-source settings — governance/sync capabilities, each a card with a
-// name, description and an on/off toggle. (Detailed config comes later.)
+// Unstructured-source settings. Single on/off capabilities are toggles; the ones
+// that hold a list of rules ("add" control) use a + to add more. (Config TBD.)
 const U_SETTINGS = [
-  { id: "refresh",   name: "Refresh frequency",          desc: "Re-scan and re-index this source on a schedule — daily, weekly, monthly or a custom cron." },
-  { id: "retention", name: "Knowledge retention",        desc: "Keep extracted knowledge for a set window, then purge it automatically." },
-  { id: "skipperms", name: "Skip source permission checks", desc: "Index content without enforcing each user's source-level access. Faster, but lowers access fidelity." },
-  { id: "pii",       name: "PII masking",                desc: "Detect and mask personal data (emails, names, IDs) as documents are indexed." },
-  { id: "indexing",  name: "Indexing strategy",          desc: "Control how documents are chunked and embedded for retrieval." },
+  { id: "refresh",   control: "toggle", name: "Refresh frequency",          desc: "Re-scan and re-index this source on a schedule — daily, weekly, monthly or a custom cron." },
+  { id: "retention", control: "toggle", name: "Knowledge retention",        desc: "Keep extracted knowledge for a set window, then purge it automatically." },
+  { id: "skipperms", control: "toggle", name: "Skip source permission checks", desc: "Index content without enforcing each user's source-level access. Faster, but lowers access fidelity." },
+  { id: "pii",       control: "add",    name: "PII masking",                desc: "Add rules to detect and mask personal data (emails, names, IDs) as content is indexed." },
+  { id: "indexing",  control: "add",    name: "Indexing strategy",          desc: "Add strategies for how content is chunked and embedded for retrieval." },
 ];
 function SrcToggle({ on, onClick }) {
   return (
@@ -2923,18 +2938,24 @@ function SrcUnstructuredSettings({ s, set }) {
   const toggle = o => set({ uSettings: Object.assign({}, U_SETTINGS.reduce((a, x) => { a[x.id] = isOn(x); return a; }, {}), (function () { var z = {}; z[o.id] = !isOn(o); return z; })()) });
   return (
     <StepWrap wide title="Settings">
-      <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 760 }}>Control how this source is kept in sync and governed. Turn on what you need — you can configure the details later.</div>
+      <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 760 }}>Control how this source is kept in sync and governed. Turn on what you need or add rules — you can configure the details later.</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 760 }}>
         {U_SETTINGS.map(o => {
-          const on = isOn(o);
+          const isAdd = o.control === "add";
+          const on = !isAdd && isOn(o);
+          const Tag = isAdd ? "div" : "label";
           return (
-            <label key={o.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 11, cursor: "pointer", border: "1px solid " + (on ? "var(--line)" : "var(--line-2)"), background: on ? "var(--panel)" : "transparent", transition: "background 120ms" }}>
+            <Tag key={o.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 11, cursor: isAdd ? "default" : "pointer", border: "1px solid " + (on ? "var(--line)" : "var(--line-2)"), background: on ? "var(--panel)" : "transparent", transition: "background 120ms" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{o.name}</div>
                 <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 3, lineHeight: 1.5 }}>{o.desc}</div>
               </div>
-              <SrcToggle on={on} onClick={() => toggle(o)} />
-            </label>
+              {isAdd
+                ? <span aria-hidden title="Add (coming soon)" style={{ width: 30, height: 30, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--line)", background: "var(--panel)", color: "var(--ink-3)" }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                  </span>
+                : <SrcToggle on={on} onClick={() => toggle(o)} />}
+            </Tag>
           );
         })}
       </div>
