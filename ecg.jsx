@@ -23385,13 +23385,6 @@ function App() {
         />
       ) : tab === "Sources" ? (
         <GlobalSourcesView />
-      ) : isBlank && tab === "Records" ? (
-        <WorkspaceEmpty
-          eyebrow="RECORDS"
-          title="No records to browse"
-          desc="Records are the actual rows behind each node. They appear here once you connect a source and let it sync."
-          icon={<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" strokeWidth="1.5"><rect x="4" y="5" width="16" height="14" rx="2"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="9" y1="10" x2="9" y2="19"/></svg>}
-        />
       ) : tab === "Records" ? (
         <RecordsView />
       ) : isBlank && tab === "Violations" ? (

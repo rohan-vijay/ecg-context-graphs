@@ -1401,8 +1401,10 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     ? "All " + readCfg.item
     : readLocs.length ? readLocs.length + " " + (readLocs.length === 1 ? readCfg.container.replace(/s$/, "") : readCfg.container)
     : "Pick " + readCfg.container;
-  const extractHint = s.extractRan ? includedEntities.length + " entit" + (includedEntities.length === 1 ? "y" : "ies") : "Run an agent";
-  const mapHint = mappedCount ? `${mappedCount} mapped` : "Map entities → nodes";
+  const objectsHint = s.extractRan ? includedEntities.length + " object" + (includedEntities.length === 1 ? "" : "s") : "Scan for objects";
+  const uAgentsAssigned = includedEntities.filter(e => { var a = (s.objectAgents || {})[e.id]; return Array.isArray(a) ? a.length > 0 : !!a; }).length;
+  const uExtractHint = uAgentsAssigned ? uAgentsAssigned + " of " + includedEntities.length + " assigned" : "Optional";
+  const mapHint = mappedCount ? `${mappedCount} mapped` : "Map objects → nodes";
   const objectHint = selectedTables.length ? selectedTables.length + " object" + (selectedTables.length === 1 ? "" : "s") : (s.query ? "Custom SQL" : "Choose what to read");
   const objAgents = s.objectAgents || {};
   const agentsAssigned = selectedTables.filter(t => objAgents[t]).length;
@@ -1412,7 +1414,8 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     { label: "Source system", hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",    hint: connLabel },
     { label: "Scope",         hint: readHint },
-    { label: "Extract",       hint: extractHint },
+    { label: "Objects",       hint: objectsHint },
+    { label: "Extract",       hint: uExtractHint },
     { label: "Map",           hint: mapHint, subItems: mapSubItems, activeSub: activeMapObj, onSub: setMapActiveObj },
     { label: "Settings",      hint: settingsHint },
   ] : [
@@ -1469,9 +1472,10 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
       {unstructured ? (
         <>
           {step === 2 && <SrcRead s={s} set={set} sel={sel} />}
-          {step === 3 && <SrcExtract s={s} set={set} sel={sel} />}
-          {step === 4 && <SrcEntityMap s={s} set={set} groups={mapGroups} activeObj={activeMapObj} sel={sel} />}
-          {step === 5 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
+          {step === 3 && <SrcDiscover s={s} set={set} sel={sel} />}
+          {step === 4 && <SrcObjectAgents s={s} set={set} groups={mapGroups} sel={sel} />}
+          {step === 5 && <SrcEntityMap s={s} set={set} groups={mapGroups} activeObj={activeMapObj} sel={sel} />}
+          {step === 6 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
         </>
       ) : (
         <>
@@ -1882,29 +1886,45 @@ const ENTITY_SETS = {
 };
 function getDiscoveredEntities(sel) { return (sel && sel.id === "slack") ? ENTITY_SETS.slack : ENTITY_SETS.default; }
 
-function SrcExtract({ s, set, sel }) {
+function SrcDiscover({ s, set, sel }) {
   const agent = s.entityAgent || "";
   const ran = !!s.extractRan;
+  const [scanning, setScanning] = useState(false);
   const entities = getDiscoveredEntities(sel);
   const include = s.entityInclude || {};
   const isIncluded = e => include[e.id] !== false;
   const includedN = entities.filter(isIncluded).length;
-  const run = () => { if (!agent) return; const inc = {}; entities.forEach(e => { inc[e.id] = true; }); set({ extractRan: true, entityInclude: inc }); };
+  const scan = () => {
+    if (!agent || scanning) return;
+    setScanning(true);
+    setTimeout(() => { const inc = {}; entities.forEach(e => { inc[e.id] = true; }); set({ extractRan: true, entityInclude: inc }); setScanning(false); }, 950);
+  };
   const toggle = id => set({ entityInclude: Object.assign({}, include, (function () { var o = {}; o[id] = !(include[id] !== false); return o; })()) });
   return (
-    <StepWrap wide title="Extract entities from your documents">
-      <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 780 }}>Unstructured sources don't have predefined objects. An agent reads the {sel ? sel.name : "documents"} in scope and <b style={{ color: "var(--ink-2)" }}>discovers the entities inside</b> — then you map each one into the graph.</div>
-      <FormRow label="Extraction agent" hint="Reads the documents in scope and discovers entity types + their fields." last={!ran}>
+    <StepWrap wide title="Objects in your documents">
+      <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 800 }}>Unstructured sources don't have predefined objects. A discovery agent scans the {sel ? sel.name : "documents"} in scope and <b style={{ color: "var(--ink-2)" }}>proposes the entities it can extract</b>. Pick the ones you want — you'll run extraction on each in the next step.</div>
+      <FormRow label="Discovery agent" hint="Scans a sample of the documents in scope and proposes the entity types it finds." last={!ran && !scanning}>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <div style={{ flex: 1, maxWidth: 460 }}>
-            <CustomSelect value={agent} placeholder="Select an agent…" onChange={v => set({ entityAgent: v, extractRan: false })} options={ENTITY_AGENTS.map(a => ({ id: a.id, label: a.name, desc: a.desc }))} searchable searchPlaceholder="Search agents…" />
+            <CustomSelect value={agent} placeholder="Select an agent…" onChange={v => set({ entityAgent: v })} options={ENTITY_AGENTS.map(a => ({ id: a.id, label: a.name, desc: a.desc }))} searchable searchPlaceholder="Search agents…" />
           </div>
-          <button onClick={run} disabled={!agent} className="btn-dark" style={{ opacity: agent ? 1 : 0.45, flexShrink: 0 }}>{ran ? "Re-run extraction" : "Run extraction"}</button>
+          <button onClick={scan} disabled={!agent || scanning} className="btn-dark" style={{ opacity: (agent && !scanning) ? 1 : 0.5, flexShrink: 0, minWidth: 150, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            {scanning
+              ? <><svg className="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 3a9 9 0 1 0 9 9" /></svg> Scanning…</>
+              : (ran ? "Re-scan" : "Scan documents")}
+          </button>
         </div>
       </FormRow>
 
-      {ran && (
-        <FormRow label="Discovered entities" hint={includedN + " of " + entities.length + " selected · these become the objects you map next."} last>
+      {scanning && (
+        <div style={{ marginTop: 18, border: "1px dashed var(--line)", borderRadius: 11, background: "var(--panel-2)", padding: "26px", textAlign: "center", color: "var(--ink-3)", fontSize: 13, lineHeight: 1.5 }}>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--ink-2)" }}>Reading a sample of your {sel ? sel.name : "documents"}…</div>
+          <div style={{ marginTop: 6, fontSize: 12 }}>The agent is identifying entity types and their fields.</div>
+        </div>
+      )}
+
+      {ran && !scanning && (
+        <FormRow label="Potential entities" hint={"These are the entity types the agent can extract — " + includedN + " of " + entities.length + " selected. Pick which to bring into the graph."} last>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {entities.map(e => {
               const on = isIncluded(e);
@@ -1949,7 +1969,12 @@ function SrcEntityMap({ s, set, groups, activeObj, sel }) {
   const destNode = nodes.find(n => n.id === destId) || null;
   const props = destNode && window.generateProps ? window.generateProps(destNode).map(p => ({ id: p.name, label: p.name, type: p.type })) : [];
   const mk = col => eid + "::" + col;
-  const cols = current ? current.cols : [];
+  const baseCols = current ? current.cols : [];
+  const agentCols = current ? agentFieldsFor(s, eid) : [];
+  const cols = baseCols.concat(agentCols);
+  const hasAgents = agentCols.length > 0;
+  const agentGroups = [];
+  agentCols.forEach(f => { let gg = agentGroups.find(x => x.name === f.agent); if (!gg) { gg = { name: f.agent, fields: [] }; agentGroups.push(gg); } gg.fields.push(f); });
   const setNode = nid => {
     const m = Object.assign({}, mapping);
     // creating a new node → each field becomes a same-named property; clear those when leaving
@@ -1961,6 +1986,31 @@ function SrcEntityMap({ s, set, groups, activeObj, sel }) {
   const mappedN = cols.filter(c => mapping[mk(c.col)]).length;
   const GRID = "minmax(180px,1.2fr) 34px minmax(200px,1.3fr)";
   const nodeOptions = nodes.map(n => ({ id: n.id, label: n.label, node: n })).concat([{ id: "__new__", label: "+ New node type" + (current ? " — " + current.label : "") }]);
+  const sectionLabel = (text, n, first) => (
+    <div key={"sec-" + text} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", background: "var(--panel-2)", borderTop: first ? "none" : "1px solid var(--line)" }}>
+      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", fontWeight: 600 }}>{text}</span>
+      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, color: "var(--ink-4)" }}>· {n}</span>
+    </div>
+  );
+  const renderFieldRow = (c, key, i) => {
+    const mapped = mapping[mk(c.col)];
+    const nm = c.label || c.col;
+    return (
+      <div key={key} style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "12px 16px", alignItems: "center", borderTop: i ? "1px solid var(--line-2)" : "none" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <MapTypeGlyph type={c.type} />
+          <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nm}</code>
+        </div>
+        <div style={{ textAlign: "center", color: (isNew || mapped) ? "var(--green)" : "var(--ink-4)", fontSize: 15 }}>→</div>
+        {isNew
+          ? <span style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 2px" }}><MapTypeGlyph type={c.type} size={22} /><code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{nm}</code><MapBadge tone="var(--purple)">NEW</MapBadge></span>
+          : <CustomSelect value={mapped || ""} onChange={v => updateMap(c.col, v)} placeholder="Select property" searchable searchPlaceholder="Search properties…"
+              options={props.concat([{ id: "__new__", label: "+ New property" }])}
+              renderTrigger={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={22} /><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{o.label}</span></span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-4)" }}>{o.label || "Select property"}</span>}
+              renderOption={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={20} />{o.label}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-3)" }}>{o.label}</span>} />}
+      </div>
+    );
+  };
   return (
     <StepWrap wide title={current ? `Map ${current.label} to the graph` : "Map entities to the graph"}>
       {!current && (
@@ -1990,24 +2040,20 @@ function SrcEntityMap({ s, set, groups, activeObj, sel }) {
               <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "10px 16px", background: "var(--panel-2)", borderBottom: "1px solid var(--line-2)", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)" }}>
                 <div>Entity field</div><div></div><div>{isNew ? "New property" : "Destination property"}</div>
               </div>
-              {cols.map((c, i) => {
-                const mapped = mapping[mk(c.col)];
-                return (
-                  <div key={c.col} style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "12px 16px", alignItems: "center", borderTop: i ? "1px solid var(--line-2)" : "none" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                      <MapTypeGlyph type={c.type} />
-                      <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.col}</code>
-                    </div>
-                    <div style={{ textAlign: "center", color: (isNew || mapped) ? "var(--green)" : "var(--ink-4)", fontSize: 15 }}>→</div>
-                    {isNew
-                      ? <span style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 2px" }}><MapTypeGlyph type={c.type} size={22} /><code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{c.col}</code><MapBadge tone="var(--purple)">NEW</MapBadge></span>
-                      : <CustomSelect value={mapped || ""} onChange={v => updateMap(c.col, v)} placeholder="Select property" searchable searchPlaceholder="Search properties…"
-                          options={props.concat([{ id: "__new__", label: "+ New property" }])}
-                          renderTrigger={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={22} /><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{o.label}</span></span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-4)" }}>{o.label || "Select property"}</span>}
-                          renderOption={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={20} />{o.label}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-3)" }}>{o.label}</span>} />}
-                  </div>
-                );
-              })}
+              {hasAgents ? (
+                <>
+                  {sectionLabel("From source", baseCols.length, true)}
+                  {baseCols.map((c, i) => renderFieldRow(c, "s-" + i, i))}
+                  {agentGroups.map(ag => (
+                    <React.Fragment key={ag.name}>
+                      {sectionLabel(ag.name, ag.fields.length)}
+                      {ag.fields.map((c, i) => renderFieldRow(c, ag.name + "-" + i, i))}
+                    </React.Fragment>
+                  ))}
+                </>
+              ) : (
+                baseCols.map((c, i) => renderFieldRow(c, "s-" + i, i))
+              )}
             </div>
           )}
         </>
@@ -2304,8 +2350,8 @@ function SrcObjectAgents({ s, set, groups, sel }) {
             <div key={g.name} style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 16px", borderBottom: hasAgents ? "1px solid var(--line-2)" : "none", background: "var(--panel-2)", borderRadius: hasAgents ? "12px 12px 0 0" : 12 }}>
                 {sel && <SrcConnectorLogo c={sel} size={18} />}
-                <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{g.name}</code>
-                <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{(g.type || "Object") + " · " + g.cols.length + " columns"}</span>
+                <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{g.label || g.name}</code>
+                <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{(g.type || "Object") + " · " + g.cols.length + (g.type === "Entity" ? " fields" : " columns")}</span>
                 {hasAgents
                   ? <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.4px", color: "var(--purple)", background: "color-mix(in oklab, var(--purple) 12%, transparent)", padding: "3px 8px", borderRadius: 5 }}>＋{total} FIELDS</span>
                   : <div style={{ marginLeft: "auto", flexShrink: 0 }}>{runAgentPicker(g, available, "+ Run an agent", true)}</div>}
