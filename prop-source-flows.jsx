@@ -1415,7 +1415,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     { label: "Connection",    hint: connLabel },
     { label: "Scope",         hint: readHint },
     { label: "Discover Files", hint: objectsHint },
-    { label: "Extract",       hint: uExtractHint },
+    { label: "Extract fields", hint: uExtractHint },
     { label: "Map",           hint: mapHint, subItems: mapSubItems, activeSub: activeMapObj, onSub: setMapActiveObj },
     { label: "Settings",      hint: settingsHint },
   ] : [
@@ -1765,22 +1765,23 @@ function srcCap(w) { return w ? w.charAt(0).toUpperCase() + w.slice(1) : w; }
 
 // Rich single-select that mirrors the "Pick a type" control: icon box + title +
 // sub line + chevron. options = [{ id, title, desc, icon }]. Empty shows a dashed +.
-function SrcRichSelect({ value, onChange, options, emptyLabel }) {
+function SrcRichSelect({ value, onChange, options, emptyLabel, dense }) {
+  const box = dense ? 27 : 34;
   const iconBox = (content, dashed) => (
-    <span style={{ width: 34, height: 34, borderRadius: 7, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--chip)", borderWidth: 1, borderStyle: dashed ? "dashed" : "solid", borderColor: "var(--line)", color: "var(--ink-3)" }}>{content}</span>
+    <span style={{ width: box, height: box, borderRadius: dense ? 6 : 7, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--chip)", borderWidth: 1, borderStyle: dashed ? "dashed" : "solid", borderColor: "var(--line)", color: "var(--ink-3)" }}>{content}</span>
   );
   const body = (icon, title, sub, ghost) => (
-    <span style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", minWidth: 0 }}>
+    <span style={{ display: "flex", alignItems: "center", gap: dense ? 9 : 11, width: "100%", minWidth: 0 }}>
       {icon}
       <span style={{ display: "flex", flexDirection: "column", minWidth: 0, gap: 1 }}>
-        <span style={{ fontSize: 14, fontWeight: ghost ? 400 : 600, color: ghost ? "var(--ink-3)" : "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</span>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--ink-4)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sub}</span>
+        <span style={{ fontSize: dense ? 13 : 14, fontWeight: ghost ? 400 : 600, color: ghost ? "var(--ink-3)" : "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</span>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: dense ? 10 : 11, color: "var(--ink-4)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sub}</span>
       </span>
     </span>
   );
   return (
     <CustomSelect
-      value={value} onChange={onChange} options={options}
+      value={value} onChange={onChange} options={options} className={dense ? "csel-dense" : undefined}
       placeholder={body(iconBox("+", true), emptyLabel || "Choose…", "Click to choose", true)}
       renderTrigger={o => body(iconBox(o.icon), o.title, o.desc)}
       renderOption={o => body(iconBox(o.icon), o.title, o.desc)}
@@ -2351,21 +2352,21 @@ function InlineRunPicker({ agents, automations, onAdd, onClose, header }) {
   const list = isAuto ? automations : agents;
   const opts = list.map(o => ({ id: o.id, icon: isAuto ? SRC_METHOD_ICONS.automation : SRC_METHOD_ICONS.agent, title: o.label, desc: "" }));
   return (
-    <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--bg-canvas)", padding: "14px 16px", marginTop: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", fontWeight: 600 }}>{header || "Run extraction"}</span>
+    <div style={{ border: "1px solid var(--line)", borderRadius: 10, background: "var(--bg-canvas)", padding: "11px 13px", marginTop: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", fontWeight: 600 }}>{header || "Run extraction"}</span>
         <button onClick={onClose} title="Cancel" style={{ border: "none", background: "none", cursor: "pointer", padding: 2, color: "var(--ink-4)" }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <div>
-          <div className="wfr-label" style={{ marginBottom: 6 }}>Method</div>
-          <SrcRichSelect value={kind} onChange={setKind} options={METHOD_KIND_OPTS} emptyLabel="Pick a method" />
+          <div className="wfr-label" style={{ marginBottom: 4 }}>Method</div>
+          <SrcRichSelect dense value={kind} onChange={setKind} options={METHOD_KIND_OPTS} emptyLabel="Pick a method" />
         </div>
         <div style={{ opacity: kind ? 1 : 0.45, pointerEvents: kind ? "auto" : "none", transition: "opacity 120ms" }}>
-          <div className="wfr-label" style={{ marginBottom: 6 }}>{isAuto ? "Automation" : "Agent"}</div>
-          <SrcRichSelect value="" onChange={id => onAdd(id)} options={kind ? opts : []} emptyLabel={kind ? (isAuto ? "Select an automation…" : "Select an agent…") : "Pick a method first"} />
+          <div className="wfr-label" style={{ marginBottom: 4 }}>{isAuto ? "Automation" : "Agent"}</div>
+          <SrcRichSelect dense value="" onChange={id => onAdd(id)} options={kind ? opts : []} emptyLabel={kind ? (isAuto ? "Select an automation…" : "Select an agent…") : "Pick a method first"} />
         </div>
       </div>
     </div>
@@ -2385,7 +2386,7 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor, fileMode }) {
   const [openPicker, setOpenPicker] = useState("");
   // Structured sources already have columns → agents/automations *enrich* records;
   // unstructured files need *extraction*. Both can be an agent OR an automation.
-  const stepTitle = fileMode ? "Extract data from files" : "Extract & enrich each object";
+  const stepTitle = fileMode ? "Extract fields" : "Extract & enrich each object";
   const ctaLabel = fileMode ? "+ Extract fields" : "+ Run enrichment";
   const panelHeader = fileMode ? "Extract fields" : "Run enrichment";
   const runBtn = (g, label, pressed) => (
@@ -2416,7 +2417,7 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor, fileMode }) {
               <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 16px", borderBottom: bodyOpen ? "1px solid var(--line-2)" : "none", background: "var(--panel-2)", borderRadius: bodyOpen ? "12px 12px 0 0" : 12 }}>
                 {sel && <SrcConnectorLogo c={sel} size={18} />}
                 <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{g.label || g.name}</code>
-                <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{g.type === "Entity" ? ("Entity" + (g.rows ? " · " + g.rows + " records" : "")) : ((g.type || "Object") + " · " + g.cols.length + " columns")}</span>
+                <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{fileMode ? "File type" : ((g.type || "Object") + " · " + g.cols.length + " columns")}</span>
                 {hasAgents
                   ? <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.4px", color: "var(--purple)", background: "color-mix(in oklab, var(--purple) 12%, transparent)", padding: "3px 8px", borderRadius: 5 }}>＋{total} FIELDS</span>
                   : <span style={{ marginLeft: "auto", flexShrink: 0 }}>{runBtn(g, pickerOpen ? "Cancel" : ctaLabel, pickerOpen)}</span>}
