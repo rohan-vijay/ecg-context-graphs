@@ -3039,34 +3039,180 @@ function buildEditState(es, node, base) {
 // Curated, logical sources covering the scenarios we demo: structured warehouses
 // & apps, plus files, email, Slack, Teams, SharePoint and OneDrive. Each row's
 // `edit` spec re-opens the wizard fully configured (see buildEditState).
+// ── Catalog extension: the 13 sources & their objects from the architecture doc ──
+[
+  { id: "monday",       cat: "Project & Support", name: "Monday",                tag: "Project Mgmt", kind: "structured",   icon: "Mn", slug: "monday",         color: "#FF3D57", desc: "Boards, items, projects, tasks and incidents." },
+  { id: "support",      cat: "Project & Support", name: "Support Portal",        tag: "Ticketing",    kind: "structured",   icon: "Su", slug: "zendesk",        color: "#16A34A", desc: "Support tickets, incidents and help-center articles." },
+  { id: "gcal",         cat: "Messaging & Email", name: "Google Calendar",       tag: "Scheduling",   kind: "unstructured", icon: "GC", slug: "googlecalendar", color: "#4285F4", desc: "Meetings, events and scheduling interactions." },
+  { id: "productusage", cat: "Identity & Events", name: "Product Usage",         tag: "Analytics",    kind: "structured",   icon: "PU", slug: "amplitude",      color: "#1463FF", desc: "Adoption metrics, usage events and expansion signals." },
+  { id: "productdocs",  cat: "Docs & Wikis",      name: "Product Documentation", tag: "Knowledge",    kind: "unstructured", icon: "PD", slug: "gitbook",        color: "#6366F1", desc: "Product guides and feature documentation." },
+  { id: "apollo",       cat: "CRM & Marketing",   name: "Apollo",                tag: "Enrichment",   kind: "structured",   icon: "Ap", slug: "apollo",         color: "#6D28D9", desc: "Company & contact data and buying-intent signals." },
+  { id: "web",          cat: "Files & Storage",   name: "Web",                   tag: "Public Data",  kind: "unstructured", icon: "We", slug: "googlechrome",   color: "#0891B2", desc: "Competitor sites, news and market data." },
+  { id: "docusign",     cat: "Files & Storage",   name: "DocuSign",              tag: "E-signature",  kind: "structured",   icon: "DS", slug: "docusign",       color: "#D4B106", desc: "Envelopes and contract signature events." },
+].forEach(c => { if (!SOURCE_SYSTEMS.some(x => x.id === c.id)) SOURCE_SYSTEMS.push(c); });
+
+Object.assign(OBJECTS_BY_SYS, {
+  hubspot: [
+    { name: "Account", type: "Object", rows: "2.8K", cols: 24 }, { name: "Contact", type: "Object", rows: "18K", cols: 18 },
+    { name: "Lead", type: "Object", rows: "24K", cols: 14 }, { name: "Opportunity", type: "Object", rows: "6.2K", cols: 22 },
+    { name: "Campaign", type: "Object", rows: "320", cols: 12 }, { name: "Renewal", type: "Object", rows: "2.4K", cols: 11 },
+    { name: "Product", type: "Object", rows: "180", cols: 9 }, { name: "Subscription", type: "Object", rows: "2.8K", cols: 13 },
+    { name: "Contract", type: "Object", rows: "1.2K", cols: 16 },
+  ],
+  netsuite: [
+    { name: "Invoice", type: "Table", rows: "12K", cols: 16 }, { name: "Payment", type: "Table", rows: "11K", cols: 10 },
+    { name: "Subscription", type: "Table", rows: "2.8K", cols: 13 }, { name: "Renewal", type: "Table", rows: "2.4K", cols: 11 },
+    { name: "Order", type: "Table", rows: "9.4K", cols: 14 }, { name: "Customer", type: "Table", rows: "2.8K", cols: 20 },
+  ],
+  monday: [
+    { name: "Issue", type: "Item", rows: "4.1K", cols: 12 }, { name: "Project", type: "Board", rows: "210", cols: 10 },
+    { name: "Task", type: "Item", rows: "18K", cols: 11 }, { name: "Incident", type: "Item", rows: "310", cols: 12 },
+  ],
+  support: [
+    { name: "Ticket", type: "Object", rows: "142K", cols: 18 }, { name: "Incident", type: "Object", rows: "310", cols: 12 },
+    { name: "Article", type: "Object", rows: "640", cols: 9 }, { name: "Conversation", type: "Object", rows: "98K", cols: 11 },
+  ],
+  productusage: [
+    { name: "usage_events", type: "Table", rows: "25M", cols: 12 }, { name: "feature_adoption", type: "Table", rows: "48K", cols: 9 },
+    { name: "account_signals", type: "View", rows: "2.8K", cols: 8 }, { name: "sessions", type: "Table", rows: "1.2M", cols: 10 },
+  ],
+  apollo: [
+    { name: "Company", type: "Object", rows: "48K", cols: 22 }, { name: "Contact", type: "Object", rows: "120K", cols: 18 },
+    { name: "Lead", type: "Object", rows: "24K", cols: 14 }, { name: "IntentSignal", type: "Object", rows: "8.4K", cols: 9 },
+  ],
+  docusign: [
+    { name: "Envelope", type: "Object", rows: "9.4K", cols: 14 }, { name: "SignatureEvent", type: "Object", rows: "22K", cols: 9 },
+    { name: "Recipient", type: "Object", rows: "31K", cols: 11 }, { name: "Template", type: "Object", rows: "48", cols: 7 },
+  ],
+});
+
+Object.assign(OBJECT_COLS_BY_NAME, {
+  lead: [{ col: "id", type: "string" }, { col: "first_name", type: "string" }, { col: "last_name", type: "string" }, { col: "email", type: "string" }, { col: "company", type: "string" }, { col: "status", type: "string" }, { col: "source", type: "string" }, { col: "score", type: "int" }, { col: "created_at", type: "timestamp" }],
+  opportunity: [{ col: "id", type: "string" }, { col: "name", type: "string" }, { col: "account_id", type: "string" }, { col: "stage", type: "string" }, { col: "amount", type: "decimal" }, { col: "close_date", type: "date" }, { col: "owner_id", type: "string" }, { col: "probability", type: "float" }, { col: "created_at", type: "timestamp" }],
+  campaign: [{ col: "id", type: "string" }, { col: "name", type: "string" }, { col: "type", type: "string" }, { col: "status", type: "string" }, { col: "start_date", type: "date" }, { col: "budget", type: "decimal" }, { col: "roi", type: "float" }, { col: "created_at", type: "timestamp" }],
+  renewal: [{ col: "id", type: "string" }, { col: "account_id", type: "string" }, { col: "subscription_id", type: "string" }, { col: "renewal_date", type: "date" }, { col: "arr_usd", type: "decimal" }, { col: "status", type: "string" }, { col: "risk", type: "string" }, { col: "created_at", type: "timestamp" }],
+  product: [{ col: "id", type: "string" }, { col: "name", type: "string" }, { col: "sku", type: "string" }, { col: "category", type: "string" }, { col: "price", type: "decimal" }, { col: "active", type: "bool" }, { col: "created_at", type: "timestamp" }],
+  subscription: [{ col: "id", type: "string" }, { col: "account_id", type: "string" }, { col: "plan", type: "string" }, { col: "seats", type: "int" }, { col: "mrr", type: "decimal" }, { col: "start_date", type: "date" }, { col: "renewal_date", type: "date" }, { col: "status", type: "string" }],
+  contract: [{ col: "id", type: "string" }, { col: "account_id", type: "string" }, { col: "type", type: "string" }, { col: "value", type: "decimal" }, { col: "start_date", type: "date" }, { col: "end_date", type: "date" }, { col: "status", type: "string" }, { col: "signed_at", type: "timestamp" }],
+  invoice: [{ col: "id", type: "string" }, { col: "account_id", type: "string" }, { col: "amount_due", type: "decimal" }, { col: "currency", type: "string" }, { col: "due_date", type: "date" }, { col: "status", type: "string" }, { col: "issued_at", type: "timestamp" }],
+  payment: [{ col: "id", type: "string" }, { col: "invoice_id", type: "string" }, { col: "amount", type: "decimal" }, { col: "method", type: "string" }, { col: "status", type: "string" }, { col: "paid_at", type: "timestamp" }],
+  customer: [{ col: "id", type: "string" }, { col: "name", type: "string" }, { col: "email", type: "string" }, { col: "balance", type: "decimal" }, { col: "terms", type: "string" }, { col: "created_at", type: "timestamp" }],
+  issue: [{ col: "id", type: "string" }, { col: "title", type: "string" }, { col: "project_id", type: "string" }, { col: "priority", type: "string" }, { col: "status", type: "string" }, { col: "assignee", type: "string" }, { col: "created_at", type: "timestamp" }],
+  project: [{ col: "id", type: "string" }, { col: "name", type: "string" }, { col: "owner", type: "string" }, { col: "status", type: "string" }, { col: "start_date", type: "date" }, { col: "due_date", type: "date" }, { col: "progress", type: "int" }],
+  task: [{ col: "id", type: "string" }, { col: "title", type: "string" }, { col: "project_id", type: "string" }, { col: "assignee", type: "string" }, { col: "status", type: "string" }, { col: "due_date", type: "date" }, { col: "created_at", type: "timestamp" }],
+  incident: [{ col: "id", type: "string" }, { col: "title", type: "string" }, { col: "severity", type: "string" }, { col: "status", type: "string" }, { col: "service", type: "string" }, { col: "opened_at", type: "timestamp" }, { col: "resolved_at", type: "timestamp" }],
+  ticket: [{ col: "id", type: "string" }, { col: "subject", type: "string" }, { col: "account_id", type: "string" }, { col: "priority", type: "string" }, { col: "status", type: "string" }, { col: "channel", type: "string" }, { col: "created_at", type: "timestamp" }],
+  article: [{ col: "id", type: "string" }, { col: "title", type: "string" }, { col: "category", type: "string" }, { col: "author", type: "string" }, { col: "published_at", type: "timestamp" }, { col: "views", type: "int" }],
+  conversation: [{ col: "id", type: "string" }, { col: "ticket_id", type: "string" }, { col: "author", type: "string" }, { col: "channel", type: "string" }, { col: "created_at", type: "timestamp" }],
+  company: [{ col: "id", type: "string" }, { col: "name", type: "string" }, { col: "domain", type: "string" }, { col: "industry", type: "string" }, { col: "employees", type: "int" }, { col: "revenue", type: "decimal" }, { col: "country", type: "string" }],
+  intentsignal: [{ col: "id", type: "string" }, { col: "account_id", type: "string" }, { col: "topic", type: "string" }, { col: "intent_score", type: "int" }, { col: "signal_date", type: "date" }, { col: "source", type: "string" }],
+  envelope: [{ col: "id", type: "string" }, { col: "account_id", type: "string" }, { col: "subject", type: "string" }, { col: "status", type: "string" }, { col: "sent_at", type: "timestamp" }, { col: "completed_at", type: "timestamp" }],
+  signatureevent: [{ col: "id", type: "string" }, { col: "envelope_id", type: "string" }, { col: "signer", type: "string" }, { col: "event_type", type: "string" }, { col: "occurred_at", type: "timestamp" }],
+  recipient: [{ col: "id", type: "string" }, { col: "envelope_id", type: "string" }, { col: "name", type: "string" }, { col: "email", type: "string" }, { col: "role", type: "string" }, { col: "signed_at", type: "timestamp" }],
+  usage_events: [{ col: "id", type: "string" }, { col: "account_id", type: "string" }, { col: "event_type", type: "string" }, { col: "feature", type: "string" }, { col: "occurred_at", type: "timestamp" }, { col: "session_id", type: "string" }],
+  feature_adoption: [{ col: "id", type: "string" }, { col: "account_id", type: "string" }, { col: "feature", type: "string" }, { col: "adoption_pct", type: "float" }, { col: "last_used_at", type: "timestamp" }],
+  account_signals: [{ col: "id", type: "string" }, { col: "account_id", type: "string" }, { col: "signal_type", type: "string" }, { col: "score", type: "float" }, { col: "trend", type: "string" }, { col: "computed_at", type: "timestamp" }],
+  sessions: [{ col: "id", type: "string" }, { col: "account_id", type: "string" }, { col: "user_id", type: "string" }, { col: "duration_s", type: "int" }, { col: "started_at", type: "timestamp" }],
+});
+
+Object.assign(READ_CONFIGS, {
+  gcal:        { container: "calendars", item: "events", entity: "event", linkPh: "Calendar name or link", starts: ["Customer meetings", "QBRs", "Demos", "Internal syncs"] },
+  productdocs: { container: "spaces", item: "pages", entity: "page", linkPh: "Space or page link", starts: ["Guides", "Feature docs", "Release notes", "FAQs"] },
+  web:         { container: "sites", item: "pages", entity: "page", linkPh: "https://competitor.com/…", starts: ["Competitor pages", "News", "Pricing pages", "Market reports"] },
+});
+
+Object.assign(ENTITY_SETS, {
+  googledrive: [
+    { id: "contract", name: "Contract", records: "1,240", conf: 96, fields: [{ col: "contract_id", type: "string", sample: "CTR-8841" }, { col: "parties", type: "string[]", sample: "Acme, Globex" }, { col: "effective_date", type: "date", sample: "2025-03-01" }, { col: "term_months", type: "int", sample: "24" }, { col: "total_value", type: "decimal", sample: "480000.00" }, { col: "governing_law", type: "string", sample: "Delaware" }] },
+    { id: "sow", name: "SOW", records: "640", conf: 93, fields: [{ col: "sow_id", type: "string", sample: "SOW-204" }, { col: "project_name", type: "string", sample: "Migration" }, { col: "client", type: "string", sample: "Acme" }, { col: "value", type: "decimal", sample: "120000.00" }, { col: "start_date", type: "date", sample: "2025-09-01" }, { col: "deliverables", type: "string[]", sample: "Phase 1, Phase 2" }] },
+    { id: "proposal", name: "Proposal", records: "980", conf: 90, fields: [{ col: "proposal_id", type: "string", sample: "PRP-77" }, { col: "account", type: "string", sample: "Globex" }, { col: "amount", type: "decimal", sample: "96000.00" }, { col: "valid_until", type: "date", sample: "2026-03-31" }, { col: "status", type: "string", sample: "sent" }] },
+    { id: "policy", name: "Policy", records: "410", conf: 92, fields: [{ col: "policy_name", type: "string", sample: "Data Retention" }, { col: "version", type: "string", sample: "v3.2" }, { col: "effective_date", type: "date", sample: "2025-09-01" }, { col: "owner", type: "string", sample: "Legal" }] },
+    { id: "knowledge_article", name: "Knowledge Article", records: "2,210", conf: 88, fields: [{ col: "article_id", type: "string", sample: "KB-1042" }, { col: "title", type: "string", sample: "SSO setup" }, { col: "category", type: "string", sample: "Security" }, { col: "author", type: "string", sample: "Docs" }, { col: "updated_at", type: "timestamp", sample: "2026-04-01" }] },
+    { id: "case_study", name: "Case Study", records: "180", conf: 90, fields: [{ col: "case_id", type: "string", sample: "CS-12" }, { col: "customer", type: "string", sample: "Initech" }, { col: "industry", type: "string", sample: "Fintech" }, { col: "outcome", type: "string", sample: "+38% adoption" }, { col: "published_date", type: "date", sample: "2026-01-30" }] },
+  ],
+  gcal: [
+    { id: "gc_meeting", name: "Meeting", records: "24,800", conf: 92, fields: [{ col: "event_id", type: "string", sample: "evt-5521" }, { col: "title", type: "string", sample: "QBR — Acme" }, { col: "organizer", type: "string", sample: "ae@acme.com" }, { col: "start_time", type: "timestamp", sample: "2026-03-04T16:00Z" }, { col: "attendees", type: "string[]", sample: "AE, SE, Buyer" }, { col: "location", type: "string", sample: "Meet" }, { col: "notes", type: "string", sample: "Renewal discussed." }] },
+  ],
+  productdocs: [
+    { id: "pd_article", name: "Knowledge Article", records: "3,120", conf: 90, fields: [{ col: "article_id", type: "string", sample: "DOC-204" }, { col: "title", type: "string", sample: "Webhooks" }, { col: "category", type: "string", sample: "API" }, { col: "author", type: "string", sample: "Docs" }, { col: "updated_at", type: "timestamp", sample: "2026-04-10" }, { col: "summary", type: "string", sample: "How to register webhooks." }] },
+    { id: "pd_guide", name: "Product Guide", records: "640", conf: 91, fields: [{ col: "guide_id", type: "string", sample: "GD-12" }, { col: "title", type: "string", sample: "Getting started" }, { col: "product_area", type: "string", sample: "Onboarding" }, { col: "steps", type: "int", sample: "8" }, { col: "updated_at", type: "timestamp", sample: "2026-03-22" }] },
+    { id: "pd_release", name: "Release Note", records: "410", conf: 94, fields: [{ col: "release_id", type: "string", sample: "REL-2026.4" }, { col: "version", type: "string", sample: "2026.4" }, { col: "date", type: "date", sample: "2026-04-01" }, { col: "highlights", type: "string[]", sample: "SSO, Audit log" }] },
+  ],
+  web: [
+    { id: "web_competitor", name: "Competitor Page", records: "1,420", conf: 86, fields: [{ col: "page_url", type: "string", sample: "https://rival.com/pricing" }, { col: "competitor", type: "string", sample: "Rival Inc" }, { col: "title", type: "string", sample: "Pricing" }, { col: "captured_at", type: "timestamp", sample: "2026-05-01" }, { col: "summary", type: "string", sample: "New enterprise tier." }] },
+    { id: "web_news", name: "News Article", records: "8,900", conf: 84, fields: [{ col: "article_url", type: "string", sample: "https://news.com/x" }, { col: "headline", type: "string", sample: "Acme raises $50M" }, { col: "source", type: "string", sample: "TechNews" }, { col: "published_at", type: "timestamp", sample: "2026-04-28" }, { col: "sentiment", type: "string", sample: "positive" }] },
+    { id: "web_market", name: "Market Signal", records: "3,300", conf: 82, fields: [{ col: "signal_url", type: "string", sample: "https://market.com/y" }, { col: "topic", type: "string", sample: "AI governance" }, { col: "signal", type: "string", sample: "rising demand" }, { col: "captured_at", type: "timestamp", sample: "2026-05-03" }, { col: "relevance", type: "float", sample: "0.82" }] },
+  ],
+});
+ENTITY_SETS.slack.push({ id: "alert", name: "Alert", records: "5,200", conf: 90, fields: [{ col: "alert_id", type: "string", sample: "ALR-91" }, { col: "severity", type: "string", sample: "SEV2" }, { col: "channel", type: "string", sample: "#oncall" }, { col: "triggered_at", type: "timestamp", sample: "2026-05-12T09:31Z" }, { col: "message", type: "string", sample: "Error rate spike." }] });
+
+// New entity types need their extraction agents built (the original build ran before these were added).
+Object.keys(ENTITY_SETS).forEach(k => ENTITY_SETS[k].forEach(e => {
+  if (!EXTRACTION_AGENTS.some(a => a.id === "extract_" + e.id))
+    EXTRACTION_AGENTS.push({ id: "extract_" + e.id, name: e.name + " Extraction Agent", desc: "Reads each " + e.name.toLowerCase() + " and extracts its fields.", outputs: e.fields, entityId: e.id, extractor: true });
+}));
+
+// ── Demo-ready pipelines — every source from the architecture doc, one pipeline ──
+// per source→entity mapping. Each row's `edit` spec re-opens the wizard fully
+// configured. Structured sources map to the closest existing node; unstructured
+// file types without a node create a new node type.
 const DEMO_PIPELINES = [
-  { id: "pl-sfdc", name: "Salesforce CRM", system: "Salesforce", sysId: "salesforce", nodeId: "account", nodeLabel: "Account", type: "Primary", freq: "Streaming", last: "12s ago", rows: "2,840", rowsN: 2840, errors: 0, status: "healthy",
-    edit: { system: "salesforce", node: "account", tables: ["Account", "Contact"], agent: "agent_field_mapper", settings: { refresh: true } } },
-  { id: "pl-netsuite", name: "NetSuite ERP", system: "NetSuite", sysId: "netsuite", nodeId: "account", nodeLabel: "Account", type: "Financial", freq: "Hourly", last: "18m ago", rows: "2,684", rowsN: 2684, errors: 0, status: "healthy",
-    edit: { system: "netsuite", node: "account", tables: ["accounts"], settings: { refresh: true } } },
-  { id: "pl-snow-sub", name: "Snowflake Warehouse", system: "Snowflake", sysId: "snowflake", nodeId: "subscription", nodeLabel: "Subscription", type: "Primary", freq: "Streaming", last: "1m ago", rows: "2,800", rowsN: 2800, errors: 0, status: "healthy",
-    edit: { system: "snowflake", node: "subscription", tables: ["ANALYTICS.SUBSCRIPTIONS"], settings: { refresh: true } } },
-  { id: "pl-snow-inv", name: "Snowflake Warehouse", system: "Snowflake", sysId: "snowflake", nodeId: "invoice", nodeLabel: "Invoice", type: "Primary", freq: "Streaming", last: "1m ago", rows: "12K", rowsN: 12040, errors: 0, status: "healthy",
-    edit: { system: "snowflake", node: "invoice", tables: ["ANALYTICS.INVOICES"], settings: { refresh: true } } },
-  { id: "pl-hubspot", name: "HubSpot Marketing", system: "HubSpot", sysId: "hubspot", nodeId: "account", nodeLabel: "Account", type: "Enrichment", freq: "Daily 02:00", last: "6h ago", rows: "1,902", rowsN: 1902, errors: 14, status: "degraded",
-    edit: { system: "hubspot", node: "account", tables: ["accounts"], settings: { refresh: true } } },
-  { id: "pl-gdrive", name: "Google Drive — Legal & Finance", system: "Google Drive", sysId: "googledrive", nodeId: "agreement", nodeLabel: "Agreement +3", type: "Documents", freq: "Every 6h", last: "2h ago", rows: "6,930", rowsN: 6930, errors: 0, status: "healthy",
-    edit: { system: "googledrive", node: "agreement", scope: "folders", locations: ["Legal / Contracts", "Finance / Invoices", "Legal / NDAs", "Strategy / Reports"], contentMode: "mixed",
-      includeOnly: ["contract", "invoice", "nda", "report"], entityNode: { contract: "agreement", invoice: "invoice", nda: "agreement", report: "__new__" }, settings: { refresh: true, retention: true } } },
-  { id: "pl-outlook", name: "Outlook — Order Confirmations", system: "Outlook", sysId: "outlook", nodeId: "interaction", nodeLabel: "Interaction", type: "Email", freq: "Every 1h", last: "22m ago", rows: "184K", rowsN: 184500, errors: 0, status: "healthy",
-    edit: { system: "outlook", node: "interaction", scope: "folders", locations: ["Inbox / Orders", "Sales / Confirmations"], contentMode: "single", knownType: "Order confirmations", settings: { refresh: true } } },
-  { id: "pl-slack", name: "Slack — Sales & Ops", system: "Slack", sysId: "slack", nodeId: "interaction", nodeLabel: "Interaction +2", type: "Messaging", freq: "Streaming", last: "1m ago", rows: "44K", rowsN: 44250, errors: 3, status: "degraded",
-    edit: { system: "slack", node: "interaction", scope: "folders", locations: ["#sales-wins", "#oncall", "#leadership"], contentMode: "mixed",
-      includeOnly: ["thread", "decision", "incident"], entityNode: { thread: "interaction", decision: "signal", incident: "incident" }, settings: { refresh: true, skipperms: true } } },
-  { id: "pl-teams", name: "Microsoft Teams — Eng & Leadership", system: "Microsoft Teams", sysId: "teams", nodeId: "interaction", nodeLabel: "Interaction", type: "Messaging", freq: "Every 30m", last: "8m ago", rows: "62K", rowsN: 62120, errors: 0, status: "healthy",
-    edit: { system: "teams", node: "interaction", scope: "folders", locations: ["Engineering", "Leadership"], contentMode: "mixed",
-      includeOnly: ["tm_message", "tm_meeting"], entityNode: { tm_message: "interaction", tm_meeting: "interaction" }, settings: { refresh: true } } },
-  { id: "pl-sharepoint", name: "SharePoint — Legal Library", system: "SharePoint", sysId: "sharepoint", nodeId: "agreement", nodeLabel: "Agreement +2", type: "Documents", freq: "Every 12h", last: "4h ago", rows: "28K", rowsN: 28050, errors: 0, status: "healthy",
-    edit: { system: "sharepoint", node: "agreement", scope: "folders", locations: ["Legal Library", "Policies"], contentMode: "mixed",
-      includeOnly: ["sp_contract", "sp_policy", "sp_document"], entityNode: { sp_contract: "agreement", sp_policy: "__new__", sp_document: "__new__" }, settings: { refresh: true, retention: true } } },
-  { id: "pl-onedrive", name: "OneDrive — Shared Workspace", system: "OneDrive", sysId: "onedrive", nodeId: "agreement", nodeLabel: "Document +2", type: "Documents", freq: "Daily", last: "9h ago", rows: "13K", rowsN: 13130, errors: 0, status: "healthy",
-    edit: { system: "onedrive", node: "agreement", scope: "folders", locations: ["Shared / Proposals", "Shared / Models"], contentMode: "mixed",
-      includeOnly: ["od_document", "od_spreadsheet", "od_pdf"], entityNode: { od_document: "__new__", od_spreadsheet: "__new__", od_pdf: "__new__" }, settings: { refresh: true } } },
+  // HubSpot (CRM) → Account, Contact, Lead, Opportunity, Campaign, Renewal, Product, Subscription, Contract
+  { id: "hub-account", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "account", nodeLabel: "Account", type: "Primary", freq: "Streaming", last: "12s ago", rows: "2,840", rowsN: 2840, errors: 0, status: "healthy", edit: { system: "hubspot", node: "account", tables: ["Account"], settings: { refresh: true } } },
+  { id: "hub-contact", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "person", nodeLabel: "Contact", type: "Primary", freq: "Streaming", last: "30s ago", rows: "18K", rowsN: 18420, errors: 0, status: "healthy", edit: { system: "hubspot", node: "person", tables: ["Contact"], settings: { refresh: true } } },
+  { id: "hub-lead", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "person", nodeLabel: "Lead", type: "Enrichment", freq: "Every 15m", last: "5m ago", rows: "24K", rowsN: 24100, errors: 0, status: "healthy", edit: { system: "hubspot", node: "person", tables: ["Lead"], settings: { refresh: true } } },
+  { id: "hub-opp", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "agreement", nodeLabel: "Opportunity", type: "Primary", freq: "Streaming", last: "1m ago", rows: "6,240", rowsN: 6240, errors: 0, status: "healthy", edit: { system: "hubspot", node: "agreement", tables: ["Opportunity"], settings: { refresh: true } } },
+  { id: "hub-campaign", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "interaction", nodeLabel: "Campaign", type: "Enrichment", freq: "Daily 02:00", last: "6h ago", rows: "318", rowsN: 318, errors: 0, status: "healthy", edit: { system: "hubspot", node: "interaction", tables: ["Campaign"], settings: { refresh: true } } },
+  { id: "hub-renewal", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "subscription", nodeLabel: "Renewal", type: "Primary", freq: "Hourly", last: "22m ago", rows: "2,410", rowsN: 2410, errors: 0, status: "healthy", edit: { system: "hubspot", node: "subscription", tables: ["Renewal"], settings: { refresh: true } } },
+  { id: "hub-product", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "subscription", nodeLabel: "Product", type: "Reference", freq: "Daily", last: "1d ago", rows: "184", rowsN: 184, errors: 0, status: "healthy", edit: { system: "hubspot", node: "subscription", tables: ["Product"], settings: { refresh: true } } },
+  { id: "hub-subscription", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "subscription", nodeLabel: "Subscription", type: "Financial", freq: "Hourly", last: "18m ago", rows: "2,800", rowsN: 2800, errors: 0, status: "healthy", edit: { system: "hubspot", node: "subscription", tables: ["Subscription"], settings: { refresh: true } } },
+  { id: "hub-contract", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "agreement", nodeLabel: "Contract", type: "Primary", freq: "Hourly", last: "40m ago", rows: "1,240", rowsN: 1240, errors: 9, status: "degraded", edit: { system: "hubspot", node: "agreement", tables: ["Contract"], settings: { refresh: true } } },
+  // NetSuite (Finance) → Invoice, Payment, Subscription, Renewal, Order
+  { id: "ns-invoice", name: "NetSuite", system: "NetSuite", sysId: "netsuite", nodeId: "invoice", nodeLabel: "Invoice", type: "Financial", freq: "Hourly", last: "18m ago", rows: "12K", rowsN: 12040, errors: 0, status: "healthy", edit: { system: "netsuite", node: "invoice", tables: ["Invoice"], settings: { refresh: true } } },
+  { id: "ns-payment", name: "NetSuite", system: "NetSuite", sysId: "netsuite", nodeId: "invoice", nodeLabel: "Payment", type: "Financial", freq: "Hourly", last: "26m ago", rows: "11K", rowsN: 11200, errors: 0, status: "healthy", edit: { system: "netsuite", node: "invoice", tables: ["Payment"], settings: { refresh: true } } },
+  { id: "ns-subscription", name: "NetSuite", system: "NetSuite", sysId: "netsuite", nodeId: "subscription", nodeLabel: "Subscription", type: "Financial", freq: "Hourly", last: "18m ago", rows: "2,800", rowsN: 2800, errors: 0, status: "healthy", edit: { system: "netsuite", node: "subscription", tables: ["Subscription"], settings: { refresh: true } } },
+  { id: "ns-renewal", name: "NetSuite", system: "NetSuite", sysId: "netsuite", nodeId: "subscription", nodeLabel: "Renewal", type: "Financial", freq: "Daily", last: "4h ago", rows: "2,410", rowsN: 2410, errors: 0, status: "healthy", edit: { system: "netsuite", node: "subscription", tables: ["Renewal"], settings: { refresh: true } } },
+  { id: "ns-order", name: "NetSuite", system: "NetSuite", sysId: "netsuite", nodeId: "invoice", nodeLabel: "Order", type: "Financial", freq: "Hourly", last: "33m ago", rows: "9,420", rowsN: 9420, errors: 0, status: "healthy", edit: { system: "netsuite", node: "invoice", tables: ["Order"], settings: { refresh: true } } },
+  // Monday (Project Mgmt) → Issue, Project, Task, Incident
+  { id: "mon-issue", name: "Monday", system: "Monday", sysId: "monday", nodeId: "incident", nodeLabel: "Issue", type: "Operational", freq: "Every 30m", last: "12m ago", rows: "4,120", rowsN: 4120, errors: 0, status: "healthy", edit: { system: "monday", node: "incident", tables: ["Issue"], settings: { refresh: true } } },
+  { id: "mon-project", name: "Monday", system: "Monday", sysId: "monday", nodeId: "ticket", nodeLabel: "Project", type: "Operational", freq: "Every 30m", last: "14m ago", rows: "210", rowsN: 210, errors: 0, status: "healthy", edit: { system: "monday", node: "ticket", tables: ["Project"], settings: { refresh: true } } },
+  { id: "mon-task", name: "Monday", system: "Monday", sysId: "monday", nodeId: "ticket", nodeLabel: "Task", type: "Operational", freq: "Every 30m", last: "9m ago", rows: "18K", rowsN: 18400, errors: 0, status: "healthy", edit: { system: "monday", node: "ticket", tables: ["Task"], settings: { refresh: true } } },
+  { id: "mon-incident", name: "Monday", system: "Monday", sysId: "monday", nodeId: "incident", nodeLabel: "Incident", type: "Operational", freq: "Every 15m", last: "6m ago", rows: "310", rowsN: 310, errors: 0, status: "healthy", edit: { system: "monday", node: "incident", tables: ["Incident"], settings: { refresh: true } } },
+  // Support Portal (Ticketing) → Ticket, Incident, Knowledge Article
+  { id: "sup-ticket", name: "Support Portal", system: "Support Portal", sysId: "support", nodeId: "ticket", nodeLabel: "Ticket", type: "Primary", freq: "Streaming", last: "1m ago", rows: "142K", rowsN: 142000, errors: 0, status: "healthy", edit: { system: "support", node: "ticket", tables: ["Ticket"], settings: { refresh: true } } },
+  { id: "sup-incident", name: "Support Portal", system: "Support Portal", sysId: "support", nodeId: "incident", nodeLabel: "Incident", type: "Operational", freq: "Streaming", last: "2m ago", rows: "310", rowsN: 310, errors: 5, status: "degraded", edit: { system: "support", node: "incident", tables: ["Incident"], settings: { refresh: true } } },
+  { id: "sup-article", name: "Support Portal", system: "Support Portal", sysId: "support", nodeId: "interaction", nodeLabel: "Knowledge Article", type: "Reference", freq: "Daily", last: "8h ago", rows: "640", rowsN: 640, errors: 0, status: "healthy", edit: { system: "support", node: "interaction", tables: ["Article"], settings: { refresh: true } } },
+  // Product Usage (Analytics) → Expansion Signal, Customer Use Case
+  { id: "pu-signal", name: "Product Usage", system: "Product Usage", sysId: "productusage", nodeId: "signal", nodeLabel: "Expansion Signal", type: "Analytics", freq: "Streaming", last: "1m ago", rows: "2,800", rowsN: 2800, errors: 0, status: "healthy", edit: { system: "productusage", node: "signal", tables: ["account_signals"], settings: { refresh: true } } },
+  { id: "pu-usecase", name: "Product Usage", system: "Product Usage", sysId: "productusage", nodeId: "signal", nodeLabel: "Customer Use Case", type: "Analytics", freq: "Hourly", last: "20m ago", rows: "48K", rowsN: 48000, errors: 0, status: "healthy", edit: { system: "productusage", node: "signal", tables: ["feature_adoption"], settings: { refresh: true } } },
+  // Apollo (Enrichment) → Lead, Contact, Intent Signal
+  { id: "apl-lead", name: "Apollo", system: "Apollo", sysId: "apollo", nodeId: "person", nodeLabel: "Lead", type: "Enrichment", freq: "Daily", last: "12h ago", rows: "24K", rowsN: 24100, errors: 0, status: "healthy", edit: { system: "apollo", node: "person", tables: ["Lead"], settings: { refresh: true } } },
+  { id: "apl-contact", name: "Apollo", system: "Apollo", sysId: "apollo", nodeId: "person", nodeLabel: "Contact", type: "Enrichment", freq: "Daily", last: "12h ago", rows: "120K", rowsN: 120000, errors: 0, status: "healthy", edit: { system: "apollo", node: "person", tables: ["Contact"], settings: { refresh: true } } },
+  { id: "apl-intent", name: "Apollo", system: "Apollo", sysId: "apollo", nodeId: "signal", nodeLabel: "Intent Signal", type: "Enrichment", freq: "Every 6h", last: "3h ago", rows: "8,400", rowsN: 8400, errors: 0, status: "healthy", edit: { system: "apollo", node: "signal", tables: ["IntentSignal"], settings: { refresh: true } } },
+  // DocuSign (E-signature) → Contract (signature events)
+  { id: "ds-contract", name: "DocuSign", system: "DocuSign", sysId: "docusign", nodeId: "agreement", nodeLabel: "Contract", type: "Primary", freq: "Real time", last: "4m ago", rows: "9,420", rowsN: 9420, errors: 0, status: "healthy", edit: { system: "docusign", node: "agreement", tables: ["SignatureEvent"], settings: { refresh: true } } },
+  // Google Drive (Documents) → Contract, SOW, Proposal, Policy, Knowledge Article, Case Study
+  { id: "drv", name: "Google Drive", system: "Google Drive", sysId: "googledrive", nodeId: "agreement", nodeLabel: "Agreement +5", type: "Documents", freq: "Every 6h", last: "2h ago", rows: "6,930", rowsN: 6930, errors: 0, status: "healthy",
+    edit: { system: "googledrive", node: "agreement", scope: "folders", locations: ["Legal / Contracts", "Sales / SOWs", "Sales / Proposals", "Legal / Policies", "Docs / Knowledge", "Marketing / Case Studies"], contentMode: "mixed",
+      includeOnly: ["contract", "sow", "proposal", "policy", "knowledge_article", "case_study"], entityNode: { contract: "agreement", sow: "__new__", proposal: "__new__", policy: "__new__", knowledge_article: "__new__", case_study: "__new__" }, settings: { refresh: true, retention: true } } },
+  // Gmail (Email) → Interaction (email)
+  { id: "gml", name: "Gmail", system: "Gmail", sysId: "gmail", nodeId: "interaction", nodeLabel: "Interaction", type: "Email", freq: "Every 1h", last: "22m ago", rows: "184K", rowsN: 184500, errors: 0, status: "healthy",
+    edit: { system: "gmail", node: "interaction", scope: "folders", locations: ["Sales inbox", "Success inbox"], contentMode: "single", knownType: "Email", settings: { refresh: true } } },
+  // Google Calendar (Scheduling) → Interaction (meeting)
+  { id: "gcl", name: "Google Calendar", system: "Google Calendar", sysId: "gcal", nodeId: "interaction", nodeLabel: "Interaction", type: "Scheduling", freq: "Every 1h", last: "35m ago", rows: "24K", rowsN: 24800, errors: 0, status: "healthy",
+    edit: { system: "gcal", node: "interaction", scope: "folders", locations: ["Sales calendar", "CS calendar"], contentMode: "single", knownType: "Meeting", settings: { refresh: true } } },
+  // Slack (Communication) → Interaction, Decision, Incident, Alert
+  { id: "slk", name: "Slack", system: "Slack", sysId: "slack", nodeId: "interaction", nodeLabel: "Interaction +3", type: "Communication", freq: "Streaming", last: "1m ago", rows: "44K", rowsN: 44250, errors: 3, status: "degraded",
+    edit: { system: "slack", node: "interaction", scope: "folders", locations: ["#sales-wins", "#oncall", "#cs-alerts"], contentMode: "mixed",
+      includeOnly: ["thread", "decision", "incident", "alert"], entityNode: { thread: "interaction", decision: "signal", incident: "incident", alert: "__new__" }, settings: { refresh: true, skipperms: true } } },
+  // Product Documentation (Knowledge Base) → Knowledge Article, Product Guide, Release Note
+  { id: "pdc", name: "Product Documentation", system: "Product Documentation", sysId: "productdocs", nodeId: "interaction", nodeLabel: "Knowledge Article +2", type: "Knowledge", freq: "Daily", last: "9h ago", rows: "4,170", rowsN: 4170, errors: 0, status: "healthy",
+    edit: { system: "productdocs", node: "interaction", scope: "folders", locations: ["Docs / Guides", "Docs / API", "Docs / Releases"], contentMode: "mixed",
+      includeOnly: ["pd_article", "pd_guide", "pd_release"], entityNode: { pd_article: "__new__", pd_guide: "__new__", pd_release: "__new__" }, settings: { refresh: true } } },
+  // Web (Public Data) → Competitor, News, Market Signal
+  { id: "web", name: "Web", system: "Web", sysId: "web", nodeId: "signal", nodeLabel: "Competitor +2", type: "Public Data", freq: "Daily", last: "9h ago", rows: "13K", rowsN: 13620, errors: 0, status: "healthy",
+    edit: { system: "web", node: "signal", scope: "folders", locations: ["rival.com", "Industry news", "Market reports"], contentMode: "mixed",
+      includeOnly: ["web_competitor", "web_news", "web_market"], entityNode: { web_competitor: "__new__", web_news: "__new__", web_market: "signal" }, settings: { refresh: true } } },
 ];
 if (typeof window !== "undefined") { window.DEMO_PIPELINES = DEMO_PIPELINES; window.buildEditState = buildEditState; }
 function SrcToggle({ on, onClick }) {
