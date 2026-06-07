@@ -2379,47 +2379,27 @@ function GlobalSourcesView() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState({ col: "name", dir: "asc" });
   const [srcLinkOpen, setSrcLinkOpen] = useState(false);
+  const [editPipeline, setEditPipeline] = useState(null);
   // Destination node for a source linked from the global Sources view. Defaults to a
   // sensible core entity; the same wizard used inside a node detail opens here too.
   const linkNode = useMemo(() => NODES.find(n => n.id === "account") || NODES.find(n => n.cat === "core" || n.state === "core") || NODES[0], []);
 
-  // Aggregate all sources across all nodes — only real source systems
-  // (drop "Manual / Admin UI", "Computed by agent", "Self (system of record)" etc.)
+  // Curated, demo-ready pipelines (defined in prop-source-flows.jsx). Each row carries
+  // an `edit` spec so clicking it re-opens the wizard fully configured.
   const allSources = useMemo(() => {
-    const list = [];
-    NODES.forEach(node => {
-      const srcs = generateSources(node);
-      srcs.forEach((s, i) => {
-        var nameLower = (s.name || "").toLowerCase();
-        // Filter out non-system sources
-        if (nameLower.indexOf("manual") >= 0) return;
-        if (nameLower.indexOf("admin ui") >= 0) return;
-        if (nameLower.indexOf("computed by") >= 0) return;
-        if (nameLower.indexOf("self (system") >= 0) return;
-        const sys = nameLower.indexOf("salesforce") >= 0 ? "Salesforce" :
-                    nameLower.indexOf("netsuite")   >= 0 ? "NetSuite"   :
-                    nameLower.indexOf("snowflake")  >= 0 ? "Snowflake"  :
-                    nameLower.indexOf("hubspot")    >= 0 ? "HubSpot"    :
-                    nameLower.indexOf("okta")       >= 0 ? "Okta"       : "Other";
-        list.push({
-          ...s,
-          uid: node.id + ":" + i,
-          nodeId: node.id,
-          nodeLabel: node.label,
-          nodeCat: node.cat,
-          system: sys,
-          rowsN: parseInt(s.rows?.replace(/[^0-9]/g, "") || 0),
-        });
-      });
-    });
-    return list;
+    const demo = (typeof window !== "undefined" && window.DEMO_PIPELINES) || [];
+    return demo.map(p => ({ ...p, uid: p.id }));
   }, []);
 
   const healthy = allSources.filter(s => s.status === "healthy").length;
   const totalRows = allSources.reduce((sum, s) => sum + s.rowsN, 0);
   const totalErrors = allSources.reduce((sum, s) => sum + (s.errors || 0), 0);
 
-  const SYSTEMS = ["Salesforce", "NetSuite", "Snowflake", "HubSpot", "Okta", "Other"];
+  const SYSTEMS = useMemo(() => {
+    const seen = [];
+    allSources.forEach(s => { if (seen.indexOf(s.system) < 0) seen.push(s.system); });
+    return seen;
+  }, [allSources]);
   const sysCounts = SYSTEMS.reduce((acc, sys) => {
     acc[sys] = allSources.filter(s => s.system === sys).length;
     return acc;
@@ -2444,6 +2424,10 @@ function GlobalSourcesView() {
   const sortIcon = col => sort.col === col ? (sort.dir === "asc" ? " ↑" : " ↓") : "";
 
   // Open the same Link Source wizard used inside a node detail.
+  if (editPipeline) {
+    const en = NODES.find(n => n.id === (editPipeline.edit.node || editPipeline.nodeId)) || linkNode;
+    return <LinkSourceFlow node={en} editSource={editPipeline.edit} onClose={() => setEditPipeline(null)} />;
+  }
   if (srcLinkOpen && linkNode) return <LinkSourceFlow node={linkNode} onClose={() => setSrcLinkOpen(false)} />;
 
   return (
@@ -2484,7 +2468,7 @@ function GlobalSourcesView() {
 
         <div className="nv-body">
           {filtered.map(s => (
-            <div key={s.uid} className="nv-row gsrc-nv-row">
+            <div key={s.uid} className="nv-row gsrc-nv-row" onClick={() => s.edit && setEditPipeline(s)} style={{ cursor: s.edit ? "pointer" : "default" }}>
               <div className="nv-cell" style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <BrandLogo system={s.system || s.name} size={18} />
                 <span className="snap-n">{s.name}</span>

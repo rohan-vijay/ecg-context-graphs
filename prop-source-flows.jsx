@@ -1370,24 +1370,27 @@ const UNSTRUCTURED_META_COLS = [
   { col: "size_bytes",  type: "int",       sample: "284913",           meta: true },
 ];
 
-function LinkSourceFlow({ node, existingSources, onClose }) {
+function LinkSourceFlow({ node, existingSources, onClose, editSource }) {
   const [step, setStep] = useState(0);
   const [mapOpenCol, setMapOpenCol] = useState("");
   const [mapActiveObj, setMapActiveObj] = useState("");
-  const [s, setS] = useState({
-    system: "", customName: "", connection: "", newConnName: "", newConnHost: "", newConnAuth: "OAuth2",
-    table: "", tables: [], query: "", inputMode: "table",
-    pkCol: "", joinCol: "", incrementalCol: "updated_at",
-    loadStrategy: "incremental", mapping: {}, transforms: {}, recordFilters: {}, transformedFields: {}, objectAgents: {}, unmappedPolicy: "ignore",
-    cadence: "5min", freshnessSLO: "30m", batchWindow: "15m",
-    retryCount: 3, retryDelay: "5m", onError: "alert",
-    alertChannel: "#schema-alerts", owner: "data-platform",
-    stage: "staging", backfill: true, backfillWindow: "30d", tags: [],
-    // Unstructured-source flow state
-    readScope: "", readLocations: [], readFilters: {}, readStarts: [],
-    extractMethod: "", extractAgent: "", extractAutomation: "", extractFields: [],
-    // Unstructured: runtime entity discovery + per-entity destination node
-    entityAgent: "", extractRan: false, entityInclude: {}, entityNode: {},
+  const [s, setS] = useState(() => {
+    const base = {
+      system: "", customName: "", connection: "", newConnName: "", newConnHost: "", newConnAuth: "OAuth2",
+      table: "", tables: [], query: "", inputMode: "table",
+      pkCol: "", joinCol: "", incrementalCol: "updated_at",
+      loadStrategy: "incremental", mapping: {}, transforms: {}, recordFilters: {}, transformedFields: {}, objectAgents: {}, unmappedPolicy: "ignore",
+      cadence: "5min", freshnessSLO: "30m", batchWindow: "15m",
+      retryCount: 3, retryDelay: "5m", onError: "alert",
+      alertChannel: "#schema-alerts", owner: "data-platform",
+      stage: "staging", backfill: true, backfillWindow: "30d", tags: [],
+      // Unstructured-source flow state
+      readScope: "", readLocations: [], readFilters: {}, readStarts: [],
+      extractMethod: "", extractAgent: "", extractAutomation: "", extractFields: [],
+      // Unstructured: runtime entity discovery + per-entity destination node
+      entityAgent: "", extractRan: false, entityInclude: {}, entityNode: {},
+    };
+    return editSource ? buildEditState(editSource, node, base) : base;
   });
 
   const set = patch => setS(v => ({ ...v, ...patch }));
@@ -1510,7 +1513,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
 
   return (
     <WizardShell
-      plainTitle="Add Data Sources" fullScreen
+      plainTitle={editSource ? "Edit pipeline" : "Add Data Sources"} fullScreen
       stage={s.stage} hideStage hideKeymap hideFootHelp
       steps={srcSteps} step={step} setStep={setStep}
       canNext={canNext}
@@ -2929,6 +2932,99 @@ const U_SETTINGS = [
   { id: "pii",       control: "add",    name: "PII masking",                desc: "Add rules to detect and mask personal data (emails, names, IDs) as content is indexed." },
   { id: "indexing",  control: "add",    name: "Indexing strategy",          desc: "Add strategies for how content is chunked and embedded for retrieval." },
 ];
+
+// ── Edit mode: rebuild a fully-configured flow state from a compact pipeline spec ──
+// Used when a row on the Sources page is clicked — the same wizard opens with every
+// step logically pre-selected (connection, scope, discovery, agents, destinations, map).
+function buildEditState(es, node, base) {
+  const st = Object.assign({}, base, { mapping: {}, objectAgents: {}, entityNode: {}, entityInclude: {}, transforms: {}, readLocations: [], readFilters: {} });
+  const sel = SOURCE_SYSTEMS.find(x => x.id === es.system);
+  st.system = es.system;
+  const conns = getConnections(es.system, sel);
+  st.connection = es.connection || (conns[0] && conns[0].id) || "";
+  st.uSettings = Object.assign({}, es.settings || { refresh: true });
+  const allNodes = (typeof window !== "undefined" && window.NODES) || [];
+  const propsFor = nid => { const n = allNodes.find(x => x.id === nid); return (n && window.generateProps) ? window.generateProps(n).map(p => p.name) : []; };
+  const autoMap = (group, cols, destId) => {
+    if (!destId || destId === "__new__") return;
+    const dp = propsFor(destId);
+    (cols || []).forEach(c => { const hit = dp.find(p => p.toLowerCase() === String(c.col).toLowerCase()); if (hit) st.mapping[group + "::" + c.col] = hit; });
+  };
+  const fallbackNode = es.node || (node && node.id) || "";
+
+  if (sel && sel.kind === "unstructured") {
+    st.readScope = es.scope || "all";
+    st.readLocations = (es.locations || []).map((l, i) => ({ id: "loc-" + es.system + "-" + i, label: l }));
+    st.readFilters = es.filters || {};
+    if (es.contentMode) st.contentMode = es.contentMode;
+    const all = getDiscoveredEntities(sel);
+    if (es.contentMode === "single") {
+      st.knownType = es.knownType || "";
+      const matched = all.find(e => e.name.toLowerCase() === (es.knownType || "").toLowerCase());
+      const ke = matched || { id: "custom_" + ((es.knownType || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "type"), name: es.knownType || "Selected type" };
+      st.extractRan = true;
+      const destId = (es.entityNode && es.entityNode[ke.id]) || fallbackNode;
+      if (destId) st.entityNode[ke.id] = destId;
+      const a = extractionAgentFor(ke.id); if (a) st.objectAgents[ke.id] = [a.id];
+      autoMap(ke.id, UNSTRUCTURED_META_COLS, destId);
+    } else {
+      st.extractRan = true;
+      const includeOnly = es.includeOnly;
+      all.forEach(e => {
+        if (includeOnly && includeOnly.indexOf(e.id) < 0) { st.entityInclude[e.id] = false; return; }
+        const destId = (es.entityNode && es.entityNode[e.id]) || fallbackNode;
+        if (destId) st.entityNode[e.id] = destId;
+        const a = extractionAgentFor(e.id); if (a) st.objectAgents[e.id] = [a.id];
+        autoMap(e.id, UNSTRUCTURED_META_COLS, destId);
+      });
+    }
+  } else {
+    const objs = getSourceObjects(es.system, sel);
+    const names = (es.tables && es.tables.length) ? es.tables : (objs[0] ? [objs[0].name] : []);
+    st.tables = names;
+    names.forEach(nm => {
+      const o = objs.find(x => x.name === nm) || { name: nm };
+      if (es.agent) st.objectAgents[nm] = Array.isArray(es.agent) ? es.agent : [es.agent];
+      autoMap(nm, getObjectCols(o), fallbackNode);
+    });
+  }
+  return st;
+}
+
+// ── Demo-ready pipelines for the global Sources page ──────────────────────────
+// Curated, logical sources covering the scenarios we demo: structured warehouses
+// & apps, plus files, email, Slack, Teams, SharePoint and OneDrive. Each row's
+// `edit` spec re-opens the wizard fully configured (see buildEditState).
+const DEMO_PIPELINES = [
+  { id: "pl-sfdc", name: "Salesforce CRM", system: "Salesforce", sysId: "salesforce", nodeId: "account", nodeLabel: "Account", type: "Primary", freq: "Streaming", last: "12s ago", rows: "2,840", rowsN: 2840, errors: 0, status: "healthy",
+    edit: { system: "salesforce", node: "account", tables: ["Account", "Contact"], agent: "agent_field_mapper", settings: { refresh: true } } },
+  { id: "pl-netsuite", name: "NetSuite ERP", system: "NetSuite", sysId: "netsuite", nodeId: "account", nodeLabel: "Account", type: "Financial", freq: "Hourly", last: "18m ago", rows: "2,684", rowsN: 2684, errors: 0, status: "healthy",
+    edit: { system: "netsuite", node: "account", tables: ["accounts"], settings: { refresh: true } } },
+  { id: "pl-snow-sub", name: "Snowflake Warehouse", system: "Snowflake", sysId: "snowflake", nodeId: "subscription", nodeLabel: "Subscription", type: "Primary", freq: "Streaming", last: "1m ago", rows: "2,800", rowsN: 2800, errors: 0, status: "healthy",
+    edit: { system: "snowflake", node: "subscription", tables: ["ANALYTICS.SUBSCRIPTIONS"], settings: { refresh: true } } },
+  { id: "pl-snow-inv", name: "Snowflake Warehouse", system: "Snowflake", sysId: "snowflake", nodeId: "invoice", nodeLabel: "Invoice", type: "Primary", freq: "Streaming", last: "1m ago", rows: "12K", rowsN: 12040, errors: 0, status: "healthy",
+    edit: { system: "snowflake", node: "invoice", tables: ["ANALYTICS.INVOICES"], settings: { refresh: true } } },
+  { id: "pl-hubspot", name: "HubSpot Marketing", system: "HubSpot", sysId: "hubspot", nodeId: "account", nodeLabel: "Account", type: "Enrichment", freq: "Daily 02:00", last: "6h ago", rows: "1,902", rowsN: 1902, errors: 14, status: "degraded",
+    edit: { system: "hubspot", node: "account", tables: ["accounts"], settings: { refresh: true } } },
+  { id: "pl-gdrive", name: "Google Drive — Legal & Finance", system: "Google Drive", sysId: "googledrive", nodeId: "agreement", nodeLabel: "Agreement +3", type: "Documents", freq: "Every 6h", last: "2h ago", rows: "6,930", rowsN: 6930, errors: 0, status: "healthy",
+    edit: { system: "googledrive", node: "agreement", scope: "folders", locations: ["Legal / Contracts", "Finance / Invoices", "Legal / NDAs", "Strategy / Reports"], contentMode: "mixed",
+      includeOnly: ["contract", "invoice", "nda", "report"], entityNode: { contract: "agreement", invoice: "invoice", nda: "agreement", report: "resource" }, settings: { refresh: true, retention: true } } },
+  { id: "pl-outlook", name: "Outlook — Order Confirmations", system: "Outlook", sysId: "outlook", nodeId: "interaction", nodeLabel: "Interaction", type: "Email", freq: "Every 1h", last: "22m ago", rows: "184K", rowsN: 184500, errors: 0, status: "healthy",
+    edit: { system: "outlook", node: "interaction", scope: "folders", locations: ["Inbox / Orders", "Sales / Confirmations"], contentMode: "single", knownType: "Order confirmations", settings: { refresh: true } } },
+  { id: "pl-slack", name: "Slack — Sales & Ops", system: "Slack", sysId: "slack", nodeId: "interaction", nodeLabel: "Interaction +2", type: "Messaging", freq: "Streaming", last: "1m ago", rows: "44K", rowsN: 44250, errors: 3, status: "degraded",
+    edit: { system: "slack", node: "interaction", scope: "folders", locations: ["#sales-wins", "#oncall", "#leadership"], contentMode: "mixed",
+      includeOnly: ["thread", "decision", "incident"], entityNode: { thread: "interaction", decision: "signal", incident: "incident" }, settings: { refresh: true, skipperms: true } } },
+  { id: "pl-teams", name: "Microsoft Teams — Eng & Leadership", system: "Microsoft Teams", sysId: "teams", nodeId: "interaction", nodeLabel: "Interaction", type: "Messaging", freq: "Every 30m", last: "8m ago", rows: "62K", rowsN: 62120, errors: 0, status: "healthy",
+    edit: { system: "teams", node: "interaction", scope: "folders", locations: ["Engineering", "Leadership"], contentMode: "mixed",
+      includeOnly: ["tm_message", "tm_meeting"], entityNode: { tm_message: "interaction", tm_meeting: "interaction" }, settings: { refresh: true } } },
+  { id: "pl-sharepoint", name: "SharePoint — Legal Library", system: "SharePoint", sysId: "sharepoint", nodeId: "agreement", nodeLabel: "Agreement +2", type: "Documents", freq: "Every 12h", last: "4h ago", rows: "28K", rowsN: 28050, errors: 0, status: "healthy",
+    edit: { system: "sharepoint", node: "agreement", scope: "folders", locations: ["Legal Library", "Policies"], contentMode: "mixed",
+      includeOnly: ["sp_contract", "sp_policy", "sp_document"], entityNode: { sp_contract: "agreement", sp_policy: "resource", sp_document: "resource" }, settings: { refresh: true, retention: true } } },
+  { id: "pl-onedrive", name: "OneDrive — Shared Workspace", system: "OneDrive", sysId: "onedrive", nodeId: "resource", nodeLabel: "Resource", type: "Documents", freq: "Daily", last: "9h ago", rows: "13K", rowsN: 13130, errors: 0, status: "healthy",
+    edit: { system: "onedrive", node: "resource", scope: "folders", locations: ["Shared / Proposals", "Shared / Models"], contentMode: "mixed",
+      includeOnly: ["od_document", "od_spreadsheet", "od_pdf"], entityNode: { od_document: "resource", od_spreadsheet: "resource", od_pdf: "resource" }, settings: { refresh: true } } },
+];
+if (typeof window !== "undefined") { window.DEMO_PIPELINES = DEMO_PIPELINES; window.buildEditState = buildEditState; }
 function SrcToggle({ on, onClick }) {
   return (
     <button onClick={onClick} role="switch" aria-checked={on} style={{ width: 40, height: 23, borderRadius: 12, border: "none", cursor: "pointer", background: on ? "var(--ink)" : "var(--line)", position: "relative", flexShrink: 0, transition: "background 130ms", padding: 0 }}>
