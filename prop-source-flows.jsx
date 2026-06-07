@@ -1401,7 +1401,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     ? "All " + readCfg.item
     : readLocs.length ? readLocs.length + " " + (readLocs.length === 1 ? readCfg.container.replace(/s$/, "") : readCfg.container)
     : "Pick " + readCfg.container;
-  const objectsHint = s.extractRan ? includedEntities.length + " object" + (includedEntities.length === 1 ? "" : "s") : "Scan for objects";
+  const objectsHint = s.extractRan ? includedEntities.length + " file type" + (includedEntities.length === 1 ? "" : "s") : "Pick a discovery agent";
   const uAgentsAssigned = includedEntities.filter(e => { var a = (s.objectAgents || {})[e.id]; return Array.isArray(a) ? a.length > 0 : !!a; }).length;
   const uExtractHint = uAgentsAssigned ? uAgentsAssigned + " of " + includedEntities.length + " assigned" : "Optional";
   const mapHint = mappedCount ? `${mappedCount} mapped` : "Map objects → nodes";
@@ -1414,7 +1414,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     { label: "Source system", hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",    hint: connLabel },
     { label: "Scope",         hint: readHint },
-    { label: "Discover Objects", hint: objectsHint },
+    { label: "Discover Files", hint: objectsHint },
     { label: "Extract",       hint: uExtractHint },
     { label: "Map",           hint: mapHint, subItems: mapSubItems, activeSub: activeMapObj, onSub: setMapActiveObj },
     { label: "Settings",      hint: settingsHint },
@@ -1906,45 +1906,32 @@ function extractionAgentFor(eid) { return EXTRACTION_AGENTS.find(a => a.id === "
 
 function SrcDiscover({ s, set, sel }) {
   const agent = s.entityAgent || "";
-  const ran = !!s.extractRan;
-  const [scanning, setScanning] = useState(false);
   const entities = getDiscoveredEntities(sel);
+  const ran = !!agent;
   const include = s.entityInclude || {};
   const isIncluded = e => include[e.id] !== false;
   const includedN = entities.filter(isIncluded).length;
-  const scan = () => {
-    if (!agent || scanning) return;
-    setScanning(true);
-    // Each entity gets its own extraction agent assigned by default — that's what
-    // pulls the document's fields out (the source only yields file metadata).
-    setTimeout(() => { const inc = {}, agents = {}; entities.forEach(e => { inc[e.id] = true; agents[e.id] = ["extract_" + e.id]; }); set({ extractRan: true, entityInclude: inc, objectAgents: agents }); setScanning(false); }, 950);
+  // Picking a discovery agent simply reveals the file types it knows how to
+  // extract — they're defined in the agent, nothing runs here. Each file type
+  // gets its extraction agent assigned by default (that's what pulls the fields).
+  const chooseAgent = v => {
+    if (!v) { set({ entityAgent: "", extractRan: false }); return; }
+    const inc = {}, agents = {};
+    entities.forEach(e => { inc[e.id] = true; agents[e.id] = ["extract_" + e.id]; });
+    set({ entityAgent: v, extractRan: true, entityInclude: inc, objectAgents: agents });
   };
   const toggle = id => set({ entityInclude: Object.assign({}, include, (function () { var o = {}; o[id] = !(include[id] !== false); return o; })()) });
   return (
-    <StepWrap wide title="Objects in your documents">
-      <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 800 }}>Unstructured sources don't have predefined objects. A discovery agent scans the {sel ? sel.name : "documents"} in scope and <b style={{ color: "var(--ink-2)" }}>proposes the entities it can extract</b>. Pick the ones you want — you'll run extraction on each in the next step.</div>
-      <FormRow label="Discovery agent" hint="Scans a sample of the documents in scope and proposes the entity types it finds." last={!ran && !scanning}>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <div style={{ flex: 1, maxWidth: 460 }}>
-            <CustomSelect value={agent} placeholder="Select an agent…" onChange={v => set({ entityAgent: v })} options={ENTITY_AGENTS.map(a => ({ id: a.id, label: a.name, desc: a.desc }))} searchable searchPlaceholder="Search agents…" />
-          </div>
-          <button onClick={scan} disabled={!agent || scanning} className="btn-dark" style={{ opacity: (agent && !scanning) ? 1 : 0.5, flexShrink: 0, minWidth: 150, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-            {scanning
-              ? <><svg className="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 3a9 9 0 1 0 9 9" /></svg> Scanning…</>
-              : (ran ? "Re-scan" : "Scan documents")}
-          </button>
+    <StepWrap wide title="Discover Files">
+      <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 800 }}>Unstructured sources have no predefined tables. Pick a discovery agent and it lists the <b style={{ color: "var(--ink-2)" }}>file types it can extract</b>. Choose which to bring into the graph — you'll run extraction on each in the next step.</div>
+      <FormRow label="Discovery agent" hint="Each agent extracts a known set of file types — pick one to see what it covers." last={!ran}>
+        <div style={{ maxWidth: 460 }}>
+          <CustomSelect value={agent} placeholder="Select an agent…" onChange={chooseAgent} options={ENTITY_AGENTS.map(a => ({ id: a.id, label: a.name, desc: a.desc }))} searchable searchPlaceholder="Search agents…" />
         </div>
       </FormRow>
 
-      {scanning && (
-        <div style={{ marginTop: 18, border: "1px dashed var(--line)", borderRadius: 11, background: "var(--panel-2)", padding: "26px", textAlign: "center", color: "var(--ink-3)", fontSize: 13, lineHeight: 1.5 }}>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--ink-2)" }}>Reading a sample of your {sel ? sel.name : "documents"}…</div>
-          <div style={{ marginTop: 6, fontSize: 12 }}>The agent is identifying entity types and their fields.</div>
-        </div>
-      )}
-
-      {ran && !scanning && (
-        <FormRow label="Potential entities" hint={"These are the entity types the agent can extract — " + includedN + " of " + entities.length + " selected. Pick which to bring into the graph."} last>
+      {ran && (
+        <FormRow label="File types" hint={"File types this agent can extract — " + includedN + " of " + entities.length + " selected. Pick which to bring into the graph."} last>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {entities.map(e => {
               const on = isIncluded(e);
