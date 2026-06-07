@@ -2204,19 +2204,23 @@ function SrcObjectAgents({ s, set, groups, sel }) {
 // plus every field the assigned agents add, with sample values.
 function SrcAgentOutputDrawer({ obj, agents, onClose }) {
   const srcCols = obj ? obj.cols : [];
-  const agentFields = agents.flatMap(a => a.outputs.map(o => Object.assign({}, o, { agent: a.name })));
-  const total = srcCols.length + agentFields.length;
-  const row = (c, tag, tagColor) => (
-    <div key={(tag || "") + c.col} style={{ display: "grid", gridTemplateColumns: "26px minmax(0,1fr) auto", gap: 11, alignItems: "center", padding: "9px 20px", borderTop: "1px solid var(--line-2)" }}>
+  const total = srcCols.length + agents.reduce((n, a) => n + a.outputs.length, 0);
+  const row = (c, key) => (
+    <div key={key} style={{ display: "grid", gridTemplateColumns: "26px minmax(0,1fr) auto", gap: 11, alignItems: "center", padding: "9px 20px", borderTop: "1px solid var(--line-2)" }}>
       <MapTypeGlyph type={c.type} size={24} />
-      <div style={{ minWidth: 0 }}>
-        <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{c.col}</code>
-        {tag && <span style={{ marginLeft: 8, fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, letterSpacing: "0.3px", padding: "1px 6px", borderRadius: 4, color: tagColor, background: "color-mix(in oklab, " + tagColor + " 13%, transparent)" }}>{tag}</span>}
-      </div>
+      <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.col}</code>
       <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, color: "var(--ink-3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180, textAlign: "right" }}>{c.sample != null ? c.sample : "—"}</code>
     </div>
   );
-  const sectionLabel = t => <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", padding: "14px 20px 6px" }}>{t}</div>;
+  // Section header — source category is neutral; each agent gets its own header
+  // (with the agent glyph + name), so rows don't need provenance tags.
+  const sectionLabel = (t, n, agent) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "15px 20px 7px" }}>
+      {agent && <span style={{ display: "inline-flex" }}><AgentGlyph /></span>}
+      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", textTransform: "uppercase", color: agent ? "var(--purple)" : "var(--ink-3)", fontWeight: agent ? 700 : 400 }}>{t}</span>
+      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, color: "var(--ink-4)" }}>· {n}</span>
+    </div>
+  );
   return (
     <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.28)", zIndex: 60, display: "flex", justifyContent: "flex-end", animation: "flow-fade-in 140ms ease-out" }}>
       <div onClick={e => e.stopPropagation()} style={{ width: 470, maxWidth: "82%", height: "100%", background: "var(--panel)", borderLeft: "1px solid var(--line)", boxShadow: "-24px 0 60px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column" }}>
@@ -2231,10 +2235,16 @@ function SrcAgentOutputDrawer({ obj, agents, onClose }) {
           <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid var(--line)", background: "none", cursor: "pointer", color: "var(--ink-3)", flexShrink: 0, fontSize: 13 }}>✕</button>
         </div>
         <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
-          {sectionLabel("From source · " + srcCols.length)}
-          {srcCols.map(c => row(c, "SOURCE", "var(--ink-3)"))}
-          {agentFields.length > 0 && sectionLabel("Added by agents · " + agentFields.length)}
-          {agentFields.map(f => row(f, f.agent, "var(--purple)"))}
+          <React.Fragment key="src">
+            {sectionLabel("From source", srcCols.length)}
+            {srcCols.map((c, i) => row(c, "src-" + i))}
+          </React.Fragment>
+          {agents.map((a, ai) => (
+            <React.Fragment key={"ag-" + ai}>
+              {sectionLabel(a.name, a.outputs.length, true)}
+              {a.outputs.map((o, i) => row(o, "ag" + ai + "-" + i))}
+            </React.Fragment>
+          ))}
         </div>
         <div style={{ flexShrink: 0, padding: "14px 20px", borderTop: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--panel-2)" }}>
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-3)" }}>Sample values · one record</span>
