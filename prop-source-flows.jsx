@@ -1956,20 +1956,17 @@ function SrcDiscover({ s, set, sel }) {
 
       {ran && (
         <FormRow label={(isAuto ? "Automation" : "Agent") + " output — File types"} hint={"The file types this " + (isAuto ? "automation" : "agent") + " classifies your documents into — " + includedN + " of " + entities.length + " selected. Pick which to bring into the graph."} last>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, maxWidth: 760 }}>
             {entities.map(e => {
               const on = isIncluded(e);
               return (
-                <div key={e.id} style={{ border: "1px solid " + (on ? "var(--line)" : "var(--line-2)"), borderRadius: 11, background: on ? "var(--panel)" : "transparent", opacity: on ? 1 : 0.66, overflow: "hidden", transition: "opacity 120ms" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 15px", cursor: "pointer" }}>
-                    <input type="checkbox" checked={on} onChange={() => toggle(e.id)} style={{ accentColor: "var(--ink)", width: 15, height: 15, flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{e.name}</span>
-                      </div>
-                    </div>
-                  </label>
-                </div>
+                <label key={e.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 14px", borderRadius: 10, cursor: "pointer", border: "1px solid " + (on ? "var(--ink)" : "var(--line-2)"), background: on ? "var(--panel)" : "transparent", boxShadow: on ? "inset 0 0 0 1px var(--ink)" : "none", opacity: on ? 1 : 0.6, transition: "opacity 120ms, border-color 120ms" }}>
+                  <span style={{ width: 34, height: 34, borderRadius: 7, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--chip)", border: "1px solid var(--line)", color: "var(--ink-3)" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><polyline points="14 3 14 8 19 8" /></svg>
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.name}</span>
+                  <input type="checkbox" checked={on} onChange={() => toggle(e.id)} style={{ accentColor: "var(--ink)", width: 16, height: 16, flexShrink: 0 }} />
+                </label>
               );
             })}
           </div>
