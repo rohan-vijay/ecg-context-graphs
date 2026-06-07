@@ -2389,8 +2389,8 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor, fileMode }) {
   // Structured sources already have columns → agents/automations *enrich* records;
   // unstructured files need *extraction*. Both can be an agent OR an automation.
   const stepTitle = fileMode ? "Extract data from files" : "Extract & enrich each object";
-  const ctaLabel = fileMode ? "+ Run extraction" : "+ Run enrichment";
-  const panelHeader = fileMode ? "Run extraction" : "Run enrichment";
+  const ctaLabel = fileMode ? "+ Extract fields" : "+ Run enrichment";
+  const panelHeader = fileMode ? "Extract fields" : "Run enrichment";
   const runBtn = (g, label, pressed) => (
     <button onClick={() => setOpenPicker(openPicker === g.name ? "" : g.name)} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "inherit", fontSize: 12.5, fontWeight: 500, color: pressed ? "var(--ink)" : "var(--ink-2)", background: pressed ? "var(--chip)" : "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}>{label}</button>
   );
