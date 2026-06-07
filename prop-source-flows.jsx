@@ -1422,7 +1422,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     { label: "Source system",  hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",     hint: connLabel },
     { label: "Objects",        hint: objectHint },
-    { label: "Extract & enrich", hint: agentsHint },
+    { label: "Extract data",   hint: agentsHint },
     { label: "Map columns", hint: colMapHint, subItems: mapSubItems, activeSub: activeMapObj, onSub: setMapActiveObj },
     { label: "Settings", hint: settingsHint },
   ];
@@ -2386,9 +2386,9 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor, fileMode }) {
   const [openPicker, setOpenPicker] = useState("");
   // Structured sources already have columns → agents/automations *enrich* records;
   // unstructured files need *extraction*. Both can be an agent OR an automation.
-  const stepTitle = fileMode ? "Extract fields" : "Extract & enrich each object";
-  const ctaLabel = fileMode ? "+ Extract fields" : "+ Run enrichment";
-  const panelHeader = fileMode ? "Extract fields" : "Run enrichment";
+  const stepTitle = fileMode ? "Extract fields" : "Extract data";
+  const ctaLabel = "+ Extract fields";
+  const panelHeader = "Extract fields";
   const runBtn = (g, label, pressed) => (
     <button onClick={() => setOpenPicker(openPicker === g.name ? "" : g.name)} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "inherit", fontSize: 12.5, fontWeight: 500, color: pressed ? "var(--ink)" : "var(--ink-2)", background: pressed ? "var(--chip)" : "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}>{label}</button>
   );
@@ -2396,7 +2396,7 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor, fileMode }) {
     <StepWrap wide title={stepTitle}>
       <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 760 }}>{fileMode
         ? <>Run an agent or automation on each file type to pull structured fields out of the documents — these become available to map in the next step. This step is optional.</>
-        : <>Optionally run an agent or automation on each object — it reads every record and produces additional fields that enrich your data, available to map in the next step.</>}</div>
+        : <>Optionally run an agent or automation on each object — it reads every record and extracts additional fields, available to map in the next step.</>}</div>
       {groups.length === 0 && (
         <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)", padding: "40px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>{fileMode ? "No file types selected — go back to Discover Files and pick at least one." : "No objects selected — go back to the Objects step and pick at least one."}</div>
       )}
