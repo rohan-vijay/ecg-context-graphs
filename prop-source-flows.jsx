@@ -2186,7 +2186,7 @@ function SrcObjectAgents({ s, set, groups, sel }) {
                       </button>
                     )}
                     <button onClick={() => setPreviewFor(g.name)} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: "var(--ink-2)", padding: 0 }}>
-                      Preview output <span style={{ fontSize: 13 }}>→</span>
+                      Preview agent output <span style={{ fontSize: 13 }}>→</span>
                     </button>
                   </div>
                 )}
