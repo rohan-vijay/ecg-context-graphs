@@ -1436,7 +1436,7 @@ function LinkSourceFlow({ node, existingSources, onClose, editSource }) {
   const activeMapObj = (mapActiveObj && mapGroups.some(g => g.name === mapActiveObj)) ? mapActiveObj : (mapGroups[0] ? mapGroups[0].name : "");
   const mapSubItems = mapGroups.length > 1 ? mapGroups.map(g => {
     const cols = mapColsOf(g);
-    const newNode = unstructured && (s.entityNode || {})[g.name] === "__new__";
+    const newNode = (s.entityNode || {})[g.name] === "__new__";
     const gm = newNode ? cols.length : cols.filter(c => (s.mapping || {})[g.name + "::" + c.col]).length;
     return { id: g.name, label: g.label || g.name, mapped: gm, total: cols.length, type: g.type, done: gm > 0 };
   }) : null;
@@ -2690,6 +2690,22 @@ function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, 
   const activeFilters = current ? (recordFilters[current.name] || []) : [];
   const tfields = current ? ((s.transformedFields || {})[current.name] || []) : [];
   const removeTf = id => { const cur = s.transformedFields || {}; const arr = (cur[current.name] || []).filter(t => t.id !== id); set({ transformedFields: Object.assign({}, cur, (function () { var o = {}; o[current.name] = arr; return o; })()) }); };
+  // Per-object destination node — each selected object can target its own node (or a
+  // brand-new node type), exactly like the unstructured entity map.
+  const entityNodeMap = s.entityNode || {};
+  const allEntityNodes = ((typeof window !== "undefined" && window.NODES) || []).filter(n => n.type === "entity");
+  const curDestId = current ? (entityNodeMap[current.name] || (node ? node.id : "")) : "";
+  const isNewDest = curDestId === "__new__";
+  const curDestNode = allEntityNodes.find(n => n.id === curDestId) || null;
+  const destProps = isNewDest ? [] : (curDestNode && window.generateProps ? window.generateProps(curDestNode).map(p => ({ id: p.name, label: p.name, type: p.type })) : (nodeProps || []));
+  const nodeOptions = allEntityNodes.map(n => ({ id: n.id, label: n.label, node: n })).concat([{ id: "__new__", label: "+ New node type" + (current ? " — " + current.name : "") }]);
+  const setObjNode = nid => {
+    if (!current) return;
+    const m = Object.assign({}, mapping);
+    if (nid === "__new__") allFields.forEach(c => { m[mk(current.name, c.col)] = "new:" + c.col; });
+    else allFields.forEach(c => { if (String(m[mk(current.name, c.col)] || "").indexOf("new:") === 0) delete m[mk(current.name, c.col)]; });
+    set({ entityNode: Object.assign({}, entityNodeMap, (function () { var o = {}; o[current.name] = nid; return o; })()), mapping: m });
+  };
   const colVisible = (c) => {
     const key = mk(current.name, c.col);
     const nm = c.label || c.col;
@@ -2723,11 +2739,13 @@ function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, 
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z" /></svg>
             </span>
           </button>
-          <div style={{ textAlign: "center", color: mapped ? "var(--green)" : "var(--ink-4)", fontSize: 15 }}>→</div>
-          <CustomSelect value={mapped || ""} onChange={v => updateMap(key, v)} placeholder="Select field"
-            options={nodeProps.map(p => ({ id: p.id, label: p.id, type: p.type })).concat([{ id: "__new__", label: "+ New property…" }])}
-            renderTrigger={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={22} /><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{o.label}</span>{o.id === "id" && <><MapBadge tone="var(--green)">PK</MapBadge><MapBadge>UK</MapBadge></>}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-4)" }}>{o.label || "Select field"}</span>}
-            renderOption={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={20} />{o.label}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-3)" }}>{o.label}</span>} />
+          <div style={{ textAlign: "center", color: (mapped || isNewDest) ? "var(--green)" : "var(--ink-4)", fontSize: 15 }}>→</div>
+          {isNewDest
+            ? <span style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 2px" }}><MapTypeGlyph type={col.type} size={22} /><code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{col.label || col.col}</code><MapBadge tone="var(--purple)">NEW</MapBadge></span>
+            : <CustomSelect value={mapped || ""} onChange={v => updateMap(key, v)} placeholder="Select field"
+                options={destProps.map(p => ({ id: p.id, label: p.id, type: p.type })).concat([{ id: "__new__", label: "+ New property…" }])}
+                renderTrigger={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={22} /><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{o.label}</span>{o.id === "id" && <><MapBadge tone="var(--green)">PK</MapBadge><MapBadge>UK</MapBadge></>}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-4)" }}>{o.label || "Select field"}</span>}
+                renderOption={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={20} />{o.label}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-3)" }}>{o.label}</span>} />}
         </div>
       </div>
     );
@@ -2764,11 +2782,13 @@ function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, 
             {chain.map((t, j) => <span key={j} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, padding: "2px 7px", borderRadius: 5, background: "var(--chip)", border: "1px solid var(--line)", color: "var(--ink-2)" }}>{tfLabel(t.fn)}</span>)}
             {chain.length === 0 && <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>passthrough</span>}
           </button>
-          <div style={{ textAlign: "center", color: mapped ? "var(--green)" : "var(--ink-4)", fontSize: 15 }}>→</div>
-          <CustomSelect value={mapped || ""} onChange={v => updateMap(key, v)} placeholder="Select field"
-            options={nodeProps.map(p => ({ id: p.id, label: p.id, type: p.type })).concat([{ id: "__new__", label: "+ New property…" }])}
-            renderTrigger={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={22} /><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{o.label}</span></span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-4)" }}>{o.label || "Select field"}</span>}
-            renderOption={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={20} />{o.label}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-3)" }}>{o.label}</span>} />
+          <div style={{ textAlign: "center", color: (mapped || isNewDest) ? "var(--green)" : "var(--ink-4)", fontSize: 15 }}>→</div>
+          {isNewDest
+            ? <span style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 2px" }}><MapTypeGlyph type={tfType} size={22} /><code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{tf.name}</code><MapBadge tone="var(--purple)">NEW</MapBadge></span>
+            : <CustomSelect value={mapped || ""} onChange={v => updateMap(key, v)} placeholder="Select field"
+                options={destProps.map(p => ({ id: p.id, label: p.id, type: p.type })).concat([{ id: "__new__", label: "+ New property…" }])}
+                renderTrigger={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={22} /><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{o.label}</span></span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-4)" }}>{o.label || "Select field"}</span>}
+                renderOption={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={20} />{o.label}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-3)" }}>{o.label}</span>} />}
         </div>
       </div>
     );
@@ -2776,12 +2796,25 @@ function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, 
 
   const multiObj = groupList.length > 1;
   const objName = current ? current.name : "";
-  const stepTitle = title || (multiObj && objName
-    ? `Map ${objName} fields to ${node?.label || "the node"}`
-    : `Map ${sel ? sel.name : "source"} fields to ${node?.label || "the node"}`);
+  const stepTitle = title || (current
+    ? `Map ${objName} to ${isNewDest ? "a new node" : (curDestNode ? curDestNode.label : "the graph")}`
+    : `Map ${sel ? sel.name : "source"} to the graph`);
 
   return (
     <StepWrap wide title={stepTitle}>
+      {current && (
+        <FormRow label="Destination node">
+          <div style={{ maxWidth: 480 }}>
+            <CustomSelect value={curDestId} placeholder="Pick or create a node…" onChange={setObjNode} options={nodeOptions} searchable searchPlaceholder="Search nodes…"
+              renderTrigger={o => o.id === "__new__"
+                ? <span style={{ color: "var(--ink-2)", fontWeight: 500 }}>{o.label}</span>
+                : <span style={{ display: "flex", alignItems: "center", gap: 9 }}>{o.node && window.ListGlyph && <window.ListGlyph node={o.node} size={18} />}<span style={{ color: "var(--ink)" }}>{o.label}</span></span>}
+              renderOption={o => o.id === "__new__"
+                ? <span style={{ color: "var(--ink-2)", fontWeight: 500 }}>{o.label}</span>
+                : <span style={{ display: "flex", alignItems: "center", gap: 9 }}>{o.node && window.ListGlyph && <window.ListGlyph node={o.node} size={18} />}{o.label}</span>} />
+          </div>
+        </FormRow>
+      )}
       {/* toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
         {/* field-view dropdown (defaults to All fields; width hugs its text) */}
@@ -3028,8 +3061,10 @@ function buildEditState(es, node, base) {
     st.tables = names;
     names.forEach(nm => {
       const o = objs.find(x => x.name === nm) || { name: nm };
+      const destId = (es.tableNode && es.tableNode[nm]) || fallbackNode;
+      st.entityNode[nm] = destId;
       if (es.agent) st.objectAgents[nm] = Array.isArray(es.agent) ? es.agent : [es.agent];
-      richMap(nm, getObjectCols(o), es.tableNode && es.tableNode[nm] ? es.tableNode[nm] : fallbackNode);
+      richMap(nm, getObjectCols(o), destId);
     });
   }
   return st;
@@ -3152,65 +3187,44 @@ Object.keys(ENTITY_SETS).forEach(k => ENTITY_SETS[k].forEach(e => {
     EXTRACTION_AGENTS.push({ id: "extract_" + e.id, name: e.name + " Extraction Agent", desc: "Reads each " + e.name.toLowerCase() + " and extracts its fields.", outputs: e.fields, entityId: e.id, extractor: true });
 }));
 
-// ── Demo-ready pipelines — every source from the architecture doc, one pipeline ──
-// per source→entity mapping. Each row's `edit` spec re-opens the wizard fully
-// configured. Structured sources map to the closest existing node; unstructured
-// file types without a node create a new node type.
+// ── Demo-ready pipelines — one per source from the architecture doc. Each row's
+// `edit` spec re-opens the wizard fully configured; every object / file-type maps
+// to its own graph node (or a new node type where that entity has none yet).
 const DEMO_PIPELINES = [
-  // HubSpot (CRM) → Account, Contact, Lead, Opportunity, Campaign, Renewal, Product, Subscription, Contract
-  { id: "hub-account", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "account", nodeLabel: "Account", type: "Primary", freq: "Streaming", last: "12s ago", rows: "2,840", rowsN: 2840, errors: 0, status: "healthy", edit: { system: "hubspot", node: "account", tables: ["Account"], settings: { refresh: true } } },
-  { id: "hub-contact", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "person", nodeLabel: "Contact", type: "Primary", freq: "Streaming", last: "30s ago", rows: "18K", rowsN: 18420, errors: 0, status: "healthy", edit: { system: "hubspot", node: "person", tables: ["Contact"], settings: { refresh: true } } },
-  { id: "hub-lead", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "person", nodeLabel: "Lead", type: "Enrichment", freq: "Every 15m", last: "5m ago", rows: "24K", rowsN: 24100, errors: 0, status: "healthy", edit: { system: "hubspot", node: "person", tables: ["Lead"], settings: { refresh: true } } },
-  { id: "hub-opp", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "agreement", nodeLabel: "Opportunity", type: "Primary", freq: "Streaming", last: "1m ago", rows: "6,240", rowsN: 6240, errors: 0, status: "healthy", edit: { system: "hubspot", node: "agreement", tables: ["Opportunity"], settings: { refresh: true } } },
-  { id: "hub-campaign", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "interaction", nodeLabel: "Campaign", type: "Enrichment", freq: "Daily 02:00", last: "6h ago", rows: "318", rowsN: 318, errors: 0, status: "healthy", edit: { system: "hubspot", node: "interaction", tables: ["Campaign"], settings: { refresh: true } } },
-  { id: "hub-renewal", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "subscription", nodeLabel: "Renewal", type: "Primary", freq: "Hourly", last: "22m ago", rows: "2,410", rowsN: 2410, errors: 0, status: "healthy", edit: { system: "hubspot", node: "subscription", tables: ["Renewal"], settings: { refresh: true } } },
-  { id: "hub-product", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "subscription", nodeLabel: "Product", type: "Reference", freq: "Daily", last: "1d ago", rows: "184", rowsN: 184, errors: 0, status: "healthy", edit: { system: "hubspot", node: "subscription", tables: ["Product"], settings: { refresh: true } } },
-  { id: "hub-subscription", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "subscription", nodeLabel: "Subscription", type: "Financial", freq: "Hourly", last: "18m ago", rows: "2,800", rowsN: 2800, errors: 0, status: "healthy", edit: { system: "hubspot", node: "subscription", tables: ["Subscription"], settings: { refresh: true } } },
-  { id: "hub-contract", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "agreement", nodeLabel: "Contract", type: "Primary", freq: "Hourly", last: "40m ago", rows: "1,240", rowsN: 1240, errors: 9, status: "degraded", edit: { system: "hubspot", node: "agreement", tables: ["Contract"], settings: { refresh: true } } },
-  // NetSuite (Finance) → Invoice, Payment, Subscription, Renewal, Order
-  { id: "ns-invoice", name: "NetSuite", system: "NetSuite", sysId: "netsuite", nodeId: "invoice", nodeLabel: "Invoice", type: "Financial", freq: "Hourly", last: "18m ago", rows: "12K", rowsN: 12040, errors: 0, status: "healthy", edit: { system: "netsuite", node: "invoice", tables: ["Invoice"], settings: { refresh: true } } },
-  { id: "ns-payment", name: "NetSuite", system: "NetSuite", sysId: "netsuite", nodeId: "invoice", nodeLabel: "Payment", type: "Financial", freq: "Hourly", last: "26m ago", rows: "11K", rowsN: 11200, errors: 0, status: "healthy", edit: { system: "netsuite", node: "invoice", tables: ["Payment"], settings: { refresh: true } } },
-  { id: "ns-subscription", name: "NetSuite", system: "NetSuite", sysId: "netsuite", nodeId: "subscription", nodeLabel: "Subscription", type: "Financial", freq: "Hourly", last: "18m ago", rows: "2,800", rowsN: 2800, errors: 0, status: "healthy", edit: { system: "netsuite", node: "subscription", tables: ["Subscription"], settings: { refresh: true } } },
-  { id: "ns-renewal", name: "NetSuite", system: "NetSuite", sysId: "netsuite", nodeId: "subscription", nodeLabel: "Renewal", type: "Financial", freq: "Daily", last: "4h ago", rows: "2,410", rowsN: 2410, errors: 0, status: "healthy", edit: { system: "netsuite", node: "subscription", tables: ["Renewal"], settings: { refresh: true } } },
-  { id: "ns-order", name: "NetSuite", system: "NetSuite", sysId: "netsuite", nodeId: "invoice", nodeLabel: "Order", type: "Financial", freq: "Hourly", last: "33m ago", rows: "9,420", rowsN: 9420, errors: 0, status: "healthy", edit: { system: "netsuite", node: "invoice", tables: ["Order"], settings: { refresh: true } } },
-  // Monday (Project Mgmt) → Issue, Project, Task, Incident
-  { id: "mon-issue", name: "Monday", system: "Monday", sysId: "monday", nodeId: "incident", nodeLabel: "Issue", type: "Operational", freq: "Every 30m", last: "12m ago", rows: "4,120", rowsN: 4120, errors: 0, status: "healthy", edit: { system: "monday", node: "incident", tables: ["Issue"], settings: { refresh: true } } },
-  { id: "mon-project", name: "Monday", system: "Monday", sysId: "monday", nodeId: "ticket", nodeLabel: "Project", type: "Operational", freq: "Every 30m", last: "14m ago", rows: "210", rowsN: 210, errors: 0, status: "healthy", edit: { system: "monday", node: "ticket", tables: ["Project"], settings: { refresh: true } } },
-  { id: "mon-task", name: "Monday", system: "Monday", sysId: "monday", nodeId: "ticket", nodeLabel: "Task", type: "Operational", freq: "Every 30m", last: "9m ago", rows: "18K", rowsN: 18400, errors: 0, status: "healthy", edit: { system: "monday", node: "ticket", tables: ["Task"], settings: { refresh: true } } },
-  { id: "mon-incident", name: "Monday", system: "Monday", sysId: "monday", nodeId: "incident", nodeLabel: "Incident", type: "Operational", freq: "Every 15m", last: "6m ago", rows: "310", rowsN: 310, errors: 0, status: "healthy", edit: { system: "monday", node: "incident", tables: ["Incident"], settings: { refresh: true } } },
-  // Support Portal (Ticketing) → Ticket, Incident, Knowledge Article
-  { id: "sup-ticket", name: "Support Portal", system: "Support Portal", sysId: "support", nodeId: "ticket", nodeLabel: "Ticket", type: "Primary", freq: "Streaming", last: "1m ago", rows: "142K", rowsN: 142000, errors: 0, status: "healthy", edit: { system: "support", node: "ticket", tables: ["Ticket"], settings: { refresh: true } } },
-  { id: "sup-incident", name: "Support Portal", system: "Support Portal", sysId: "support", nodeId: "incident", nodeLabel: "Incident", type: "Operational", freq: "Streaming", last: "2m ago", rows: "310", rowsN: 310, errors: 5, status: "degraded", edit: { system: "support", node: "incident", tables: ["Incident"], settings: { refresh: true } } },
-  { id: "sup-article", name: "Support Portal", system: "Support Portal", sysId: "support", nodeId: "interaction", nodeLabel: "Knowledge Article", type: "Reference", freq: "Daily", last: "8h ago", rows: "640", rowsN: 640, errors: 0, status: "healthy", edit: { system: "support", node: "interaction", tables: ["Article"], settings: { refresh: true } } },
-  // Product Usage (Analytics) → Expansion Signal, Customer Use Case
-  { id: "pu-signal", name: "Product Usage", system: "Product Usage", sysId: "productusage", nodeId: "signal", nodeLabel: "Expansion Signal", type: "Analytics", freq: "Streaming", last: "1m ago", rows: "2,800", rowsN: 2800, errors: 0, status: "healthy", edit: { system: "productusage", node: "signal", tables: ["account_signals"], settings: { refresh: true } } },
-  { id: "pu-usecase", name: "Product Usage", system: "Product Usage", sysId: "productusage", nodeId: "signal", nodeLabel: "Customer Use Case", type: "Analytics", freq: "Hourly", last: "20m ago", rows: "48K", rowsN: 48000, errors: 0, status: "healthy", edit: { system: "productusage", node: "signal", tables: ["feature_adoption"], settings: { refresh: true } } },
-  // Apollo (Enrichment) → Lead, Contact, Intent Signal
-  { id: "apl-lead", name: "Apollo", system: "Apollo", sysId: "apollo", nodeId: "person", nodeLabel: "Lead", type: "Enrichment", freq: "Daily", last: "12h ago", rows: "24K", rowsN: 24100, errors: 0, status: "healthy", edit: { system: "apollo", node: "person", tables: ["Lead"], settings: { refresh: true } } },
-  { id: "apl-contact", name: "Apollo", system: "Apollo", sysId: "apollo", nodeId: "person", nodeLabel: "Contact", type: "Enrichment", freq: "Daily", last: "12h ago", rows: "120K", rowsN: 120000, errors: 0, status: "healthy", edit: { system: "apollo", node: "person", tables: ["Contact"], settings: { refresh: true } } },
-  { id: "apl-intent", name: "Apollo", system: "Apollo", sysId: "apollo", nodeId: "signal", nodeLabel: "Intent Signal", type: "Enrichment", freq: "Every 6h", last: "3h ago", rows: "8,400", rowsN: 8400, errors: 0, status: "healthy", edit: { system: "apollo", node: "signal", tables: ["IntentSignal"], settings: { refresh: true } } },
-  // DocuSign (E-signature) → Contract (signature events)
-  { id: "ds-contract", name: "DocuSign", system: "DocuSign", sysId: "docusign", nodeId: "agreement", nodeLabel: "Contract", type: "Primary", freq: "Real time", last: "4m ago", rows: "9,420", rowsN: 9420, errors: 0, status: "healthy", edit: { system: "docusign", node: "agreement", tables: ["SignatureEvent"], settings: { refresh: true } } },
-  // Google Drive (Documents) → Contract, SOW, Proposal, Policy, Knowledge Article, Case Study
+  { id: "hubspot", name: "HubSpot", system: "HubSpot", sysId: "hubspot", nodeId: "account", nodeLabel: "Account +8", type: "CRM", freq: "Streaming", last: "12s ago", rows: "55K", rowsN: 55000, errors: 0, status: "healthy",
+    edit: { system: "hubspot", node: "account", tables: ["Account", "Contact", "Lead", "Opportunity", "Campaign", "Renewal", "Product", "Subscription", "Contract"],
+      tableNode: { Account: "account", Contact: "person", Lead: "__new__", Opportunity: "__new__", Campaign: "__new__", Renewal: "__new__", Product: "__new__", Subscription: "subscription", Contract: "agreement" }, settings: { refresh: true } } },
+  { id: "netsuite", name: "NetSuite", system: "NetSuite", sysId: "netsuite", nodeId: "invoice", nodeLabel: "Invoice +4", type: "Finance", freq: "Hourly", last: "18m ago", rows: "38K", rowsN: 37650, errors: 0, status: "healthy",
+    edit: { system: "netsuite", node: "invoice", tables: ["Invoice", "Payment", "Subscription", "Renewal", "Order"],
+      tableNode: { Invoice: "invoice", Payment: "__new__", Subscription: "subscription", Renewal: "__new__", Order: "__new__" }, settings: { refresh: true } } },
+  { id: "monday", name: "Monday", system: "Monday", sysId: "monday", nodeId: "incident", nodeLabel: "Incident +3", type: "Project Mgmt", freq: "Every 30m", last: "12m ago", rows: "23K", rowsN: 22640, errors: 0, status: "healthy",
+    edit: { system: "monday", node: "incident", tables: ["Issue", "Project", "Task", "Incident"],
+      tableNode: { Issue: "__new__", Project: "__new__", Task: "__new__", Incident: "incident" }, settings: { refresh: true } } },
+  { id: "support", name: "Support Portal", system: "Support Portal", sysId: "support", nodeId: "ticket", nodeLabel: "Ticket +2", type: "Ticketing", freq: "Streaming", last: "1m ago", rows: "143K", rowsN: 142950, errors: 5, status: "degraded",
+    edit: { system: "support", node: "ticket", tables: ["Ticket", "Incident", "Article"],
+      tableNode: { Ticket: "ticket", Incident: "incident", Article: "__new__" }, settings: { refresh: true } } },
+  { id: "productusage", name: "Product Usage", system: "Product Usage", sysId: "productusage", nodeId: "signal", nodeLabel: "Signal +1", type: "Analytics", freq: "Streaming", last: "1m ago", rows: "51K", rowsN: 50800, errors: 0, status: "healthy",
+    edit: { system: "productusage", node: "signal", tables: ["account_signals", "feature_adoption"],
+      tableNode: { account_signals: "signal", feature_adoption: "__new__" }, settings: { refresh: true } } },
+  { id: "apollo", name: "Apollo", system: "Apollo", sysId: "apollo", nodeId: "person", nodeLabel: "Contact +3", type: "Enrichment", freq: "Daily", last: "12h ago", rows: "152K", rowsN: 152400, errors: 0, status: "healthy",
+    edit: { system: "apollo", node: "person", tables: ["Company", "Contact", "Lead", "IntentSignal"],
+      tableNode: { Company: "__new__", Contact: "person", Lead: "__new__", IntentSignal: "signal" }, settings: { refresh: true } } },
+  { id: "docusign", name: "DocuSign", system: "DocuSign", sysId: "docusign", nodeId: "agreement", nodeLabel: "Contract", type: "E-signature", freq: "Real time", last: "4m ago", rows: "9,420", rowsN: 9420, errors: 0, status: "healthy",
+    edit: { system: "docusign", node: "agreement", tables: ["SignatureEvent"], tableNode: { SignatureEvent: "agreement" }, settings: { refresh: true } } },
   { id: "drv", name: "Google Drive", system: "Google Drive", sysId: "googledrive", nodeId: "agreement", nodeLabel: "Agreement +5", type: "Documents", freq: "Every 6h", last: "2h ago", rows: "6,930", rowsN: 6930, errors: 0, status: "healthy",
     edit: { system: "googledrive", node: "agreement", scope: "folders", locations: ["Legal / Contracts", "Sales / SOWs", "Sales / Proposals", "Legal / Policies", "Docs / Knowledge", "Marketing / Case Studies"], contentMode: "mixed",
       includeOnly: ["contract", "sow", "proposal", "policy", "knowledge_article", "case_study"], entityNode: { contract: "agreement", sow: "__new__", proposal: "__new__", policy: "__new__", knowledge_article: "__new__", case_study: "__new__" }, settings: { refresh: true, retention: true } } },
-  // Gmail (Email) → Interaction (email)
   { id: "gml", name: "Gmail", system: "Gmail", sysId: "gmail", nodeId: "interaction", nodeLabel: "Interaction", type: "Email", freq: "Every 1h", last: "22m ago", rows: "184K", rowsN: 184500, errors: 0, status: "healthy",
     edit: { system: "gmail", node: "interaction", scope: "folders", locations: ["Sales inbox", "Success inbox"], contentMode: "single", knownType: "Email", settings: { refresh: true } } },
-  // Google Calendar (Scheduling) → Interaction (meeting)
-  { id: "gcl", name: "Google Calendar", system: "Google Calendar", sysId: "gcal", nodeId: "interaction", nodeLabel: "Interaction", type: "Scheduling", freq: "Every 1h", last: "35m ago", rows: "24K", rowsN: 24800, errors: 0, status: "healthy",
+  { id: "gcl", name: "Google Calendar", system: "Google Calendar", sysId: "gcal", nodeId: "interaction", nodeLabel: "Interaction", type: "Scheduling", freq: "Every 1h", last: "35m ago", rows: "25K", rowsN: 24800, errors: 0, status: "healthy",
     edit: { system: "gcal", node: "interaction", scope: "folders", locations: ["Sales calendar", "CS calendar"], contentMode: "single", knownType: "Meeting", settings: { refresh: true } } },
-  // Slack (Communication) → Interaction, Decision, Incident, Alert
   { id: "slk", name: "Slack", system: "Slack", sysId: "slack", nodeId: "interaction", nodeLabel: "Interaction +3", type: "Communication", freq: "Streaming", last: "1m ago", rows: "44K", rowsN: 44250, errors: 3, status: "degraded",
     edit: { system: "slack", node: "interaction", scope: "folders", locations: ["#sales-wins", "#oncall", "#cs-alerts"], contentMode: "mixed",
       includeOnly: ["thread", "decision", "incident", "alert"], entityNode: { thread: "interaction", decision: "signal", incident: "incident", alert: "__new__" }, settings: { refresh: true, skipperms: true } } },
-  // Product Documentation (Knowledge Base) → Knowledge Article, Product Guide, Release Note
   { id: "pdc", name: "Product Documentation", system: "Product Documentation", sysId: "productdocs", nodeId: "interaction", nodeLabel: "Knowledge Article +2", type: "Knowledge", freq: "Daily", last: "9h ago", rows: "4,170", rowsN: 4170, errors: 0, status: "healthy",
     edit: { system: "productdocs", node: "interaction", scope: "folders", locations: ["Docs / Guides", "Docs / API", "Docs / Releases"], contentMode: "mixed",
       includeOnly: ["pd_article", "pd_guide", "pd_release"], entityNode: { pd_article: "__new__", pd_guide: "__new__", pd_release: "__new__" }, settings: { refresh: true } } },
-  // Web (Public Data) → Competitor, News, Market Signal
-  { id: "web", name: "Web", system: "Web", sysId: "web", nodeId: "signal", nodeLabel: "Competitor +2", type: "Public Data", freq: "Daily", last: "9h ago", rows: "13K", rowsN: 13620, errors: 0, status: "healthy",
+  { id: "web", name: "Web", system: "Web", sysId: "web", nodeId: "signal", nodeLabel: "Competitor +2", type: "Public Data", freq: "Daily", last: "9h ago", rows: "14K", rowsN: 13620, errors: 0, status: "healthy",
     edit: { system: "web", node: "signal", scope: "folders", locations: ["rival.com", "Industry news", "Market reports"], contentMode: "mixed",
       includeOnly: ["web_competitor", "web_news", "web_market"], entityNode: { web_competitor: "__new__", web_news: "__new__", web_market: "signal" }, settings: { refresh: true } } },
 ];
