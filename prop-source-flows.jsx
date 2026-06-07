@@ -1955,8 +1955,6 @@ function SrcDiscover({ s, set, sel }) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
                         <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{e.name}</span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-4)" }}>{e.records + " records · " + e.fields.length + " fields"}</span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, letterSpacing: "0.3px", padding: "2px 7px", borderRadius: 4, color: "var(--green)", background: "var(--green-fill)" }}>{e.conf}% CONF</span>
                       </div>
                     </div>
                   </label>
