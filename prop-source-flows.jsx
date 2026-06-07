@@ -1401,7 +1401,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     ? "All " + readCfg.item
     : readLocs.length ? readLocs.length + " " + (readLocs.length === 1 ? readCfg.container.replace(/s$/, "") : readCfg.container)
     : "Pick " + readCfg.container;
-  const objectsHint = s.extractRan ? includedEntities.length + " file type" + (includedEntities.length === 1 ? "" : "s") : "Pick a discovery agent";
+  const objectsHint = s.extractRan ? includedEntities.length + " file type" + (includedEntities.length === 1 ? "" : "s") : "Agent or automation";
   const uAgentsAssigned = includedEntities.filter(e => { var a = (s.objectAgents || {})[e.id]; return Array.isArray(a) ? a.length > 0 : !!a; }).length;
   const uExtractHint = uAgentsAssigned ? uAgentsAssigned + " of " + includedEntities.length + " assigned" : "Optional";
   const mapHint = mappedCount ? `${mappedCount} mapped` : "Map objects → nodes";
@@ -1872,6 +1872,11 @@ const ENTITY_AGENTS = [
   { id: "kg_builder",       name: "Knowledge Graph Builder Agent", desc: "Extracts entities and the relationships between them." },
   { id: "pii_safe",         name: "PII-Safe Extractor Agent",    desc: "Extracts entities while masking sensitive fields at read time." },
 ];
+const ENTITY_AUTOMATIONS = [
+  { id: "auto_doc_intake",  name: "Document Intake Automation",  desc: "Saved pipeline that classifies incoming files and extracts their fields." },
+  { id: "auto_drive_sync",  name: "Drive Sync Automation",       desc: "Watches the connected drive and processes new files on a schedule." },
+  { id: "auto_contracts",   name: "Contracts Automation",        desc: "Pre-built flow tuned for legal documents and agreements." },
+];
 const ENTITY_SETS = {
   default: [
     { id: "contract", name: "Contract", records: "1,240", conf: 96, fields: [{ col: "contract_id", type: "string", sample: "CTR-8841" }, { col: "parties", type: "string[]", sample: "Acme, Globex" }, { col: "effective_date", type: "date", sample: "2025-03-01" }, { col: "term_months", type: "int", sample: "24" }, { col: "total_value", type: "decimal", sample: "480000.00" }, { col: "governing_law", type: "string", sample: "Delaware" }] },
@@ -1906,14 +1911,19 @@ function extractionAgentFor(eid) { return EXTRACTION_AGENTS.find(a => a.id === "
 
 function SrcDiscover({ s, set, sel }) {
   const agent = s.entityAgent || "";
+  const kind = s.discoveryKind || "agent";
+  const isAuto = kind === "automation";
+  const pool = isAuto ? ENTITY_AUTOMATIONS : ENTITY_AGENTS;
   const entities = getDiscoveredEntities(sel);
   const ran = !!agent;
   const include = s.entityInclude || {};
   const isIncluded = e => include[e.id] !== false;
   const includedN = entities.filter(isIncluded).length;
-  // Picking a discovery agent simply reveals the file types it knows how to
-  // extract — they're defined in the agent, nothing runs here. Each file type
-  // gets its extraction agent assigned by default (that's what pulls the fields).
+  // Switching kind resets the picked agent/automation and the revealed file types.
+  const chooseKind = k => { if (k === kind) return; set({ discoveryKind: k, entityAgent: "", extractRan: false }); };
+  // Picking a discovery agent/automation simply reveals the file types it knows
+  // how to extract — they're defined in the agent, nothing runs here. Each file
+  // type gets its extraction agent assigned by default (that's what pulls fields).
   const chooseAgent = v => {
     if (!v) { set({ entityAgent: "", extractRan: false }); return; }
     const inc = {}, agents = {};
@@ -1921,17 +1931,31 @@ function SrcDiscover({ s, set, sel }) {
     set({ entityAgent: v, extractRan: true, entityInclude: inc, objectAgents: agents });
   };
   const toggle = id => set({ entityInclude: Object.assign({}, include, (function () { var o = {}; o[id] = !(include[id] !== false); return o; })()) });
+  const KIND_OPTS = [{ k: "agent", label: "Agent", sub: "An AI agent that reads files" }, { k: "automation", label: "Automation", sub: "A saved processing pipeline" }];
   return (
     <StepWrap wide title="Discover Files">
-      <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 800 }}>Unstructured sources have no predefined tables. Pick a discovery agent and it lists the <b style={{ color: "var(--ink-2)" }}>file types it can extract</b>. Choose which to bring into the graph — you'll run extraction on each in the next step.</div>
-      <FormRow label="Discovery agent" hint="Each agent extracts a known set of file types — pick one to see what it covers." last={!ran}>
+      <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 800 }}>Unstructured sources have no predefined tables. Run a discovery agent or automation — it lists the <b style={{ color: "var(--ink-2)" }}>file types it can extract</b>. Choose which to bring into the graph — you'll run extraction on each in the next step.</div>
+      <FormRow label="Discover with" hint="Use an AI agent or a saved automation to surface the file types.">
+        <div style={{ display: "flex", gap: 10 }}>
+          {KIND_OPTS.map(o => {
+            const on = kind === o.k;
+            return (
+              <button key={o.k} onClick={() => chooseKind(o.k)} style={{ flex: 1, maxWidth: 230, textAlign: "left", padding: "11px 14px", borderRadius: 10, cursor: "pointer", border: "1px solid " + (on ? "var(--ink)" : "var(--line)"), background: on ? "var(--panel)" : "transparent", boxShadow: on ? "inset 0 0 0 1px var(--ink)" : "none", transition: "border-color 120ms" }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{o.label}</div>
+                <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 2 }}>{o.sub}</div>
+              </button>
+            );
+          })}
+        </div>
+      </FormRow>
+      <FormRow label={isAuto ? "Automation" : "Discovery agent"} hint={isAuto ? "Each automation extracts a known set of file types — pick one to see what it covers." : "Each agent extracts a known set of file types — pick one to see what it covers."} last={!ran}>
         <div style={{ maxWidth: 460 }}>
-          <CustomSelect value={agent} placeholder="Select an agent…" onChange={chooseAgent} options={ENTITY_AGENTS.map(a => ({ id: a.id, label: a.name, desc: a.desc }))} searchable searchPlaceholder="Search agents…" />
+          <CustomSelect value={agent} placeholder={isAuto ? "Select an automation…" : "Select an agent…"} onChange={chooseAgent} options={pool.map(a => ({ id: a.id, label: a.name, desc: a.desc }))} searchable searchPlaceholder={isAuto ? "Search automations…" : "Search agents…"} />
         </div>
       </FormRow>
 
       {ran && (
-        <FormRow label="File types" hint={"File types this agent can extract — " + includedN + " of " + entities.length + " selected. Pick which to bring into the graph."} last>
+        <FormRow label="File types" hint={"File types this " + (isAuto ? "automation" : "agent") + " can extract — " + includedN + " of " + entities.length + " selected. Pick which to bring into the graph."} last>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {entities.map(e => {
               const on = isIncluded(e);
