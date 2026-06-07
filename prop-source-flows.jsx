@@ -1414,7 +1414,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     { label: "Source system", hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",    hint: connLabel },
     { label: "Scope",         hint: readHint },
-    { label: "Objects",       hint: objectsHint },
+    { label: "Discover Objects", hint: objectsHint },
     { label: "Extract",       hint: uExtractHint },
     { label: "Map",           hint: mapHint, subItems: mapSubItems, activeSub: activeMapObj, onSub: setMapActiveObj },
     { label: "Settings",      hint: settingsHint },
@@ -1950,20 +1950,13 @@ function SrcDiscover({ s, set, sel }) {
               const on = isIncluded(e);
               return (
                 <div key={e.id} style={{ border: "1px solid " + (on ? "var(--line)" : "var(--line-2)"), borderRadius: 11, background: on ? "var(--panel)" : "transparent", opacity: on ? 1 : 0.66, overflow: "hidden", transition: "opacity 120ms" }}>
-                  <label style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "13px 15px", cursor: "pointer" }}>
-                    <input type="checkbox" checked={on} onChange={() => toggle(e.id)} style={{ accentColor: "var(--ink)", width: 15, height: 15, marginTop: 2, flexShrink: 0 }} />
+                  <label style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 15px", cursor: "pointer" }}>
+                    <input type="checkbox" checked={on} onChange={() => toggle(e.id)} style={{ accentColor: "var(--ink)", width: 15, height: 15, flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
                         <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{e.name}</span>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-4)" }}>{e.records + " records · " + e.fields.length + " fields"}</span>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, letterSpacing: "0.3px", padding: "2px 7px", borderRadius: 4, color: "var(--green)", background: "var(--green-fill)" }}>{e.conf}% CONF</span>
-                      </div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 9 }}>
-                        {e.fields.map(f => (
-                          <span key={f.col} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, padding: "2px 7px 2px 4px", borderRadius: 5, background: "var(--chip)", border: "1px solid var(--line-2)", color: "var(--ink-2)" }}>
-                            <MapTypeGlyph type={f.type} size={16} />{f.col}
-                          </span>
-                        ))}
                       </div>
                     </div>
                   </label>
