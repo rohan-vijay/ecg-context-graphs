@@ -1184,7 +1184,7 @@ const SRC_STEPS = [
   { label: "Source system", hint: "Pick connector from catalog" },
   { label: "Connection",    hint: "Pick or add a connection"   },
   { label: "Object",        hint: "Choose what to read"        },
-  { label: "Column mapping",hint: "Map source → node props"    },
+  { label: "Map columns",   hint: "Map source → node props"    },
   { label: "Settings",      hint: "Pipeline, ingestion, tier"  },
   { label: "Review",        hint: "Config & publish"          },
 ];
@@ -1373,14 +1373,17 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const mapGroups = unstructured
     ? [{ name: (node && node.label) || "Document", type: "Extracted fields", rows: "", cols: unstructuredCols }]
     : selectedTables.map(nm => { const o = allObjects.find(x => x.name === nm) || { name: nm }; return { name: nm, type: o.type, rows: o.rows, cols: getObjectCols(o) }; });
-  const mapKeys = mapGroups.reduce((acc, g) => acc.concat(g.cols.map(c => g.name + "::" + c.col)), []);
+  // A group's mappable fields = its source columns + any agent-extracted fields.
+  const mapColsOf = g => g.cols.concat(agentFieldsFor(s, g.name));
+  const mapKeys = mapGroups.reduce((acc, g) => acc.concat(mapColsOf(g).map(c => g.name + "::" + c.col)), []);
   const mappedCount = mapKeys.filter(k => (s.mapping || {})[k]).length;
   const totalMapCols = mapKeys.length;
   // Active object for the per-object mapping sub-navigation.
   const activeMapObj = (mapActiveObj && mapGroups.some(g => g.name === mapActiveObj)) ? mapActiveObj : (mapGroups[0] ? mapGroups[0].name : "");
   const mapSubItems = mapGroups.length > 1 ? mapGroups.map(g => {
-    const gm = g.cols.filter(c => (s.mapping || {})[g.name + "::" + c.col]).length;
-    return { id: g.name, label: g.name, mapped: gm, total: g.cols.length, type: g.type, done: gm > 0 };
+    const cols = mapColsOf(g);
+    const gm = cols.filter(c => (s.mapping || {})[g.name + "::" + c.col]).length;
+    return { id: g.name, label: g.name, mapped: gm, total: cols.length, type: g.type, done: gm > 0 };
   }) : null;
   const settingsHint = (s.pipelineType === "scheduled" ? "Scheduled" : "Real Time") + " · " + (s.resourceTier || "Small");
   const canNext = step === 0 ? !!s.system
@@ -1416,7 +1419,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     { label: "Connection",     hint: connLabel },
     { label: "Objects",        hint: objectHint },
     { label: "Extract",        hint: agentsHint },
-    { label: "Column mapping", hint: colMapHint, subItems: mapSubItems, activeSub: activeMapObj, onSub: setMapActiveObj },
+    { label: "Map columns", hint: colMapHint, subItems: mapSubItems, activeSub: activeMapObj, onSub: setMapActiveObj },
     { label: "Settings", hint: settingsHint },
   ];
 
@@ -1596,7 +1599,9 @@ function SrcConnStatusDot({ status }) {
 
 function SrcConnection({ s, set, sel }) {
   const conns = sel ? getConnections(sel.id, sel) : [];
-  const addingNew = s.connection === "__new__";
+  const [newOpen, setNewOpen] = useState(false);
+  const createdNew = s.connection === "__new__";
+  const canCreate = (s.newConnName || "").trim().length > 0 && (s.newConnHost || "").trim().length > 0;
   const hostLabel = sel?.id === "salesforce" ? "Instance URL"
     : sel?.cat === "Data Warehouse" || sel?.cat === "Databases" ? "Host / account"
     : sel?.cat === "Files & Storage" ? "Bucket / site"
@@ -1634,25 +1639,48 @@ function SrcConnection({ s, set, sel }) {
         </>
       )}
 
-      <button onClick={() => set({ connection: "__new__" })}
-        style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 14px", borderRadius: 10, borderWidth: 1, borderStyle: addingNew ? "solid" : "dashed", borderColor: addingNew ? "var(--ink)" : "var(--line)", background: addingNew ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--ink)", boxShadow: addingNew ? "0 0 0 2px color-mix(in oklab, var(--ink) 12%, transparent)" : "none" }}>
-        <span style={{ width: 22, height: 22, borderRadius: 6, background: "var(--chip)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-2)", flexShrink: 0 }}>+</span>
-        <span style={{ fontWeight: 600 }}>Add a new connection</span>
-        <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--ink-3)" }}>{sel ? "to " + sel.name : ""}</span>
+      <button onClick={() => setNewOpen(true)}
+        style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "13px 14px", borderRadius: 10, borderWidth: 1, borderStyle: createdNew ? "solid" : "dashed", borderColor: createdNew ? "var(--ink)" : "var(--line)", background: createdNew ? "var(--panel)" : "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--ink)", textAlign: "left" }}>
+        {createdNew && sel
+          ? <SrcConnectorLogo c={sel} size={20} />
+          : <span style={{ width: 22, height: 22, borderRadius: 6, background: "var(--chip)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-2)", flexShrink: 0 }}>+</span>}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ fontWeight: 600 }}>{createdNew ? (s.newConnName || "New connection") : "Add a new connection"}</span>
+          {createdNew && s.newConnHost && <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--ink-3)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.newConnHost + " · " + s.newConnAuth}</div>}
+        </div>
+        {createdNew
+          ? <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: "50%", background: "var(--ink)", color: "var(--bg-canvas)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>✓</span>
+          : <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--ink-3)", flexShrink: 0 }}>{sel ? "to " + sel.name : ""}</span>}
       </button>
 
-      {addingNew && (
-        <div style={{ marginTop: 14, padding: "16px", border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)", display: "grid", gap: 12 }}>
-          <FormRow label="Connection name" required>
-            <input className="winput" placeholder={sel ? sel.name + " — production" : "My connection"} value={s.newConnName} onChange={e => set({ newConnName: e.target.value })} autoFocus />
-          </FormRow>
-          <FormRow label={hostLabel} required>
-            <input className="winput winput-mono" placeholder={sel?.id === "salesforce" ? "acme.my.salesforce.com" : sel?.cat === "Files & Storage" ? "s3://acme-bucket" : "host.acme.internal"} value={s.newConnHost} onChange={e => set({ newConnHost: e.target.value })} />
-          </FormRow>
-          <FormRow label="Authentication" last>
-            <CustomSelect value={s.newConnAuth} onChange={v => set({ newConnAuth: v })} options={["OAuth2", "API key", "Key-pair", "Username / password", "Service account"].map(t => ({ id: t, label: t }))} />
-          </FormRow>
-          <div style={{ fontSize: 11.5, color: "var(--ink-4)", lineHeight: 1.5 }}>You'll be redirected to authorize. Credentials are stored encrypted and reused across pipelines.</div>
+      {newOpen && (
+        <div onClick={() => setNewOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(20,22,16,0.42)", backdropFilter: "blur(2px)", display: "grid", placeItems: "center", padding: 24, animation: "flow-fade-in 140ms ease-out" }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 520, maxWidth: "92vw", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 14, boxShadow: "0 24px 64px rgba(0,0,0,0.22)", overflow: "hidden", display: "flex", flexDirection: "column", animation: "flow-zoom-in 180ms cubic-bezier(.2,.8,.2,1)" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "16px 20px", borderBottom: "1px solid var(--line-2)" }}>
+              {sel && <SrcConnectorLogo c={sel} size={26} />}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: "'Instrument Serif', serif", fontSize: 21, color: "var(--ink)", lineHeight: 1.1 }}>New connection</div>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--ink-3)", marginTop: 3 }}>{sel ? "to " + sel.name : ""}</div>
+              </div>
+              <button onClick={() => setNewOpen(false)} style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid var(--line)", background: "none", cursor: "pointer", color: "var(--ink-3)", flexShrink: 0, fontSize: 13 }}>✕</button>
+            </div>
+            <div style={{ padding: "18px 20px", display: "grid", gap: 14 }}>
+              <FormRow label="Connection name" required>
+                <input className="winput" placeholder={sel ? sel.name + " — production" : "My connection"} value={s.newConnName} onChange={e => set({ newConnName: e.target.value })} autoFocus />
+              </FormRow>
+              <FormRow label={hostLabel} required>
+                <input className="winput winput-mono" placeholder={sel?.id === "salesforce" ? "acme.my.salesforce.com" : sel?.cat === "Files & Storage" ? "s3://acme-bucket" : "host.acme.internal"} value={s.newConnHost} onChange={e => set({ newConnHost: e.target.value })} />
+              </FormRow>
+              <FormRow label="Authentication" last>
+                <CustomSelect value={s.newConnAuth} onChange={v => set({ newConnAuth: v })} options={["OAuth2", "API key", "Key-pair", "Username / password", "Service account"].map(t => ({ id: t, label: t }))} />
+              </FormRow>
+              <div style={{ fontSize: 11.5, color: "var(--ink-4)", lineHeight: 1.5 }}>You'll be redirected to authorize. Credentials are stored encrypted and reused across pipelines.</div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: "14px 20px", borderTop: "1px solid var(--line-2)", background: "var(--panel-2)" }}>
+              <button className="btn-ghost" onClick={() => setNewOpen(false)}>Cancel</button>
+              <button className="btn-dark" disabled={!canCreate} style={{ opacity: canCreate ? 1 : 0.45 }} onClick={() => { if (canCreate) { set({ connection: "__new__" }); setNewOpen(false); } }}>Create connection</button>
+            </div>
+          </div>
         </div>
       )}
     </StepWrap>
@@ -2130,6 +2158,13 @@ const OBJECT_AGENTS = [
   { id: "geocode",        name: "Address Geocoder Agent",     desc: "Normalizes addresses and adds lat/long.",              outputs: [{ col: "lat", type: "decimal", sample: "37.7749" }, { col: "lng", type: "decimal", sample: "-122.4194" }, { col: "normalized_address", type: "string", sample: "548 Market St, SF" }, { col: "timezone", type: "string", sample: "America/Los_Angeles" }] },
 ];
 function agentDef(id) { return OBJECT_AGENTS.find(a => a.id === id) || null; }
+// Agent-extracted fields for an object, as mappable columns. Namespaced col keys
+// ("fx::<agent>::<field>") so they never collide with same-named source columns.
+function agentFieldsFor(s, objName) {
+  const a = (s.objectAgents || {})[objName];
+  const ids = Array.isArray(a) ? a : (a ? [a] : []);
+  return ids.reduce((acc, id) => { const ag = agentDef(id); return ag ? acc.concat(ag.outputs.map(o => ({ col: "fx::" + id + "::" + o.col, label: o.col, type: o.type, sample: o.sample, agent: ag.name }))) : acc; }, []);
+}
 
 function SrcObjectAgents({ s, set, groups, sel }) {
   const assigned = s.objectAgents || {};
@@ -2277,16 +2312,19 @@ function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, 
   // Map ONE object at a time — the active object is driven by the sidebar sub-nav.
   const current = (activeObj && groupList.find(g => g.name === activeObj)) || groupList[0] || null;
   const curCols = current ? current.cols : [];
-  const curKeys = curCols.map(c => mk(current.name, c.col));
-  const total = curKeys.length;
-  const mappedCount = curKeys.filter(k => mapping[k]).length;
+  // Fields the assigned agents add — mappable alongside the source columns.
+  const agentFields = current ? agentFieldsFor(s, current.name) : [];
+  const allFields = curCols.concat(agentFields);
+  const total = allFields.length;
+  const mappedCount = allFields.filter(c => mapping[mk(current.name, c.col)]).length;
   const recordFilters = s.recordFilters || {};
   const activeFilters = current ? (recordFilters[current.name] || []) : [];
   const tfields = current ? ((s.transformedFields || {})[current.name] || []) : [];
   const removeTf = id => { const cur = s.transformedFields || {}; const arr = (cur[current.name] || []).filter(t => t.id !== id); set({ transformedFields: Object.assign({}, cur, (function () { var o = {}; o[current.name] = arr; return o; })()) }); };
   const colVisible = (c) => {
     const key = mk(current.name, c.col);
-    if (q && c.col.toLowerCase().indexOf(q.toLowerCase()) < 0) return false;
+    const nm = c.label || c.col;
+    if (q && nm.toLowerCase().indexOf(q.toLowerCase()) < 0) return false;
     if (tab === "mapped") return !!mapping[key];
     if (tab === "unmapped") return !mapping[key];
     return true;
@@ -2302,8 +2340,8 @@ function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, 
         <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "12px 16px", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
             <MapTypeGlyph type={col.type} />
-            <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{col.col}</code>
-            {col.col === "id" && <MapBadge tone="var(--green)">PK</MapBadge>}
+            <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{col.label || col.col}</code>
+            {col.col === "id" && !col.agent && <MapBadge tone="var(--green)">PK</MapBadge>}
           </div>
           <button onClick={() => setOpenCol(key)}
             style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", width: "100%", padding: "7px 10px", borderRadius: 8, borderWidth: 1, borderStyle: tlist.length || isOpen ? "solid" : "dashed", borderColor: isOpen ? "var(--ink)" : tlist.length ? "var(--line)" : "transparent", background: isOpen ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", minHeight: 34 }}
@@ -2445,20 +2483,46 @@ function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, 
       )}
 
       {current && (function () {
-        const visible = curCols.filter(colVisible);
+        const sourceVisible = curCols.filter(colVisible);
+        const agentVisible = agentFields.filter(colVisible);
+        // group the agent-extracted fields by the agent that produced them
+        const agentGroups = [];
+        agentVisible.forEach(f => { let gg = agentGroups.find(x => x.name === f.agent); if (!gg) { gg = { name: f.agent, fields: [] }; agentGroups.push(gg); } gg.fields.push(f); });
+        const hasAgents = agentFields.length > 0;
+        // subtle section header — kept as quiet as the column captions above
+        const sectionLabel = (text, count, first) => (
+          <div key={"sec-" + text} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", background: "var(--panel-2)", borderTop: first ? "none" : "1px solid var(--line)" }}>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", fontWeight: 600 }}>{text}</span>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, color: "var(--ink-4)" }}>· {count}</span>
+          </div>
+        );
+        const empty = sourceVisible.length === 0 && agentVisible.length === 0 && tfields.length === 0;
         return (
           <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)", overflow: "hidden" }}>
             {/* active object caption */}
             <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 16px", borderBottom: "1px solid var(--line)", background: "var(--panel-2)" }}>
               {!singleGroup && sel && <SrcConnectorLogo c={sel} size={18} />}
               <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{current.name}</code>
-              <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{(current.type || "Object") + " · " + current.cols.length + " columns"}</span>
+              <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{(current.type || "Object") + " · " + current.cols.length + " columns" + (hasAgents ? " · " + agentFields.length + " from agents" : "")}</span>
               <span style={{ marginLeft: "auto", fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 600, color: mappedCount ? "var(--green)" : "var(--ink-3)" }}>{mappedCount + "/" + total + " mapped"}</span>
             </div>
             {tableHeader(false)}
-            {visible.map((col, i) => renderRow(current, col, i, i === visible.length - 1))}
+            {hasAgents ? (
+              <>
+                {sectionLabel("From source", sourceVisible.length, true)}
+                {sourceVisible.map((col, i) => renderRow(current, col, i))}
+                {agentGroups.map(ag => (
+                  <React.Fragment key={ag.name}>
+                    {sectionLabel(ag.name, ag.fields.length)}
+                    {ag.fields.map((col, i) => renderRow(current, col, i))}
+                  </React.Fragment>
+                ))}
+              </>
+            ) : (
+              sourceVisible.map((col, i) => renderRow(current, col, i, i === sourceVisible.length - 1))
+            )}
             {tab !== "mapped" && tfields.map(tf => renderTfRow(tf))}
-            {visible.length === 0 && tfields.length === 0 && <div style={{ padding: "30px", textAlign: "center", color: "var(--ink-3)", fontSize: 12.5 }}>No fields match the current filter.</div>}
+            {empty && <div style={{ padding: "30px", textAlign: "center", color: "var(--ink-3)", fontSize: 12.5 }}>No fields match the current filter.</div>}
           </div>
         );
       })()}
