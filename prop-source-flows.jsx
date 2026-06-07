@@ -1404,7 +1404,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const objectsHint = s.extractRan ? includedEntities.length + " file type" + (includedEntities.length === 1 ? "" : "s") : "Find file types";
   const uAgentsAssigned = includedEntities.filter(e => { var a = (s.objectAgents || {})[e.id]; return Array.isArray(a) ? a.length > 0 : !!a; }).length;
   const uExtractHint = uAgentsAssigned ? uAgentsAssigned + " of " + includedEntities.length + " assigned" : "Optional";
-  const mapHint = mappedCount ? `${mappedCount} mapped` : "Map objects → nodes";
+  const mapHint = mappedCount ? `${mappedCount} mapped` : "Map file types to nodes";
   const objectHint = selectedTables.length ? selectedTables.length + " object" + (selectedTables.length === 1 ? "" : "s") : (s.query ? "Custom SQL" : "Choose what to read");
   const objAgents = s.objectAgents || {};
   const agentsAssigned = selectedTables.filter(t => objAgents[t]).length;
@@ -1475,7 +1475,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
           {step === 3 && <SrcDiscover s={s} set={set} sel={sel} />}
           {step === 4 && <SrcObjectAgents s={s} set={set} groups={mapGroups} sel={sel} fileMode
             agentPoolFor={g => ({ agents: [extractionAgentFor(g.name)].filter(Boolean).concat(DOC_ENRICH_AGENTS), automations: RUN_AUTOMATIONS })} />}
-          {step === 5 && <SrcEntityMap s={s} set={set} groups={mapGroups} activeObj={activeMapObj} sel={sel} />}
+          {step === 5 && <SrcEntityMap s={s} set={set} groups={mapGroups} activeObj={activeMapObj} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} />}
           {step === 6 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
         </>
       ) : (
@@ -1765,7 +1765,7 @@ function srcCap(w) { return w ? w.charAt(0).toUpperCase() + w.slice(1) : w; }
 
 // Rich single-select that mirrors the "Pick a type" control: icon box + title +
 // sub line + chevron. options = [{ id, title, desc, icon }]. Empty shows a dashed +.
-function SrcRichSelect({ value, onChange, options, emptyLabel, dense }) {
+function SrcRichSelect({ value, onChange, options, emptyLabel, dense, searchable, searchPlaceholder, plainOptions }) {
   const box = dense ? 27 : 34;
   const iconBox = (content, dashed) => (
     <span style={{ width: box, height: box, borderRadius: dense ? 6 : 7, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--chip)", borderWidth: 1, borderStyle: dashed ? "dashed" : "solid", borderColor: "var(--line)", color: "var(--ink-3)" }}>{content}</span>
@@ -1782,9 +1782,10 @@ function SrcRichSelect({ value, onChange, options, emptyLabel, dense }) {
   return (
     <CustomSelect
       value={value} onChange={onChange} options={options} className={dense ? "csel-dense" : undefined}
+      searchable={searchable} searchPlaceholder={searchPlaceholder}
       placeholder={body(iconBox("+", true), emptyLabel || "Choose…", "Click to choose", true)}
       renderTrigger={o => body(iconBox(o.icon), o.title, o.desc)}
-      renderOption={o => body(iconBox(o.icon), o.title, o.desc)}
+      renderOption={plainOptions ? (o => <span style={{ fontSize: dense ? 13 : 14, fontWeight: 600, color: "var(--ink)" }}>{o.title}</span>) : (o => body(iconBox(o.icon), o.title, o.desc))}
     />
   );
 }
@@ -1980,8 +1981,9 @@ function SrcDiscover({ s, set, sel }) {
 }
 
 // ── Unstructured Map: map each discovered entity to a graph node + its props ───
-function SrcEntityMap({ s, set, groups, activeObj, sel }) {
+function SrcEntityMap({ s, set, groups, activeObj, sel, openCol, setOpenCol }) {
   const mapping = s.mapping || {};
+  const transforms = s.transforms || {};
   const entityNode = s.entityNode || {};
   const nodes = ((typeof window !== "undefined" && window.NODES) || []).filter(n => n.type === "entity");
   const current = (activeObj && groups.find(g => g.name === activeObj)) || groups[0] || null;
@@ -2006,7 +2008,7 @@ function SrcEntityMap({ s, set, groups, activeObj, sel }) {
   };
   const updateMap = (col, v) => set({ mapping: Object.assign({}, mapping, (function () { var o = {}; o[mk(col)] = v; return o; })()) });
   const mappedN = cols.filter(c => mapping[mk(c.col)]).length;
-  const GRID = "minmax(180px,1.2fr) 34px minmax(200px,1.3fr)";
+  const GRID = "minmax(160px,1.1fr) minmax(150px,1fr) 28px minmax(180px,1.1fr)";
   const nodeOptions = nodes.map(n => ({ id: n.id, label: n.label, node: n })).concat([{ id: "__new__", label: "+ New node type" + (current ? " — " + current.label : "") }]);
   const sectionLabel = (text, n, first) => (
     <div key={"sec-" + text} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", background: "var(--panel-2)", borderTop: first ? "none" : "1px solid var(--line)" }}>
@@ -2015,14 +2017,28 @@ function SrcEntityMap({ s, set, groups, activeObj, sel }) {
     </div>
   );
   const renderFieldRow = (c, key, i) => {
-    const mapped = mapping[mk(c.col)];
+    const ck = mk(c.col);
+    const mapped = mapping[ck];
     const nm = c.label || c.col;
+    const tlist = transforms[ck] || [];
+    const isOpen = openCol === ck;
     return (
       <div key={key} style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "12px 16px", alignItems: "center", borderTop: i ? "1px solid var(--line-2)" : "none" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
           <MapTypeGlyph type={c.type} />
           <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nm}</code>
         </div>
+        <button onClick={() => setOpenCol && setOpenCol(ck)}
+          style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", width: "100%", padding: "7px 10px", borderRadius: 8, borderWidth: 1, borderStyle: tlist.length || isOpen ? "solid" : "dashed", borderColor: isOpen ? "var(--ink)" : tlist.length ? "var(--line)" : "transparent", background: isOpen ? "var(--bg-canvas)" : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", minHeight: 34 }}
+          onMouseEnter={e => { e.currentTarget.style.background = "var(--panel-2)"; if (!tlist.length && !isOpen) e.currentTarget.style.borderColor = "var(--line)"; }}
+          onMouseLeave={e => { if (!isOpen) e.currentTarget.style.background = "transparent"; if (!tlist.length && !isOpen) e.currentTarget.style.borderColor = "transparent"; }}>
+          {tlist.length === 0
+            ? <span style={{ fontSize: 12, color: "var(--ink-4)" }}>+ Add transformation</span>
+            : tlist.map((t, j) => <span key={j} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, padding: "2px 7px", borderRadius: 5, background: "var(--chip)", border: "1px solid var(--line)", color: "var(--ink-2)" }}>{t.fn ? tfLabel(t.fn) : "function…"}</span>)}
+          <span style={{ marginLeft: "auto", color: "var(--ink-3)", flexShrink: 0, display: "flex" }} title="Edit transformations">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z" /></svg>
+          </span>
+        </button>
         <div style={{ textAlign: "center", color: (isNew || mapped) ? "var(--green)" : "var(--ink-4)", fontSize: 15 }}>→</div>
         {isNew
           ? <span style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 2px" }}><MapTypeGlyph type={c.type} size={22} /><code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{nm}</code><MapBadge tone="var(--purple)">NEW</MapBadge></span>
@@ -2040,7 +2056,7 @@ function SrcEntityMap({ s, set, groups, activeObj, sel }) {
       )}
       {current && (
         <>
-          <FormRow label="Destination node" hint="Each discovered entity becomes a node in the graph — reuse an existing one or create a new node type." last={!destId}>
+          <FormRow label="Destination node" last={!destId}>
             <div style={{ maxWidth: 480 }}>
               <CustomSelect value={destId} placeholder="Pick or create a node…" onChange={setNode} options={nodeOptions} searchable searchPlaceholder="Search nodes…"
                 renderTrigger={o => o.id === "__new__"
@@ -2060,7 +2076,7 @@ function SrcEntityMap({ s, set, groups, activeObj, sel }) {
                 {!isNew && <span style={{ marginLeft: "auto", fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 600, color: mappedN ? "var(--green)" : "var(--ink-3)" }}>{mappedN + "/" + cols.length + " mapped"}</span>}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "10px 16px", background: "var(--panel-2)", borderBottom: "1px solid var(--line-2)", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)" }}>
-                <div>Entity field</div><div></div><div>{isNew ? "New property" : "Destination property"}</div>
+                <div>Entity field</div><div>Transformations</div><div></div><div>{isNew ? "New property" : "Destination property"}</div>
               </div>
               {hasAgents ? (
                 <>
@@ -2346,31 +2362,24 @@ function agentFieldsFor(s, objName) {
   return ids.reduce((acc, id) => { const ag = agentDef(id); return ag ? acc.concat(ag.outputs.map(o => ({ col: "fx::" + id + "::" + o.col, label: o.col, type: o.type, sample: o.sample, agent: ag.name }))) : acc; }, []);
 }
 
-// Inline picker for the Extract step: two balanced rich-selects — choose a
-// method (Agent / Automation) on the left, then the specific one on the right.
-function InlineRunPicker({ agents, automations, onAdd, onClose, header }) {
+// Inline picker for the Extract step: two dropdowns inline (method + the
+// specific agent/automation) with a subtle close to the right — no extra chrome.
+function InlineRunPicker({ agents, automations, onAdd, onClose }) {
   const [kind, setKind] = useState("");
   const isAuto = kind === "automation";
   const list = isAuto ? automations : agents;
-  const opts = list.map(o => ({ id: o.id, icon: isAuto ? SRC_METHOD_ICONS.automation : SRC_METHOD_ICONS.agent, title: o.label, desc: "" }));
+  const opts = list.map(o => ({ id: o.id, title: o.label, label: o.label }));
   return (
-    <div style={{ border: "1px solid var(--line)", borderRadius: 10, background: "var(--bg-canvas)", padding: "11px 13px", marginTop: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", fontWeight: 600 }}>{header || "Run extraction"}</span>
-        <button onClick={onClose} title="Cancel" style={{ border: "none", background: "none", cursor: "pointer", padding: 2, color: "var(--ink-4)" }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
-        </button>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <SrcRichSelect dense value={kind} onChange={setKind} options={METHOD_KIND_OPTS} emptyLabel="Pick a method" />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <div>
-          <div className="wfr-label" style={{ marginBottom: 4 }}>Method</div>
-          <SrcRichSelect dense value={kind} onChange={setKind} options={METHOD_KIND_OPTS} emptyLabel="Pick a method" />
-        </div>
-        <div style={{ opacity: kind ? 1 : 0.45, pointerEvents: kind ? "auto" : "none", transition: "opacity 120ms" }}>
-          <div className="wfr-label" style={{ marginBottom: 4 }}>{isAuto ? "Automation" : "Agent"}</div>
-          <SrcRichSelect dense value="" onChange={id => onAdd(id)} options={kind ? opts : []} emptyLabel={kind ? (isAuto ? "Select an automation…" : "Select an agent…") : "Pick a method first"} />
-        </div>
+      <div style={{ flex: 1, minWidth: 0, opacity: kind ? 1 : 0.45, pointerEvents: kind ? "auto" : "none", transition: "opacity 120ms" }}>
+        <SrcRichSelect dense searchable plainOptions searchPlaceholder={isAuto ? "Search automations…" : "Search agents…"} value="" onChange={id => onAdd(id)} options={kind ? opts : []} emptyLabel={kind ? (isAuto ? "Select an automation…" : "Select an agent…") : "Pick a method first"} />
       </div>
+      <button onClick={onClose} title="Cancel" style={{ border: "none", background: "none", cursor: "pointer", padding: 4, color: "var(--ink-4)", flexShrink: 0 }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+      </button>
     </div>
   );
 }
@@ -2390,7 +2399,6 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor, fileMode }) {
   // unstructured files need *extraction*. Both can be an agent OR an automation.
   const stepTitle = fileMode ? "Extract fields" : "Extract data";
   const ctaLabel = "+ Extract fields";
-  const panelHeader = "Extract fields";
   const runBtn = (g, label, pressed) => (
     <button onClick={() => setOpenPicker(openPicker === g.name ? "" : g.name)} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "inherit", fontSize: 12.5, fontWeight: 500, color: pressed ? "var(--ink)" : "var(--ink-2)", background: pressed ? "var(--chip)" : "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}>{label}</button>
   );
@@ -2419,7 +2427,7 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor, fileMode }) {
               <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 16px", borderBottom: bodyOpen ? "1px solid var(--line-2)" : "none", background: "var(--panel-2)", borderRadius: bodyOpen ? "12px 12px 0 0" : 12 }}>
                 {sel && <SrcConnectorLogo c={sel} size={18} />}
                 <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{g.label || g.name}</code>
-                <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{fileMode ? "File type" : ((g.type || "Object") + " · " + g.cols.length + " columns")}</span>
+                {!fileMode && <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{(g.type || "Object") + " · " + g.cols.length + " columns"}</span>}
                 {hasAgents
                   ? <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.4px", color: "var(--purple)", background: "color-mix(in oklab, var(--purple) 12%, transparent)", padding: "3px 8px", borderRadius: 5 }}>＋{total} FIELDS</span>
                   : <span style={{ marginLeft: "auto", flexShrink: 0 }}>{runBtn(g, pickerOpen ? "Cancel" : ctaLabel, pickerOpen)}</span>}
@@ -2446,7 +2454,7 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor, fileMode }) {
                     </div>
                   )}
 
-                  {pickerOpen && <InlineRunPicker header={panelHeader} agents={availAgents} automations={availAutomations} onAdd={id => { addAgent(g.name, id); setOpenPicker(""); }} onClose={() => setOpenPicker("")} />}
+                  {pickerOpen && <InlineRunPicker agents={availAgents} automations={availAutomations} onAdd={id => { addAgent(g.name, id); setOpenPicker(""); }} onClose={() => setOpenPicker("")} />}
 
                   {hasAgents && (
                     <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12 }}>
