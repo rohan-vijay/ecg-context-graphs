@@ -1349,6 +1349,8 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     // Unstructured-source flow state
     readScope: "", readLocations: [], readFilters: {}, readStarts: [],
     extractMethod: "", extractAgent: "", extractAutomation: "", extractFields: [],
+    // Unstructured: runtime entity discovery + per-entity destination node
+    entityAgent: "", extractRan: false, entityInclude: {}, entityNode: {},
   });
 
   const set = patch => setS(v => ({ ...v, ...patch }));
@@ -1359,19 +1361,16 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const unstructured = !!(sel && sel.kind === "unstructured");
   const readCfg = getReadConfig(sel);
   const readLocs = s.readLocations || [];
-  const extractFields = s.extractFields || [];
-  // For unstructured Map: the source "columns" are the auto-captured file metadata
-  // plus the user-defined extracted fields. These get mapped to node properties.
-  const unstructuredCols = unstructured ? UNSTRUCTURED_META_COLS.concat(
-    extractFields.filter(f => f.name).map(f => ({ col: f.name, type: f.type || "string", sample: f.description || "extracted", extracted: true }))
-  ) : [];
-  // Mapping groups — one per selected object (structured) or a single captured-fields
-  // group (unstructured). Each group's columns are mapped independently; mapping keys
-  // are namespaced as "<object>::<col>" so identically-named columns don't collide.
+  // Unstructured: entities are discovered at runtime by the Extract agent.
+  const discoveredEntities = unstructured && s.extractRan ? getDiscoveredEntities(sel) : [];
+  const includedEntities = discoveredEntities.filter(e => (s.entityInclude || {})[e.id] !== false);
+  // Mapping groups — one per selected object (structured) or per discovered entity
+  // (unstructured). Each group's columns are mapped independently; mapping keys are
+  // namespaced as "<group>::<col>" so identically-named columns don't collide.
   const allObjects = sel && !unstructured ? getSourceObjects(sel.id, sel) : [];
   const selectedTables = s.tables || [];
   const mapGroups = unstructured
-    ? [{ name: (node && node.label) || "Document", type: "Extracted fields", rows: "", cols: unstructuredCols }]
+    ? includedEntities.map(e => ({ name: e.id, label: e.name, type: "Entity", rows: e.records, cols: e.fields }))
     : selectedTables.map(nm => { const o = allObjects.find(x => x.name === nm) || { name: nm }; return { name: nm, type: o.type, rows: o.rows, cols: getObjectCols(o) }; });
   // A group's mappable fields = its source columns + any agent-extracted fields.
   const mapColsOf = g => g.cols.concat(agentFieldsFor(s, g.name));
@@ -1382,13 +1381,15 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
   const activeMapObj = (mapActiveObj && mapGroups.some(g => g.name === mapActiveObj)) ? mapActiveObj : (mapGroups[0] ? mapGroups[0].name : "");
   const mapSubItems = mapGroups.length > 1 ? mapGroups.map(g => {
     const cols = mapColsOf(g);
-    const gm = cols.filter(c => (s.mapping || {})[g.name + "::" + c.col]).length;
-    return { id: g.name, label: g.name, mapped: gm, total: cols.length, type: g.type, done: gm > 0 };
+    const newNode = unstructured && (s.entityNode || {})[g.name] === "__new__";
+    const gm = newNode ? cols.length : cols.filter(c => (s.mapping || {})[g.name + "::" + c.col]).length;
+    return { id: g.name, label: g.label || g.name, mapped: gm, total: cols.length, type: g.type, done: gm > 0 };
   }) : null;
   const settingsHint = (s.pipelineType === "scheduled" ? "Scheduled" : "Real Time") + " · " + (s.resourceTier || "Small");
   const canNext = step === 0 ? !!s.system
     : step === 1 ? !!s.connection
     : step === 2 ? (unstructured ? (s.readScope === "all" || ((s.readScope === "folders" || s.readScope === "files") && readLocs.length > 0)) : (selectedTables.length > 0 || !!s.query))
+    : step === 3 ? (unstructured ? (s.extractRan && includedEntities.length > 0) : true)
     : true;
 
   // Sidebar hints reflect the live selections, not static copy.
@@ -1400,8 +1401,8 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     ? "All " + readCfg.item
     : readLocs.length ? readLocs.length + " " + (readLocs.length === 1 ? readCfg.container.replace(/s$/, "") : readCfg.container)
     : "Pick " + readCfg.container;
-  const extractHint = extractFields.length ? extractFields.length + " field" + (extractFields.length === 1 ? "" : "s") : "Optional";
-  const mapHint = mappedCount ? `${mappedCount} mapped` : "Map fields → node props";
+  const extractHint = s.extractRan ? includedEntities.length + " entit" + (includedEntities.length === 1 ? "y" : "ies") : "Run an agent";
+  const mapHint = mappedCount ? `${mappedCount} mapped` : "Map entities → nodes";
   const objectHint = selectedTables.length ? selectedTables.length + " object" + (selectedTables.length === 1 ? "" : "s") : (s.query ? "Custom SQL" : "Choose what to read");
   const objAgents = s.objectAgents || {};
   const agentsAssigned = selectedTables.filter(t => objAgents[t]).length;
@@ -1412,7 +1413,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     { label: "Connection",    hint: connLabel },
     { label: "Scope",         hint: readHint },
     { label: "Extract",       hint: extractHint },
-    { label: "Map",           hint: mapHint },
+    { label: "Map",           hint: mapHint, subItems: mapSubItems, activeSub: activeMapObj, onSub: setMapActiveObj },
     { label: "Settings",      hint: settingsHint },
   ] : [
     { label: "Source system",  hint: sel ? sel.name : "Pick connector from catalog" },
@@ -1468,9 +1469,8 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
       {unstructured ? (
         <>
           {step === 2 && <SrcRead s={s} set={set} sel={sel} />}
-          {step === 3 && <SrcExtract s={s} set={set} node={node} />}
-          {step === 4 && <SrcMapping s={s} set={set} groups={mapGroups} nodeProps={nodeProps} node={node} sel={sel} openCol={mapOpenCol} setOpenCol={setMapOpenCol} singleGroup
-            title={`Map ${sel ? sel.name : "source"} fields to ${node?.label || "the node"}`} />}
+          {step === 3 && <SrcExtract s={s} set={set} sel={sel} />}
+          {step === 4 && <SrcEntityMap s={s} set={set} groups={mapGroups} activeObj={activeMapObj} sel={sel} />}
           {step === 5 && <SrcSchedule s={s} set={set} srcCols={srcCols} />}
         </>
       ) : (
@@ -1858,55 +1858,160 @@ function SrcRead({ s, set, sel }) {
   );
 }
 
-// ── Src Step 4 (unstructured): Extract ────────────────────────────────────────
-function SrcExtract({ s, set, node }) {
-  const method = s.extractMethod || "";
-  const fields = s.extractFields || [];
-  const updateField = (id, k, val) => set({ extractFields: fields.map(f => f.id === id ? Object.assign({}, f, (function () { const o = {}; o[k] = val; return o; })()) : f) });
-  const removeField = id => set({ extractFields: fields.filter(f => f.id !== id) });
-  const addField = () => set({ extractFields: fields.concat([{ id: "f-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6), name: "", type: "string", description: "" }]) });
-  const GRID = "minmax(150px,1fr) 116px minmax(200px,1.7fr) 30px";
+// ── Unstructured Extract: discover entities at runtime via an agent ───────────
+// Unstructured sources (Drive, Slack) have no predefined objects — an agent
+// reads the documents in scope and discovers the entity types inside.
+const ENTITY_AGENTS = [
+  { id: "entity_extractor", name: "Entity Extractor Agent",      desc: "Reads each document and discovers the entity types and their fields." },
+  { id: "doc_classifier",   name: "Document Classifier Agent",   desc: "Classifies every document, then groups them into entity types." },
+  { id: "kg_builder",       name: "Knowledge Graph Builder Agent", desc: "Extracts entities and the relationships between them." },
+  { id: "pii_safe",         name: "PII-Safe Extractor Agent",    desc: "Extracts entities while masking sensitive fields at read time." },
+];
+const ENTITY_SETS = {
+  default: [
+    { id: "contract", name: "Contract", records: "1,240", conf: 96, fields: [{ col: "contract_id", type: "string", sample: "CTR-8841" }, { col: "parties", type: "string[]", sample: "Acme, Globex" }, { col: "effective_date", type: "date", sample: "2025-03-01" }, { col: "term_months", type: "int", sample: "24" }, { col: "total_value", type: "decimal", sample: "480000.00" }, { col: "governing_law", type: "string", sample: "Delaware" }] },
+    { id: "invoice", name: "Invoice", records: "3,580", conf: 94, fields: [{ col: "invoice_no", type: "string", sample: "INV-22910" }, { col: "vendor", type: "string", sample: "Globex Inc" }, { col: "amount_due", type: "decimal", sample: "12450.00" }, { col: "currency", type: "string", sample: "USD" }, { col: "due_date", type: "date", sample: "2026-02-15" }] },
+    { id: "candidate", name: "Candidate", records: "820", conf: 90, fields: [{ col: "full_name", type: "string", sample: "Jane Doe" }, { col: "email", type: "string", sample: "jane@acme.com" }, { col: "skills", type: "string[]", sample: "React, Go" }, { col: "years_experience", type: "int", sample: "7" }] },
+    { id: "meeting_note", name: "Meeting Note", records: "5,100", conf: 88, fields: [{ col: "title", type: "string", sample: "Q3 Planning" }, { col: "date", type: "date", sample: "2026-01-12" }, { col: "attendees", type: "string[]", sample: "Sam, Priya" }, { col: "action_items", type: "string[]", sample: "Ship v2" }] },
+  ],
+  slack: [
+    { id: "thread", name: "Message Thread", records: "42,100", conf: 95, fields: [{ col: "thread_id", type: "string", sample: "T-99x" }, { col: "channel", type: "string", sample: "#eng" }, { col: "participants", type: "string[]", sample: "sam, priya" }, { col: "started_at", type: "timestamp", sample: "2026-05-01T10:00Z" }, { col: "summary", type: "string", sample: "Deploy plan" }] },
+    { id: "decision", name: "Decision", records: "1,840", conf: 89, fields: [{ col: "decision", type: "string", sample: "Adopt Postgres" }, { col: "owner", type: "string", sample: "morgan" }, { col: "date", type: "date", sample: "2026-04-20" }, { col: "rationale", type: "string", sample: "Lower cost" }] },
+    { id: "incident", name: "Incident", records: "310", conf: 92, fields: [{ col: "incident_id", type: "string", sample: "INC-204" }, { col: "severity", type: "string", sample: "SEV2" }, { col: "resolved", type: "bool", sample: "true" }, { col: "channel", type: "string", sample: "#oncall" }] },
+  ],
+};
+function getDiscoveredEntities(sel) { return (sel && sel.id === "slack") ? ENTITY_SETS.slack : ENTITY_SETS.default; }
+
+function SrcExtract({ s, set, sel }) {
+  const agent = s.entityAgent || "";
+  const ran = !!s.extractRan;
+  const entities = getDiscoveredEntities(sel);
+  const include = s.entityInclude || {};
+  const isIncluded = e => include[e.id] !== false;
+  const includedN = entities.filter(isIncluded).length;
+  const run = () => { if (!agent) return; const inc = {}; entities.forEach(e => { inc[e.id] = true; }); set({ extractRan: true, entityInclude: inc }); };
+  const toggle = id => set({ entityInclude: Object.assign({}, include, (function () { var o = {}; o[id] = !(include[id] !== false); return o; })()) });
   return (
-    <StepWrap wide title="Extract fields from file contents">
-      <FormRow label="Extraction method" hint="How values are read from inside each document." last>
-        <SrcRichSelect value={method} onChange={v => set({ extractMethod: v })} emptyLabel="Pick a method"
-          options={[
-            { id: "agent", title: "Agent", desc: "An LLM agent reads each document and extracts the schema below.", icon: SRC_METHOD_ICONS.agent },
-            { id: "automation", title: "Automation", desc: "A deterministic automation / parser extracts the schema below.", icon: SRC_METHOD_ICONS.automation },
-          ]} />
-        {method && (
-          <div style={{ marginTop: 12 }}>
-            <div style={SRC_SUBLBL}>{method === "agent" ? "Agent" : "Automation"}</div>
-            {method === "agent"
-              ? <CustomSelect value={s.extractAgent} placeholder="Select an agent…" onChange={v => set({ extractAgent: v })} options={EXTRACT_AGENTS.map(x => ({ id: x, label: x }))} />
-              : <CustomSelect value={s.extractAutomation} placeholder="Select an automation…" onChange={v => set({ extractAutomation: v })} options={EXTRACT_AUTOMATIONS.map(x => ({ id: x, label: x }))} />}
+    <StepWrap wide title="Extract entities from your documents">
+      <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 780 }}>Unstructured sources don't have predefined objects. An agent reads the {sel ? sel.name : "documents"} in scope and <b style={{ color: "var(--ink-2)" }}>discovers the entities inside</b> — then you map each one into the graph.</div>
+      <FormRow label="Extraction agent" hint="Reads the documents in scope and discovers entity types + their fields." last={!ran}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div style={{ flex: 1, maxWidth: 460 }}>
+            <CustomSelect value={agent} placeholder="Select an agent…" onChange={v => set({ entityAgent: v, extractRan: false })} options={ENTITY_AGENTS.map(a => ({ id: a.id, label: a.name, desc: a.desc }))} searchable searchPlaceholder="Search agents…" />
           </div>
-        )}
+          <button onClick={run} disabled={!agent} className="btn-dark" style={{ opacity: agent ? 1 : 0.45, flexShrink: 0 }}>{ran ? "Re-run extraction" : "Run extraction"}</button>
+        </div>
       </FormRow>
 
-      {/* Output schema — hidden for now per request (kept for reference)
-      {method && (
-      <FormRow label="Output schema" optional hint="The fields to extract from each document. The name + description tell the agent what to pull." last>
-        <div style={{ border: "1px solid var(--line)", borderRadius: 11, overflow: "hidden", background: "var(--panel)" }}>
-          <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 10, padding: "9px 14px", background: "var(--panel-2)", borderBottom: "1px solid var(--line-2)", fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", color: "var(--ink-3)", textTransform: "uppercase" }}>
-            <span>Field name</span><span>Type</span><span>Description</span><span />
+      {ran && (
+        <FormRow label="Discovered entities" hint={includedN + " of " + entities.length + " selected · these become the objects you map next."} last>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {entities.map(e => {
+              const on = isIncluded(e);
+              return (
+                <div key={e.id} style={{ border: "1px solid " + (on ? "var(--line)" : "var(--line-2)"), borderRadius: 11, background: on ? "var(--panel)" : "transparent", opacity: on ? 1 : 0.66, overflow: "hidden", transition: "opacity 120ms" }}>
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "13px 15px", cursor: "pointer" }}>
+                    <input type="checkbox" checked={on} onChange={() => toggle(e.id)} style={{ accentColor: "var(--ink)", width: 15, height: 15, marginTop: 2, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{e.name}</span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: "var(--ink-4)" }}>{e.records + " records · " + e.fields.length + " fields"}</span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, letterSpacing: "0.3px", padding: "2px 7px", borderRadius: 4, color: "var(--green)", background: "var(--green-fill)" }}>{e.conf}% CONF</span>
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 9 }}>
+                        {e.fields.map(f => (
+                          <span key={f.col} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, padding: "2px 7px 2px 4px", borderRadius: 5, background: "var(--chip)", border: "1px solid var(--line-2)", color: "var(--ink-2)" }}>
+                            <MapTypeGlyph type={f.type} size={16} />{f.col}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              );
+            })}
           </div>
-          {fields.map((f, i) => (
-            <div key={f.id} style={{ display: "grid", gridTemplateColumns: GRID, gap: 10, padding: "9px 14px", borderTop: i ? "1px solid var(--line-2)" : "none", alignItems: "center" }}>
-              <input className="winput winput-mono" style={{ padding: "7px 9px", fontSize: 12 }} placeholder="contract_start_date" value={f.name} onChange={e => updateField(f.id, "name", e.target.value)} />
-              <CustomSelect value={f.type || "string"} onChange={v => updateField(f.id, "type", v)} options={EXTRACT_TYPES.map(x => ({ id: x, label: x }))} />
-              <input className="winput" style={{ padding: "7px 9px", fontSize: 12 }} placeholder="When the contract term begins." value={f.description} onChange={e => updateField(f.id, "description", e.target.value)} />
-              <button onClick={() => removeField(f.id)} style={SRC_REMOVE_BTN}>×</button>
-            </div>
-          ))}
-          {fields.length === 0 && (
-            <div style={{ padding: "30px 14px", textAlign: "center", color: "var(--ink-3)", fontSize: 12.5 }}>No fields yet — add the values you want pulled from each document.</div>
-          )}
-        </div>
-        <button onClick={addField} style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "11px", borderRadius: 9, border: "1px dashed var(--line)", background: "var(--panel)", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "var(--ink-2)" }}><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-3)" }}>+</span> Add field</button>
-      </FormRow>
+        </FormRow>
       )}
-      */}
+    </StepWrap>
+  );
+}
+
+// ── Unstructured Map: map each discovered entity to a graph node + its props ───
+function SrcEntityMap({ s, set, groups, activeObj, sel }) {
+  const mapping = s.mapping || {};
+  const entityNode = s.entityNode || {};
+  const nodes = ((typeof window !== "undefined" && window.NODES) || []).filter(n => n.type === "entity");
+  const current = (activeObj && groups.find(g => g.name === activeObj)) || groups[0] || null;
+  const eid = current ? current.name : "";
+  const destId = entityNode[eid] || "";
+  const isNew = destId === "__new__";
+  const destNode = nodes.find(n => n.id === destId) || null;
+  const props = destNode && window.generateProps ? window.generateProps(destNode).map(p => ({ id: p.name, label: p.name, type: p.type })) : [];
+  const mk = col => eid + "::" + col;
+  const cols = current ? current.cols : [];
+  const setNode = nid => {
+    const m = Object.assign({}, mapping);
+    // creating a new node → each field becomes a same-named property; clear those when leaving
+    if (nid === "__new__") cols.forEach(c => { m[mk(c.col)] = "new:" + c.col; });
+    else cols.forEach(c => { if (String(m[mk(c.col)] || "").indexOf("new:") === 0) delete m[mk(c.col)]; });
+    set({ entityNode: Object.assign({}, entityNode, (function () { var o = {}; o[eid] = nid; return o; })()), mapping: m });
+  };
+  const updateMap = (col, v) => set({ mapping: Object.assign({}, mapping, (function () { var o = {}; o[mk(col)] = v; return o; })()) });
+  const mappedN = cols.filter(c => mapping[mk(c.col)]).length;
+  const GRID = "minmax(180px,1.2fr) 34px minmax(200px,1.3fr)";
+  const nodeOptions = nodes.map(n => ({ id: n.id, label: n.label, node: n })).concat([{ id: "__new__", label: "+ New node type" + (current ? " — " + current.label : "") }]);
+  return (
+    <StepWrap wide title={current ? `Map ${current.label} to the graph` : "Map entities to the graph"}>
+      {!current && (
+        <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)", padding: "40px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No entities yet — go back to Extract and run the agent.</div>
+      )}
+      {current && (
+        <>
+          <FormRow label="Destination node" hint="Each discovered entity becomes a node in the graph — reuse an existing one or create a new node type." last={!destId}>
+            <div style={{ maxWidth: 480 }}>
+              <CustomSelect value={destId} placeholder="Pick or create a node…" onChange={setNode} options={nodeOptions} searchable searchPlaceholder="Search nodes…"
+                renderTrigger={o => o.id === "__new__"
+                  ? <span style={{ color: "var(--ink-2)", fontWeight: 500 }}>{o.label}</span>
+                  : <span style={{ display: "flex", alignItems: "center", gap: 9 }}>{o.node && window.ListGlyph && <window.ListGlyph node={o.node} size={18} />}<span style={{ color: "var(--ink)" }}>{o.label}</span></span>}
+                renderOption={o => o.id === "__new__"
+                  ? <span style={{ color: "var(--ink-2)", fontWeight: 500 }}>{o.label}</span>
+                  : <span style={{ display: "flex", alignItems: "center", gap: 9 }}>{o.node && window.ListGlyph && <window.ListGlyph node={o.node} size={18} />}{o.label}</span>} />
+            </div>
+          </FormRow>
+
+          {destId && (
+            <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)", overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 16px", borderBottom: "1px solid var(--line)", background: "var(--panel-2)" }}>
+                <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{current.label}</code>
+                <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{cols.length + " fields → " + (isNew ? "new node" : (destNode ? destNode.label : "node"))}</span>
+                {!isNew && <span style={{ marginLeft: "auto", fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 600, color: mappedN ? "var(--green)" : "var(--ink-3)" }}>{mappedN + "/" + cols.length + " mapped"}</span>}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "10px 16px", background: "var(--panel-2)", borderBottom: "1px solid var(--line-2)", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)" }}>
+                <div>Entity field</div><div></div><div>{isNew ? "New property" : "Destination property"}</div>
+              </div>
+              {cols.map((c, i) => {
+                const mapped = mapping[mk(c.col)];
+                return (
+                  <div key={c.col} style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "12px 16px", alignItems: "center", borderTop: i ? "1px solid var(--line-2)" : "none" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                      <MapTypeGlyph type={c.type} />
+                      <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.col}</code>
+                    </div>
+                    <div style={{ textAlign: "center", color: (isNew || mapped) ? "var(--green)" : "var(--ink-4)", fontSize: 15 }}>→</div>
+                    {isNew
+                      ? <span style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 2px" }}><MapTypeGlyph type={c.type} size={22} /><code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{c.col}</code><MapBadge tone="var(--purple)">NEW</MapBadge></span>
+                      : <CustomSelect value={mapped || ""} onChange={v => updateMap(c.col, v)} placeholder="Select property" searchable searchPlaceholder="Search properties…"
+                          options={props.concat([{ id: "__new__", label: "+ New property" }])}
+                          renderTrigger={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={22} /><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: "var(--ink)" }}>{o.label}</span></span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-4)" }}>{o.label || "Select property"}</span>}
+                          renderOption={o => o.id && o.id !== "__new__" ? <span style={{ display: "flex", alignItems: "center", gap: 9 }}><MapTypeGlyph type={o.type} size={20} />{o.label}</span> : <span style={{ color: o.id === "__new__" ? "var(--ink-2)" : "var(--ink-3)" }}>{o.label}</span>} />}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
     </StepWrap>
   );
 }
