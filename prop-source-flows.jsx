@@ -37,6 +37,7 @@ const SOURCE_SYSTEMS = [
   // ── Unstructured sources (docs, files, messages, wikis) ──
   { id: "googledrive", cat: "Files & Storage", domain: "google.com", name: "Google Drive",          tag: "Files",        kind: "unstructured", status: "healthy",  icon: "GD",  slug: "googledrive",         color: "#1FA463", desc: "Docs, Sheets, Slides and stored files." },
   { id: "slack", cat: "Messaging & Email", domain: "slack.com",       name: "Slack",                 tag: "Messaging",    kind: "unstructured", status: "healthy",  icon: "Sl",  slug: "slack",               color: "#4A154B", desc: "Channels, threads and message history." },
+  { id: "teams", cat: "Messaging & Email", domain: "microsoft.com",   name: "Microsoft Teams",       tag: "Messaging",    kind: "unstructured", status: "healthy",  icon: "Tm",  slug: "microsoftteams",      color: "#5059C9", desc: "Channels, chats, meetings and shared files." },
   { id: "confluence", cat: "Docs & Wikis", domain: "atlassian.com",  name: "Confluence",            tag: "Wiki",         kind: "unstructured", status: "healthy",  icon: "Cf",  slug: "confluence",          color: "#172B4D", desc: "Spaces, pages and knowledge bases." },
   { id: "notion", cat: "Docs & Wikis", domain: "notion.so",      name: "Notion",                tag: "Wiki",         kind: "unstructured", status: "healthy",  icon: "No",  slug: "notion",              color: "#000000", desc: "Pages, wikis and databases." },
   { id: "sharepoint", cat: "Files & Storage", domain: "microsoft.com",  name: "SharePoint",            tag: "Files",        kind: "unstructured", status: "healthy",  icon: "SP",  slug: "microsoftsharepoint", color: "#0078D4", desc: "Document libraries and team sites." },
@@ -109,6 +110,32 @@ const OBJECTS_BY_SYS = {
     { name: "public.orders",        type: "Table", rows: "12K",  cols: 16 },
     { name: "public.order_items",   type: "Table", rows: "48K",  cols: 9  },
     { name: "billing.invoices",     type: "Table", rows: "12K",  cols: 13 },
+  ],
+  databricks: [
+    { name: "main.sales.accounts",         type: "Delta",            rows: "2.8K", cols: 18 },
+    { name: "main.sales.opportunities",    type: "Delta",            rows: "6.2K", cols: 24 },
+    { name: "main.finance.invoices",       type: "Delta",            rows: "12K",  cols: 13 },
+    { name: "main.product.usage_events",   type: "Delta",            rows: "48M",  cols: 11 },
+    { name: "main.gold.account_health",    type: "Materialized View", rows: "2.8K", cols: 9  },
+    { name: "bronze.raw.sfdc_accounts",    type: "Delta",            rows: "2.8K", cols: 42 },
+    { name: "main.hr.employees",           type: "Delta",            rows: "3.4K", cols: 21 },
+  ],
+  bigquery: [
+    { name: "analytics.accounts",          type: "Table",            rows: "2.8K", cols: 18 },
+    { name: "analytics.sessions",          type: "Table",            rows: "14M",  cols: 16 },
+    { name: "analytics.orders",            type: "Table",            rows: "12K",  cols: 16 },
+    { name: "analytics.events_*",          type: "Partitioned Table", rows: "210M", cols: 9  },
+    { name: "marketing.campaigns",         type: "Table",            rows: "640",  cols: 12 },
+    { name: "finance.invoices",            type: "Table",            rows: "12K",  cols: 13 },
+    { name: "core.users",                  type: "Table",            rows: "1.2K", cols: 14 },
+  ],
+  redshift: [
+    { name: "public.accounts",             type: "Table", rows: "2.8K", cols: 18 },
+    { name: "public.users",                type: "Table", rows: "1.2K", cols: 14 },
+    { name: "analytics.fact_orders",       type: "Table", rows: "12K",  cols: 16 },
+    { name: "analytics.fact_usage_events", type: "Table", rows: "96M",  cols: 9  },
+    { name: "analytics.dim_account",       type: "Table", rows: "2.8K", cols: 18 },
+    { name: "billing.invoices",            type: "Table", rows: "12K",  cols: 13 },
   ],
   stripe: [
     { name: "customers",      type: "Object", rows: "2.8K", cols: 24 },
@@ -1829,9 +1856,12 @@ function SrcRead({ s, set, sel }) {
   const locs = s.readLocations || [];
   const filters = s.readFilters || {};
   const [link, setLink] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
   const specific = scope === "folders" || scope === "files";
   const contentMode = s.contentMode || "mixed";
   const docTypes = getDiscoveredEntities(sel);
+  const activeFilters = Object.keys(filters).filter(k => { const v = filters[k]; return v && v.length && v !== "all"; }).length;
+  const filtersOpen = showFilters || activeFilters > 0;
   const setFilter = (k, val) => set({ readFilters: Object.assign({}, filters, (function () { const o = {}; o[k] = val; return o; })()) });
   const addLink = () => { const t = link.trim(); if (!t) return; set({ readLocations: locs.concat([{ id: "loc-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6), label: t }]) }); setLink(""); };
   const removeLoc = id => set({ readLocations: locs.filter(x => x.id !== id) });
@@ -1891,7 +1921,15 @@ function SrcRead({ s, set, sel }) {
         </FormRow>
       )}
 
-      {scope && (
+      {scope && !filtersOpen && (
+        <FormRow label="Filters" optional hint="Index everything in scope, or narrow it down by type, owner, date or name." last>
+          <button onClick={() => setShowFilters(true)} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "inherit", fontSize: 13, fontWeight: 500, color: "var(--ink-2)", background: "var(--panel)", border: "1px dashed var(--line)", borderRadius: 9, padding: "9px 14px", cursor: "pointer" }}>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "var(--ink-3)" }}>+</span> Add filters
+          </button>
+        </FormRow>
+      )}
+
+      {scope && filtersOpen && (
         <FormRow label="Filters" optional hint={"Only index " + cfg.item + " matching the " + sel.name + " metadata below. Leave blank to include everything."} last>
           <div style={{ display: "grid", gap: 14 }}>
             {cfg.filters.map(f => (
@@ -1942,8 +1980,33 @@ const ENTITY_SETS = {
     { id: "decision", name: "Decision", records: "1,840", conf: 89, fields: [{ col: "decision", type: "string", sample: "Adopt Postgres" }, { col: "owner", type: "string", sample: "morgan" }, { col: "date", type: "date", sample: "2026-04-20" }, { col: "rationale", type: "string", sample: "Lower cost" }] },
     { id: "incident", name: "Incident", records: "310", conf: 92, fields: [{ col: "incident_id", type: "string", sample: "INC-204" }, { col: "severity", type: "string", sample: "SEV2" }, { col: "resolved", type: "bool", sample: "true" }, { col: "channel", type: "string", sample: "#oncall" }] },
   ],
+  teams: [
+    { id: "tm_message", name: "Channel Message", records: "58,200", conf: 94, fields: [{ col: "message_id", type: "string", sample: "msg-7f21" }, { col: "channel", type: "string", sample: "Engineering" }, { col: "author", type: "string", sample: "priya@acme.com" }, { col: "posted_at", type: "timestamp", sample: "2026-05-12T09:31Z" }, { col: "summary", type: "string", sample: "Release blocked on QA." }] },
+    { id: "tm_meeting", name: "Meeting", records: "3,920", conf: 91, fields: [{ col: "meeting_id", type: "string", sample: "mtg-204" }, { col: "title", type: "string", sample: "Sprint review" }, { col: "organizer", type: "string", sample: "sam@acme.com" }, { col: "start_time", type: "timestamp", sample: "2026-05-12T15:00Z" }, { col: "attendees", type: "string[]", sample: "Sam, Priya, Lee" }, { col: "recap", type: "string", sample: "Shipped 4 of 6 stories." }] },
+    { id: "tm_chat", name: "Chat", records: "21,400", conf: 88, fields: [{ col: "chat_id", type: "string", sample: "chat-91x" }, { col: "participants", type: "string[]", sample: "morgan, lee" }, { col: "last_message_at", type: "timestamp", sample: "2026-05-11T18:02Z" }, { col: "summary", type: "string", sample: "Agreed on vendor." }] },
+    { id: "tm_file", name: "Shared File", records: "8,760", conf: 90, fields: [{ col: "file_name", type: "string", sample: "Q2_Plan.pptx" }, { col: "shared_by", type: "string", sample: "sam@acme.com" }, { col: "channel", type: "string", sample: "Leadership" }, { col: "shared_at", type: "timestamp", sample: "2026-04-30T12:10Z" }] },
+  ],
+  outlook: [
+    { id: "ol_email", name: "Email", records: "184,500", conf: 93, fields: [{ col: "message_id", type: "string", sample: "AAMk-9f3" }, { col: "subject", type: "string", sample: "Renewal terms" }, { col: "sender", type: "string", sample: "morgan@globex.com" }, { col: "recipients", type: "string[]", sample: "sales@acme.com" }, { col: "sent_at", type: "timestamp", sample: "2026-02-09T14:20Z" }, { col: "summary", type: "string", sample: "Proposes 2-yr renewal." }] },
+    { id: "ol_invite", name: "Meeting Invite", records: "12,300", conf: 90, fields: [{ col: "event_id", type: "string", sample: "evt-5521" }, { col: "title", type: "string", sample: "QBR — Acme" }, { col: "organizer", type: "string", sample: "ae@acme.com" }, { col: "start_time", type: "timestamp", sample: "2026-03-04T16:00Z" }, { col: "attendees", type: "string[]", sample: "AE, SE, Buyer" }, { col: "location", type: "string", sample: "Teams" }] },
+    { id: "ol_contact", name: "Contact", records: "6,410", conf: 92, fields: [{ col: "full_name", type: "string", sample: "Jordan Lee" }, { col: "email", type: "string", sample: "jordan@globex.com" }, { col: "company", type: "string", sample: "Globex" }, { col: "phone", type: "string", sample: "+1 415 555 0132" }] },
+    { id: "ol_task", name: "Task", records: "2,180", conf: 86, fields: [{ col: "task_id", type: "string", sample: "task-88" }, { col: "subject", type: "string", sample: "Send MSA redline" }, { col: "due_date", type: "date", sample: "2026-03-10" }, { col: "status", type: "string", sample: "in_progress" }] },
+  ],
+  sharepoint: [
+    { id: "sp_document", name: "Document", records: "26,400", conf: 92, fields: [{ col: "file_name", type: "string", sample: "MSA_Acme.docx" }, { col: "library", type: "string", sample: "Legal" }, { col: "author", type: "string", sample: "legal@acme.com" }, { col: "modified_at", type: "timestamp", sample: "2026-04-01T10:00Z" }, { col: "file_type", type: "string", sample: "docx" }] },
+    { id: "sp_contract", name: "Contract", records: "1,240", conf: 95, fields: [{ col: "contract_id", type: "string", sample: "CTR-8841" }, { col: "parties", type: "string[]", sample: "Acme, Globex" }, { col: "effective_date", type: "date", sample: "2025-03-01" }, { col: "term_months", type: "int", sample: "24" }, { col: "total_value", type: "decimal", sample: "480000.00" }] },
+    { id: "sp_policy", name: "Policy", records: "410", conf: 91, fields: [{ col: "policy_name", type: "string", sample: "Data Retention" }, { col: "version", type: "string", sample: "v3.2" }, { col: "effective_date", type: "date", sample: "2025-09-01" }, { col: "owner", type: "string", sample: "Legal" }] },
+    { id: "sp_meeting", name: "Meeting Note", records: "3,300", conf: 87, fields: [{ col: "title", type: "string", sample: "Q3 Planning" }, { col: "date", type: "date", sample: "2026-01-12" }, { col: "attendees", type: "string[]", sample: "Sam, Priya" }, { col: "action_items", type: "string[]", sample: "Ship v2" }] },
+    { id: "sp_listitem", name: "List Item", records: "14,900", conf: 84, fields: [{ col: "item_id", type: "string", sample: "li-2204" }, { col: "list_name", type: "string", sample: "Vendor Register" }, { col: "title", type: "string", sample: "Globex Inc" }, { col: "created_by", type: "string", sample: "ops@acme.com" }, { col: "created_at", type: "timestamp", sample: "2025-12-02T09:00Z" }] },
+  ],
+  onedrive: [
+    { id: "od_document", name: "Document", records: "9,800", conf: 91, fields: [{ col: "file_name", type: "string", sample: "Proposal.docx" }, { col: "owner", type: "string", sample: "me@acme.com" }, { col: "modified_at", type: "timestamp", sample: "2026-05-05T08:00Z" }, { col: "file_type", type: "string", sample: "docx" }] },
+    { id: "od_spreadsheet", name: "Spreadsheet", records: "4,210", conf: 89, fields: [{ col: "file_name", type: "string", sample: "Model_v4.xlsx" }, { col: "owner", type: "string", sample: "me@acme.com" }, { col: "modified_at", type: "timestamp", sample: "2026-05-04T17:22Z" }, { col: "sheet_count", type: "int", sample: "6" }] },
+    { id: "od_presentation", name: "Presentation", records: "2,640", conf: 88, fields: [{ col: "file_name", type: "string", sample: "Board_Q2.pptx" }, { col: "owner", type: "string", sample: "me@acme.com" }, { col: "modified_at", type: "timestamp", sample: "2026-04-28T11:00Z" }, { col: "slide_count", type: "int", sample: "28" }] },
+    { id: "od_pdf", name: "PDF", records: "7,120", conf: 90, fields: [{ col: "file_name", type: "string", sample: "Signed_NDA.pdf" }, { col: "owner", type: "string", sample: "me@acme.com" }, { col: "modified_at", type: "timestamp", sample: "2026-03-19T14:40Z" }, { col: "page_count", type: "int", sample: "4" }] },
+  ],
 };
-function getDiscoveredEntities(sel) { return (sel && sel.id === "slack") ? ENTITY_SETS.slack : ENTITY_SETS.default; }
+function getDiscoveredEntities(sel) { return (sel && ENTITY_SETS[sel.id]) || ENTITY_SETS.default; }
 
 // Per-entity extraction agents — these are what actually read the document body and
 // pull out the entity's domain fields (the source itself only yields file metadata).
