@@ -948,7 +948,12 @@
   /* dropdown styled as a compact button (e.g. "+ Run an agent") */
   .csel-menu-right .csel-menu { left: auto; right: 0; }
   .csel-compact .csel-trigger { height: 32px; padding: 0 12px; font-size: 12.5px; }
+  .csel-compact .csel-menu { min-width: 256px; }
   .csel-btnlabel .csel-ph { color: var(--ink-2); font-size: 12.5px; }
+  /* search box inside a searchable dropdown */
+  .csel-search { display: flex; align-items: center; gap: 8px; padding: 7px 10px; margin-bottom: 4px; border-bottom: 1px solid var(--line-2); color: var(--ink-3); }
+  .csel-search input { flex: 1; min-width: 0; border: none; outline: none; background: none; font-family: inherit; font-size: 13px; color: var(--ink); }
+  .csel-search input::placeholder { color: var(--ink-4); }
   .csel-group { font-family: "JetBrains Mono", monospace; font-size: 9.5px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--ink-4); padding: 8px 10px 4px; }
   .csel-opt { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; background: transparent; cursor: pointer; font-family: inherit; font-size: 13.5px; text-align: left; border-radius: 6px; }
   .csel-opt:hover { background: var(--chip); }
@@ -1221,7 +1226,7 @@
 <body>
 <div id="root"></div>
 <script type="text/babel" src="ecg.jsx?v=knowledge-discovery-v25"></script>
-<script type="text/babel" src="prop-source-flows.jsx?v=link-source-v42"></script>
+<script type="text/babel" src="prop-source-flows.jsx?v=link-source-v43"></script>
 <script type="text/babel" src="edge-flow.jsx"></script>
 </body>
 </html>

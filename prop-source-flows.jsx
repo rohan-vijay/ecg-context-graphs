@@ -318,13 +318,16 @@ function FormRow({ label, required, optional, children, hint, last }) {
 }
 
 // Grouped dropdown (types, PII, masking, etc.)
-function CustomSelect({ value, onChange, options, placeholder = "—", renderTrigger, renderOption, grouped, className }) {
+function CustomSelect({ value, onChange, options, placeholder = "—", renderTrigger, renderOption, grouped, className, searchable, searchPlaceholder }) {
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
   const ref = useRef(null);
-  useOutsideClick(ref, open, () => setOpen(false));
+  useOutsideClick(ref, open, () => { setOpen(false); setQ(""); });
 
   const allOptions = grouped ? options.flatMap(g => g.items) : options;
   const sel = allOptions.find(o => (o.id || o) === value);
+  const matches = o => !q || String(o.label || o.name || o).toLowerCase().indexOf(q.toLowerCase()) >= 0;
+  const choose = id => { onChange(id); setOpen(false); setQ(""); };
 
   return (
     <div className={"csel" + (className ? " " + className : "")} ref={ref}>
@@ -338,26 +341,39 @@ function CustomSelect({ value, onChange, options, placeholder = "—", renderTri
       </button>
       {open && (
         <div className="csel-menu">
-          {grouped ? options.map(g => (
-            <div key={g.label}>
-              <div className="csel-group">{g.label}</div>
-              {g.items.map(o => (
-                <button key={o.id} className={"csel-opt" + (value === o.id ? " on" : "")} onClick={() => { onChange(o.id); setOpen(false); }}>
-                  {renderOption ? renderOption(o) : <><span className="csel-opt-label">{o.label}</span>{o.desc && <span className="csel-opt-sub">{o.desc}</span>}</>}
-                  {value === o.id && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" className="csel-tick"><path d="M5 12l5 5L20 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                </button>
-              ))}
+          {searchable && (
+            <div className="csel-search">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
+              <input autoFocus placeholder={searchPlaceholder || "Search…"} value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === "Escape") { setOpen(false); setQ(""); } }} />
             </div>
-          )) : options.map(o => {
+          )}
+          {grouped ? options.map(g => {
+            const items = g.items.filter(matches);
+            if (!items.length) return null;
+            return (
+              <div key={g.label}>
+                <div className="csel-group">{g.label}</div>
+                {items.map(o => (
+                  <button key={o.id} className={"csel-opt" + (value === o.id ? " on" : "")} onClick={() => choose(o.id)}>
+                    {renderOption ? renderOption(o) : <><span className="csel-opt-label">{o.label}</span>{o.desc && <span className="csel-opt-sub">{o.desc}</span>}</>}
+                    {value === o.id && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" className="csel-tick"><path d="M5 12l5 5L20 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                  </button>
+                ))}
+              </div>
+            );
+          }) : options.filter(matches).map(o => {
             const id = o.id || o;
             const label = o.label || o.name || o;
             return (
-              <button key={id} className={"csel-opt" + (value === id ? " on" : "")} onClick={() => { onChange(id); setOpen(false); }}>
+              <button key={id} className={"csel-opt" + (value === id ? " on" : "")} onClick={() => choose(id)}>
                 {renderOption ? renderOption(o) : <><span className="csel-opt-label">{label}</span>{o.desc && <span className="csel-opt-sub">{o.desc}</span>}</>}
                 {value === id && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" className="csel-tick"><path d="M5 12l5 5L20 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
               </button>
             );
           })}
+          {searchable && q && !allOptions.filter(matches).length && (
+            <div style={{ padding: "14px 12px", textAlign: "center", color: "var(--ink-4)", fontSize: 12.5 }}>No agents match “{q}”.</div>
+          )}
         </div>
       )}
     </div>
@@ -2106,12 +2122,12 @@ function FilterRecordsPopover({ cols, initial, objName, onApply, onClear, onClos
 // agents (in sequence) that read every record and emit additional fields. The
 // final output (source columns + agent fields) is previewable one step away.
 const OBJECT_AGENTS = [
-  { id: "enrich_company", name: "Company Enricher",     desc: "Appends firmographics from external data providers.", outputs: [{ col: "industry", type: "string", sample: "SaaS" }, { col: "employee_count", type: "int", sample: "540" }, { col: "annual_revenue", type: "decimal", sample: "24500000.00" }, { col: "hq_country", type: "string", sample: "US" }] },
-  { id: "lead_score",     name: "Lead Scorer",          desc: "Scores each record on fit and intent signals.",       outputs: [{ col: "fit_score", type: "int", sample: "82" }, { col: "intent_score", type: "int", sample: "67" }, { col: "priority_tier", type: "string", sample: "A" }] },
-  { id: "dedupe",         name: "Duplicate Detector",   desc: "Flags likely duplicates and proposes a survivor.",     outputs: [{ col: "dup_cluster_id", type: "string", sample: "clu_4f" }, { col: "is_survivor", type: "bool", sample: "true" }, { col: "match_confidence", type: "decimal", sample: "0.94" }] },
-  { id: "sentiment",      name: "Sentiment Classifier", desc: "Reads notes & activity to gauge health.",              outputs: [{ col: "sentiment", type: "string", sample: "positive" }, { col: "health_score", type: "int", sample: "78" }] },
-  { id: "summarize",      name: "Record Summarizer",    desc: "Generates a one-line summary per record.",             outputs: [{ col: "summary", type: "string", sample: "Enterprise SaaS account, expanding." }] },
-  { id: "geocode",        name: "Address Geocoder",     desc: "Normalizes addresses and adds lat/long.",              outputs: [{ col: "lat", type: "decimal", sample: "37.7749" }, { col: "lng", type: "decimal", sample: "-122.4194" }, { col: "normalized_address", type: "string", sample: "548 Market St, SF" }, { col: "timezone", type: "string", sample: "America/Los_Angeles" }] },
+  { id: "enrich_company", name: "Company Enricher Agent",     desc: "Appends firmographics from external data providers.", outputs: [{ col: "industry", type: "string", sample: "SaaS" }, { col: "employee_count", type: "int", sample: "540" }, { col: "annual_revenue", type: "decimal", sample: "24500000.00" }, { col: "hq_country", type: "string", sample: "US" }] },
+  { id: "lead_score",     name: "Lead Scorer Agent",          desc: "Scores each record on fit and intent signals.",       outputs: [{ col: "fit_score", type: "int", sample: "82" }, { col: "intent_score", type: "int", sample: "67" }, { col: "priority_tier", type: "string", sample: "A" }] },
+  { id: "dedupe",         name: "Duplicate Detector Agent",   desc: "Flags likely duplicates and proposes a survivor.",     outputs: [{ col: "dup_cluster_id", type: "string", sample: "clu_4f" }, { col: "is_survivor", type: "bool", sample: "true" }, { col: "match_confidence", type: "decimal", sample: "0.94" }] },
+  { id: "sentiment",      name: "Sentiment Classifier Agent", desc: "Reads notes & activity to gauge health.",              outputs: [{ col: "sentiment", type: "string", sample: "positive" }, { col: "health_score", type: "int", sample: "78" }] },
+  { id: "summarize",      name: "Record Summarizer Agent",    desc: "Generates a one-line summary per record.",             outputs: [{ col: "summary", type: "string", sample: "Enterprise SaaS account, expanding." }] },
+  { id: "geocode",        name: "Address Geocoder Agent",     desc: "Normalizes addresses and adds lat/long.",              outputs: [{ col: "lat", type: "decimal", sample: "37.7749" }, { col: "lng", type: "decimal", sample: "-122.4194" }, { col: "normalized_address", type: "string", sample: "548 Market St, SF" }, { col: "timezone", type: "string", sample: "America/Los_Angeles" }] },
 ];
 function agentDef(id) { return OBJECT_AGENTS.find(a => a.id === id) || null; }
 
@@ -2129,7 +2145,8 @@ function SrcObjectAgents({ s, set, groups, sel }) {
   // agent menu right there (no extra picker line).
   const runAgentPicker = (g, available, label, alignRight) => (
     <CustomSelect className={"csel-auto csel-compact csel-btnlabel" + (alignRight ? " csel-menu-right" : "")}
-      value="" placeholder={label} options={available} onChange={v => addAgent(g.name, v)} />
+      value="" placeholder={label} options={available} onChange={v => addAgent(g.name, v)}
+      searchable searchPlaceholder="Search agents…" />
   );
   return (
     <StepWrap wide title="Run agents on each object">
@@ -2141,7 +2158,7 @@ function SrcObjectAgents({ s, set, groups, sel }) {
         {groups.map(g => {
           const chain = chainOf(g.name);
           const total = outFieldCount(g.name);
-          const available = OBJECT_AGENTS.filter(a => chain.indexOf(a.id) < 0).map(a => ({ id: a.id, label: a.name, desc: a.desc }));
+          const available = OBJECT_AGENTS.filter(a => chain.indexOf(a.id) < 0).map(a => ({ id: a.id, label: a.name }));
           const hasAgents = chain.length > 0;
           return (
             <div key={g.name} style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--panel)" }}>
