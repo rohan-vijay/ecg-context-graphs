@@ -2945,7 +2945,7 @@ function SrcUnstructuredSettings({ s, set }) {
           const on = !isAdd && isOn(o);
           const Tag = isAdd ? "div" : "label";
           return (
-            <Tag key={o.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 11, cursor: isAdd ? "default" : "pointer", border: "1px solid " + (on ? "var(--line)" : "var(--line-2)"), background: on ? "var(--panel)" : "transparent", transition: "background 120ms" }}>
+            <Tag key={o.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 11, cursor: isAdd ? "default" : "pointer", border: "1px solid " + (on ? "var(--line)" : "var(--line-2)"), background: "#fff", transition: "background 120ms" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{o.name}</div>
                 <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 3, lineHeight: 1.5 }}>{o.desc}</div>
