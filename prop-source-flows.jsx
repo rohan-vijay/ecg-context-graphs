@@ -1422,7 +1422,7 @@ function LinkSourceFlow({ node, existingSources, onClose }) {
     { label: "Source system",  hint: sel ? sel.name : "Pick connector from catalog" },
     { label: "Connection",     hint: connLabel },
     { label: "Objects",        hint: objectHint },
-    { label: "Extract",        hint: agentsHint },
+    { label: "Extract & enrich", hint: agentsHint },
     { label: "Map columns", hint: colMapHint, subItems: mapSubItems, activeSub: activeMapObj, onSub: setMapActiveObj },
     { label: "Settings", hint: settingsHint },
   ];
@@ -2348,7 +2348,7 @@ function agentFieldsFor(s, objName) {
 
 // Inline picker for the Extract step: two balanced rich-selects — choose a
 // method (Agent / Automation) on the left, then the specific one on the right.
-function InlineRunPicker({ agents, automations, onAdd, onClose }) {
+function InlineRunPicker({ agents, automations, onAdd, onClose, header }) {
   const [kind, setKind] = useState("");
   const isAuto = kind === "automation";
   const list = isAuto ? automations : agents;
@@ -2356,7 +2356,7 @@ function InlineRunPicker({ agents, automations, onAdd, onClose }) {
   return (
     <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--bg-canvas)", padding: "14px 16px", marginTop: 12 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", fontWeight: 600 }}>Run extraction</span>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--ink-3)", fontWeight: 600 }}>{header || "Run extraction"}</span>
         <button onClick={onClose} title="Cancel" style={{ border: "none", background: "none", cursor: "pointer", padding: 2, color: "var(--ink-4)" }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
@@ -2386,14 +2386,19 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor, fileMode }) {
   const outFieldCount = obj => chainOf(obj).reduce((n, id) => n + ((agentDef(id) || { outputs: [] }).outputs.length), 0);
   const previewGroup = previewFor ? groups.find(g => g.name === previewFor) : null;
   const [openPicker, setOpenPicker] = useState("");
+  // Structured sources already have columns → agents/automations *enrich* records;
+  // unstructured files need *extraction*. Both can be an agent OR an automation.
+  const stepTitle = fileMode ? "Extract data from files" : "Extract & enrich each object";
+  const ctaLabel = fileMode ? "+ Run extraction" : "+ Run enrichment";
+  const panelHeader = fileMode ? "Run extraction" : "Run enrichment";
   const runBtn = (g, label, pressed) => (
     <button onClick={() => setOpenPicker(openPicker === g.name ? "" : g.name)} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "inherit", fontSize: 12.5, fontWeight: 500, color: pressed ? "var(--ink)" : "var(--ink-2)", background: pressed ? "var(--chip)" : "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}>{label}</button>
   );
   return (
-    <StepWrap wide title={fileMode ? "Extract data from files" : "Run agents on each object"}>
+    <StepWrap wide title={stepTitle}>
       <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.55, maxWidth: 760 }}>{fileMode
         ? <>Run an agent or automation on each file type to pull structured fields out of the documents — these become available to map in the next step. This step is optional.</>
-        : <>Optionally run an agent on each object you selected. The agent reads every record and produces additional fields — these become available to map in the next step.</>}</div>
+        : <>Optionally run an agent or automation on each object — it reads every record and produces additional fields that enrich your data, available to map in the next step.</>}</div>
       {groups.length === 0 && (
         <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--panel)", padding: "40px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>{fileMode ? "No file types selected — go back to Discover Files and pick at least one." : "No objects selected — go back to the Objects step and pick at least one."}</div>
       )}
@@ -2417,7 +2422,7 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor, fileMode }) {
                 <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{g.type === "Entity" ? ("Entity" + (g.rows ? " · " + g.rows + " records" : "")) : ((g.type || "Object") + " · " + g.cols.length + " columns")}</span>
                 {hasAgents
                   ? <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.4px", color: "var(--purple)", background: "color-mix(in oklab, var(--purple) 12%, transparent)", padding: "3px 8px", borderRadius: 5 }}>＋{total} FIELDS</span>
-                  : <span style={{ marginLeft: "auto", flexShrink: 0 }}>{runBtn(g, pickerOpen ? "Cancel" : "+ Run extraction", pickerOpen)}</span>}
+                  : <span style={{ marginLeft: "auto", flexShrink: 0 }}>{runBtn(g, pickerOpen ? "Cancel" : ctaLabel, pickerOpen)}</span>}
               </div>
               {bodyOpen && (
                 <div style={{ padding: "13px 16px" }}>
@@ -2441,7 +2446,7 @@ function SrcObjectAgents({ s, set, groups, sel, agentPoolFor, fileMode }) {
                     </div>
                   )}
 
-                  {pickerOpen && <InlineRunPicker agents={availAgents} automations={availAutomations} onAdd={id => { addAgent(g.name, id); setOpenPicker(""); }} onClose={() => setOpenPicker("")} />}
+                  {pickerOpen && <InlineRunPicker header={panelHeader} agents={availAgents} automations={availAutomations} onAdd={id => { addAgent(g.name, id); setOpenPicker(""); }} onClose={() => setOpenPicker("")} />}
 
                   {hasAgents && (
                     <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12 }}>
