@@ -2225,12 +2225,11 @@ function SrcAgentOutputDrawer({ obj, agents, onClose }) {
       <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, color: "var(--ink-3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180, textAlign: "right" }}>{c.sample != null ? c.sample : "—"}</code>
     </div>
   );
-  // Section header — source category is neutral; each agent gets its own header
-  // (with the agent glyph + name), so rows don't need provenance tags.
-  const sectionLabel = (t, n, agent) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "15px 20px 7px" }}>
-      {agent && <span style={{ display: "inline-flex" }}><AgentGlyph /></span>}
-      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.5px", textTransform: "uppercase", color: agent ? "var(--purple)" : "var(--ink-3)", fontWeight: agent ? 700 : 400 }}>{t}</span>
+  // Section header — every section (source and each agent) renders the same way:
+  // a subtle banded row with a top divider, so sections are clearly segregated.
+  const sectionLabel = (t, n, first) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 20px", background: "var(--panel-2)", borderTop: first ? "none" : "1px solid var(--line)" }}>
+      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.6px", textTransform: "uppercase", color: "var(--ink-3)", fontWeight: 600 }}>{t}</span>
       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, color: "var(--ink-4)" }}>· {n}</span>
     </div>
   );
@@ -2249,12 +2248,12 @@ function SrcAgentOutputDrawer({ obj, agents, onClose }) {
         </div>
         <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
           <React.Fragment key="src">
-            {sectionLabel("From source", srcCols.length)}
+            {sectionLabel("From source", srcCols.length, true)}
             {srcCols.map((c, i) => row(c, "src-" + i))}
           </React.Fragment>
           {agents.map((a, ai) => (
             <React.Fragment key={"ag-" + ai}>
-              {sectionLabel(a.name, a.outputs.length, true)}
+              {sectionLabel(a.name, a.outputs.length)}
               {a.outputs.map((o, i) => row(o, "ag" + ai + "-" + i))}
             </React.Fragment>
           ))}
@@ -2266,13 +2265,6 @@ function SrcAgentOutputDrawer({ obj, agents, onClose }) {
       </div>
     </div>
   );
-}
-
-// Small agent avatar glyph reused in the per-object agent picker.
-function AgentGlyph() {
-  return <span style={{ width: 24, height: 24, borderRadius: 6, flexShrink: 0, background: "color-mix(in oklab, var(--purple) 13%, transparent)", border: "1px solid color-mix(in oklab, var(--purple) 28%, var(--line))", color: "var(--purple)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="3.4" /><path d="M5.5 20c0-3.6 2.9-5.6 6.5-5.6s6.5 2 6.5 5.6" /><path d="M12 2.2v1.2" /></svg>
-  </span>;
 }
 
 function SrcMapping({ s, set, groups, activeObj, nodeProps, node, sel, openCol, setOpenCol, eyebrow, title, desc, singleGroup }) {
