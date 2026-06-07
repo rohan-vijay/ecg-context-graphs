@@ -1894,16 +1894,19 @@ function SrcRead({ s, set, sel }) {
   return (
     <StepWrap wide title={`What to read from ${sel.name}`}>
       <FormRow label="Scope" hint="How much of the connection should we index?" last={!scope}>
-        <SrcRichSelect value={scope} onChange={v => set({ readScope: v })} emptyLabel="Pick a scope"
-          options={[
-            { id: "all", title: "All " + cfg.item, desc: "Index every " + cfg.item.replace(/s$/, "") + " reachable from this connection.", icon: SRC_SCOPE_ICONS.all },
-            { id: "folders", title: "Specific " + cfg.container, desc: "Pick " + cfg.container + "; everything inside is indexed and kept in sync.", icon: SRC_SCOPE_ICONS.folders },
-            { id: "files", title: "Specific " + cfg.item, desc: "Pick individual " + cfg.item + " to index.", icon: SRC_SCOPE_ICONS.files },
-          ]} />
+        <div style={{ maxWidth: 760 }}>
+          <SrcRichSelect value={scope} onChange={v => set({ readScope: v })} emptyLabel="Pick a scope"
+            options={[
+              { id: "all", title: "All " + cfg.item, desc: "Index every " + cfg.item.replace(/s$/, "") + " reachable from this connection.", icon: SRC_SCOPE_ICONS.all },
+              { id: "folders", title: "Specific " + cfg.container, desc: "Pick " + cfg.container + "; everything inside is indexed and kept in sync.", icon: SRC_SCOPE_ICONS.folders },
+              { id: "files", title: "Specific " + cfg.item, desc: "Pick individual " + cfg.item + " to index.", icon: SRC_SCOPE_ICONS.files },
+            ]} />
+        </div>
       </FormRow>
 
       {specific && (
         <FormRow label={(scope === "folders" ? srcCap(cfg.container) : srcCap(cfg.item)) + " to index"} required hint={locs.length ? locs.length + " added" : undefined}>
+          <div style={{ maxWidth: 760 }}>
           {locs.length > 0 && (
             <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", marginBottom: 10, background: "var(--panel)" }}>
               {locs.map((l, i) => (
@@ -1920,6 +1923,7 @@ function SrcRead({ s, set, sel }) {
             <button onClick={addLink} style={{ flexShrink: 0, padding: "0 18px", borderRadius: 9, border: "1px solid var(--ink)", background: "var(--ink)", color: "var(--bg-canvas)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Add</button>
           </div>
           <div style={{ marginTop: 8, fontSize: 11.5, color: "var(--ink-4)" }}>Or <button style={{ background: "none", border: "none", padding: 0, color: "var(--ink-2)", textDecoration: "underline", cursor: "pointer", fontFamily: "inherit", fontSize: 11.5 }}>browse {sel.name}</button> to pick visually.</div>
+          </div>
         </FormRow>
       )}
 
